@@ -87,6 +87,12 @@ fn fastq_seq(r: &mut dyn BufRead) -> io::Result<Option<Vec<u8>>> {
     if seq.len()!=qual.trim_end().len() {return Err(io::Error::new(io::ErrorKind::InvalidData,"bases / qualities differ"));}
     Ok(Some(seq))
 }
+// Sample seeds from the entire input, rather than assuming that the first
+// 50,000 read pairs adequately represent all amplified components.
+fn count_seed_pair(pair_index: usize) -> bool {
+    pair_index < 10000 || pair_index % 40 == 0
+}
+
 impl Reads {
     fn load(fq1: &str, fq2: &str, max_pairs: Option<usize>) -> io::Result<Self> {
         let mut r1=read_open(fq1)?; let mut r2=read_open(fq2)?;
@@ -101,7 +107,7 @@ impl Reads {
                 break;
             };
             for read in [a,b] {
-                if pairs < 50000 && read.len() >= K {
+                if count_seed_pair(pairs) && read.len() >= K {
                     for pos in (0..=read.len()-K).step_by(3) {
                         if let Some(kmer)=encode(&read[pos..pos+K]) {
                             let rev=rc(&read[pos..pos+K]);
@@ -334,6 +340,13 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn samples_kmers_from_late_reads() {
+        assert!(count_seed_pair(0));
+        assert!(count_seed_pair(9999));
+        assert!(!count_seed_pair(10001));
+        assert!(count_seed_pair(50000));
+        assert!(count_seed_pair(800000));
+    }
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
     #[test] fn read_external_fasta_seeds() {

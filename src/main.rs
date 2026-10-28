@@ -235,6 +235,72 @@ fn overlap_consumed(read: &[u8], contig: &[u8], anchor: usize) -> Option<usize> 
     best.map(|(_,consumed)|consumed)
 }
 
+// Experimental de Bruijn fallback. All evidence comes from the input reads;
+// no MiCall reference or previous IVA contigs are consulted.
+struct SolidKmerGraph {
+    next: HashMap<u64, [u32; 4]>,
+}
+
+impl SolidKmerGraph {
+    fn build(reads: &Reads) -> Self {
+        // Only a k-mer independently observed at least ten times in the
+        // original seed sample can anchor a graph edge. This rejects most
+        // random Illumina errors without storing every erroneous k-mer.
+        let mut solid=HashSet::<u64>::new();
+        for (&key,&count) in &reads.seed_counts {
+            if count < 10 { continue; }
+            solid.insert(key);
+            solid.insert(encode(&rc(&decode(key))).unwrap());
+        }
+        let mut next=HashMap::<u64,[u32;4]>::new();
+        const MASK: u64 = (1u64 << (2 * K)) - 1;
+        for seq in &reads.seqs {
+            let mut rolling=0u64;
+            let mut valid=0usize;
+            for &base in seq {
+                let digit=match base {
+                    b'A'=>0usize,b'C'=>1,b'G'=>2,b'T'=>3,
+                    _=>{rolling=0;valid=0;continue;}
+                };
+                if valid >= K && solid.contains(&rolling) {
+                    let votes=next.entry(rolling).or_insert([0;4]);
+                    votes[digit]=votes[digit].saturating_add(1);
+                }
+                rolling=((rolling << 2)|(digit as u64))&MASK;
+                valid=(valid+1).min(K);
+            }
+        }
+        eprintln!("solid read graph: {} oriented k-mers with outgoing evidence",next.len());
+        Self { next }
+    }
+
+    fn extend_right(&self, seq: &[u8], min_cov:usize, min_ratio:usize) -> Vec<u8> {
+        let mut output=seq.to_vec();
+        if output.len()<K {return output;}
+        let mut visited=HashSet::<u64>::new();
+        for prior in output.windows(K).take(output.len()-K) {
+            if let Some(key)=encode(prior) { visited.insert(key); }
+        }
+        while output.len()<MAX_CONTIG_LENGTH {
+            let Some(key)=encode(&output[output.len()-K..]) else {break;};
+            if !visited.insert(key) {break;}
+            let Some(votes)=self.next.get(&key) else {break;};
+            let mut ranks=[0usize,1,2,3];
+            ranks.sort_unstable_by(|&a,&b|votes[b].cmp(&votes[a]).then(a.cmp(&b)));
+            let major=votes[ranks[0]] as usize;
+            let minor=votes[ranks[1]] as usize;
+            if major<min_cov || major<min_ratio.saturating_mul(minor) {break;}
+            output.push([b'A',b'C',b'G',b'T'][ranks[0]]);
+        }
+        output
+    }
+
+    fn extend_both(&self, seq: &[u8], min_cov:usize, min_ratio:usize) -> Vec<u8> {
+        let right=self.extend_right(seq,min_cov,min_ratio);
+        rc(&self.extend_right(&rc(&right),min_cov,min_ratio))
+    }
+}
+
 fn choose_extension(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize)->Vec<u8>{
     let mut out=Vec::new();
     let mut remaining=(0..overhangs.len()).collect::<Vec<_>>();
@@ -382,6 +448,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
     let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
     let now=Instant::now();
     let reads=Reads::load(&a,&b,max_pairs)?;
+    let graph=SolidKmerGraph::build(&reads);
     let mut candidates=reads.seed_counts.iter().map(|(k,c)|(*k,*c)).collect::<Vec<_>>();
     candidates.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
     let mut contigs=Vec::<Vec<u8>>::new();
@@ -390,7 +457,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         eprintln!("received {} MiCall G2P seed contigs", supplied.len());
         let seed_quota=(max / 3).max(1);
         for seed in supplied.into_iter().filter(|seq|seq.len()>=K).take(seed_quota) {
-            let extended=extend(seed,&reads,5,2);
+            let extended=graph.extend_both(&extend(seed,&reads,5,2),5,2);
             if extended.len()>=SEED_TARGET*3/4 &&
                !contigs.iter().any(|c|c.windows(extended.len()).any(|w|w==extended)) {
                 contigs.push(extended);
@@ -405,7 +472,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
-        let seq=extend(seedseq,&reads,5,2);
+        let seq=graph.extend_both(&extend(seedseq,&reads,5,2),5,2);
         if seq.len()>=SEED_TARGET*3/4 {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
@@ -448,6 +515,37 @@ mod tests {
         assert_eq!(recover_stalled_end(&target[..100],&Reads{
             seqs:vec![],index:HashMap::new(),seed_counts:HashMap::new()
         },1,4),None);
+    }
+
+    #[test]
+    fn solid_kmer_graph_joins_high_support_ends_without_a_reference() {
+        let mut rng=0x87654321deadbeefu64;
+        let sequence=(0..170).map(|_| {
+            rng^=rng<<13; rng^=rng>>7; rng^=rng<<17;
+            [b'A',b'C',b'G',b'T'][(rng&3) as usize]
+        }).collect::<Vec<_>>();
+        let mut seed_counts=HashMap::new();
+        for w in sequence.windows(K) {
+            let key=encode(w).unwrap();
+            let rev=encode(&rc(w)).unwrap();
+            seed_counts.insert(key.min(rev),25);
+        }
+        let mut seqs=vec![sequence.clone();12];
+        seqs.extend((0..12).map(|_|rc(&sequence)));
+        let reads=Reads {seqs,index:HashMap::new(),seed_counts};
+        let graph=SolidKmerGraph::build(&reads);
+        assert_eq!(graph.extend_both(&sequence[40..100],10,4),sequence);
+        assert_eq!(graph.extend_right(b"NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",10,4).len(),K);
+    }
+
+    #[test]
+    fn solid_graph_does_not_force_a_mixed_population_branch() {
+        let key=encode(b"ACGTACGTACGTACGTACGTACGTACGTACG").unwrap();
+        let mut next=HashMap::new();
+        next.insert(key,[12,7,0,0]);
+        let graph=SolidKmerGraph{next};
+        let seed=decode(key);
+        assert_eq!(graph.extend_right(&seed,10,4),seed);
     }
 
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}

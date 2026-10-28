@@ -83,3 +83,6 @@ Final best HXB2 alignment among MAX consensus sequences is the primary score.
 All downstream outputs including `conseq`, `genome_coverage`, remap counts and
 concordance are retained and compared by counts/digests. Never commit private samples.
 Old `scripts/benchmark.sh` is a **legacy stitcher-only experiment**, not final alpha.
+
+### Parallel full-MiCall benchmark
+Run `./scripts/benchmark_full_micall_parallel.sh --mode iva --iva-mode cached --jobs 4` to prepare historical IVA replay baselines, then `./scripts/benchmark_full_micall_parallel.sh --mode riva --jobs 4` for all seven with one global 20-minute cap. Each sample has its own OS process and MiCall output directory. Aggregate results in `invocations/<run-id>/summary.json`; incomplete and timed-out samples fail. Use `--sample SAMPLE` for smoke checks. Riva binary SHA is recorded per child run; never combine different binaries to claim a pass.

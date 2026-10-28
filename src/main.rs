@@ -155,11 +155,12 @@ impl Reads {
                 let (begin,read_start)=if q>=pos {(q-pos,0)} else {(0,pos-q)};
                 let overlap=contig.len()-begin;
                 let read=&self.seqs[hit.read as usize];
-                if overlap<K || read_start+overlap>=read.len() {continue;}
-                if !read_supports_overlap(
-                    &read[read_start..read_start+overlap], &contig[begin..]) {continue;}
+                if overlap<K || read_start>=read.len() {continue;}
+                let anchor=q-begin;
+                let Some(consumed)=overlap_consumed(
+                    &read[read_start..], &contig[begin..], anchor) else {continue;};
                 used.insert(original);
-                ext.push(read[read_start+overlap..].to_vec());
+                ext.push(read[read_start+consumed..].to_vec());
             }
         }
         ext
@@ -182,6 +183,56 @@ fn read_supports_overlap(read: &[u8], contig: &[u8]) -> bool {
         }
     }
     true
+}
+
+// The anchor is a truly exact 31-mer; only the sequence AFTER that
+// read-derived anchor may have a single insertion/deletion. The paired
+// FASTQ read then still extends beyond the aligned end of the contig.
+// This tolerates a frequent class of sequencer error without relying
+// on external references or mapping reads to HXB2.
+fn overlap_consumed(read: &[u8], contig: &[u8], anchor: usize) -> Option<usize> {
+    let n=contig.len();
+    if n<K || anchor+K>n || read.len()<anchor+K {return None;}
+    let budget=(n/50).max(1);
+    let mut best=None::<(usize,usize)>;
+    if read.len()>n && read_supports_overlap(&read[..n],contig) {
+        best=Some((read[..n].iter().zip(contig).filter(|(x,y)|x!=y).count(),n));
+    }
+    let min_k=anchor+K;
+    if min_k>=n {return best.map(|(_,consumed)|consumed);}
+
+    let mut left=vec![0usize;n+1];
+    let comparable=read.len().min(n);
+    for i in 0..comparable {
+        left[i+1]=left[i]+usize::from(read[i]!=contig[i]);
+    }
+    // Insertion in the read relative to contig (one extra read base).
+    if read.len()>n+1 {
+        let mut suffix=vec![0usize;n+1];
+        for i in (0..n).rev() {
+            suffix[i]=suffix[i+1]+usize::from(read[i+1]!=contig[i]);
+        }
+        for k in min_k..n {
+            let cost=left[k]+1+suffix[k];
+            if cost<=budget && best.is_none_or(|b|cost<b.0) {
+                best=Some((cost,n+1));
+            }
+        }
+    }
+    // Deletion in the read (one contig base absent from this read).
+    if read.len()>=n {
+        let mut suffix=vec![0usize;n];
+        for k in (0..n-1).rev() {
+            suffix[k]=suffix[k+1]+usize::from(read[k]!=contig[k+1]);
+        }
+        for k in min_k..n {
+            let cost=left[k]+1+suffix[k];
+            if cost<=budget && best.is_none_or(|b|cost<b.0) {
+                best=Some((cost,n-1));
+            }
+        }
+    }
+    best.map(|(_,consumed)|consumed)
 }
 
 fn choose_extension(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize)->Vec<u8>{
@@ -359,6 +410,28 @@ mod tests {
             unrelated[i]=match unrelated[i] { b'A'=>b'C', _=>b'A' };
         }
         assert!(!read_supports_overlap(&unrelated,&contig));
+    }
+    #[test] fn single_indel_after_exact_anchor_extends() {
+        let mut rng=0x3a7d5c1f725a12bbu64;
+        let contig=(0..160).map(|_|{
+            rng^=rng<<13;rng^=rng>>7;rng^=rng<<17;
+            [b'A',b'C',b'G',b'T'][(rng&3) as usize]
+        }).collect::<Vec<_>>();
+        let anchor=60;
+        let mut insertion=contig.clone();
+        insertion.insert(130,b'A');
+        insertion.extend_from_slice(b"GGAATTCC");
+        let mut deletion=contig.clone();
+        deletion.remove(130);
+        deletion.extend_from_slice(b"GGAATTCC");
+        assert_eq!(overlap_consumed(&insertion,&contig,anchor),Some(161));
+        assert_eq!(overlap_consumed(&deletion,&contig,anchor),Some(159));
+        assert_eq!(&insertion[161..],b"GGAATTCC");
+        assert_eq!(&deletion[159..],b"GGAATTCC");
+        let mut errors=contig.clone();
+        for p in (100..150).step_by(4) {errors[p]=b'N';}
+        errors.extend_from_slice(b"GGAATTCC");
+        assert_eq!(overlap_consumed(&errors,&contig,anchor),None);
     }
     #[test] fn internal_seed_overhang_can_extend() {
         let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";

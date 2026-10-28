@@ -3,8 +3,8 @@
 ## Integration policy
 
 - **One canonical MiCall A/B integration:** PR #7, branch `fix/podman-seeded-comparison`.
-- **One separate performance trial:** PR #10, branch `experiment/podman-bowtie-threads`.
-- Former draft PRs #1 and #3–#6, #8–#9 were closed only after source branches/commits were preserved or incorporated.
+- **Archived performance trial:** PR #10 closed after the unchanged 7-sample benchmark finished in 839.3 seconds; branch `experiment/podman-bowtie-threads` is retained, not merged.
+- Former draft PRs #1 and #3–#6, #8–#10 were closed only after source branches/commits were preserved or incorporated.
 - This index lists worktrees; it does not imply that untested experiments are accepted or should be merged.
 - The benchmark FASTQs, IVA baseline caches, result directories, and historical slow-seven dataset remain private and outside Git.
 

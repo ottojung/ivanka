@@ -1,0 +1,6 @@
+FROM localhost/riva-micall-iva:base
+RUN mv /opt/bowtie2/bowtie2 /opt/bowtie2/bowtie2-original
+COPY benchmarks/bowtie2_perf_wrapper.py /opt/bowtie2/bowtie2
+RUN chmod 755 /opt/bowtie2/bowtie2
+ENV RIVA_BOWTIE_THREADS=8
+LABEL org.ottojung.riva.benchmark.config="shared bowtie2 parallel mapping"

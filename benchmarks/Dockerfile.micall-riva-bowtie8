@@ -1,0 +1,5 @@
+FROM localhost/riva-micall-iva:bowtie8
+COPY --from=localhost/riva-micall-riva:seeded /usr/local/bin/riva /usr/local/bin/riva
+COPY benchmarks/patch_micall_for_riva.py /tmp/patch_micall_for_riva.py
+RUN python /tmp/patch_micall_for_riva.py && rm /tmp/patch_micall_for_riva.py
+LABEL org.ottojung.riva.benchmark.config="same bowtie8 base with only assembler substituted"

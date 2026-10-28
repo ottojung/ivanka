@@ -30,7 +30,7 @@
 | `fix/internal-seed-overlap` | `/workspace/riva-internal-overlap` | `1993fda53f` | clean |
 | `experiment/riva-late-cycle` | `/workspace/riva-late-cycle` | `6089e2ce10` | clean |
 | `experiment/riva-long-cycle` | `/workspace/riva-long-cycle` | `a115fc7a90` | clean |
-| `experiment/riva-one-indel` | `/workspace/riva-one-indel` | `2e9ddcf260` | clean |
+| `experiment/riva-one-indel` | `/workspace/riva-one-indel` | `66b0e9eb58` | clean |
 | `fix/podman-seeded-comparison` | `/workspace/riva-podman-benchmark` | `85e78b1a9a` | clean |
 | `experiment/podman-bowtie-threads` | `/workspace/riva-podman-bowtie` | `da03b03209` | clean |
 | `benchmark/podman-g2p` | `/workspace/riva-podman-g2p` | `b6e2711d2c` | clean |
@@ -51,3 +51,23 @@
 - Retain all branch refs and experiment histories until comparative results establish a safe next step.
 
 Additional isolated work in this preserved branch: commit 8b786bc adds bounded 10-base trim-and-retry, and 2e9ddcf adds a high-support, reference-free solid-kmer graph fallback. The graph variant has 14 passing Rust tests and was built as localhost/riva-micall-riva:solidgraph. These changes are NOT accepted into PR #7 without complete real MiCall evidence.
+
+## Measured HCV-NS5a seed-selection bias (2026-10-28)
+
+Only for diagnostics (not as input to Riva), compared HCV-NS5a S101
+candidate k-mers with the genuine IVA raw 2169-base contig.
+The original global-highest-500 seeds match only genomic bins 0-1199,
+while a deterministic log2-read-abundance round-robin across 500 seeds
+has matches throughout bins 0-2168. The second half is not missing
+read coverage: its individual 31-mer counts are generally 50-200+ in
+just the first 50k paired reads. This exposes a structural bias in the
+original fixed-size seed search, not an HXB2 scoring artifact.
+
+Experimental commit 66b0e9e on preserved branch
+`experiment/riva-one-indel` implements that balanced seed search,
+with 16 passing Rust tests; the immutable image
+`localhost/riva-micall-riva:depthbalanced` is based on the same MiCall
+IVA image and changes only the Riva executable. The full-MiCall
+Riva-only 7-sample run was started as Lubko job
+`76a1dec8-3016-4ec9-91bd-bb814d62970d` using the exact verified
+IVA controls and dataset; no acceptance claim is made until results.

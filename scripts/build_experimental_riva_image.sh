@@ -8,6 +8,13 @@ src=$1
 image=$2
 test -f "$src/Cargo.lock"
 git -C "$src" rev-parse --verify HEAD >/dev/null
+# The image's commit label is trustworthy only if the copied source matches
+# that commit, including no untracked files under src.
+dirty=$(git -C "$src" status --porcelain --untracked-files=all -- Cargo.toml Cargo.lock src)
+if [ -n "$dirty" ]; then
+    echo "Refusing uncommitted Rust source (image provenance would be false)" >&2
+    exit 1
+fi
 branch_sha=$(git -C "$src" rev-parse HEAD)
 containerfile=$(mktemp)
 trap 'rm -f "$containerfile"' EXIT HUP INT TERM

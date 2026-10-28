@@ -275,7 +275,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         eprintln!("received {} MiCall G2P seed contigs", supplied.len());
         let seed_quota=(max / 3).max(1);
         for seed in supplied.into_iter().filter(|seq|seq.len()>=K).take(seed_quota) {
-            let extended=extend(seed,&reads,10,4);
+            let extended=extend(seed,&reads,10,2);
             if extended.len()>=SEED_TARGET*3/4 &&
                !contigs.iter().any(|c|c.windows(extended.len()).any(|w|w==extended)) {
                 contigs.push(extended);
@@ -290,7 +290,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
-        let seq=extend(seedseq,&reads,10,4);
+        let seq=extend(seedseq,&reads,10,2);
         if seq.len()>=SEED_TARGET*3/4 {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
@@ -348,6 +348,12 @@ mod tests {
         seq.extend(std::iter::repeat(b'C').take(4000));
         seq.extend(std::iter::repeat(b'A').take(100));
         assert_eq!(cycle_end(&seq), None);
+    }
+    #[test] fn two_to_one_dominance_allows_majority_branch() {
+        let mut observations=(0..16).map(|_|b"ACGT".to_vec()).collect::<Vec<_>>();
+        observations.extend((0..8).map(|_|b"ATGT".to_vec()));
+        assert_eq!(choose_extension(&observations,10,4),b"A");
+        assert_eq!(choose_extension(&observations,10,2),b"ACGT");
     }
     #[test] fn extension_consensus(){
         let a=(0..16).map(|_|b"ACGTA".to_vec()).collect::<Vec<_>>();

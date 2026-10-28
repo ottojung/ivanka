@@ -258,6 +258,79 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
     }
     seq
 }
+// Fallback graph traversal for read-coherent extension dead ends.
+// Every edge is observed directly in a read; no references or mapping.
+const GRAPH_READ_LIMIT: usize = 400_000; // oriented reads (~100k pairs)
+const GRAPH_MIN_EDGE_SUPPORT: u32 = 10;
+
+fn graph_spectrum(reads: &Reads) -> HashMap<u64,u32> {
+    let mut counts=HashMap::new();
+    for seq in reads.seqs.iter().take(GRAPH_READ_LIMIT) {
+        for window in seq.windows(K) {
+            if let Some(kmer)=encode(window) {
+                *counts.entry(kmer).or_insert(0u32)+=1;
+            }
+        }
+    }
+    counts
+}
+
+fn graph_extend(mut seq:Vec<u8>, spectrum:&HashMap<u64,u32>, min_support:u32)
+    -> Vec<u8> {
+    if seq.len()<K {return seq;}
+    let mut used=seq.windows(K).filter_map(encode).collect::<HashSet<_>>();
+    let mask=(1u64 << (2*K))-1;
+    loop {
+        if seq.len()>=MAX_CONTIG_LENGTH {break;}
+        let Some(key)=encode(&seq[seq.len()-K..]) else {break;};
+        let mut next=None;
+        for digit in 0..4u64 {
+            let candidate=((key<<2)|digit)&mask;
+            if used.contains(&candidate) {continue;}
+            let count=spectrum.get(&candidate).copied().unwrap_or(0);
+            if count<min_support {continue;}
+            // Stable tie break in A,C,G,T order; no reference needed.
+            if next.is_none_or(|(_,best_count)|count>best_count) {
+                next=Some((candidate,count));
+            }
+        }
+        let Some((candidate,_))=next else {break;};
+        seq.push(match candidate&3 {0=>b'A',1=>b'C',2=>b'G',_=>b'T'});
+        used.insert(candidate);
+    }
+    seq
+}
+
+fn graph_contig(seed:u64,spectrum:&HashMap<u64,u32>,min_support:u32)
+    -> Vec<u8> {
+    let seq=graph_extend(decode(seed),spectrum,min_support);
+    rc(&graph_extend(rc(&seq),spectrum,min_support))
+}
+
+fn graph_fallback(reads:&Reads,max:usize) -> Vec<Vec<u8>> {
+    let spectrum=graph_spectrum(reads);
+    eprintln!("graph fallback indexed {} read-supported oriented k-mers",spectrum.len());
+    let mut seeds=spectrum.iter().filter(|(_,count)|**count>=GRAPH_MIN_EDGE_SUPPORT)
+        .map(|(key,count)|(*key,*count)).collect::<Vec<_>>();
+    seeds.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+    let mut contigs=Vec::<Vec<u8>>::new();
+    let mut attempted=0;
+    for (key,_) in seeds {
+        if contigs.len()>=max || attempted>=800 {break;}
+        let s=decode(key);
+        let rev=rc(&s);
+        if contigs.iter().any(|c|c.windows(K).any(|w|w==s || w==rev)) {continue;}
+        attempted+=1;
+        let c=graph_contig(key,&spectrum,GRAPH_MIN_EDGE_SUPPORT);
+        if c.len()>=SEED_TARGET*3/4 && !contigs.iter()
+            .any(|old|old.windows(c.len()).any(|w|w==c)) {
+            eprintln!("graph candidate {} produced {} nt",attempted,c.len());
+            contigs.push(c);
+        }
+    }
+    contigs
+}
+
 fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
     let args=std::env::args().collect::<Vec<_>>();
     let mut a=None;let mut b=None;let mut output=None;let mut max=48usize;let mut max_pairs=None;let mut seeds=None;
@@ -322,6 +395,19 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
+    let original_count=contigs.len();
+    let fallback=graph_fallback(&reads,(max/2).max(4));
+    // Keep the best original contigs and reserve half the output capacity
+    // for independent k-mer graph candidates. No HXB2 coordinate involved.
+    contigs.sort_unstable_by(|a,b|b.len().cmp(&a.len()));
+    contigs.truncate(max.saturating_sub(fallback.len()));
+    for c in fallback {
+        if !contigs.iter().any(|old|old.windows(c.len()).any(|w|w==c)) {
+            contigs.push(c);
+        }
+    }
+    eprintln!("assembled {} seed-overlap, {} total including graph fallback",
+              original_count,contigs.len());
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">riva_{} len={}",i+1,c.len())?;
@@ -334,6 +420,27 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn graph_traversal_recovers_nonrepeating_seed_path() {
+        let mut genome=Vec::new();
+        let mut state=0x9d3e7ac0f4b23517u64;
+        for _ in 0..300 {
+            state^=state<<13;state^=state>>7;state^=state<<17;
+            genome.push([b'A',b'C',b'G',b'T'][((state >> 32)&3) as usize]);
+        }
+        let mut sequences=Vec::new();
+        for _ in 0..6 {
+            for window in genome.windows(90) {
+                sequences.push(window.to_vec());
+                sequences.push(rc(window));
+            }
+        }
+        let reads=Reads{seqs:sequences,index:HashMap::new(),seed_counts:HashMap::new()};
+        let spectrum=graph_spectrum(&reads);
+        let seed=encode(&genome[110..110+K]).unwrap();
+        let assembled=graph_contig(seed,&spectrum,5);
+        assert!(assembled==genome || assembled==rc(&genome),
+                "expected the full synthetic genome, got {} nt",assembled.len());
+    }
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
     #[test] fn read_external_fasta_seeds() {

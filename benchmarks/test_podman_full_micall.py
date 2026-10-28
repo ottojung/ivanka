@@ -58,3 +58,26 @@ class BenchmarkTests(TestCase):
 
  def test_missing_iva_baseline_fails(self):
   self.assertFalse(m.best_consensus_acceptance(None,1000)["pass"])
+
+ def test_parallel_runner_emits_parseable_jsonl(self):
+  import json
+  import sys
+  from unittest.mock import patch
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   (root/"manifest.tsv").write_text("sample\nA\nB\n")
+   (root/"hxb2.fasta").write_text(">reference\nACGT\n")
+   destination=root/"results"
+   def fake_sample(row,*args):
+    return {"sample":row["sample"],"status":"finished","failed":False}
+   with patch.object(m,"DATA",root),patch.object(m,"RESULTS",destination), \
+        patch.object(m,"image_id",return_value="sha256:base"), \
+        patch.object(m,"verify_identical_micall_base"), \
+        patch.object(m,"sha",return_value="abc"), \
+        patch.object(m,"evaluate_sample",side_effect=fake_sample), \
+        patch.object(sys,"argv",["benchmark","--jobs","2"]):
+    self.assertEqual(m.main(),0)
+   events=[json.loads(line) for line in (destination/"results.jsonl").read_text().splitlines()]
+   self.assertEqual(len(events),4)
+   self.assertEqual(sum(e["status"]=="started" for e in events),2)
+   self.assertEqual(sum(e["status"]=="finished" for e in events),2)

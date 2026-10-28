@@ -69,3 +69,15 @@ HXB2 hash and MiCall project code match. The default Riva image is
 localhost/riva-micall-riva:seeded. Both images share MiCall base layers.
 All samples must produce a final MAX-cutoff MiCall consensus after mapping,
 and the selected pipeline arms must exit successfully.
+
+
+For the seven-sample full-MiCall benchmark, --jobs 4 runs independent
+sample pipelines concurrently within the same global deadline:
+
+    ./scripts/benchmark_podman_full_micall.sh --mode both --jobs 4
+
+Each sample has separate private output and container names. The output
+JSONL contains start/finish events that remain parseable even when
+samples finish out of order. The persistent IVA baseline cache is
+per-sample and validated against the same immutable MiCall image and
+FASTQ input hashes; this is preferable for Riva-only iterations.

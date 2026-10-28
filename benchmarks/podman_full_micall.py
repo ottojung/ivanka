@@ -6,6 +6,7 @@ All clinical input and results must remain outside this public repository.
 """
 import argparse
 import csv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 import os
@@ -209,16 +210,90 @@ def run_arm(row, arm, image, reference, timeout, invocation):
     return result
 
 
+def evaluate_sample(row, args, images, checked, pinned_iva_id,
+                    hxb2_hash, reference, invocation, deadline):
+    """Run one sample through selected real MiCall image(s), with no shared scratch."""
+    name = row["sample"]
+    record={"sample":name,"invocation":invocation,
+            "hxb2_sha256":hxb2_hash,"status":"started"}
+    started=time.monotonic()
+    failures=0
+    try:
+        if deadline-time.monotonic() <= 1:
+            record["status"]="global_timeout"
+            record["error"]="No global time budget before starting sample"
+            record["failed"]=True
+            return record
+        provenance=baseline_provenance(row,pinned_iva_id,hxb2_hash)
+        reused_baseline=None
+        if args.mode=="riva":
+            reused_baseline=load_iva_baseline(name,provenance)
+            record["iva_baseline_reused"]=True
+        for arm in ("iva","riva"):
+            if arm not in checked:
+                continue
+            remaining=deadline-time.monotonic()
+            if remaining <= 1:
+                record["status"]="global_timeout"
+                record["error"]="No global time budget for next assembler arm"
+                failures+=1
+                break
+            print(f"{name}: {arm}",flush=True)
+            try:
+                result=run_arm(row,arm,images[arm],str(reference),
+                               min(args.timeout_per_arm,max(1,int(remaining))),
+                               invocation)
+                record[arm]=result
+                if result["exit_code"]:
+                    failures+=1
+            except Exception as exc:
+                record[arm]={"error":f"{type(exc).__name__}: {exc}"}
+                failures+=1
+        if "iva" in record and "metrics" in record["iva"]:
+            try:
+                save_iva_baseline(name,provenance,record["iva"])
+            except ValueError as exc:
+                record["baseline_error"]=str(exc)
+                failures+=1
+        baseline=record.get("iva",reused_baseline)
+        if "riva" in checked:
+            if ("riva" in record and "metrics" in record["riva"] and
+                baseline and baseline.get("exit_code")==0 and "metrics" in baseline):
+                a=baseline["metrics"]["best_hxb2_final_max_conseq_score"]
+                b=record["riva"]["metrics"]["best_hxb2_final_max_conseq_score"]
+                record["best_contig_acceptance"]=best_consensus_acceptance(a,b)
+                record["output_comparison"]=compare_outputs(
+                    baseline["metrics"],record["riva"]["metrics"])
+                if not record["best_contig_acceptance"]["pass"]:
+                    failures+=1
+            else:
+                record["evaluation_error"]="Missing valid IVA baseline or completed Riva MiCall outputs"
+                failures+=1
+    except Exception as exc:
+        record["status"]="error"
+        record["error"]=f"{type(exc).__name__}: {exc}"
+        failures+=1
+    if record["status"]=="started":
+        record["status"]="finished"
+    record["failed"]=bool(failures)
+    record["total_seconds"]=round(time.monotonic()-started,2)
+    return record
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="append",
                         help="Run only a selected sample ID (repeatable)")
     parser.add_argument("--mode", choices=("both","iva","riva"), default="both")
+    parser.add_argument("--jobs", type=int, default=1,
+                        help="Independent sample pipelines to run concurrently")
     parser.add_argument("--timeout-per-arm", type=int, default=1170)
     parser.add_argument("--total-time-limit", type=int, default=1180,
                         help="Global seconds for all samples, default below 20-minute hard cap")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
+    if args.jobs<1 or args.total_time_limit<1 or args.timeout_per_arm<1:
+        parser.error("jobs and both time limits must be positive")
     images={"iva":IVA_IMAGE,"riva":RIVA_IMAGE}
     checked={}
     for arm,img in images.items():
@@ -229,10 +304,12 @@ def main():
     pinned_iva_id = checked.get("iva") or image_id(IVA_IMAGE)
     if "riva" in checked:
         verify_identical_micall_base(IVA_IMAGE, RIVA_IMAGE)
-    rows=list(csv.DictReader((DATA/"manifest.tsv").open(),delimiter="\t"))
+    with (DATA/"manifest.tsv").open(newline="") as manifest:
+        rows=list(csv.DictReader(manifest,delimiter="\t"))
     rows=[row for row in rows if args.sample is None or row["sample"] in args.sample]
     if not rows: raise ValueError("No samples selected")
-    hxb2=next(SeqIO.parse(DATA/"hxb2.fasta","fasta")).seq
+    with (DATA/"hxb2.fasta").open() as reference_file:
+        hxb2=next(SeqIO.parse(reference_file,"fasta")).seq
     if args.probe:
         print(json.dumps({"images":checked,"sample_count":len(rows),
                           "hxb2_sha256":sha(DATA/"hxb2.fasta")},indent=2))
@@ -243,64 +320,28 @@ def main():
     path=RESULTS/"results.jsonl"
     failed=0
     deadline=time.monotonic()+args.total_time_limit
-    with path.open("a", buffering=1) as out:
-        for row in rows:
-            record={"sample":row["sample"],"invocation":invocation,
-                    "hxb2_sha256":hxb2_hash,"status":"started"}
-            out.write(json.dumps(record)+"\n")
-            provenance = baseline_provenance(row, pinned_iva_id, hxb2_hash)
-            reused_baseline = None
-            if args.mode == "riva":
+    with path.open("a",buffering=1) as out:
+        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            futures={}
+            for row in rows:
+                out.write(json.dumps({"sample":row["sample"],
+                                      "invocation":invocation,"status":"started"})+"\n")
+                task=executor.submit(evaluate_sample,row,args,images,checked,
+                                     pinned_iva_id,hxb2_hash,hxb2,invocation,deadline)
+                futures[task]=row["sample"]
+            for task in as_completed(futures):
+                name=futures[task]
                 try:
-                    reused_baseline = load_iva_baseline(row["sample"], provenance)
-                    record["iva_baseline_reused"] = True
-                except (ValueError, OSError, KeyError) as exc:
-                    failed += 1
-                    record["status"] = "error"
-                    record["error"] = str(exc)
-                    out.write(json.dumps(record, sort_keys=True)+"\n")
-                    print(row["sample"], "missing or incompatible IVA baseline:", exc, flush=True)
-                    continue
-            exhausted=False
-            for arm in ("iva","riva"):
-                if arm not in checked: continue
-                remaining=deadline-time.monotonic()
-                if remaining <= 1:
-                    record["status"]="global_timeout"
-                    record["error"]="Exhausted total-time-limit before next assembler arm"
-                    exhausted=True
-                    failed+=1
-                    break
-                print(f'{row["sample"]}: {arm}',flush=True)
-                try:
-                    record[arm]=run_arm(row,arm,images[arm],str(hxb2),
-                                        min(args.timeout_per_arm, max(1,int(remaining))),
-                                        invocation)
-                    if record[arm]["exit_code"]: failed+=1
+                    record=task.result()
                 except Exception as exc:
-                    record[arm]={"error":str(exc)}
+                    record={"sample":name,"invocation":invocation,"status":"error",
+                            "error":f"{type(exc).__name__}: {exc}","failed":True}
+                out.write(json.dumps(record,sort_keys=True)+"\n")
+                if record["failed"]:
                     failed+=1
-            if "iva" in record and "metrics" in record["iva"]:
-                try:
-                    save_iva_baseline(row["sample"], provenance, record["iva"])
-                except ValueError as exc:
-                    record["baseline_error"] = str(exc)
-                    failed += 1
-            baseline = record.get("iva", reused_baseline)
-            if "riva" in record and "metrics" in record["riva"] and baseline and baseline.get("exit_code") == 0 and "metrics" in baseline:
-                a=baseline["metrics"]["best_hxb2_final_max_conseq_score"]
-                b=record["riva"]["metrics"]["best_hxb2_final_max_conseq_score"]
-                record["best_contig_acceptance"]=best_consensus_acceptance(a,b)
-                record["output_comparison"] = compare_outputs(
-                    baseline["metrics"], record["riva"]["metrics"])
-                if not record["best_contig_acceptance"]["pass"]: failed+=1
-            if not exhausted:
-                record["status"]="finished"
-            out.write(json.dumps(record,sort_keys=True)+"\n")
-            if exhausted:
-                break
+                print(name,record["status"],"fail" if record["failed"] else "ok",
+                      record.get("best_contig_acceptance",{}),flush=True)
     return 1 if failed else 0
-
 
 if __name__=="__main__":
     raise SystemExit(main())

@@ -173,6 +173,37 @@ def qualification_within_cap(configured_limit, elapsed):
     return 0 < configured_limit <= QUALIFICATION_MAX_SECONDS and 0 <= elapsed <= QUALIFICATION_MAX_SECONDS
 
 
+def project_aware_acceptance(iva_dir, riva_dir):
+    """Score real final MiCall Riva consensus against final IVA consensus."""
+    def sequences(directory):
+        path=next((p for p in (directory/"conseq.csv", directory/"scratch"/"conseq.csv")
+                   if p.is_file()),None)
+        if path is None:
+            raise ValueError("Missing final conseq.csv")
+        with path.open(newline="") as handle:
+            reader=csv.DictReader(handle)
+            return [row["sequence"].upper() for row in reader
+                    if row.get("consensus-percent-cutoff")=="MAX" and row.get("sequence")]
+    targets=sequences(iva_dir)
+    candidates=sequences(riva_dir)
+    if not targets or not candidates:
+        raise ValueError("No final MAX MiCall consensus")
+    maxlen=max(map(len,targets))
+    aligner=PairwiseAligner()
+    aligner.mode="global"
+    aligner.match_score=1
+    aligner.mismatch_score=-1
+    aligner.open_gap_score=-2
+    aligner.extend_gap_score=-1
+    best=max(aligner.score(ref,seq) for ref in targets
+             if len(ref)>=0.95*maxlen for seq in candidates)
+    return {"method":"final_iva_max_consensus_global_alignment",
+            "iva_score":float(maxlen),"riva_score":float(best),
+            "threshold":0.95*maxlen,"pass":best>=0.95*maxlen,
+            "iva_final_max_count":len(targets),
+            "riva_final_max_count":len(candidates)}
+
+
 def baseline_provenance(row, iva_image_id, hxb2_sha256):
     sample = row["sample"]
     sample_dir = DATA / "samples" / sample
@@ -265,6 +296,7 @@ def run_arm(row, arm, image, reference, timeout, invocation):
     result = {
         "exit_code": exitcode, "seconds": round(time.monotonic()-start, 2),
         "image_id": image_id(image), "image": image,
+        "artifact_dir": str(folder.resolve()),
         "metrics": score_outputs(folder, reference),
     }
     if exitcode:
@@ -339,7 +371,17 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                 baseline and baseline.get("exit_code")==0 and "metrics" in baseline):
                 a=baseline["metrics"]["best_hxb2_final_max_conseq_score"]
                 b=record["riva"]["metrics"]["best_hxb2_final_max_conseq_score"]
-                record["best_contig_acceptance"]=best_consensus_acceptance(a,b)
+                if row.get("project") == "NFLHIVDNA":
+                    record["best_contig_acceptance"]=best_consensus_acceptance(a,b)
+                    record["best_contig_acceptance"]["method"]="HXB2"
+                else:
+                    # HXB2 cannot validate HCV or short V3 amplicons.
+                    iva_dir=Path(baseline.get(
+                        "artifact_dir", str(RESULTS/invocation/name/"iva")))
+                    riva_dir=Path(record["riva"].get(
+                        "artifact_dir", str(RESULTS/invocation/name/"riva")))
+                    record["best_contig_acceptance"]=project_aware_acceptance(
+                        iva_dir,riva_dir)
                 record["output_comparison"]=compare_outputs(
                     baseline["metrics"],record["riva"]["metrics"])
                 iva_depth=baseline["metrics"].get("coverage_depth")

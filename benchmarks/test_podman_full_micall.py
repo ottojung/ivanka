@@ -142,7 +142,7 @@ class BenchmarkTests(TestCase):
   with patch.object(m,"baseline_provenance",return_value={"verified":True}), \
        patch.object(m,"save_iva_baseline"), \
        patch.object(m,"run_arm",side_effect=fake_arm) as runner:
-   result=m.evaluate_sample({"sample":"S"},args,{"iva":"A","riva":"B"},
+   result=m.evaluate_sample({"sample":"S","project":"NFLHIVDNA"},args,{"iva":"A","riva":"B"},
            {"iva":"hashA","riva":"hashB"},"base-id","refhash","ACGT","inv",
            time.monotonic()+5)
   self.assertFalse(result["failed"])
@@ -174,3 +174,33 @@ class BenchmarkTests(TestCase):
   self.assertFalse(m.qualification_within_cap(2380,2400.01))
   self.assertFalse(m.qualification_within_cap(0,100))
   self.assertFalse(m.qualification_within_cap(2380,-1))
+
+ def test_project_aware_comparison_uses_full_consensus_not_hxb2(self):
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   for arm,seq in (("iva","ACGT"*100),("riva","TTTT"*100)):
+    folder=root/arm
+    folder.mkdir()
+    (folder/"conseq.csv").write_text(
+        "region,consensus-percent-cutoff,sequence\n"
+        "synthetic,MAX,"+seq+"\n")
+   result=m.project_aware_acceptance(root/"iva",root/"riva")
+   self.assertFalse(result["pass"])
+   self.assertEqual(result["iva_score"],400)
+   self.assertEqual(result["method"],"final_iva_max_consensus_global_alignment")
+
+ def test_project_aware_requires_near_full_length_matching_contig(self):
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   seq="ACGT"*100
+   for arm in ("iva","riva"):
+    folder=root/arm
+    folder.mkdir()
+    (folder/"conseq.csv").write_text(
+        "region,consensus-percent-cutoff,sequence\n"
+        "synthetic,MAX,"+seq+"\n")
+   self.assertTrue(m.project_aware_acceptance(root/"iva",root/"riva")["pass"])
+   (root/"riva"/"conseq.csv").write_text(
+       "region,consensus-percent-cutoff,sequence\n"
+       "synthetic,MAX,"+seq[:100]+"\n")
+   self.assertFalse(m.project_aware_acceptance(root/"iva",root/"riva")["pass"])

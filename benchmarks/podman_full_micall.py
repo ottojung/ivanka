@@ -370,7 +370,7 @@ def main():
                         help="Riva-only diagnostic: run full MiCall without control, never claim pass")
     parser.add_argument("--timeout-per-arm", type=int, default=2370)
     parser.add_argument("--total-time-limit", type=int, default=2380,
-                        help="Global seconds for all samples, default below 20-minute hard cap")
+                        help="Global seconds for all samples, default below 40-minute hard cap")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
     if args.jobs<1 or args.total_time_limit<1 or args.timeout_per_arm<1:

@@ -52,3 +52,34 @@ clinical validation.
 
 The role mapping is private because it contains sample names. Store it in
 `/workspace/riva-benchmark-cache/roles.json`.
+
+## Full MiCall de novo comparison (authoritative alpha benchmark)
+
+Run `./scripts/benchmark_full_micall.sh --probe` to validate the runtime.
+Build IVA baseline: `./scripts/benchmark_full_micall.sh --mode iva --iva-mode run`.
+Riva evaluation: `./scripts/benchmark_full_micall.sh --mode riva --riva target/release/riva`.
+Both arms together: `./scripts/benchmark_full_micall.sh --mode both --iva-mode run`.
+
+MiCall's actual Sample.process(use_denovo=True) computes shared upstream data; the Riva arm reuses those exact bytes and executes MiCall's own run_denovo and process_post_assembly methods in the same fixed checkout.
+The benchmark substitutes ONLY the `micall.drivers.sample.denovo` assembler function.
+MiCall does trim, merge-for-entropy, G2P, referenceless stitching, unstitched read mapping,
+reference-informed stitching, final mapping, sam2aln, aln2counts, final conseq,
+coverage and concordance; the benchmark reimplements none of these steps.
+As previously specified, contigs <600 nt are excluded at the assembler boundary in BOTH arms.
+The G2P-derived contigs are appended by MiCall itself.
+
+Historical replay fallback: `./scripts/benchmark_full_micall.sh --mode iva --iva-mode cached`
+injects real original IVA contigs from Kive and executes the complete MiCall processing.
+It is labeled historical replay, never a fresh IVA run.
+Actual IVA additionally consumes internal G2P seed contigs; Riva currently does not.
+This difference is documented until Riva has a compatible seed-contig interface.
+
+Private output defaults to `/workspace/riva-full-micall-results/`, data to
+`/workspace/denovo-example-io-1/`, and MiCall to `/workspace/qai-repo/repos/MiCall`.
+Override `RIVA_FULL_RESULTS`, `RIVA_DATA`, `MICALL_REPO`, `MICALL_BENCH_PYTHON` as needed.
+The 20-minute timeout is global. IVA baseline files are pinned to MiCall/HXB2 hashes
+and Kive run identity; Riva binary SHA256 is recorded for every invocation.
+Final best HXB2 alignment among MAX consensus sequences is the primary score.
+All downstream outputs including `conseq`, `genome_coverage`, remap counts and
+concordance are retained and compared by counts/digests. Never commit private samples.
+Old `scripts/benchmark.sh` is a **legacy stitcher-only experiment**, not final alpha.

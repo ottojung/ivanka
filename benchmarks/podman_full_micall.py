@@ -177,7 +177,12 @@ def run_arm(row, arm, image, reference, timeout, invocation):
         "podman", "run", "--rm", "--pull=never", "--name", container_name,
         "-v", f"{DATA.resolve()}:/bench:ro",
         "-v", f"{RESULTS.resolve()}:/results:rw",
-        "--entrypoint", "micall", image,
+        # PID 1 has its own deadline: an interrupted host-side benchmark
+        # cannot leave a container running indefinitely.
+        "--label", f"org.ottojung.riva.benchmark.invocation={invocation}",
+        "--entrypoint", "/usr/bin/timeout", image,
+        "--signal=TERM", "--kill-after=10s",
+        f"{max(1,int(timeout)-15)}s", "micall",
         "analyze", "sample",
         f"{container_sample}/{fq[0].name}",
         f"{container_sample}/{fq[1].name}",

@@ -5,8 +5,8 @@ use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::time::Instant;
 
-const K: usize = 31;
-const INDEX_STEP: usize = 12;
+const K: usize = 25;
+const INDEX_STEP: usize = 8;
 const SEED_TARGET: usize = 720;
 const MAX_EXTENSION: usize = 100;
 const MAX_CONTIG_LENGTH: usize = 25000;
@@ -335,7 +335,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
-    #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
+    #[test] fn encode_roundtrip(){let x=&b"ACGTACGTACGTACGTACGTACGTACGTACG"[..K]; assert_eq!(decode(encode(x).unwrap()),x);}
     #[test] fn read_external_fasta_seeds() {
         let path=std::env::temp_dir().join(format!("riva-seeds-{}.fasta",std::process::id()));
         std::fs::write(&path,">seed-one\nacgtACGT\n>seed-two\nGGGG\n>ambiguous\nANNN\n").unwrap();
@@ -361,7 +361,7 @@ mod tests {
         assert!(!read_supports_overlap(&unrelated,&contig));
     }
     #[test] fn internal_seed_overhang_can_extend() {
-        let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";
+        let seed=&b"ACGTACGTACGTACGTACGTACGTACGTACG"[..K];
         let mut read=vec![b'G';40];
         read.extend_from_slice(seed);
         read.extend_from_slice(b"TTAACCGG");

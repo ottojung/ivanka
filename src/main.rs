@@ -260,7 +260,7 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
 }
 fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
     let args=std::env::args().collect::<Vec<_>>();
-    let mut a=None;let mut b=None;let mut output=None;let mut max=12usize;let mut max_pairs=None;let mut seeds=None;
+    let mut a=None;let mut b=None;let mut output=None;let mut max=48usize;let mut max_pairs=None;let mut seeds=None;
     let mut i=1;
     while i<args.len() {
         match args[i].as_str() {
@@ -277,7 +277,7 @@ fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),S
                 i+=2;
             },
             "--help"|"-h" => {
-                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 12] [--max-pairs N] [--seeds seeds.fasta]");
+                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 48] [--max-pairs N] [--seeds seeds.fasta]");
                 std::process::exit(0);
             },
             _=>return Err(format!("unknown/incomplete argument: {}",args[i])),
@@ -306,7 +306,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
     }
     let mut attempted=0usize;
     for (seed,count) in candidates {
-        if contigs.len()>=max || attempted>=500 {break;}
+        if contigs.len()>=max || attempted>=1500 {break;}
         if count<25 {break;}
         let seedseq=decode(seed);
         let seedrev=rc(&seedseq);

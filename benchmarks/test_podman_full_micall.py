@@ -100,3 +100,14 @@ class BenchmarkTests(TestCase):
    self.assertIn("108s",argv)
    self.assertIn("micall",argv)
    self.assertEqual(result["exit_code"],0)
+
+ def test_depth_metrics_streamed_from_final_micall_report(self):
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   (root/"genome_coverage.csv").write_text("coverage\n0\n9\n10\n120\n")
+   depth=m.score_outputs(root,"ACGT")["coverage_depth"]
+   self.assertEqual(depth["positions"],4)
+   self.assertEqual(depth["covered_positions"],3)
+   self.assertEqual(depth["positions_ge_10"],2)
+   self.assertEqual(depth["positions_ge_100"],1)
+   self.assertEqual(depth["mean_depth"],34.75)

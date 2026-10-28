@@ -56,34 +56,62 @@ def verify_identical_micall_base(iva_image, riva_image):
 
 
 def score_outputs(folder, reference):
+    """Inspect the final MiCall products without materializing whole CSVs in RAM."""
     aligner = PairwiseAligner()
     aligner.mode = "global"
     aligner.end_gap_score = -1
     scores = []
+    lengths = []
     result = {}
+    depth = {"positions":0,"covered_positions":0,"positions_ge_10":0,
+             "positions_ge_100":0,"sum_depth":0.0,"maximum_depth":0.0}
     for basename in OUTPUT_NAMES:
         matches = [path for path in (folder / basename, folder / "scratch" / basename)
                    if path.is_file()]
         if not matches:
             result[basename] = {"exists": False}
             continue
-        file = matches[0]  # Prefer final collated MiCall output over internal scratch CSV.
+        file = matches[0]  # Final collated MiCall output has priority.
+        rowcount=0
         with file.open(newline="") as f:
-            rd = csv.DictReader(f)
-            lines = list(rd)
-        result[basename] = {"exists": True, "rows": len(lines), "sha256": sha(file)}
-        if basename != "conseq.csv":
-            continue
-        for row in lines:
-            if row.get("consensus-percent-cutoff") != "MAX":
-                continue
-            seq = row.get("sequence", "").upper()
-            if not seq:
-                continue
-            scores.append(float(aligner.score(reference, seq)))
-    return {"best_hxb2_final_max_conseq_score": max(scores, default=None),
-            "num_final_max_conseqs": len(scores), "outputs": result}
-
+            reader=csv.DictReader(f)
+            for row in reader:
+                rowcount+=1
+                if basename == "conseq.csv":
+                    if row.get("consensus-percent-cutoff") != "MAX":
+                        continue
+                    seq = row.get("sequence","").upper()
+                    if seq:
+                        scores.append(float(aligner.score(reference,seq)))
+                        lengths.append(len(seq))
+                elif basename == "genome_coverage.csv":
+                    value = row.get("coverage")
+                    if value in (None,""):
+                        continue
+                    try:
+                        coverage=float(value)
+                    except ValueError:
+                        continue
+                    depth["positions"]+=1
+                    depth["sum_depth"]+=coverage
+                    depth["maximum_depth"]=max(depth["maximum_depth"],coverage)
+                    if coverage > 0: depth["covered_positions"]+=1
+                    if coverage >= 10: depth["positions_ge_10"]+=1
+                    if coverage >= 100: depth["positions_ge_100"]+=1
+        result[basename]={"exists":True,"rows":rowcount,"sha256":sha(file)}
+    return {"best_hxb2_final_max_conseq_score": max(scores,default=None),
+            "num_final_max_conseqs":len(scores),
+            "final_max_conseq_lengths":sorted(lengths,reverse=True),
+            "coverage_depth": {
+                "positions":depth["positions"],
+                "covered_positions":depth["covered_positions"],
+                "positions_ge_10":depth["positions_ge_10"],
+                "positions_ge_100":depth["positions_ge_100"],
+                "mean_depth":(depth["sum_depth"]/depth["positions"]
+                              if depth["positions"] else None),
+                "maximum_depth":depth["maximum_depth"],
+            },
+            "outputs":result}
 
 def compare_outputs(iva, riva):
     """Report downstream MiCall differences without assuming only one contig."""
@@ -269,6 +297,19 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                 record["best_contig_acceptance"]=best_consensus_acceptance(a,b)
                 record["output_comparison"]=compare_outputs(
                     baseline["metrics"],record["riva"]["metrics"])
+                iva_depth=baseline["metrics"].get("coverage_depth")
+                riva_depth=record["riva"]["metrics"].get("coverage_depth")
+                if iva_depth and riva_depth:
+                    record["coverage_comparison"]={
+                        "iva":iva_depth,
+                        "riva":riva_depth,
+                        "covered_position_delta":(
+                            riva_depth["covered_positions"]-
+                            iva_depth["covered_positions"]),
+                        "ge_10_position_delta":(
+                            riva_depth["positions_ge_10"]-
+                            iva_depth["positions_ge_10"]),
+                    }
                 if not record["best_contig_acceptance"]["pass"]:
                     failures+=1
             else:

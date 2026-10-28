@@ -17,6 +17,8 @@ import sys
 import tempfile
 import time
 
+from acceptance import accept_sample, reference_fidelity, STRUCTURAL_ROLES
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("RIVA_DATA", "/workspace/denovo-example-io-1"))
 CACHE = Path(os.environ.get("RIVA_BENCH_CACHE", "/workspace/riva-benchmark-cache"))
@@ -162,7 +164,17 @@ def run():
     reference_hash=hashlib.sha256(ref.encode()).hexdigest()
     baseline_path=CACHE/"baselines.json"
     baselines=json.loads(baseline_path.read_text()) if baseline_path.exists() else {}
+    roles_path=CACHE/"roles.json"
+    if args.mode != "baseline":
+        if not roles_path.is_file():
+            raise ValueError("Missing private benchmark role config: " + str(roles_path))
+        roles=json.loads(roles_path.read_text())
+        if any(r["sample"] not in roles for r in manifest):
+            raise ValueError("Incomplete private benchmark role config")
+    else:
+        roles={}
     start=time.monotonic()
+    records=[]
     current=RESULTS/"results.jsonl"
     with current.open("a",buffering=1) as report:
         for row in manifest:
@@ -210,17 +222,38 @@ def run():
                     record["score_fraction"]=(got/target if got is not None and target is not None and target>0 else None)
                     # Explicitly avoid PASS claims for undefined/negative scores and structural cases.
                     record["ordinary_score_threshold_met"]=record["score_fraction"] is not None and record["score_fraction"]>=0.95
+                    structural=None
+                    if roles[sample] in STRUCTURAL_ROLES:
+                        structural=reference_fidelity(folder/"iva.raw.fasta",
+                                                      folder/"riva.stitched.fasta")
+                        record["structural_check"]=structural
+                    ok,problems=accept_sample(roles[sample],base["metrics"],riva,structural)
+                    record["alpha_pass"]=ok
+                    record["alpha_problems"]=problems
                 record["status"]="evaluated"
             except Exception as ex:
                 record["status"]="error"
                 record["error"]=str(ex)
             record["seconds"]=round(time.monotonic()-t0,2)
             report.write(json.dumps(record,sort_keys=True)+"\n")
+            records.append(record)
             print(f"{sample}: {record['status']} in {record['seconds']}s",flush=True)
     print(f"Finished invocation in {time.monotonic()-start:.1f}s; results={current}")
-    print("NOTE: HXB2 score alone is not structural fidelity; alpha PASS requires independent structural checks.")
-    return 1 if any(json.loads(line).get("status")=="error" for line in
-        current.read_text().splitlines() if json.loads(line).get("timestamp",0)>=time.time()-(time.monotonic()-start)-2) else 0
+    failures=[r for r in records if r.get("status")!="evaluated" or
+              (args.mode!="baseline" and not r.get("alpha_pass",False))]
+    if len(records)!=len(manifest):
+        print(f"ALPHA FAIL: only {len(records)}/{len(manifest)} selected samples completed")
+        return 1
+    if failures:
+        print(f"ALPHA FAIL: {len(failures)}/{len(records)} samples failed:")
+        for r in failures:
+            print(f"  {r['sample']}: {r.get('error') or '; '.join(r.get('alpha_problems', []))}")
+        return 1
+    if args.mode=="baseline":
+        print("IVA baseline evaluation succeeded (not an Riva alpha PASS)")
+    else:
+        print("ALPHA SCORE/FIDELITY GATES PASS for selected samples")
+    return 0
 
 if __name__=="__main__":
     try: sys.exit(run())

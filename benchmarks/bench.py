@@ -173,6 +173,13 @@ def run():
             raise ValueError("Incomplete private benchmark role config")
     else:
         roles={}
+    # Every JSONL record carries its invoking binary identity. Never combine
+    # best scores from unrelated experimental builds into a fictitious 7/7 run.
+    invocation_id=f"{int(time.time())}-{os.getpid()}"
+    binary_sha256=None
+    if args.mode in ("riva", "all"):
+        binary_sha256=hashlib.sha256(Path(args.riva).read_bytes()).hexdigest()
+    print(f"Invocation: {invocation_id} Riva SHA256: {binary_sha256 or 'baseline-only'}",flush=True)
     start=time.monotonic()
     records=[]
     current=RESULTS/"results.jsonl"
@@ -182,6 +189,7 @@ def run():
             if ABORT: break
             t0=time.monotonic()
             record={"sample":sample,"run_id":row["kive_run_id"],
+                    "invocation_id":invocation_id,"riva_binary_sha256":binary_sha256,
                     "mode":args.mode,"timestamp":time.time(),"status":"started"}
             report.write(json.dumps(record)+"\n")
             try:

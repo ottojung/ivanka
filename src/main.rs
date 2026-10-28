@@ -33,6 +33,34 @@ fn encode(seq: &[u8]) -> Option<u64> {
     }
     Some(n)
 }
+// Index every position of candidate seed kmers: a 31-base seed contains
+// only one possible query anchor, so sparse 12-base sampling discards ~11/12
+// of its supporting reads. For other kmers retain sparse postings to limit
+// memory use. Rolling encoding makes the full scan linear in read length.
+fn index_read(
+    index: &mut HashMap<u64, Vec<Hit>>,
+    seq: &[u8],
+    read_id: u32,
+    dense: &HashSet<u64>,
+) {
+    if seq.len() < K || seq.len() > u16::MAX as usize { return; }
+    const MASK: u64 = (1u64 << (2 * K)) - 1;
+    let mut key = 0u64;
+    let mut valid = 0usize;
+    for (i, base) in seq.iter().enumerate() {
+        let digit = match base {
+            b'A' => 0, b'C' => 1, b'G' => 2, b'T' => 3,
+            _ => { key = 0; valid = 0; continue; }
+        };
+        key = ((key << 2) | digit) & MASK;
+        valid += 1;
+        if valid < K { continue; }
+        let pos = i + 1 - K;
+        if pos % INDEX_STEP == 0 || pos + K == seq.len() || dense.contains(&key) {
+            index.entry(key).or_default().push(Hit {read: read_id, pos: pos as u16});
+        }
+    }
+}
 fn decode(mut val: u64) -> Vec<u8> {
     let mut out = vec![0; K];
     for x in out.iter_mut().rev() {
@@ -91,17 +119,16 @@ impl Reads {
         }
         eprintln!("building index for {} read pairs ({} oriented sequences)",pairs,seqs.len());
         let mut index:HashMap<u64,Vec<Hit>>=HashMap::new();
+        let mut seed_ranking=seed_counts.iter().map(|(k,c)|(*k,*c)).collect::<Vec<_>>();
+        seed_ranking.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+        let mut dense_seeds=HashSet::<u64>::new();
+        for (seed,count) in seed_ranking.into_iter().take(1200) {
+            if count<25 { break; }
+            dense_seeds.insert(seed);
+            dense_seeds.insert(encode(&rc(&decode(seed))).unwrap());
+        }
         for (idx,seq) in seqs.iter().enumerate() {
-            if seq.len()<K || seq.len()>u16::MAX as usize {continue;}
-            for pos in (0..=seq.len()-K).step_by(INDEX_STEP) {
-                if let Some(kmer)=encode(&seq[pos..pos+K]){
-                    index.entry(kmer).or_default().push(Hit{read:idx as u32,pos:pos as u16});
-                }
-            }
-            // Always index the last k-mer as well.
-            if let Some(kmer)=encode(&seq[seq.len()-K..]){
-                index.entry(kmer).or_default().push(Hit{read:idx as u32,pos:(seq.len()-K) as u16});
-            }
+            index_read(&mut index,seq,idx as u32,&dense_seeds);
         }
         eprintln!("index built: {} keys, {} distinct sampled seed kmers",index.len(),seed_counts.len());
         Ok(Self{seqs,index,seed_counts})
@@ -271,6 +298,20 @@ mod tests {
     use super::*;
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
+    #[test] fn dense_seed_postings_preserve_unaligned_read_positions() {
+        let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";
+        let mut read=vec![b'G';5];
+        read.extend_from_slice(seed);
+        read.extend_from_slice(b"TTACCC");
+        let mut sparse=HashMap::new();
+        index_read(&mut sparse,&read,0,&HashSet::new());
+        assert!(!sparse.get(&encode(seed).unwrap()).is_some_and(|x|
+            x.iter().any(|hit|hit.pos==5)));
+        let mut dense=HashMap::new();
+        let keys=HashSet::from([encode(seed).unwrap()]);
+        index_read(&mut dense,&read,0,&keys);
+        assert!(dense.get(&encode(seed).unwrap()).unwrap().iter().any(|x|x.pos==5));
+    }
     #[test] fn internal_seed_overhang_can_extend() {
         let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";
         let mut read=vec![b'G';40];

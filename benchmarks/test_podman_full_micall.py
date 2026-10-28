@@ -116,3 +116,24 @@ class BenchmarkTests(TestCase):
    self.assertEqual(depth["positions_ge_10"],2)
    self.assertEqual(depth["positions_ge_100"],1)
    self.assertEqual(depth["mean_depth"],34.75)
+
+ def test_parallel_iva_and_riva_arms_keep_separate_results(self):
+  import time
+  from types import SimpleNamespace
+  from unittest.mock import patch
+  args=SimpleNamespace(mode="both",timeout_per_arm=3,parallel_arms=True)
+  def fake_arm(row,arm,*arguments):
+   score=100 if arm=="iva" else 99
+   return {"exit_code":0,"metrics":{
+     "best_hxb2_final_max_conseq_score":score,"outputs":{}}}
+  with patch.object(m,"baseline_provenance",return_value={"verified":True}), \
+       patch.object(m,"save_iva_baseline"), \
+       patch.object(m,"run_arm",side_effect=fake_arm) as runner:
+   result=m.evaluate_sample({"sample":"S"},args,{"iva":"A","riva":"B"},
+           {"iva":"hashA","riva":"hashB"},"base-id","refhash","ACGT","inv",
+           time.monotonic()+5)
+  self.assertFalse(result["failed"])
+  self.assertEqual(runner.call_count,2)
+  self.assertTrue(result["best_contig_acceptance"]["pass"])
+  self.assertEqual(result["iva"]["metrics"]["best_hxb2_final_max_conseq_score"],100)
+  self.assertEqual(result["riva"]["metrics"]["best_hxb2_final_max_conseq_score"],99)

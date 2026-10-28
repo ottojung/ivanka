@@ -81,3 +81,5 @@ JSONL contains start/finish events that remain parseable even when
 samples finish out of order. The persistent IVA baseline cache is
 per-sample and validated against the same immutable MiCall image and
 FASTQ input hashes; this is preferable for Riva-only iterations.
+
+Option --parallel-arms permits the IVA and Riva MiCall pipelines for a sample to run simultaneously, sharing only immutable input FASTQs and the same pinned MiCall base. Use this with --jobs only when host capacity permits.

@@ -262,26 +262,34 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
         if args.mode=="riva":
             reused_baseline=load_iva_baseline(name,provenance)
             record["iva_baseline_reused"]=True
-        for arm in ("iva","riva"):
-            if arm not in checked:
-                continue
+        arms=[arm for arm in ("iva","riva") if arm in checked]
+        def attempt(arm):
             remaining=deadline-time.monotonic()
             if remaining <= 1:
-                record["status"]="global_timeout"
-                record["error"]="No global time budget for next assembler arm"
-                failures+=1
-                break
-            print(f"{name}: {arm}",flush=True)
+                return arm,{"exit_code":124,
+                            "error":"Global time limit exhausted before arm"}
             try:
                 result=run_arm(row,arm,images[arm],str(reference),
                                min(args.timeout_per_arm,max(1,int(remaining))),
                                invocation)
-                record[arm]=result
-                if result["exit_code"]:
-                    failures+=1
             except Exception as exc:
-                record[arm]={"error":f"{type(exc).__name__}: {exc}"}
+                result={"exit_code":1,"error":f"{type(exc).__name__}: {exc}"}
+            return arm,result
+
+        for arm in arms:
+            print(f"{name}: {arm}",flush=True)
+        if args.parallel_arms and len(arms)==2:
+            with ThreadPoolExecutor(max_workers=2) as arm_executor:
+                arm_jobs=[arm_executor.submit(attempt,arm) for arm in arms]
+                results=[task.result() for task in as_completed(arm_jobs)]
+        else:
+            results=[attempt(arm) for arm in arms]
+        for arm,result in results:
+            record[arm]=result
+            if result.get("exit_code"):
                 failures+=1
+                if result["exit_code"]==124:
+                    record["status"]="global_timeout"
         if "iva" in record and "metrics" in record["iva"]:
             try:
                 save_iva_baseline(name,provenance,record["iva"])
@@ -333,6 +341,8 @@ def main():
     parser.add_argument("--mode", choices=("both","iva","riva"), default="both")
     parser.add_argument("--jobs", type=int, default=1,
                         help="Independent sample pipelines to run concurrently")
+    parser.add_argument("--parallel-arms", action="store_true",
+                        help="Run IVA and Riva concurrently within each sample")
     parser.add_argument("--timeout-per-arm", type=int, default=1170)
     parser.add_argument("--total-time-limit", type=int, default=1180,
                         help="Global seconds for all samples, default below 20-minute hard cap")
@@ -406,6 +416,7 @@ def main():
         "failed_samples":[r["sample"] for r in completed_records if r["failed"]],
         "global_seconds":round(time.monotonic()-benchmark_start,2),
         "global_limit_seconds":args.total_time_limit,
+        "jobs":args.jobs,"parallel_arms":args.parallel_arms,
         "full_alpha_pass":full_alpha_pass,
         "note":"A subset or an IVA-only baseline run is never full alpha."
     }

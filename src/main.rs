@@ -225,6 +225,46 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
     }
     seq
 }
+// When read-supported alternatives fail the 4:1 dominance gate, preserve
+// distinct extension paths rather than silently ending a mixed population.
+// Every branch must have at least min_cov supporting reads. The assembler does
+// not use HXB2 or any external reference to select a branch.
+fn alternative_next_bases(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize) -> Vec<u8> {
+    let mut counts=[0usize;4];
+    for o in overhangs {
+        match o.first().copied() {
+            Some(b'A')=>counts[0]+=1,Some(b'C')=>counts[1]+=1,
+            Some(b'G')=>counts[2]+=1,Some(b'T')=>counts[3]+=1,_=>{}
+        }
+    }
+    let mut ranking=(0..4).collect::<Vec<_>>();
+    ranking.sort_unstable_by(|&a,&b|counts[b].cmp(&counts[a]).then_with(||a.cmp(&b)));
+    if counts[ranking[1]] < min_cov ||
+       counts[ranking[0]] >= min_ratio.saturating_mul(counts[ranking[1]]) {
+        return Vec::new();
+    }
+    ranking.into_iter().take(2).filter(|&i|counts[i]>=min_cov)
+        .map(|i|[b'A',b'C',b'G',b'T'][i]).collect()
+}
+
+fn branch_once(seq:&[u8], reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<Vec<u8>> {
+    let mut out=Vec::new();
+    for left in [false,true] {
+        let oriented=if left {rc(seq)} else {seq.to_vec()};
+        let overhangs=reads.overhangs(&oriented);
+        for base in alternative_next_bases(&overhangs,min_cov,min_ratio) {
+            let mut trial=oriented.clone();
+            trial.push(base);
+            let extended=extend(trial,reads,min_cov,min_ratio);
+            let actual=if left {rc(&extended)} else {extended};
+            if actual.len()>seq.len()+1 && !out.contains(&actual) {
+                out.push(actual);
+            }
+        }
+    }
+    out
+}
+
 fn parse() -> Result<(String,String,String,usize,Option<usize>),String>{
     let args=std::env::args().collect::<Vec<_>>();
     let mut a=None;let mut b=None;let mut output=None;let mut max=12usize;let mut max_pairs=None;
@@ -260,7 +300,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
     let mut contigs=Vec::<Vec<u8>>::new();
     let mut attempted=0usize;
     for (seed,count) in candidates {
-        if contigs.len()>=max || attempted>=500 {break;}
+        if contigs.len()>=max.saturating_mul(4) || attempted>=500 {break;}
         if count<25 {break;}
         let seedseq=decode(seed);
         let seedrev=rc(&seedseq);
@@ -271,11 +311,20 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
             if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {
+                let alternatives=branch_once(&seq,&reads,10,4);
                 contigs.push(seq);
+                for branch in alternatives {
+                    if branch.len()>=SEED_TARGET*3/4 &&
+                        !contigs.iter().any(|c|c==&branch || c.windows(branch.len()).any(|w|w==branch)) {
+                        contigs.push(branch);
+                    }
+                }
             }
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
+    contigs.sort_unstable_by(|a,b|b.len().cmp(&a.len()));
+    contigs.truncate(max);
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">riva_{} len={}",i+1,c.len())?;
@@ -290,6 +339,12 @@ mod tests {
     use super::*;
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
+    #[test] fn supported_mixed_extension_is_preserved_as_two_paths() {
+        let mut overhangs=(0..48).map(|_|b"ATGA".to_vec()).collect::<Vec<_>>();
+        overhangs.extend((0..36).map(|_|b"GTGA".to_vec()));
+        assert_eq!(alternative_next_bases(&overhangs,10,4),vec![b'A',b'G']);
+        assert_eq!(alternative_next_bases(&overhangs,40,4),Vec::<u8>::new());
+    }
     #[test] fn internal_seed_overhang_can_extend() {
         let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";
         let mut read=vec![b'G';40];

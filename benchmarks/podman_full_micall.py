@@ -65,6 +65,9 @@ def score_outputs(folder, reference):
     result = {}
     depth = {"positions":0,"covered_positions":0,"positions_ge_10":0,
              "positions_ge_100":0,"sum_depth":0.0,"maximum_depth":0.0}
+    unique_covered=set()
+    unique_ge_10=set()
+    unique_ge_100=set()
     for basename in OUTPUT_NAMES:
         matches = [path for path in (folder / basename, folder / "scratch" / basename)
                    if path.is_file()]
@@ -98,6 +101,15 @@ def score_outputs(folder, reference):
                     if coverage > 0: depth["covered_positions"]+=1
                     if coverage >= 10: depth["positions_ge_10"]+=1
                     if coverage >= 100: depth["positions_ge_100"]+=1
+                    # Rows are not unique genome coordinates: multiple
+                    # contigs may cover the same HXB2 position. Report both.
+                    ref=row.get("coordinates")
+                    pos=row.get("refseq_nuc_pos")
+                    if ref and pos:
+                        coordinate=(ref,pos)
+                        if coverage > 0: unique_covered.add(coordinate)
+                        if coverage >= 10: unique_ge_10.add(coordinate)
+                        if coverage >= 100: unique_ge_100.add(coordinate)
         result[basename]={"exists":True,"rows":rowcount,"sha256":sha(file)}
     return {"best_hxb2_final_max_conseq_score": max(scores,default=None),
             "num_final_max_conseqs":len(scores),
@@ -110,6 +122,9 @@ def score_outputs(folder, reference):
                 "mean_depth":(depth["sum_depth"]/depth["positions"]
                               if depth["positions"] else None),
                 "maximum_depth":depth["maximum_depth"],
+                "unique_reference_positions_covered":len(unique_covered),
+                "unique_reference_positions_ge_10":len(unique_ge_10),
+                "unique_reference_positions_ge_100":len(unique_ge_100),
             },
             "outputs":result}
 
@@ -258,6 +273,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
             record["failed"]=True
             return record
         provenance=baseline_provenance(row,pinned_iva_id,hxb2_hash)
+        record["provenance"]=provenance
         reused_baseline=None
         if args.mode=="riva":
             try:

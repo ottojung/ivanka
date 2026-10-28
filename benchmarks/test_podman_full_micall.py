@@ -117,6 +117,17 @@ class BenchmarkTests(TestCase):
    self.assertEqual(depth["positions_ge_100"],1)
    self.assertEqual(depth["mean_depth"],34.75)
 
+ def test_coverage_breadth_deduplicates_multiple_contigs(self):
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   (root/"genome_coverage.csv").write_text(
+      "coordinates,refseq_nuc_pos,coverage\n"
+      "HXB2,1,15\nHXB2,1,20\nHXB2,2,8\nHXB2,3,0\n")
+   depth=m.score_outputs(root,"ACGT")["coverage_depth"]
+   self.assertEqual(depth["covered_positions"],3)
+   self.assertEqual(depth["unique_reference_positions_covered"],2)
+   self.assertEqual(depth["unique_reference_positions_ge_10"],1)
+
  def test_parallel_iva_and_riva_arms_keep_separate_results(self):
   import time
   from types import SimpleNamespace

@@ -21,6 +21,20 @@ class BenchmarkTests(TestCase):
   d=m.compare_outputs(left,right)["conseq.csv"]
   self.assertEqual(d["row_delta"],1)
   self.assertFalse(d["same_sha256"])
+ def test_verified_iva_baseline_roundtrip(self):
+  from unittest.mock import patch
+  with TemporaryDirectory() as d, patch.object(m, "RESULTS", Path(d)):
+   prov={"iva_image_id":"sha256:a","hxb2_sha256":"sha256:b",
+         "fastq_sha256":["x","y"],"micall_project_code":""}
+   arm={"exit_code":0,"metrics":{
+     "best_hxb2_final_max_conseq_score":1000,
+     "outputs":{"conseq.csv":{"exists":True,"rows":1,"sha256":"x"}}}}
+   m.save_iva_baseline("S1",prov,arm)
+   self.assertEqual(m.load_iva_baseline("S1",prov),arm)
+   with self.assertRaisesRegex(ValueError,"provenance"):
+    m.load_iva_baseline("S1",prov | {"iva_image_id":"sha256:DIFFERENT"})
+   with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
+    m.load_iva_baseline("S2",prov)
  def test_missing_conseq(self):
   with TemporaryDirectory() as d:
    self.assertIsNone(m.score_outputs(Path(d),"ACGT")["best_hxb2_final_max_conseq_score"])

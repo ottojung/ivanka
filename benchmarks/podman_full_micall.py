@@ -87,6 +87,45 @@ def compare_outputs(iva, riva):
     return results
 
 
+def baseline_provenance(row, iva_image_id, hxb2_sha256):
+    sample = row["sample"]
+    sample_dir = DATA / "samples" / sample
+    fastqs = [sample_dir / f"{sample}_L001_R{i}_001.fastq.gz" for i in (1, 2)]
+    return {
+        "iva_image_id": iva_image_id,
+        "hxb2_sha256": hxb2_sha256,
+        "fastq_sha256": [sha(f) for f in fastqs],
+        "micall_project_code": row.get("micall_project_code", "").strip(),
+    }
+
+
+def iva_baseline_path(sample):
+    return RESULTS / "iva-baselines" / (sample + ".json")
+
+
+def load_iva_baseline(sample, expected_provenance):
+    path = iva_baseline_path(sample)
+    if not path.is_file():
+        raise ValueError("No verified IVA baseline for this sample: run --mode iva first")
+    stored = json.loads(path.read_text())
+    if stored["provenance"] != expected_provenance:
+        raise ValueError("IVA baseline provenance differs from current MiCall image, FASTQs, or HXB2")
+    arm = stored["iva"]
+    if arm["exit_code"] != 0 or arm["metrics"]["best_hxb2_final_max_conseq_score"] is None:
+        raise ValueError("The stored IVA baseline is not a completed scored MiCall run")
+    return arm
+
+
+def save_iva_baseline(sample, provenance, arm):
+    if arm["exit_code"] != 0 or arm["metrics"]["best_hxb2_final_max_conseq_score"] is None:
+        raise ValueError("Cannot cache an incomplete or unscored IVA baseline")
+    path = iva_baseline_path(sample)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".new")
+    temp.write_text(json.dumps({"provenance": provenance, "iva": arm}, sort_keys=True))
+    temp.replace(path)
+
+
 def run_arm(row, arm, image, reference, timeout, invocation):
     name = row["sample"]
     folder = RESULTS / invocation / name / arm
@@ -152,6 +191,9 @@ def main():
     for arm,img in images.items():
         if args.mode not in ("both",arm): continue
         checked[arm]=image_id(img)
+    # Even Riva-only runs must verify the exact IVA image that produced the
+    # baseline; image tags by themselves are not immutable.
+    pinned_iva_id = checked.get("iva") or image_id(IVA_IMAGE)
     rows=list(csv.DictReader((DATA/"manifest.tsv").open(),delimiter="\t"))
     rows=[row for row in rows if args.sample is None or row["sample"] in args.sample]
     if not rows: raise ValueError("No samples selected")
@@ -162,13 +204,27 @@ def main():
         return 0
     RESULTS.mkdir(parents=True,exist_ok=True)
     invocation=str(int(time.time()))+"-"+str(os.getpid())
+    hxb2_hash=sha(DATA/"hxb2.fasta")
     path=RESULTS/"results.jsonl"
     failed=0
     with path.open("a", buffering=1) as out:
         for row in rows:
             record={"sample":row["sample"],"invocation":invocation,
-                    "hxb2_sha256":sha(DATA/"hxb2.fasta"),"status":"started"}
+                    "hxb2_sha256":hxb2_hash,"status":"started"}
             out.write(json.dumps(record)+"\n")
+            provenance = baseline_provenance(row, pinned_iva_id, hxb2_hash)
+            reused_baseline = None
+            if args.mode == "riva":
+                try:
+                    reused_baseline = load_iva_baseline(row["sample"], provenance)
+                    record["iva_baseline_reused"] = True
+                except (ValueError, OSError, KeyError) as exc:
+                    failed += 1
+                    record["status"] = "error"
+                    record["error"] = str(exc)
+                    out.write(json.dumps(record, sort_keys=True)+"\n")
+                    print(row["sample"], "missing or incompatible IVA baseline:", exc, flush=True)
+                    continue
             for arm in ("iva","riva"):
                 if arm not in checked: continue
                 print(f'{row["sample"]}: {arm}',flush=True)
@@ -179,14 +235,21 @@ def main():
                 except Exception as exc:
                     record[arm]={"error":str(exc)}
                     failed+=1
-            if all(arm in record and "metrics" in record[arm] for arm in ("iva","riva")):
-                a=record["iva"]["metrics"]["best_hxb2_final_max_conseq_score"]
+            if "iva" in record and "metrics" in record["iva"]:
+                try:
+                    save_iva_baseline(row["sample"], provenance, record["iva"])
+                except ValueError as exc:
+                    record["baseline_error"] = str(exc)
+                    failed += 1
+            baseline = record.get("iva", reused_baseline)
+            if "riva" in record and "metrics" in record["riva"] and baseline and baseline.get("exit_code") == 0 and "metrics" in baseline:
+                a=baseline["metrics"]["best_hxb2_final_max_conseq_score"]
                 b=record["riva"]["metrics"]["best_hxb2_final_max_conseq_score"]
                 record["best_contig_acceptance"]={
                     "iva_score":a,"riva_score":b,
                     "pass": a is not None and b is not None and b >= 0.95*a}
                 record["output_comparison"] = compare_outputs(
-                    record["iva"]["metrics"], record["riva"]["metrics"])
+                    baseline["metrics"], record["riva"]["metrics"])
                 if not record["best_contig_acceptance"]["pass"]: failed+=1
             record["status"]="finished"
             out.write(json.dumps(record,sort_keys=True)+"\n")

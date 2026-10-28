@@ -45,3 +45,16 @@ class BenchmarkTests(TestCase):
  def test_missing_conseq(self):
   with TemporaryDirectory() as d:
    self.assertIsNone(m.score_outputs(Path(d),"ACGT")["best_hxb2_final_max_conseq_score"])
+
+ def test_negative_iva_baseline_uses_absolute_threshold(self):
+  self.assertTrue(m.best_consensus_acceptance(-120,-119)["pass"])
+  self.assertFalse(m.best_consensus_acceptance(-120,-121)["pass"])
+  self.assertEqual(m.best_consensus_acceptance(-120,-119)["threshold"],-120)
+
+ def test_positive_iva_baseline_requires_95_percent(self):
+  self.assertTrue(m.best_consensus_acceptance(1000,950)["pass"])
+  self.assertFalse(m.best_consensus_acceptance(1000,949)["pass"])
+  self.assertFalse(m.best_consensus_acceptance(1000,None)["pass"])
+
+ def test_missing_iva_baseline_fails(self):
+  self.assertFalse(m.best_consensus_acceptance(None,1000)["pass"])

@@ -19,10 +19,11 @@ from Bio.Align import PairwiseAligner
 DATA = Path(os.environ.get("RIVA_DATA", "/workspace/denovo-example-io-1"))
 RESULTS = Path(os.environ.get("RIVA_PODMAN_RESULTS", "/workspace/riva-podman-results"))
 IVA_IMAGE = os.environ.get("RIVA_IVA_IMAGE", "localhost/riva-micall-iva:base")
-RIVA_IMAGE = os.environ.get("RIVA_RIVA_IMAGE", "localhost/riva-micall-riva:alpha")
+RIVA_IMAGE = os.environ.get("RIVA_RIVA_IMAGE", "localhost/riva-micall-riva:seeded")
 OUTPUT_NAMES = ("conseq.csv", "conseq_all.csv", "contigs.csv", "unstitched_contigs.csv",
                 "stitched_contigs.csv", "genome_coverage.csv", "genome_concordance.csv",
-                "remap_counts.csv", "coverage_summary.csv", "concordance.csv")
+                "remap_counts.csv", "coverage_summary.csv", "concordance.csv",
+                "nuc.csv", "amino.csv", "insertions.csv", "coverage_scores.csv")
 
 
 def sha(path):
@@ -100,6 +101,21 @@ def compare_outputs(iva, riva):
                           if "rows" in a and "rows" in b else None),
         }
     return results
+
+
+def best_consensus_acceptance(iva_score, riva_score):
+    """A single good final MiCall MAX consensus is sufficient.
+
+    Non-positive baselines use absolute comparison rather than a relative
+    threshold, which would be meaningless for negative alignment scores.
+    """
+    threshold = (0.95*iva_score if iva_score > 0 else iva_score) if iva_score is not None else None
+    return {
+        "iva_score": iva_score,
+        "riva_score": riva_score,
+        "threshold": threshold,
+        "pass": threshold is not None and riva_score is not None and riva_score >= threshold,
+    }
 
 
 def baseline_provenance(row, iva_image_id, hxb2_sha256):
@@ -198,7 +214,9 @@ def main():
     parser.add_argument("--sample", action="append",
                         help="Run only a selected sample ID (repeatable)")
     parser.add_argument("--mode", choices=("both","iva","riva"), default="both")
-    parser.add_argument("--timeout-per-arm", type=int, default=3600)
+    parser.add_argument("--timeout-per-arm", type=int, default=1170)
+    parser.add_argument("--total-time-limit", type=int, default=1180,
+                        help="Global seconds for all samples, default below 20-minute hard cap")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
     images={"iva":IVA_IMAGE,"riva":RIVA_IMAGE}
@@ -224,6 +242,7 @@ def main():
     hxb2_hash=sha(DATA/"hxb2.fasta")
     path=RESULTS/"results.jsonl"
     failed=0
+    deadline=time.monotonic()+args.total_time_limit
     with path.open("a", buffering=1) as out:
         for row in rows:
             record={"sample":row["sample"],"invocation":invocation,
@@ -242,12 +261,21 @@ def main():
                     out.write(json.dumps(record, sort_keys=True)+"\n")
                     print(row["sample"], "missing or incompatible IVA baseline:", exc, flush=True)
                     continue
+            exhausted=False
             for arm in ("iva","riva"):
                 if arm not in checked: continue
+                remaining=deadline-time.monotonic()
+                if remaining <= 1:
+                    record["status"]="global_timeout"
+                    record["error"]="Exhausted total-time-limit before next assembler arm"
+                    exhausted=True
+                    failed+=1
+                    break
                 print(f'{row["sample"]}: {arm}',flush=True)
                 try:
                     record[arm]=run_arm(row,arm,images[arm],str(hxb2),
-                                        args.timeout_per_arm, invocation)
+                                        min(args.timeout_per_arm, max(1,int(remaining))),
+                                        invocation)
                     if record[arm]["exit_code"]: failed+=1
                 except Exception as exc:
                     record[arm]={"error":str(exc)}
@@ -262,14 +290,15 @@ def main():
             if "riva" in record and "metrics" in record["riva"] and baseline and baseline.get("exit_code") == 0 and "metrics" in baseline:
                 a=baseline["metrics"]["best_hxb2_final_max_conseq_score"]
                 b=record["riva"]["metrics"]["best_hxb2_final_max_conseq_score"]
-                record["best_contig_acceptance"]={
-                    "iva_score":a,"riva_score":b,
-                    "pass": a is not None and b is not None and b >= 0.95*a}
+                record["best_contig_acceptance"]=best_consensus_acceptance(a,b)
                 record["output_comparison"] = compare_outputs(
                     baseline["metrics"], record["riva"]["metrics"])
                 if not record["best_contig_acceptance"]["pass"]: failed+=1
-            record["status"]="finished"
+            if not exhausted:
+                record["status"]="finished"
             out.write(json.dumps(record,sort_keys=True)+"\n")
+            if exhausted:
+                break
     return 1 if failed else 0
 
 

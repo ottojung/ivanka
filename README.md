@@ -59,4 +59,13 @@ The role mapping is private because it contains sample names. Store it in
 
 To build: `podman tag ghcr.io/cfe-lab/micall:latest localhost/riva-micall-iva:base` then `podman build --layers -t localhost/riva-micall-riva:alpha -f benchmarks/Dockerfile.micall-riva .`. Run: `./scripts/benchmark_podman_full_micall.sh --mode both`. Private dataset and outputs are selected by `RIVA_DATA` and `RIVA_PODMAN_RESULTS` and are never committed. Results include source image identity, final HXB2 MAX-consensus best score and report file hashes and row counts.
 
-Riva currently lacks internal G2P seed support; MiCall still appends its G2P contigs to both assembler arms before stitching. This is a known difference to resolve.
+The seeded Riva image accepts G2P contigs at the assembler boundary; MiCall also appends those contigs before stitching in both arms.
+
+
+The Podman full-MiCall comparison enforces a single global 20-minute
+deadline and a separate per-arm timeout. A verified IVA baseline may be
+reused with --mode riva only when IVA image ID, input FASTQ hashes,
+HXB2 hash and MiCall project code match. The default Riva image is
+localhost/riva-micall-riva:seeded. Both images share MiCall base layers.
+All samples must produce a final MAX-cutoff MiCall consensus after mapping,
+and the selected pipeline arms must exit successfully.

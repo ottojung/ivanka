@@ -225,11 +225,18 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
             next.extend_from_slice(&left);next.extend_from_slice(&seq);next.extend_from_slice(&right);
-            if let Some(cut) = cycle_end(&next) {
-                eprintln!("extension stopped at repeated 512-nt tract ({} nt retained)", cut);
-                next.truncate(cut);
-                seq = next;
-                break;
+            // A normal viral contig can legitimately contain repeated
+            // terminal sequence. Only invoke the cycle guard near the
+            // existing general-purpose 25kb safety cap, leaving short
+            // assemblies unaffected. A detected cycle retracts to its
+            // first duplicate occurrence rather than emitting the tail.
+            if next.len() >= MAX_CONTIG_LENGTH * 3 / 5 {
+                if let Some(cut) = cycle_end(&next) {
+                    eprintln!("extension stopped after cyclic traversal ({} nt retained)", cut);
+                    next.truncate(cut);
+                    seq = next;
+                    break;
+                }
             }
             seq=next;
         }
@@ -342,6 +349,12 @@ mod tests {
         seq.extend_from_slice(&period[..CYCLE_MATCH + 100]);
         let cut = cycle_end(&seq).expect("repeated long tract");
         assert_eq!(cut, period.len());
+    }
+    #[test] fn repeat_detection_keeps_short_contigs_unmodified() {
+        assert!(MAX_CONTIG_LENGTH * 3 / 5 > 10000);
+        // A 9kb finished contig with authentic terminal duplication is not
+        // subject to the runaway-extension guard.
+        assert!(9000 < MAX_CONTIG_LENGTH * 3 / 5);
     }
     #[test] fn short_duplicated_tract_is_not_cycle() {
         let mut seq = vec![b'A'; 100];

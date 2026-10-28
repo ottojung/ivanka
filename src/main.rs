@@ -154,6 +154,32 @@ fn choose_extension(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize)->Vec<u
     }
     out
 }
+// A long exact tract repeated at a distant position signals that extension
+// has traversed a cycle/repeat path rather than discovering new sequence.
+// Require much more context than a read anchor (31 nt) so short legitimate
+// repeats are not mistaken for a circular traversal.
+const CYCLE_MATCH: usize = 512;
+const CYCLE_MIN_SPACING: usize = 2000;
+
+fn cycle_end(seq: &[u8]) -> Option<usize> {
+    if seq.len() < CYCLE_MIN_SPACING + CYCLE_MATCH { return None; }
+    let mut first = HashMap::<u64, usize>::new();
+    for i in 0..=seq.len() - CYCLE_MATCH {
+        let Some(anchor) = encode(&seq[i..i + K]) else { continue; };
+        if let Some(&j) = first.get(&anchor) {
+            if i - j >= CYCLE_MIN_SPACING
+                && seq[j..j + CYCLE_MATCH] == seq[i..i + CYCLE_MATCH]
+                && seq[j..j + CYCLE_MATCH]
+                    .windows(K).step_by(32)
+                    .filter_map(encode).collect::<HashSet<_>>().len() >= 8 {
+                return Some(i + CYCLE_MATCH);
+            }
+        } else {
+            first.insert(anchor, i);
+        }
+    }
+    None
+}
 fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<u8>{
     let mut stagnant=0usize;
     for _ in 0..600 {
@@ -167,6 +193,12 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
             next.extend_from_slice(&left);next.extend_from_slice(&seq);next.extend_from_slice(&right);
+            if let Some(cut) = cycle_end(&next) {
+                eprintln!("extension stopped at repeated 512-nt tract ({} nt retained)", cut);
+                next.truncate(cut);
+                seq = next;
+                break;
+            }
             seq=next;
         }
     }
@@ -237,6 +269,23 @@ mod tests {
     use super::*;
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
+    #[test] fn distant_cycle_is_stopped() {
+        let mut rng=0xdeadbeef12345678u64;
+        let period=(0..6000).map(|_|{
+            rng^=rng<<13; rng^=rng>>7; rng^=rng<<17;
+            [b'A',b'C',b'G',b'T'][(rng & 3) as usize]
+        }).collect::<Vec<u8>>();
+        let mut seq = period.clone();
+        seq.extend_from_slice(&period[..CYCLE_MATCH + 100]);
+        let cut = cycle_end(&seq).expect("repeated long tract");
+        assert_eq!(cut, period.len() + CYCLE_MATCH);
+    }
+    #[test] fn short_duplicated_tract_is_not_cycle() {
+        let mut seq = vec![b'A'; 100];
+        seq.extend(std::iter::repeat(b'C').take(4000));
+        seq.extend(std::iter::repeat(b'A').take(100));
+        assert_eq!(cycle_end(&seq), None);
+    }
     #[test] fn extension_consensus(){
         let a=(0..16).map(|_|b"ACGTA".to_vec()).collect::<Vec<_>>();
         assert_eq!(choose_extension(&a,10,4),b"ACGTA");

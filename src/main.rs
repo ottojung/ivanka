@@ -265,6 +265,38 @@ fn branch_once(seq:&[u8], reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<V
     out
 }
 
+// Explore linked read-supported alternatives through successive ambiguous
+// extension boundaries, not just once after producing a long contig.
+// Keep all prefixes, never merge distinct alternatives based on a reference.
+const MAX_BRANCH_DEPTH: usize = 3;
+const MAX_BRANCH_PATHS: usize = 12;
+
+fn branch_paths(seed:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize)
+    -> Vec<Vec<u8>> {
+    let mut paths=vec![seed];
+    let mut frontier=vec![0usize];
+    for _ in 0..MAX_BRANCH_DEPTH {
+        let mut next=Vec::new();
+        for parent in frontier {
+            let mut branches=branch_once(&paths[parent],reads,min_cov,min_ratio);
+            branches.sort_unstable_by(|a,b|b.len().cmp(&a.len()));
+            for branch in branches {
+                if paths.len() >= MAX_BRANCH_PATHS {break;}
+                // No exact duplicate paths, even if different read anchors
+                // reached the same extension from either orientation.
+                if !paths.iter().any(|old| old==&branch) {
+                    paths.push(branch);
+                    next.push(paths.len()-1);
+                }
+            }
+            if paths.len()>=MAX_BRANCH_PATHS {break;}
+        }
+        if next.is_empty() || paths.len()>=MAX_BRANCH_PATHS {break;}
+        frontier=next;
+    }
+    paths
+}
+
 fn parse() -> Result<(String,String,String,usize,Option<usize>),String>{
     let args=std::env::args().collect::<Vec<_>>();
     let mut a=None;let mut b=None;let mut output=None;let mut max=12usize;let mut max_pairs=None;
@@ -307,19 +339,23 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
         let seq=extend(seedseq,&reads,10,4);
-        if seq.len()>=SEED_TARGET*3/4 {
-            eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
-            // Do not merge contigs, merely suppress exact contained duplicates.
-            if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {
-                let alternatives=branch_once(&seq,&reads,10,4);
-                contigs.push(seq);
-                for branch in alternatives {
-                    if branch.len()>=SEED_TARGET*3/4 &&
-                        !contigs.iter().any(|c|c==&branch || c.windows(branch.len()).any(|w|w==branch)) {
-                        contigs.push(branch);
-                    }
-                }
+        // Previously we branched only *after* a 540-nt contig was
+        // accepted, discarding high-coverage 31-to-432nt dead-ends even
+        // though branching there could recover a full haplotype.
+        // Restrict repeated branching to the first 48 attempted seeds.
+        let choices=if attempted<=48 {
+            branch_paths(seq,&reads,10,4)
+        } else {
+            vec![seq]
+        };
+        for candidate in choices {
+            if candidate.len()<SEED_TARGET*3/4 {continue;}
+            if contigs.iter().any(|c|c.windows(candidate.len()).any(|w|w==candidate)) {
+                continue;
             }
+            eprintln!("candidate {} coverage {} produced {} nt",
+                     attempted,count,candidate.len());
+            contigs.push(candidate);
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
@@ -339,6 +375,10 @@ mod tests {
     use super::*;
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
+    #[test] fn bounded_branch_budget_is_finite() {
+        assert!(MAX_BRANCH_DEPTH>=2);
+        assert!(MAX_BRANCH_PATHS>=2 && MAX_BRANCH_PATHS<=16);
+    }
     #[test] fn supported_mixed_extension_is_preserved_as_two_paths() {
         let mut overhangs=(0..48).map(|_|b"ATGA".to_vec()).collect::<Vec<_>>();
         overhangs.extend((0..36).map(|_|b"GTGA".to_vec()));

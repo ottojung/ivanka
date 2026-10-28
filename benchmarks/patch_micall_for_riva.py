@@ -33,7 +33,17 @@ def run_subprocess(fastq1: Path, fastq2: Path, merged_contigs_csv: Optional[Path
     output = tmp_dir / "riva_contigs.fasta"
     command = ["riva", "--reads1", str(fastq1),
                "--reads2", str(fastq2), "--output", str(output)]
-    logger.info("Running Riva assembler (G2P seed input unavailable).")
+    if merged_contigs_csv is not None:
+        from csv import DictReader
+        seed_fasta = tmp_dir / "g2p-seeds.fasta"
+        with open(merged_contigs_csv) as source, seed_fasta.open("w") as target:
+            for index, row in enumerate(DictReader(source)):
+                sequence = row.get("contig", "").strip().upper()
+                if sequence:
+                    target.write(f">g2p_{index}\\n{sequence}\\n")
+        if seed_fasta.stat().st_size:
+            command.extend(["--seeds", str(seed_fasta)])
+    logger.info("Running Riva assembler with MiCall G2P seed input.")
     subprocess.run(command, check=True, cwd=tmp_dir)
     if not output.is_file():
         raise RuntimeError("Riva returned success but wrote no FASTA")

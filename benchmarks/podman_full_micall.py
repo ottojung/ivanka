@@ -61,7 +61,7 @@ def score_outputs(folder, reference):
             if row.get("consensus-percent-cutoff") != "MAX":
                 continue
             seq = row.get("sequence", "").upper()
-            if not seq or not set(seq) <= set("ACGTN-"):
+            if not seq:
                 continue
             scores.append(float(aligner.score(reference, seq)))
     return {"best_hxb2_final_max_conseq_score": max(scores, default=None),

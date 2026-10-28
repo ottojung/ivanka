@@ -163,3 +163,10 @@ class BenchmarkTests(TestCase):
   self.assertIn("baseline_error",r)
   self.assertNotIn("best_contig_acceptance",r)
   self.assertEqual(runner.call_count,1)
+
+ def test_qualification_wall_time_and_configured_budget(self):
+  self.assertTrue(m.qualification_within_cap(1180,1199.99))
+  self.assertTrue(m.qualification_within_cap(1200,1200))
+  self.assertFalse(m.qualification_within_cap(1201,100))
+  self.assertFalse(m.qualification_within_cap(1180,1200.01))
+  self.assertFalse(m.qualification_within_cap(0,100))

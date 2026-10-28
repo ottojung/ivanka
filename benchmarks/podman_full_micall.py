@@ -162,6 +162,17 @@ def best_consensus_acceptance(iva_score, riva_score):
     }
 
 
+QUALIFICATION_MAX_SECONDS = 1200
+
+
+def qualification_within_cap(configured_limit, elapsed):
+    """Reject alpha qualification if either the budget or observed wall time exceeds 20m.
+
+    The separate IVA-only control preparation is deliberately nonqualifying.
+    """
+    return 0 < configured_limit <= QUALIFICATION_MAX_SECONDS and elapsed <= QUALIFICATION_MAX_SECONDS
+
+
 def baseline_provenance(row, iva_image_id, hxb2_sha256):
     sample = row["sample"]
     sample_dir = DATA / "samples" / sample
@@ -430,7 +441,9 @@ def main():
                  for r in completed_records)
     full_scope=(args.sample is None and len(rows)==manifest_sample_count
                 and manifest_sample_count==7)
+    global_seconds=time.monotonic()-benchmark_start
     full_alpha_pass=(full_scope and args.mode in ("both","riva")
+                     and qualification_within_cap(args.total_time_limit,global_seconds)
                      and accepted==manifest_sample_count and failed==0)
     summary={
         "invocation":invocation,"mode":args.mode,"images":checked,
@@ -439,7 +452,7 @@ def main():
         "selected_samples":len(rows),"finished_samples":len(completed_records),
         "accepted_samples":accepted,
         "failed_samples":[r["sample"] for r in completed_records if r["failed"]],
-        "global_seconds":round(time.monotonic()-benchmark_start,2),
+        "global_seconds":round(global_seconds,2),
         "global_limit_seconds":args.total_time_limit,
         "jobs":args.jobs,"parallel_arms":args.parallel_arms,
         "allow_missing_baseline":args.allow_missing_baseline,

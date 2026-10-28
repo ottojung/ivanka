@@ -201,7 +201,10 @@ fn cycle_end(seq: &[u8]) -> Option<usize> {
                 && seq[j..j + CYCLE_MATCH]
                     .windows(K).step_by(32)
                     .filter_map(encode).collect::<HashSet<_>>().len() >= 8 {
-                return Some(i + CYCLE_MATCH);
+                // The duplicated tract starts at i. Its 512 bases are
+                // observation/evidence of a cycle, not new assembled
+                // sequence, so retract them from the output contig.
+                return Some(i);
             }
         } else {
             first.insert(anchor, i);
@@ -338,7 +341,7 @@ mod tests {
         let mut seq = period.clone();
         seq.extend_from_slice(&period[..CYCLE_MATCH + 100]);
         let cut = cycle_end(&seq).expect("repeated long tract");
-        assert_eq!(cut, period.len() + CYCLE_MATCH);
+        assert_eq!(cut, period.len());
     }
     #[test] fn short_duplicated_tract_is_not_cycle() {
         let mut seq = vec![b'A'; 100];

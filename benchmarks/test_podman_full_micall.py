@@ -102,6 +102,8 @@ class BenchmarkTests(TestCase):
     result=m.run_arm({"sample":"TEST"},"riva","image:tag","ACGT",123,"invocation")
    argv=runner.call_args.args[0]
    self.assertEqual(argv[argv.index("--entrypoint")+1],"/usr/bin/timeout")
+   self.assertEqual(argv[argv.index("--timeout")+1],"121")
+   self.assertEqual(argv[argv.index("--stop-timeout")+1],"2")
    self.assertIn("108s",argv)
    self.assertIn("micall",argv)
    self.assertEqual(result["exit_code"],0)

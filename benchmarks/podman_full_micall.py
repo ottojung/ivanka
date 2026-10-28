@@ -229,6 +229,10 @@ def run_arm(row, arm, image, reference, timeout, invocation):
     container_name = f"riva-bench-{arm}-{invocation}-{hashlib.sha256(name.encode()).hexdigest()[:8]}"
     command = [
         "podman", "run", "--rm", "--pull=never", "--name", container_name,
+        # Podman's own lifecycle timer survives loss of the host Python
+        # benchmark process. The inner GNU timeout alone can leave orphaned
+        # containers when the outer 20-minute wrapper terminates Python.
+        "--timeout", str(max(1, int(timeout)-2)), "--stop-timeout", "2",
         "-v", f"{DATA.resolve()}:/bench:ro",
         "-v", f"{RESULTS.resolve()}:/results:rw",
         # PID 1 has its own deadline: an interrupted host-side benchmark

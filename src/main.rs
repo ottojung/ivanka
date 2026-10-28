@@ -47,6 +47,33 @@ fn read_open(path: &str) -> io::Result<Box<dyn BufRead>> {
         Ok(Box::new(BufReader::new(MultiGzDecoder::new(f))))
     } else { Ok(Box::new(BufReader::new(f))) }
 }
+// G2P-derived MiCall seed contigs. These seed candidates are supplied before
+// assembly; this does not require any reference mapping or coordinate lookup.
+fn fasta_seeds(path: &str) -> io::Result<Vec<Vec<u8>>> {
+    let mut output = Vec::new();
+    let mut current = Vec::new();
+    let mut started = false;
+    for line in read_open(path)?.lines() {
+        let line = line?;
+        if line.starts_with('>') {
+            if started && !current.is_empty() {
+                if current.iter().all(|b| matches!(b, b'A'|b'C'|b'G'|b'T')) {
+                    output.push(std::mem::take(&mut current));
+                } else {current.clear();}
+            }
+            started = true;
+        } else {
+            if !started && !line.trim().is_empty() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "sequence before FASTA header"));
+            }
+            current.extend(line.trim().bytes().map(|b| b.to_ascii_uppercase()));
+        }
+    }
+    if started && !current.is_empty() && current.iter().all(|b| matches!(b, b'A'|b'C'|b'G'|b'T')) {
+        output.push(current);
+    }
+    Ok(output)
+}
 fn fastq_seq(r: &mut dyn BufRead) -> io::Result<Option<Vec<u8>>> {
     let mut a=String::new(); let mut b=String::new();
     if r.read_line(&mut a)? == 0 { return Ok(None); }
@@ -206,39 +233,52 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
     }
     seq
 }
-fn parse() -> Result<(String,String,String,usize,Option<usize>),String>{
+fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
     let args=std::env::args().collect::<Vec<_>>();
-    let mut a=None;let mut b=None;let mut output=None;let mut max=12usize;let mut max_pairs=None;
+    let mut a=None;let mut b=None;let mut output=None;let mut max=12usize;let mut max_pairs=None;let mut seeds=None;
     let mut i=1;
     while i<args.len() {
         match args[i].as_str() {
-            "--reads1"|"--reads2"|"--output"|"--max-contigs"|"--max-pairs" if i+1<args.len()=>{
+            "--reads1"|"--reads2"|"--output"|"--max-contigs"|"--max-pairs"|"--seeds" if i+1<args.len()=>{
                 match args[i].as_str(){
                     "--reads1"=>a=Some(args[i+1].clone()),
                     "--reads2"=>b=Some(args[i+1].clone()),
                     "--output"=>output=Some(args[i+1].clone()),
                     "--max-contigs"=>max=args[i+1].parse().map_err(|_|"invalid max-contigs")?,
                     "--max-pairs"=>max_pairs=Some(args[i+1].parse().map_err(|_|"invalid max-pairs")?),
+                    "--seeds"=>seeds=Some(args[i+1].clone()),
                     _=>{}
                 }
                 i+=2;
             },
             "--help"|"-h" => {
-                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 12] [--max-pairs N]");
+                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 12] [--max-pairs N] [--seeds seeds.fasta]");
                 std::process::exit(0);
             },
             _=>return Err(format!("unknown/incomplete argument: {}",args[i])),
         }
     }
-    Ok((a.ok_or("missing --reads1")?, b.ok_or("missing --reads2")?,output.ok_or("missing --output")?,max,max_pairs))
+    Ok((a.ok_or("missing --reads1")?, b.ok_or("missing --reads2")?,output.ok_or("missing --output")?,max,max_pairs,seeds))
 }
 fn main()->Result<(),Box<dyn std::error::Error>> {
-    let (a,b,out,max,max_pairs)=parse().map_err(io::Error::other)?;
+    let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
     let now=Instant::now();
     let reads=Reads::load(&a,&b,max_pairs)?;
     let mut candidates=reads.seed_counts.iter().map(|(k,c)|(*k,*c)).collect::<Vec<_>>();
     candidates.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
     let mut contigs=Vec::<Vec<u8>>::new();
+    if let Some(ref seeds_file) = seeds_path {
+        let supplied=fasta_seeds(seeds_file)?;
+        eprintln!("received {} MiCall G2P seed contigs", supplied.len());
+        let seed_quota=(max / 3).max(1);
+        for seed in supplied.into_iter().filter(|seq|seq.len()>=K).take(seed_quota) {
+            let extended=extend(seed,&reads,10,4);
+            if extended.len()>=SEED_TARGET*3/4 &&
+               !contigs.iter().any(|c|c.windows(extended.len()).any(|w|w==extended)) {
+                contigs.push(extended);
+            }
+        }
+    }
     let mut attempted=0usize;
     for (seed,count) in candidates {
         if contigs.len()>=max || attempted>=500 {break;}
@@ -271,6 +311,13 @@ mod tests {
     use super::*;
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
+    #[test] fn read_external_fasta_seeds() {
+        let path=std::env::temp_dir().join(format!("riva-seeds-{}.fasta",std::process::id()));
+        std::fs::write(&path,">seed-one\nacgtACGT\n>seed-two\nGGGG\n>ambiguous\nANNN\n").unwrap();
+        let seeds=fasta_seeds(path.to_str().unwrap()).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(seeds,vec![b"ACGTACGT".to_vec(),b"GGGG".to_vec()]);
+    }
     #[test] fn internal_seed_overhang_can_extend() {
         let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";
         let mut read=vec![b'G';40];

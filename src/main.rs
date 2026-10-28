@@ -187,7 +187,9 @@ fn choose_extension(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize)->Vec<u
 // has traversed a cycle/repeat path rather than discovering new sequence.
 // Require much more context than a read anchor (31 nt) so short legitimate
 // repeats are not mistaken for a circular traversal.
-const CYCLE_MATCH: usize = 512;
+// Biological terminal repeats can legitimately span several hundred bases.
+// Require >1kb of identity before declaring a runaway assembly cycle.
+const CYCLE_MATCH: usize = 1024;
 const CYCLE_MIN_SPACING: usize = 2000;
 
 fn cycle_end(seq: &[u8]) -> Option<usize> {
@@ -226,7 +228,7 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
             next.extend_from_slice(&left);next.extend_from_slice(&seq);next.extend_from_slice(&right);
             if let Some(cut) = cycle_end(&next) {
-                eprintln!("extension stopped at repeated 512-nt tract ({} nt retained)", cut);
+                eprintln!("extension stopped at repeated >1kb tract ({} nt retained)", cut);
                 next.truncate(cut);
                 seq = next;
                 break;
@@ -342,6 +344,20 @@ mod tests {
         seq.extend_from_slice(&period[..CYCLE_MATCH + 100]);
         let cut = cycle_end(&seq).expect("repeated long tract");
         assert_eq!(cut, period.len());
+    }
+    #[test] fn legitimate_terminal_repeat_is_not_a_cycle() {
+        // A plausible non-circular sequence with two ~650nt terminal
+        // repeats must not be truncated merely due to that duplication.
+        let mut rng=0x7265766572736547u64;
+        let body=(0..6000).map(|_| {
+            rng^=rng<<13; rng^=rng>>7; rng^=rng<<17;
+            [b'A',b'C',b'G',b'T'][(rng & 3) as usize]
+        }).collect::<Vec<u8>>();
+        let repeat=body[..650].to_vec();
+        let mut seq=repeat.clone();
+        seq.extend_from_slice(&body);
+        seq.extend_from_slice(&repeat);
+        assert_eq!(cycle_end(&seq),None);
     }
     #[test] fn short_duplicated_tract_is_not_cycle() {
         let mut seq = vec![b'A'; 100];

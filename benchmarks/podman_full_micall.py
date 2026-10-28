@@ -162,6 +162,17 @@ def best_consensus_acceptance(iva_score, riva_score):
     }
 
 
+QUALIFICATION_MAX_SECONDS = 2400
+
+
+def qualification_within_cap(configured_limit, elapsed):
+    """Require both configured and observed whole-run wall time <=40 minutes.
+
+    A separate IVA-only control preparation is never an alpha qualification.
+    """
+    return 0 < configured_limit <= QUALIFICATION_MAX_SECONDS and 0 <= elapsed <= QUALIFICATION_MAX_SECONDS
+
+
 def baseline_provenance(row, iva_image_id, hxb2_sha256):
     sample = row["sample"]
     sample_dir = DATA / "samples" / sample
@@ -218,6 +229,9 @@ def run_arm(row, arm, image, reference, timeout, invocation):
     container_name = f"riva-bench-{arm}-{invocation}-{hashlib.sha256(name.encode()).hexdigest()[:8]}"
     command = [
         "podman", "run", "--rm", "--pull=never", "--name", container_name,
+        # Podman enforces a container lifetime even when the supervising
+        # Python process receives SIGKILL.
+        "--timeout", str(max(1,int(timeout)-2)), "--stop-timeout", "2",
         "-v", f"{DATA.resolve()}:/bench:ro",
         "-v", f"{RESULTS.resolve()}:/results:rw",
         # PID 1 has its own deadline: an interrupted host-side benchmark
@@ -430,7 +444,9 @@ def main():
                  for r in completed_records)
     full_scope=(args.sample is None and len(rows)==manifest_sample_count
                 and manifest_sample_count==7)
+    global_seconds=time.monotonic()-benchmark_start
     full_alpha_pass=(full_scope and args.mode in ("both","riva")
+                     and qualification_within_cap(args.total_time_limit,global_seconds)
                      and accepted==manifest_sample_count and failed==0)
     summary={
         "invocation":invocation,"mode":args.mode,"images":checked,
@@ -439,7 +455,7 @@ def main():
         "selected_samples":len(rows),"finished_samples":len(completed_records),
         "accepted_samples":accepted,
         "failed_samples":[r["sample"] for r in completed_records if r["failed"]],
-        "global_seconds":round(time.monotonic()-benchmark_start,2),
+        "global_seconds":round(global_seconds,2),
         "global_limit_seconds":args.total_time_limit,
         "jobs":args.jobs,"parallel_arms":args.parallel_arms,
         "allow_missing_baseline":args.allow_missing_baseline,

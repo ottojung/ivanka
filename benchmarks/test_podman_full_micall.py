@@ -102,6 +102,8 @@ class BenchmarkTests(TestCase):
     result=m.run_arm({"sample":"TEST"},"riva","image:tag","ACGT",123,"invocation")
    argv=runner.call_args.args[0]
    self.assertEqual(argv[argv.index("--entrypoint")+1],"/usr/bin/timeout")
+   self.assertEqual(argv[argv.index("--timeout")+1],"121")
+   self.assertEqual(argv[argv.index("--stop-timeout")+1],"2")
    self.assertIn("108s",argv)
    self.assertIn("micall",argv)
    self.assertEqual(result["exit_code"],0)
@@ -163,3 +165,12 @@ class BenchmarkTests(TestCase):
   self.assertIn("baseline_error",r)
   self.assertNotIn("best_contig_acceptance",r)
   self.assertEqual(runner.call_count,1)
+
+
+ def test_qualification_respects_requested_forty_minute_limit(self):
+  self.assertTrue(m.qualification_within_cap(2380,2399.99))
+  self.assertTrue(m.qualification_within_cap(2400,2400))
+  self.assertFalse(m.qualification_within_cap(2401,100))
+  self.assertFalse(m.qualification_within_cap(2380,2400.01))
+  self.assertFalse(m.qualification_within_cap(0,100))
+  self.assertFalse(m.qualification_within_cap(2380,-1))

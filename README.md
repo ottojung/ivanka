@@ -83,3 +83,25 @@ per-sample and validated against the same immutable MiCall image and
 FASTQ input hashes; this is preferable for Riva-only iterations.
 
 Option --parallel-arms permits the IVA and Riva MiCall pipelines for a sample to run simultaneously, sharing only immutable input FASTQs and the same pinned MiCall base. Use this with --jobs only when host capacity permits.
+
+
+## Genuine IVA control preparation (not an alpha qualification)
+
+Large HIV samples take more than 20 minutes for a full IVA MiCall run on
+this host. The 20-minute Riva qualification limit remains mandatory.
+For repeated development, prepare genuine IVA controls once:
+
+    ./scripts/prepare_full_micall_iva_baselines.sh
+
+This uses the exact same MiCall image and all de novo stages, but with
+a separately disclosed, longer setup budget. It is **not** an alpha
+benchmark pass. Complete scored IVA baselines are pinned to image ID,
+FASTQ SHA256, HXB2 SHA256 and MiCall project-code configuration.
+An incomplete or unscored IVA run cannot become a cached control. Then
+validate the full Riva MiCall pipeline with a 20-minute global deadline:
+
+    ./scripts/benchmark_podman_full_micall.sh --mode riva --jobs 4
+
+To test the absolute end-to-end runtime for both arms together, use
+--mode both and optional --parallel-arms within the 20-minute limit.
+If that run does not complete, the summary must say FAIL.

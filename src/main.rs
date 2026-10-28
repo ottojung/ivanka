@@ -451,13 +451,38 @@ fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),S
     }
     Ok((a.ok_or("missing --reads1")?, b.ok_or("missing --reads2")?,output.ok_or("missing --output")?,max,max_pairs,seeds))
 }
+// The highest-count k-mers often come from one over-sequenced region.
+// Round-robin across log2-depth buckets so the limited extension budget also
+// visits lower-depth but solid (>24 supporting observations) genomic regions.
+// Use a deterministic multiplicative permutation within each bucket instead
+// of count ranking, which otherwise repeatedly attempts nearby seeds.
+fn balanced_seed_candidates(counts:&HashMap<u64,u32>) -> Vec<(u64,u32)> {
+    let mut buckets=vec![Vec::<(u64,u32)>::new();32];
+    for (&key,&count) in counts {
+        if count < 25 {continue;}
+        let bucket=(31-count.leading_zeros()) as usize;
+        buckets[bucket].push((key,count));
+    }
+    let mut longest=0;
+    for bucket in &mut buckets {
+        bucket.sort_unstable_by_key(|&(key,_)| key.wrapping_mul(0x9e3779b97f4a7c15));
+        longest=longest.max(bucket.len());
+    }
+    let mut result=Vec::with_capacity(buckets.iter().map(Vec::len).sum());
+    for rank in 0..longest {
+        for bucket in buckets.iter().rev() {
+            if let Some(&item)=bucket.get(rank) {result.push(item);}
+        }
+    }
+    result
+}
+
 fn main()->Result<(),Box<dyn std::error::Error>> {
     let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
     let now=Instant::now();
     let reads=Reads::load(&a,&b,max_pairs)?;
     let graph=SolidKmerGraph::build(&reads);
-    let mut candidates=reads.seed_counts.iter().map(|(k,c)|(*k,*c)).collect::<Vec<_>>();
-    candidates.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+    let candidates=balanced_seed_candidates(&reads.seed_counts);
     let mut contigs=Vec::<Vec<u8>>::new();
     if let Some(ref seeds_file) = seeds_path {
         let supplied=fasta_seeds(seeds_file)?;
@@ -474,8 +499,9 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
     }
     let mut attempted=0usize;
     for (seed,count) in candidates {
-        if contigs.len()>=max || attempted>=500 {break;}
-        if count<25 {break;}
+        // Accumulate candidates beyond the final output budget; keep the
+        // longest (and hence best explored) ones after broad seed sampling.
+        if contigs.len()>=max.saturating_mul(3) || attempted>=500 {break;}
         let seedseq=decode(seed);
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
@@ -491,6 +517,8 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
+    contigs.sort_unstable_by(|a,b|b.len().cmp(&a.len()));
+    contigs.truncate(max);
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">riva_{} len={}",i+1,c.len())?;
@@ -564,6 +592,23 @@ mod tests {
         let graph=SolidKmerGraph{next};
         let seed=decode(key);
         assert_eq!(graph.extend_right(&seed,10,4),seed);
+    }
+
+    #[test]
+    fn balanced_seed_search_covers_low_and_high_depth_within_early_budget() {
+        let mut counts=HashMap::new();
+        for i in 0..100u64 {counts.insert(i+100,8000);}
+        for i in 0..100u64 {counts.insert(i+200,90);}
+        for i in 0..100u64 {counts.insert(i+300,32);}
+        counts.insert(7,24);
+        let selected=balanced_seed_candidates(&counts);
+        assert_eq!(selected.len(),300);
+        let early=selected.iter().take(12).map(|x|x.1).collect::<Vec<_>>();
+        assert_eq!(early.iter().filter(|x|**x==8000).count(),4);
+        assert_eq!(early.iter().filter(|x|**x==90).count(),4);
+        assert_eq!(early.iter().filter(|x|**x==32).count(),4);
+        assert!(!selected.iter().any(|x|x.0==7));
+        assert_eq!(selected,balanced_seed_candidates(&counts));
     }
 
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}

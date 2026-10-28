@@ -156,7 +156,8 @@ impl Reads {
                 let overlap=contig.len()-begin;
                 let read=&self.seqs[hit.read as usize];
                 if overlap<K || read_start+overlap>=read.len() {continue;}
-                if read[read_start..read_start+overlap]!=contig[begin..] {continue;}
+                if !read_supports_overlap(
+                    &read[read_start..read_start+overlap], &contig[begin..]) {continue;}
                 used.insert(original);
                 ext.push(read[read_start+overlap..].to_vec());
             }
@@ -164,6 +165,25 @@ impl Reads {
         ext
     }
 }
+// A single sequencing error outside a 31-mer seed must not discard a
+// genuine read spanning the contig end. Exact k-mer anchoring already
+// guarantees one long perfect tract; permit at most 2% disagreement in the
+// full aligned overlap, with early exit on unrelated/repetitive matches.
+fn read_supports_overlap(read: &[u8], contig: &[u8]) -> bool {
+    if read.len() != contig.len() || read.len() < K {
+        return false;
+    }
+    let mut errors = 0usize;
+    let limit = (read.len() / 50).max(1);
+    for (r, c) in read.iter().zip(contig) {
+        if r != c {
+            errors += 1;
+            if errors > limit { return false; }
+        }
+    }
+    true
+}
+
 fn choose_extension(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize)->Vec<u8>{
     let mut out=Vec::new();
     let mut remaining=(0..overhangs.len()).collect::<Vec<_>>();
@@ -322,6 +342,23 @@ mod tests {
         let seeds=fasta_seeds(path.to_str().unwrap()).unwrap();
         std::fs::remove_file(&path).unwrap();
         assert_eq!(seeds,vec![b"ACGTACGT".to_vec(),b"GGGG".to_vec()]);
+    }
+    #[test] fn sparse_error_tolerant_overlap_support() {
+        let contig=(0..160).map(|i| [b'A',b'C',b'G',b'T'][(i*i/3+i*7)%4])
+            .collect::<Vec<_>>();
+        let mut read=contig.clone();
+        read[7]=match read[7] { b'A'=>b'C', _=>b'A' };
+        read.extend_from_slice(b"TTAACCGG");
+        let anchor=encode(&contig[60..60+K]).unwrap();
+        let mut index=HashMap::new();
+        index.insert(anchor,vec![Hit{read:0,pos:60}]);
+        let reads=Reads{seqs:vec![read],index,seed_counts:HashMap::new()};
+        assert_eq!(reads.overhangs(&contig),vec![b"TTAACCGG".to_vec()]);
+        let mut unrelated=contig.clone();
+        for i in (0..40).step_by(4) {
+            unrelated[i]=match unrelated[i] { b'A'=>b'C', _=>b'A' };
+        }
+        assert!(!read_supports_overlap(&unrelated,&contig));
     }
     #[test] fn internal_seed_overhang_can_extend() {
         let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";

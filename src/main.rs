@@ -122,14 +122,16 @@ impl Reads {
                 let original=hit.read/2;
                 if used.contains(&original) {continue;}
                 let pos=hit.pos as usize;
-                if q<pos {continue;}
-                let begin=q-pos;
+                // The contig may be shorter than the aligned read, especially
+                // during seeding. In that case the read starts *before* the
+                // contig, and the matching anchor is internal to the read.
+                let (begin,read_start)=if q>=pos {(q-pos,0)} else {(0,pos-q)};
                 let overlap=contig.len()-begin;
                 let read=&self.seqs[hit.read as usize];
-                if overlap<K || overlap>=read.len() {continue;}
-                if read[..overlap]!=contig[begin..] {continue;}
+                if overlap<K || read_start+overlap>=read.len() {continue;}
+                if read[read_start..read_start+overlap]!=contig[begin..] {continue;}
                 used.insert(original);
-                ext.push(read[overlap..].to_vec());
+                ext.push(read[read_start+overlap..].to_vec());
             }
         }
         ext
@@ -269,6 +271,17 @@ mod tests {
     use super::*;
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
+    #[test] fn internal_seed_overhang_can_extend() {
+        let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";
+        let mut read=vec![b'G';40];
+        read.extend_from_slice(seed);
+        read.extend_from_slice(b"TTAACCGG");
+        let mut index=HashMap::new();
+        index.insert(encode(seed).unwrap(),vec![Hit{read:0,pos:40}]);
+        let reads=Reads{seqs:vec![read],index,seed_counts:HashMap::new()};
+        let ov=reads.overhangs(seed);
+        assert_eq!(ov,vec![b"TTAACCGG".to_vec()]);
+    }
     #[test] fn distant_cycle_is_stopped() {
         let mut rng=0xdeadbeef12345678u64;
         let period=(0..6000).map(|_|{

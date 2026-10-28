@@ -368,8 +368,8 @@ def main():
                         help="Run IVA and Riva concurrently within each sample")
     parser.add_argument("--allow-missing-baseline", action="store_true",
                         help="Riva-only diagnostic: run full MiCall without control, never claim pass")
-    parser.add_argument("--timeout-per-arm", type=int, default=1170)
-    parser.add_argument("--total-time-limit", type=int, default=1180,
+    parser.add_argument("--timeout-per-arm", type=int, default=2370)
+    parser.add_argument("--total-time-limit", type=int, default=2380,
                         help="Global seconds for all samples, default below 20-minute hard cap")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()

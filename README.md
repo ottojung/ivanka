@@ -52,3 +52,11 @@ clinical validation.
 
 The role mapping is private because it contains sample names. Store it in
 `/workspace/riva-benchmark-cache/roles.json`.
+
+## Full MiCall A/B with Podman
+
+`benchmarks/Dockerfile.micall-riva` builds Riva and overlays only the IVA assembler function in a pinned official MiCall image. All MiCall mapping, stitching, consensus, and coverage steps are unchanged. This follows the assembler boundary in MiCall PR #1015, without its unrelated stitcher changes.
+
+To build: `podman tag ghcr.io/cfe-lab/micall:latest localhost/riva-micall-iva:base` then `podman build --layers -t localhost/riva-micall-riva:alpha -f benchmarks/Dockerfile.micall-riva .`. Run: `./scripts/benchmark_podman_full_micall.sh --mode both`. Private dataset and outputs are selected by `RIVA_DATA` and `RIVA_PODMAN_RESULTS` and are never committed. Results include source image identity, final HXB2 MAX-consensus best score and report file hashes and row counts.
+
+Riva currently lacks internal G2P seed support; MiCall still appends its G2P contigs to both assembler arms before stitching. This is a known difference to resolve.

@@ -68,6 +68,25 @@ def score_outputs(folder, reference):
             "num_final_max_conseqs": len(scores), "outputs": result}
 
 
+def compare_outputs(iva, riva):
+    """Report downstream MiCall differences without assuming only one contig."""
+    left, right = iva["outputs"], riva["outputs"]
+    results = {}
+    for filename in sorted(set(left) | set(right)):
+        a = left.get(filename, {})
+        b = right.get(filename, {})
+        results[filename] = {
+            "both_present": a.get("exists", False) and b.get("exists", False),
+            "same_sha256": (a.get("sha256") == b.get("sha256")
+                            if a.get("sha256") and b.get("sha256") else None),
+            "iva_rows": a.get("rows"),
+            "riva_rows": b.get("rows"),
+            "row_delta": (b["rows"] - a["rows"]
+                          if "rows" in a and "rows" in b else None),
+        }
+    return results
+
+
 def run_arm(row, arm, image, reference, timeout, invocation):
     name = row["sample"]
     folder = RESULTS / invocation / name / arm
@@ -166,6 +185,8 @@ def main():
                 record["best_contig_acceptance"]={
                     "iva_score":a,"riva_score":b,
                     "pass": a is not None and b is not None and b >= 0.95*a}
+                record["output_comparison"] = compare_outputs(
+                    record["iva"]["metrics"], record["riva"]["metrics"])
                 if not record["best_contig_acceptance"]["pass"]: failed+=1
             record["status"]="finished"
             out.write(json.dumps(record,sort_keys=True)+"\n")

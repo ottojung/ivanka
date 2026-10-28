@@ -15,6 +15,12 @@ class BenchmarkTests(TestCase):
    s=m.score_outputs(Path(d),"ACGT")
    self.assertEqual(s["best_hxb2_final_max_conseq_score"],4.0)
    self.assertEqual(s["num_final_max_conseqs"],2)
+ def test_output_differences_are_explicit(self):
+  left={"outputs":{"conseq.csv":{"exists":True,"rows":2,"sha256":"abc"}}}
+  right={"outputs":{"conseq.csv":{"exists":True,"rows":3,"sha256":"def"}}}
+  d=m.compare_outputs(left,right)["conseq.csv"]
+  self.assertEqual(d["row_delta"],1)
+  self.assertFalse(d["same_sha256"])
  def test_missing_conseq(self):
   with TemporaryDirectory() as d:
    self.assertIsNone(m.score_outputs(Path(d),"ACGT")["best_hxb2_final_max_conseq_score"])

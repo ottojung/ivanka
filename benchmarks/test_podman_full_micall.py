@@ -35,6 +35,13 @@ class BenchmarkTests(TestCase):
     m.load_iva_baseline("S1",prov | {"iva_image_id":"sha256:DIFFERENT"})
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
     m.load_iva_baseline("S2",prov)
+ def test_base_layers_must_match(self):
+  from unittest.mock import patch
+  layers={"iva":["a","b"],"riva":["a","b","c"],"foreign":["x","y"]}
+  with patch.object(m,"image_layers",side_effect=lambda name:layers[name]):
+   m.verify_identical_micall_base("iva","riva")
+   with self.assertRaisesRegex(ValueError,"does not derive"):
+    m.verify_identical_micall_base("iva","foreign")
  def test_missing_conseq(self):
   with TemporaryDirectory() as d:
    self.assertIsNone(m.score_outputs(Path(d),"ACGT")["best_hxb2_final_max_conseq_score"])

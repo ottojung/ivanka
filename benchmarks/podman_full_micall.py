@@ -38,6 +38,21 @@ def image_id(ref):
                                     "--format", "{{.Id}}", ref], text=True).strip()
 
 
+def image_layers(ref):
+    raw = subprocess.check_output(
+        ["podman", "image", "inspect", "--format", "{{json .RootFS.Layers}}", ref],
+        text=True).strip()
+    return json.loads(raw)
+
+
+def verify_identical_micall_base(iva_image, riva_image):
+    """Compare immutable container layer digests, not mutable image tags."""
+    baseline = image_layers(iva_image)
+    experiment = image_layers(riva_image)
+    if not baseline or experiment[:len(baseline)] != baseline:
+        raise ValueError("Riva image does not derive from the selected IVA MiCall base image")
+
+
 def score_outputs(folder, reference):
     aligner = PairwiseAligner()
     aligner.mode = "global"
@@ -194,6 +209,8 @@ def main():
     # Even Riva-only runs must verify the exact IVA image that produced the
     # baseline; image tags by themselves are not immutable.
     pinned_iva_id = checked.get("iva") or image_id(IVA_IMAGE)
+    if "riva" in checked:
+        verify_identical_micall_base(IVA_IMAGE, RIVA_IMAGE)
     rows=list(csv.DictReader((DATA/"manifest.tsv").open(),delimiter="\t"))
     rows=[row for row in rows if args.sample is None or row["sample"] in args.sample]
     if not rows: raise ValueError("No samples selected")

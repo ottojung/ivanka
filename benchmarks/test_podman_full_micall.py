@@ -81,6 +81,11 @@ class BenchmarkTests(TestCase):
    self.assertEqual(len(events),4)
    self.assertEqual(sum(e["status"]=="started" for e in events),2)
    self.assertEqual(sum(e["status"]=="finished" for e in events),2)
+   summaries=list(destination.glob("summary-*.json"))
+   self.assertEqual(len(summaries),1)
+   summary=json.loads(summaries[0].read_text())
+   self.assertFalse(summary["full_alpha_pass"])
+   self.assertEqual(summary["selected_samples"],2)
 
  def test_run_arm_enforces_timeout_inside_container(self):
   from unittest.mock import patch,Mock

@@ -352,6 +352,7 @@ def main():
         verify_identical_micall_base(IVA_IMAGE, RIVA_IMAGE)
     with (DATA/"manifest.tsv").open(newline="") as manifest:
         rows=list(csv.DictReader(manifest,delimiter="\t"))
+    manifest_sample_count=len(rows)
     rows=[row for row in rows if args.sample is None or row["sample"] in args.sample]
     if not rows: raise ValueError("No samples selected")
     with (DATA/"hxb2.fasta").open() as reference_file:
@@ -365,7 +366,9 @@ def main():
     hxb2_hash=sha(DATA/"hxb2.fasta")
     path=RESULTS/"results.jsonl"
     failed=0
-    deadline=time.monotonic()+args.total_time_limit
+    completed_records=[]
+    benchmark_start=time.monotonic()
+    deadline=benchmark_start+args.total_time_limit
     with path.open("a",buffering=1) as out:
         with ThreadPoolExecutor(max_workers=args.jobs) as executor:
             futures={}
@@ -383,10 +386,34 @@ def main():
                     record={"sample":name,"invocation":invocation,"status":"error",
                             "error":f"{type(exc).__name__}: {exc}","failed":True}
                 out.write(json.dumps(record,sort_keys=True)+"\n")
+                completed_records.append(record)
                 if record["failed"]:
                     failed+=1
                 print(name,record["status"],"fail" if record["failed"] else "ok",
                       record.get("best_contig_acceptance",{}),flush=True)
+    accepted=sum(r.get("best_contig_acceptance",{}).get("pass") is True
+                 for r in completed_records)
+    full_scope=(args.sample is None and len(rows)==manifest_sample_count
+                and manifest_sample_count==7)
+    full_alpha_pass=(full_scope and args.mode in ("both","riva")
+                     and accepted==manifest_sample_count and failed==0)
+    summary={
+        "invocation":invocation,"mode":args.mode,"images":checked,
+        "hxb2_sha256":hxb2_hash,"manifest_sha256":sha(DATA/"manifest.tsv"),
+        "manifest_sample_count":manifest_sample_count,
+        "selected_samples":len(rows),"finished_samples":len(completed_records),
+        "accepted_samples":accepted,
+        "failed_samples":[r["sample"] for r in completed_records if r["failed"]],
+        "global_seconds":round(time.monotonic()-benchmark_start,2),
+        "global_limit_seconds":args.total_time_limit,
+        "full_alpha_pass":full_alpha_pass,
+        "note":"A subset or an IVA-only baseline run is never full alpha."
+    }
+    (RESULTS/f"summary-{invocation}.json").write_text(
+        json.dumps(summary,indent=2,sort_keys=True))
+    print("FULL_ALPHA_PASS" if full_alpha_pass else "FULL_ALPHA_NOT_PASSED",
+          f"{accepted}/{manifest_sample_count} full-pipeline comparisons",
+          flush=True)
     return 1 if failed else 0
 
 if __name__=="__main__":

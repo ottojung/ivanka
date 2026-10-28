@@ -137,3 +137,18 @@ class BenchmarkTests(TestCase):
   self.assertTrue(result["best_contig_acceptance"]["pass"])
   self.assertEqual(result["iva"]["metrics"]["best_hxb2_final_max_conseq_score"],100)
   self.assertEqual(result["riva"]["metrics"]["best_hxb2_final_max_conseq_score"],99)
+
+ def test_missing_iva_can_run_riva_diagnostic_but_never_pass(self):
+  import time
+  from types import SimpleNamespace
+  from unittest.mock import patch
+  args=SimpleNamespace(mode="riva",timeout_per_arm=6,parallel_arms=False,allow_missing_baseline=True)
+  with patch.object(m,"baseline_provenance",return_value={"verified":True}), \
+       patch.object(m,"load_iva_baseline",side_effect=ValueError("missing control")), \
+       patch.object(m,"run_arm",return_value={"exit_code":0,"metrics":{"best_hxb2_final_max_conseq_score":1000,"outputs":{}}}) as runner:
+   r=m.evaluate_sample({"sample":"S"},args,{"riva":"img"},{"riva":"hash"},"base","hxb2","ACGT","inv",time.monotonic()+20)
+  self.assertTrue(r["failed"])
+  self.assertEqual(r["riva"]["exit_code"],0)
+  self.assertIn("baseline_error",r)
+  self.assertNotIn("best_contig_acceptance",r)
+  self.assertEqual(runner.call_count,1)

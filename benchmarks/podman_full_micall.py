@@ -82,8 +82,9 @@ def run_arm(row, arm, image, reference, timeout, invocation):
     container_sample = "/bench/samples/" + name
     # The manifest project is a cohort label, NOT MiCall primer project_code.
     project = row.get("micall_project_code", "").strip()
+    container_name = f"riva-bench-{arm}-{invocation}-{hashlib.sha256(name.encode()).hexdigest()[:8]}"
     command = [
-        "podman", "run", "--rm", "--pull=never",
+        "podman", "run", "--rm", "--pull=never", "--name", container_name,
         "-v", f"{DATA.resolve()}:/bench:ro",
         "-v", f"{RESULTS.resolve()}:/results:rw",
         "--entrypoint", "micall", image,
@@ -104,6 +105,10 @@ def run_arm(row, arm, image, reference, timeout, invocation):
                                timeout=timeout, check=False)
             exitcode = p.returncode
         except subprocess.TimeoutExpired:
+            # Killing the CLI process need not kill its Podman container.
+            subprocess.run(["podman", "rm", "--force", container_name],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=30, check=False)
             exitcode = 124
     result = {
         "exit_code": exitcode, "seconds": round(time.monotonic()-start, 2),
@@ -120,7 +125,7 @@ def main():
     parser.add_argument("--sample", action="append",
                         help="Run only a selected sample ID (repeatable)")
     parser.add_argument("--mode", choices=("both","iva","riva"), default="both")
-    parser.add_argument("--timeout-per-arm", type=int, default=1200)
+    parser.add_argument("--timeout-per-arm", type=int, default=3600)
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
     images={"iva":IVA_IMAGE,"riva":RIVA_IMAGE}

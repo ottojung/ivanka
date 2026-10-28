@@ -260,8 +260,15 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
         provenance=baseline_provenance(row,pinned_iva_id,hxb2_hash)
         reused_baseline=None
         if args.mode=="riva":
-            reused_baseline=load_iva_baseline(name,provenance)
-            record["iva_baseline_reused"]=True
+            try:
+                reused_baseline=load_iva_baseline(name,provenance)
+                record["iva_baseline_reused"]=True
+            except (ValueError,OSError,KeyError) as exc:
+                if not args.allow_missing_baseline:
+                    raise
+                # Useful to measure real Riva-MiCall runtime/output while
+                # preparing costly IVA controls. Never mark it as accepted.
+                record["baseline_error"]=str(exc)
         arms=[arm for arm in ("iva","riva") if arm in checked]
         def attempt(arm):
             remaining=deadline-time.monotonic()
@@ -343,6 +350,8 @@ def main():
                         help="Independent sample pipelines to run concurrently")
     parser.add_argument("--parallel-arms", action="store_true",
                         help="Run IVA and Riva concurrently within each sample")
+    parser.add_argument("--allow-missing-baseline", action="store_true",
+                        help="Riva-only diagnostic: run full MiCall without control, never claim pass")
     parser.add_argument("--timeout-per-arm", type=int, default=1170)
     parser.add_argument("--total-time-limit", type=int, default=1180,
                         help="Global seconds for all samples, default below 20-minute hard cap")
@@ -417,6 +426,7 @@ def main():
         "global_seconds":round(time.monotonic()-benchmark_start,2),
         "global_limit_seconds":args.total_time_limit,
         "jobs":args.jobs,"parallel_arms":args.parallel_arms,
+        "allow_missing_baseline":args.allow_missing_baseline,
         "full_alpha_pass":full_alpha_pass,
         "note":"A subset or an IVA-only baseline run is never full alpha."
     }

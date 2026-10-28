@@ -105,3 +105,10 @@ validate the full Riva MiCall pipeline with a 20-minute global deadline:
 To test the absolute end-to-end runtime for both arms together, use
 --mode both and optional --parallel-arms within the 20-minute limit.
 If that run does not complete, the summary must say FAIL.
+
+
+While real IVA controls are being prepared, diagnose the fully mapped Riva
+pipeline independently with --mode riva --allow-missing-baseline --jobs 4.
+This keeps MiCall mapping/stitching/counting intact and records real final
+outputs, but every missing-control sample is explicitly flagged FAILED
+and cannot be used to claim an alpha pass. No cached IVA surrogate is fabricated.

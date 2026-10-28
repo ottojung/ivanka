@@ -285,16 +285,58 @@ fn cycle_end(seq: &[u8]) -> Option<usize> {
     }
     None
 }
+// Like IVA's retry-after-end-trimming, but only accept a trimmed end if
+// independent read evidence recovers MORE bases than the trim discarded.
+// This cannot silently shorten an otherwise complete contig.
+const STALL_TRIM: usize = 10;
+
+fn recover_stalled_end(
+    seq: &[u8], reads: &Reads, min_cov: usize, min_ratio: usize
+) -> Option<Vec<u8>> {
+    if seq.len() < 2 * K + STALL_TRIM { return None; }
+    let mut best: Option<Vec<u8>> = None;
+    for reversed in [false, true] {
+        let oriented = if reversed { rc(seq) } else { seq.to_vec() };
+        let kept = oriented.len() - STALL_TRIM;
+        let suffix = choose_extension(&reads.overhangs(&oriented[..kept]), min_cov, min_ratio);
+        if suffix.len() <= STALL_TRIM { continue; }
+        let mut candidate = oriented[..kept].to_vec();
+        candidate.extend_from_slice(&suffix);
+        if reversed { candidate = rc(&candidate); }
+        if candidate.len() <= seq.len() { continue; }
+        if best.as_ref().is_none_or(|other| candidate.len() > other.len()) {
+            best = Some(candidate);
+        }
+    }
+    best
+}
+
 fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<u8>{
     let mut stagnant=0usize;
+    let mut recovered_stalls=0usize;
     for _ in 0..600 {
         if seq.len()>MAX_CONTIG_LENGTH {break;}
         let right=choose_extension(&reads.overhangs(&seq),min_cov,min_ratio);
         let reversed=rc(&seq);
         let left_rc=choose_extension(&reads.overhangs(&reversed),min_cov,min_ratio);
         let left=rc(&left_rc);
-        if right.is_empty() && left.is_empty(){stagnant+=1; if stagnant>=1 {break;}}
-        else {stagnant=0;}
+        if right.is_empty() && left.is_empty() {
+            if recovered_stalls < 2 {
+                if let Some(recovered) = recover_stalled_end(&seq, reads, min_cov, min_ratio) {
+                    if let Some(cut) = cycle_end(&recovered) {
+                        seq = recovered[..cut].to_vec();
+                        break;
+                    }
+                    recovered_stalls += 1;
+                    seq = recovered;
+                    continue;
+                }
+            }
+            stagnant += 1;
+            if stagnant >= 1 { break; }
+        } else {
+            stagnant = 0;
+        }
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
             next.extend_from_slice(&left);next.extend_from_slice(&seq);next.extend_from_slice(&right);
@@ -385,6 +427,29 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stalled_end_trim_recovers_read_supported_correct_sequence() {
+        let mut rng = 0xf1a2b3c4d5e60718u64;
+        let target=(0..160).map(|_| {
+            rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17;
+            [b'A',b'C',b'G',b'T'][(rng & 3) as usize]
+        }).collect::<Vec<_>>();
+        let mut damaged = target[..100].to_vec();
+        damaged.extend(std::iter::repeat(b'N').take(STALL_TRIM));
+        let read=target[50..140].to_vec();
+        let key=encode(&target[60..60+K]).unwrap();
+        let mut index=HashMap::new();
+        index.insert(key, vec![Hit { read:0, pos:10 }]);
+        let reads=Reads {
+            seqs:vec![read], index, seed_counts:HashMap::new()
+        };
+        assert_eq!(recover_stalled_end(&damaged,&reads,1,4),
+                   Some(target[..140].to_vec()));
+        assert_eq!(recover_stalled_end(&target[..100],&Reads{
+            seqs:vec![],index:HashMap::new(),seed_counts:HashMap::new()
+        },1,4),None);
+    }
+
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
     #[test] fn read_external_fasta_seeds() {

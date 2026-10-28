@@ -50,7 +50,7 @@ def score_outputs(folder, reference):
         if not matches:
             result[basename] = {"exists": False}
             continue
-        file = matches[-1]
+        file = matches[0]  # Prefer final collated MiCall output over internal scratch CSV.
         with file.open(newline="") as f:
             rd = csv.DictReader(f)
             lines = list(rd)

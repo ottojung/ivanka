@@ -289,7 +289,14 @@ impl SolidKmerGraph {
             ranks.sort_unstable_by(|&a,&b|votes[b].cmp(&votes[a]).then(a.cmp(&b)));
             let major=votes[ranks[0]] as usize;
             let minor=votes[ranks[1]] as usize;
-            if major<min_cov || major<min_ratio.saturating_mul(minor) {break;}
+            let ambiguous = if min_ratio == 1 {
+                // Experimental graph-only majority: tolerate uneven
+                // haplotype populations, but do not force near ties.
+                major.saturating_mul(4) < minor.saturating_mul(5)
+            } else {
+                major < min_ratio.saturating_mul(minor)
+            };
+            if major<min_cov || ambiguous {break;}
             output.push([b'A',b'C',b'G',b'T'][ranks[0]]);
         }
         output
@@ -457,7 +464,8 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         eprintln!("received {} MiCall G2P seed contigs", supplied.len());
         let seed_quota=(max / 3).max(1);
         for seed in supplied.into_iter().filter(|seq|seq.len()>=K).take(seed_quota) {
-            let extended=graph.extend_both(&extend(seed,&reads,5,2),5,2);
+            let graph_seed=graph.extend_both(&seed,10,1);
+            let extended=extend(graph_seed,&reads,5,2);
             if extended.len()>=SEED_TARGET*3/4 &&
                !contigs.iter().any(|c|c.windows(extended.len()).any(|w|w==extended)) {
                 contigs.push(extended);
@@ -472,7 +480,8 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
-        let seq=graph.extend_both(&extend(seedseq,&reads,5,2),5,2);
+        let graph_seed=graph.extend_both(&seedseq,10,1);
+        let seq=extend(graph_seed,&reads,5,2);
         if seq.len()>=SEED_TARGET*3/4 {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
@@ -538,6 +547,15 @@ mod tests {
         assert_eq!(graph.extend_right(b"NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",10,4).len(),K);
     }
 
+    #[test]
+    fn tolerant_graph_majority_still_rejects_nearly_balanced_paths() {
+        let key=encode(b"ACGTACGTACGTACGTACGTACGTACGTACG").unwrap();
+        let seed=decode(key);
+        let mut next=HashMap::new();
+        next.insert(key,[14,12,0,0]);
+        let graph=SolidKmerGraph{next};
+        assert_eq!(graph.extend_right(&seed,10,1),seed);
+    }
     #[test]
     fn solid_graph_does_not_force_a_mixed_population_branch() {
         let key=encode(b"ACGTACGTACGTACGTACGTACGTACGTACG").unwrap();

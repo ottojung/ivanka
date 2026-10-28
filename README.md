@@ -118,3 +118,8 @@ As of 2026-10-28 the benchmark global limit is 40 minutes: the shell hard cap is
 ## Mixed-project scoring
 
 NFLHIVDNA samples retain the historical best-final-MAX-consensus HXB2 comparison. The V3LOOP and HCV samples cannot be evaluated against whole-genome HIV HXB2: their final mapped MiCall MAX consensuses are globally compared against the longest final IVA MAX consensus for their own sample instead, using +1 match, -1 mismatch, -2 gap-open and -1 gap-extension scores. A Riva final contig must score at least 95% of the full IVA consensus self-score. Incomplete/short fragments do not qualify. Genuine raw MiCall outputs are saved outside Git and a cached IVA control records its provenance and private artifact path.
+
+A full-alpha pass requires *both* IVA and Riva MiCall pipelines to finish
+together within the global 40-minute run (mode both). A Riva-only run
+using provenance-verified cached IVA controls is reported separately as
+cached_iva_comparison_pass, not as a two-arm wall-clock pass.

@@ -487,9 +487,12 @@ def main():
     full_scope=(args.sample is None and len(rows)==manifest_sample_count
                 and manifest_sample_count==7)
     global_seconds=time.monotonic()-benchmark_start
-    full_alpha_pass=(full_scope and args.mode in ("both","riva")
-                     and qualification_within_cap(args.total_time_limit,global_seconds)
-                     and accepted==manifest_sample_count and failed==0)
+    complete_noninferiority=(full_scope and
+                            qualification_within_cap(args.total_time_limit,global_seconds)
+                            and accepted==manifest_sample_count and failed==0)
+    # A wall-clock two-arm verdict requires IVA and Riva in one invocation.
+    full_alpha_pass=(complete_noninferiority and args.mode=="both")
+    cached_iva_comparison_pass=(complete_noninferiority and args.mode=="riva")
     summary={
         "invocation":invocation,"mode":args.mode,"images":checked,
         "hxb2_sha256":hxb2_hash,"manifest_sha256":sha(DATA/"manifest.tsv"),
@@ -502,7 +505,8 @@ def main():
         "jobs":args.jobs,"parallel_arms":args.parallel_arms,
         "allow_missing_baseline":args.allow_missing_baseline,
         "full_alpha_pass":full_alpha_pass,
-        "note":"A subset or an IVA-only baseline run is never full alpha."
+        "cached_iva_comparison_pass":cached_iva_comparison_pass,
+        "note":"Full alpha requires both IVA and Riva in one <=40min complete A/B run; Riva-only with cached IVA is labelled separately."
     }
     (RESULTS/f"summary-{invocation}.json").write_text(
         json.dumps(summary,indent=2,sort_keys=True))

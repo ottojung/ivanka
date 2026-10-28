@@ -85,6 +85,7 @@ class BenchmarkTests(TestCase):
    self.assertEqual(len(summaries),1)
    summary=json.loads(summaries[0].read_text())
    self.assertFalse(summary["full_alpha_pass"])
+   self.assertFalse(summary["cached_iva_comparison_pass"])
    self.assertEqual(summary["selected_samples"],2)
 
  def test_run_arm_enforces_timeout_inside_container(self):
@@ -204,3 +205,34 @@ class BenchmarkTests(TestCase):
        "region,consensus-percent-cutoff,sequence\n"
        "synthetic,MAX,"+seq[:100]+"\n")
    self.assertFalse(m.project_aware_acceptance(root/"iva",root/"riva")["pass"])
+
+ def test_cached_control_never_claims_two_arm_alpha(self):
+  import json
+  import sys
+  from unittest.mock import patch
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   samples="".join(f"S{i}\n" for i in range(7))
+   (root/"manifest.tsv").write_text("sample\n"+samples)
+   (root/"hxb2.fasta").write_text(">HXB2\nACGT\n")
+   results=root/"results"
+   def fake_case(row,*args):
+    return {"sample":row["sample"],"status":"finished","failed":False,
+            "best_contig_acceptance":{"pass":True}}
+   with patch.object(m,"DATA",root),patch.object(m,"RESULTS",results), \
+        patch.object(m,"image_id",return_value="sha256:fixed"), \
+        patch.object(m,"verify_identical_micall_base"), \
+        patch.object(m,"sha",return_value="sample-hash"), \
+        patch.object(m,"evaluate_sample",side_effect=fake_case), \
+        patch.object(m.time,"time",side_effect=[1234,1235]):
+    with patch.object(sys,"argv",["bench","--mode","riva"]):
+     self.assertEqual(m.main(),0)
+    cached=json.loads(list(results.glob("summary-*.json"))[0].read_text())
+    self.assertTrue(cached["cached_iva_comparison_pass"])
+    self.assertFalse(cached["full_alpha_pass"])
+    with patch.object(sys,"argv",["bench","--mode","both"]):
+     self.assertEqual(m.main(),0)
+   summaries=[json.loads(p.read_text()) for p in results.glob("summary-*.json")]
+   paired=next(r for r in summaries if r["mode"]=="both")
+   self.assertTrue(paired["full_alpha_pass"])
+   self.assertFalse(paired["cached_iva_comparison_pass"])

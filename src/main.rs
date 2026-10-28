@@ -213,11 +213,30 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
     let mut stagnant=0usize;
     for _ in 0..600 {
         if seq.len()>MAX_CONTIG_LENGTH {break;}
-        let right=choose_extension(&reads.overhangs(&seq),min_cov,min_ratio);
+        let right_reads=reads.overhangs(&seq);
+        let right=choose_extension(&right_reads,min_cov,min_ratio);
         let reversed=rc(&seq);
-        let left_rc=choose_extension(&reads.overhangs(&reversed),min_cov,min_ratio);
+        let left_reads=reads.overhangs(&reversed);
+        let left_rc=choose_extension(&left_reads,min_cov,min_ratio);
         let left=rc(&left_rc);
-        if right.is_empty() && left.is_empty(){stagnant+=1; if stagnant>=1 {break;}}
+        if right.is_empty() && left.is_empty() {
+            if std::env::var_os("RIVA_TRACE_EXTENSIONS").is_some() {
+                let summarize = |overhangs:&[Vec<u8>]| -> [usize;4] {
+                    let mut counts=[0usize;4];
+                    for o in overhangs {
+                        if let Some(&base)=o.first() {
+                            match base {b'A'=>counts[0]+=1,b'C'=>counts[1]+=1,
+                                b'G'=>counts[2]+=1,b'T'=>counts[3]+=1,_=>{}}
+                        }
+                    }
+                    counts
+                };
+                eprintln!("EXTENSION_STOP length={} right_reads={} right_bases={:?} left_reads={} left_bases={:?}",
+                          seq.len(),right_reads.len(),summarize(&right_reads),
+                          left_reads.len(),summarize(&left_reads));
+            }
+            stagnant+=1; if stagnant>=1 {break;}
+        }
         else {stagnant=0;}
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());

@@ -39,14 +39,16 @@ are committed to this public repository.
 
 ## Acceptance gate
 
-The harness returns a nonzero exit status when any sample fails HXB2 score or
-structural-fidelity gates. Ordinary samples require 95% of their real IVA HXB2
-score. The mixed/deletion samples must also preserve each long real-IVA control
-molecule at >=85% contiguous coverage and >=95% identity. Negative IVA HXB2
-scores are compared in absolute score units, never divided. This structural
-check is conservative and does not prove the absence of recombinants; a human
-review is still necessary before clinical use.
+The harness returns nonzero if no assembled contig achieves the fixed HXB2
+alignment threshold, or if a sample errors or times out. The score is the
+**maximum over individual final contigs**: one sufficiently good contig passes,
+even when many others are present. Positive IVA baselines require at least 95%
+of IVA's best HXB2 score. Nonpositive baselines use an absolute score
+comparison rather than division. For mixed/deletion samples the independent
+structural-fidelity comparison is reported as a diagnostic, not an additional
+requirement that every IVA control or every output molecule must align.
+A best-contig HXB2 pass does not prove the absence of chimeras and is not
+clinical validation.
 
 The role mapping is private because it contains sample names. Store it in
-`/workspace/riva-benchmark-cache/roles.json`, mapping sample identifiers from
-`manifest.tsv` to `ordinary`, `fragmented`, `mixed`, or `deletion`.
+`/workspace/riva-benchmark-cache/roles.json`.

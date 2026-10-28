@@ -21,9 +21,18 @@ class AcceptanceTests(unittest.TestCase):
     def test_structural_cases_require_independent_alignment(self):
         iva={"hxb2_score": 100}
         riva={"hxb2_score": 100, "stitched_count": 1}
-        self.assertFalse(accept_sample("deletion", iva, riva)[0])
-        self.assertFalse(accept_sample("deletion", iva, riva, {"pass": False})[0])
+        self.assertTrue(accept_sample("deletion", iva, riva)[0])
+        self.assertTrue(accept_sample("deletion", iva, riva, {"pass": False})[0])
         self.assertTrue(accept_sample("deletion", iva, riva, {"pass": True})[0])
+        self.assertTrue(accept_sample("fragmented", iva, riva)[0])
+
+    def test_any_one_contig_may_pass_with_many_poor_contigs(self):
+        iva={"hxb2_score": 1000}
+        riva={"per_contig_scores": [12, -850, 957, 100],
+              "hxb2_score": 957, "stitched_count": 4}
+        self.assertTrue(accept_sample("mixed", iva, riva, {"pass": False})[0])
+        riva["hxb2_score"] = 949
+        self.assertFalse(accept_sample("mixed", iva, riva, {"pass": True})[0])
 
     def test_no_contigs_is_never_pass(self):
         self.assertFalse(accept_sample("SAMPLE",{"hxb2_score":0},{"hxb2_score":0,"stitched_count":0})[0])

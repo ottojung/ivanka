@@ -306,6 +306,8 @@ def main() -> int:
     baselines_file = RESULTS / "iva-full-micall-baselines.json"
     baselines = (json.loads(baselines_file.read_text())
                  if baselines_file.exists() else {})
+    per_sample_baselines = RESULTS / "iva-baselines"
+    per_sample_baselines.mkdir(exist_ok=True)
     run_id = f"{int(time.time())}-{os.getpid()}"
     provenance = metadata() | {
         "invocation_id": run_id,
@@ -346,11 +348,23 @@ def main() -> int:
                             "kive_run_id": row["kive_run_id"],
                         },
                     }
-                    tmp = baselines_file.with_suffix(".new")
-                    tmp.write_text(json.dumps(baselines, indent=2))
-                    tmp.replace(baselines_file)
+                    # Single-sample baseline files are independently atomic,
+                    # so parallel MiCall experiments cannot lose baselines to
+                    # simultaneous writes of the aggregate index.
+                    dest = per_sample_baselines / f"{sample_id}.json"
+                    tmp = dest.with_suffix(f".{os.getpid()}.new")
+                    tmp.write_text(json.dumps(baselines[sample_id], indent=2))
+                    tmp.replace(dest)
+                    if len(rows) == 1:
+                        tmp = baselines_file.with_suffix(f".{os.getpid()}.new")
+                        baselines[sample_id] = json.loads(dest.read_text())
+                        tmp.write_text(json.dumps(baselines, indent=2))
+                        tmp.replace(baselines_file)
                 if "riva" in sample_result:
                     saved = baselines.get(sample_id)
+                    per_sample = per_sample_baselines / f"{sample_id}.json"
+                    if per_sample.is_file():
+                        saved = json.loads(per_sample.read_text())
                     if saved is None:
                         raise ValueError("IVA full-MiCall baseline missing: run --mode iva first")
                     expected = saved["provenance"]

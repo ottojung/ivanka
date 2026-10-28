@@ -30,7 +30,7 @@
 | `fix/internal-seed-overlap` | `/workspace/riva-internal-overlap` | `1993fda53f` | clean |
 | `experiment/riva-late-cycle` | `/workspace/riva-late-cycle` | `6089e2ce10` | clean |
 | `experiment/riva-long-cycle` | `/workspace/riva-long-cycle` | `a115fc7a90` | clean |
-| `experiment/riva-one-indel` | `/workspace/riva-one-indel` | `3f869e8ec5` | clean |
+| `experiment/riva-one-indel` | `/workspace/riva-one-indel` | `2e9ddcf260` | clean |
 | `fix/podman-seeded-comparison` | `/workspace/riva-podman-benchmark` | `85e78b1a9a` | clean |
 | `experiment/podman-bowtie-threads` | `/workspace/riva-podman-bowtie` | `da03b03209` | clean |
 | `benchmark/podman-g2p` | `/workspace/riva-podman-g2p` | `b6e2711d2c` | clean |
@@ -49,3 +49,5 @@
 - Old HIV HXB2 scoring is invalid for HCV and V3. PR #7 now evaluates those against their own final IVA MAX consensus.
 - Investigate NS5a 2054-base IVA versus 639-base Riva result; the dominance2 and sequencing-error-tolerant read-overlap variants are under A/B testing.
 - Retain all branch refs and experiment histories until comparative results establish a safe next step.
+
+Additional isolated work in this preserved branch: commit 8b786bc adds bounded 10-base trim-and-retry, and 2e9ddcf adds a high-support, reference-free solid-kmer graph fallback. The graph variant has 14 passing Rust tests and was built as localhost/riva-micall-riva:solidgraph. These changes are NOT accepted into PR #7 without complete real MiCall evidence.

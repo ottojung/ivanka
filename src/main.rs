@@ -195,12 +195,12 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
             next.extend_from_slice(&left);next.extend_from_slice(&seq);next.extend_from_slice(&right);
-            if let Some(cut) = cycle_end(&next) {
+            if next.len()/150 != seq.len()/150 { if let Some(cut) = cycle_end(&next) {
                 eprintln!("extension stopped at repeated 512-nt tract ({} nt retained)", cut);
                 next.truncate(cut);
                 seq = next;
                 break;
-            }
+            }}
             seq=next;
         }
     }
@@ -247,7 +247,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
-        let seq=extend(seedseq,&reads,10,4);
+        let seq=extend(seedseq,&reads,8,1);
         if seq.len()>=SEED_TARGET*3/4 {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.

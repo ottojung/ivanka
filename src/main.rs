@@ -235,7 +235,7 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
                           seq.len(),right_reads.len(),summarize(&right_reads),
                           left_reads.len(),summarize(&left_reads));
             }
-            stagnant+=1; if stagnant>=1 {break;}
+            stagnant+=1; if stagnant>=2 {break;}
         }
         else {stagnant=0;}
         if !left.is_empty() || !right.is_empty() {
@@ -291,8 +291,8 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         eprintln!("received {} MiCall G2P seed contigs", supplied.len());
         let seed_quota=(max / 3).max(1);
         for seed in supplied.into_iter().filter(|seq|seq.len()>=K).take(seed_quota) {
-            let extended=extend(seed,&reads,10,4);
-            if extended.len()>=SEED_TARGET*3/4 &&
+            let extended=extend(seed,&reads,6,2);
+            if extended.len()>=SEED_TARGET/2 &&
                !contigs.iter().any(|c|c.windows(extended.len()).any(|w|w==extended)) {
                 contigs.push(extended);
             }
@@ -300,14 +300,14 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
     }
     let mut attempted=0usize;
     for (seed,count) in candidates {
-        if contigs.len()>=max || attempted>=500 {break;}
-        if count<25 {break;}
+        if contigs.len()>=max || attempted>=1000 {break;}
+        if count<15 {break;}
         let seedseq=decode(seed);
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
-        let seq=extend(seedseq,&reads,10,4);
-        if seq.len()>=SEED_TARGET*3/4 {
+        let seq=extend(seedseq,&reads,6,2);
+        if seq.len()>=SEED_TARGET/2 {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
             if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {

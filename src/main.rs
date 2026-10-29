@@ -149,7 +149,7 @@ fn choose_extension(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize)->Vec<u
         }
         let mut sorted=counts;
         sorted.sort_unstable_by(|a,b|b.cmp(a));
-        if sorted[0]<min_cov || sorted[0]<min_ratio.saturating_mul(sorted[1]) {break;}
+        if sorted[0]<min_cov || sorted[0]==sorted[1] || sorted[0]<min_ratio.saturating_mul(sorted[1]) {break;}
         let base=match counts.iter().position(|n|*n==sorted[0]).unwrap(){0=>b'A',1=>b'C',2=>b'G',_=>b'T'};
         out.push(base);
         remaining.retain(|x|overhangs[*x].get(i)==Some(&base));
@@ -298,6 +298,12 @@ mod tests {
         seq.extend(std::iter::repeat(b'C').take(4000));
         seq.extend(std::iter::repeat(b'A').take(100));
         assert_eq!(cycle_end(&seq), None);
+    }
+    #[test] fn tied_branch_does_not_choose_alphabetically() {
+        let a=(0..8).map(|_|b"A".to_vec()).collect::<Vec<_>>();
+        let mut b=a;
+        b.extend((0..8).map(|_|b"C".to_vec()));
+        assert!(choose_extension(&b,8,1).is_empty());
     }
     #[test] fn extension_consensus(){
         let a=(0..16).map(|_|b"ACGTA".to_vec()).collect::<Vec<_>>();

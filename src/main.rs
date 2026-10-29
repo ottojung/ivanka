@@ -195,12 +195,12 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
             next.extend_from_slice(&left);next.extend_from_slice(&seq);next.extend_from_slice(&right);
-            if let Some(cut) = cycle_end(&next) {
+            if next.len()/150 != seq.len()/150 { if let Some(cut) = cycle_end(&next) {
                 eprintln!("extension stopped at repeated 512-nt tract ({} nt retained)", cut);
                 next.truncate(cut);
                 seq = next;
                 break;
-            }
+            }}
             seq=next;
         }
     }
@@ -240,7 +240,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
     candidates.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
     let mut contigs=Vec::<Vec<u8>>::new();
     let mut attempted=0usize;
-    for (seed,count) in candidates {
+    for (seed,count) in candidates.iter().copied() {
         if contigs.len()>=max || attempted>=500 {break;}
         if count<25 {break;}
         let seedseq=decode(seed);
@@ -257,6 +257,24 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
+    // Preserve strict assembly results; supplement with majority-vote
+    // paths from independent seed extensions.
+    let primary_count=contigs.len();
+    let mut supplemental=Vec::<Vec<u8>>::new();
+    let mut considered=0usize;
+    for (seed,count) in candidates {
+        if supplemental.len()>=primary_count || considered>=180 {break;}
+        if count<25 {break;}
+        considered+=1;
+        let seq=extend(decode(seed),&reads,8,1);
+        if seq.len()<SEED_TARGET*3/4 {continue;}
+        if contigs.iter().chain(supplemental.iter()).any(|c|
+                c.windows(seq.len()).any(|w|w==seq)
+) {continue;}
+        supplemental.push(seq);
+    }
+    eprintln!("conservative {} and majority {} contigs",primary_count,supplemental.len());
+    contigs.extend(supplemental);
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">riva_{} len={}",i+1,c.len())?;

@@ -281,6 +281,7 @@ fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),S
             _=>return Err(format!("unknown/incomplete argument: {}",args[i])),
         }
     }
+    if max == 0 || max > 1000 { return Err("max-contigs must be in 1..=1000".to_string()); }
     Ok((a.ok_or("missing --reads1")?, b.ok_or("missing --reads2")?,output.ok_or("missing --output")?,max,max_pairs,seeds))
 }
 fn main()->Result<(),Box<dyn std::error::Error>> {

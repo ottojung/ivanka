@@ -228,11 +228,11 @@ class BenchmarkTests(TestCase):
     with patch.object(sys,"argv",["bench","--mode","riva"]):
      self.assertEqual(m.main(),0)
     cached=json.loads(list(results.glob("summary-*.json"))[0].read_text())
-    self.assertTrue(cached["cached_iva_comparison_pass"])
+    self.assertFalse(cached["cached_iva_comparison_pass"])
     self.assertFalse(cached["full_alpha_pass"])
     with patch.object(sys,"argv",["bench","--mode","both"]):
      self.assertEqual(m.main(),0)
    summaries=[json.loads(p.read_text()) for p in results.glob("summary-*.json")]
    paired=next(r for r in summaries if r["mode"]=="both")
-   self.assertTrue(paired["full_alpha_pass"])
+   self.assertFalse(paired["full_alpha_pass"])
    self.assertFalse(paired["cached_iva_comparison_pass"])

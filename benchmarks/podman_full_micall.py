@@ -427,6 +427,7 @@ def main():
     parser.add_argument("--timeout-per-arm", type=int, default=2370)
     parser.add_argument("--total-time-limit", type=int, default=2380,
                         help="Global seconds for all samples, default below 40-minute hard cap")
+    parser.add_argument("--qualify",action="store_true", help="Strict 20-sample full-alpha run requiring pinned manifest SHA-256")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
     if args.jobs<1 or args.total_time_limit<1 or args.timeout_per_arm<1:
@@ -444,6 +445,16 @@ def main():
     with (DATA/"manifest.tsv").open(newline="") as manifest:
         rows=list(csv.DictReader(manifest,delimiter="\t"))
     manifest_sample_count=len(rows)
+    names=[row["sample"] for row in rows]
+    if len(set(names))!=len(names):
+        raise ValueError("Duplicate sample identities in manifest")
+    manifest_hash=sha(DATA/"manifest.tsv")
+    if args.qualify:
+        expected=os.environ.get("RIVA_EXPECTED_MANIFEST_SHA256", "")
+        if args.mode!="both" or args.sample is not None or manifest_sample_count!=20:
+            raise ValueError("Full alpha requires all 20 predeclared samples in one both-arm invocation")
+        if not expected or manifest_hash!=expected:
+            raise ValueError("Qualification manifest SHA-256 missing or mismatched")
     rows=[row for row in rows if args.sample is None or row["sample"] in args.sample]
     if not rows: raise ValueError("No samples selected")
     with (DATA/"hxb2.fasta").open() as reference_file:
@@ -484,8 +495,18 @@ def main():
                       record.get("best_contig_acceptance",{}),flush=True)
     accepted=sum(r.get("best_contig_acceptance",{}).get("pass") is True
                  for r in completed_records)
-    full_scope=(args.sample is None and len(rows)==manifest_sample_count
-                and manifest_sample_count==7)
+    finished_names=[r.get("sample") for r in completed_records]
+    both_arms_complete=all(
+        r.get("status")=="finished" and
+        r.get("iva",{}).get("exit_code")==0 and
+        r.get("riva",{}).get("exit_code")==0 and
+        "metrics" in r.get("iva",{}) and "metrics" in r.get("riva",{})
+        for r in completed_records)
+    full_scope=(args.qualify and len(rows)==20 and
+                len(completed_records)==20 and
+                len(set(finished_names))==20 and
+                set(finished_names)==set(names) and
+                both_arms_complete)
     global_seconds=time.monotonic()-benchmark_start
     complete_noninferiority=(full_scope and
                             qualification_within_cap(args.total_time_limit,global_seconds)
@@ -495,7 +516,8 @@ def main():
     cached_iva_comparison_pass=(complete_noninferiority and args.mode=="riva")
     summary={
         "invocation":invocation,"mode":args.mode,"images":checked,
-        "hxb2_sha256":hxb2_hash,"manifest_sha256":sha(DATA/"manifest.tsv"),
+        "hxb2_sha256":hxb2_hash,"manifest_sha256":manifest_hash,
+        "qualification_requested":args.qualify,
         "manifest_sample_count":manifest_sample_count,
         "selected_samples":len(rows),"finished_samples":len(completed_records),
         "accepted_samples":accepted,
@@ -513,7 +535,7 @@ def main():
     print("FULL_ALPHA_PASS" if full_alpha_pass else "FULL_ALPHA_NOT_PASSED",
           f"{accepted}/{manifest_sample_count} full-pipeline comparisons",
           flush=True)
-    return 1 if failed else 0
+    return 1 if failed or (args.qualify and not full_alpha_pass) else 0
 
 if __name__=="__main__":
     raise SystemExit(main())

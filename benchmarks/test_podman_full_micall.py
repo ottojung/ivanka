@@ -88,6 +88,18 @@ class BenchmarkTests(TestCase):
    self.assertFalse(summary["cached_iva_comparison_pass"])
    self.assertEqual(summary["selected_samples"],2)
 
+ def test_failure_categories_do_not_confuse_unscorable_iva_with_riva_failure(self):
+  record={"failed":True,"status":"error",
+          "iva":{"exit_code":0,"metrics":{"num_final_max_conseqs":0}},
+          "riva":{"exit_code":0,"metrics":{"num_final_max_conseqs":1}}}
+  self.assertEqual(m.failure_category(record),"iva_no_final_max")
+  record["iva"]["metrics"]["num_final_max_conseqs"]=1
+  record["best_contig_acceptance"]={"pass":False}
+  self.assertEqual(m.failure_category(record),"riva_below_noninferiority_threshold")
+  record["best_contig_acceptance"]["pass"]=True
+  record["failed"]=False
+  self.assertIsNone(m.failure_category(record))
+
  def test_run_arm_enforces_timeout_inside_container(self):
   from unittest.mock import patch,Mock
   with TemporaryDirectory() as d:

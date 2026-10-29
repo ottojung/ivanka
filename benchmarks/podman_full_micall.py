@@ -430,6 +430,20 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
     return record
 
 
+def failure_category(record):
+    if not record.get('failed'): return None
+    if record.get('status')=='global_timeout': return 'global_timeout'
+    iva=record.get('iva')
+    if not isinstance(iva,dict): return 'missing_iva_baseline'
+    if iva.get('exit_code')!=0: return 'iva_pipeline_error'
+    if (iva.get('metrics',{}).get('num_final_max_conseqs') or 0)==0: return 'iva_no_final_max'
+    riva=record.get('riva')
+    if not isinstance(riva,dict): return 'missing_riva_run'
+    if riva.get('exit_code')!=0: return 'riva_pipeline_error'
+    if (riva.get('metrics',{}).get('num_final_max_conseqs') or 0)==0: return 'riva_no_final_max'
+    if record.get('best_contig_acceptance',{}).get('pass') is False: return 'riva_below_noninferiority_threshold'
+    return 'other_evaluation_error'
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="append",
@@ -536,6 +550,11 @@ def main():
     # A wall-clock two-arm verdict requires IVA and Riva in one invocation.
     full_alpha_pass=(complete_noninferiority and args.mode=="both")
     cached_iva_comparison_pass=(complete_noninferiority and args.mode=="riva")
+    reason_counts={}
+    for record in completed_records:
+        reason=failure_category(record)
+        if reason is not None:
+            reason_counts[reason]=reason_counts.get(reason,0)+1
     summary={
         "invocation":invocation,"mode":args.mode,"images":checked,
         "hxb2_sha256":hxb2_hash,"manifest_sha256":manifest_hash,
@@ -546,6 +565,7 @@ def main():
         "selected_samples":len(rows),"finished_samples":len(completed_records),
         "accepted_samples":accepted,
         "failed_samples":[r["sample"] for r in completed_records if r["failed"]],
+        "failure_categories":reason_counts,
         "global_seconds":round(global_seconds,2),
         "global_limit_seconds":args.total_time_limit,
         "jobs":args.jobs,"parallel_arms":args.parallel_arms,

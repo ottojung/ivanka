@@ -7,7 +7,6 @@ use std::time::Instant;
 
 const K: usize = 31;
 const INDEX_STEP: usize = 12;
-const SEED_TARGET: usize = 720;
 const MAX_EXTENSION: usize = 100;
 const MAX_CONTIG_LENGTH: usize = 25000;
 
@@ -46,6 +45,33 @@ fn read_open(path: &str) -> io::Result<Box<dyn BufRead>> {
     if path.ends_with(".gz") {
         Ok(Box::new(BufReader::new(MultiGzDecoder::new(f))))
     } else { Ok(Box::new(BufReader::new(f))) }
+}
+// G2P-derived MiCall seed contigs. These seed candidates are supplied before
+// assembly; this does not require any reference mapping or coordinate lookup.
+fn fasta_seeds(path: &str) -> io::Result<Vec<Vec<u8>>> {
+    let mut output = Vec::new();
+    let mut current = Vec::new();
+    let mut started = false;
+    for line in read_open(path)?.lines() {
+        let line = line?;
+        if line.starts_with('>') {
+            if started && !current.is_empty() {
+                if current.iter().all(|b| matches!(b, b'A'|b'C'|b'G'|b'T')) {
+                    output.push(std::mem::take(&mut current));
+                } else {current.clear();}
+            }
+            started = true;
+        } else {
+            if !started && !line.trim().is_empty() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "sequence before FASTA header"));
+            }
+            current.extend(line.trim().bytes().map(|b| b.to_ascii_uppercase()));
+        }
+    }
+    if started && !current.is_empty() && current.iter().all(|b| matches!(b, b'A'|b'C'|b'G'|b'T')) {
+        output.push(current);
+    }
+    Ok(output)
 }
 fn fastq_seq(r: &mut dyn BufRead) -> io::Result<Option<Vec<u8>>> {
     let mut a=String::new(); let mut b=String::new();
@@ -108,11 +134,12 @@ impl Reads {
     }
     // Returns overhangs from reads overlapping the right end of contig. No aligner or
     // read mapper: a k-mer is only an inverted-index lookup; the full overlap must be exact.
-    fn overhangs(&self, contig:&[u8]) -> Vec<Vec<u8>> {
-        if contig.len()<K {return Vec::new();}
+    fn overhangs_with_ids(&self, contig:&[u8]) -> (Vec<Vec<u8>>,Vec<u32>) {
+        if contig.len()<K {return (Vec::new(),Vec::new());}
         let start=contig.len().saturating_sub(250);
         let mut used=HashSet::<u32>::new();
         let mut ext=Vec::new();
+        let mut ids=Vec::new();
         for q in start..=contig.len()-K {
             let Some(key)=encode(&contig[q..q+K]) else {continue;};
             let Some(hits)=self.index.get(&key) else {continue;};
@@ -132,9 +159,10 @@ impl Reads {
                 if read[read_start..read_start+overlap]!=contig[begin..] {continue;}
                 used.insert(original);
                 ext.push(read[read_start+overlap..].to_vec());
+                ids.push(original);
             }
         }
-        ext
+        (ext,ids)
     }
 }
 fn choose_extension(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize)->Vec<u8>{
@@ -182,15 +210,49 @@ fn cycle_end(seq: &[u8]) -> Option<usize> {
     }
     None
 }
-fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<u8>{
+// A read is credited only if it supports the extension actually taken.
+// Read IDs identify individual FASTQ records (including duplicate molecules),
+// but the same record is never counted more than once for this contig.
+fn record_extension_support(suffixes:&[Vec<u8>], ids:&[u32],
+                            extension:&[u8], support:&mut HashSet<u32>) {
+    if extension.is_empty() { return; }
+    for (suffix,&id) in suffixes.iter().zip(ids.iter()) {
+        if !suffix.is_empty() &&
+           suffix.iter().zip(extension).all(|(a,b)|a==b) &&
+           suffix[0]==extension[0] {
+            support.insert(id);
+        }
+    }
+}
+fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec<u8>,usize){
     let mut stagnant=0usize;
+    let mut supporting_reads=HashSet::<u32>::new();
     for _ in 0..600 {
         if seq.len()>MAX_CONTIG_LENGTH {break;}
-        let right=choose_extension(&reads.overhangs(&seq),min_cov,min_ratio);
+        let (right_reads,right_ids)=reads.overhangs_with_ids(&seq);
+        let right=choose_extension(&right_reads,min_cov,min_ratio);
         let reversed=rc(&seq);
-        let left_rc=choose_extension(&reads.overhangs(&reversed),min_cov,min_ratio);
+        let (left_reads,left_ids)=reads.overhangs_with_ids(&reversed);
+        let left_rc=choose_extension(&left_reads,min_cov,min_ratio);
         let left=rc(&left_rc);
-        if right.is_empty() && left.is_empty(){stagnant+=1; if stagnant>=1 {break;}}
+        if right.is_empty() && left.is_empty() {
+            if std::env::var_os("RIVA_TRACE_EXTENSIONS").is_some() {
+                let summarize = |overhangs:&[Vec<u8>]| -> [usize;4] {
+                    let mut counts=[0usize;4];
+                    for o in overhangs {
+                        if let Some(&base)=o.first() {
+                            match base {b'A'=>counts[0]+=1,b'C'=>counts[1]+=1,
+                                b'G'=>counts[2]+=1,b'T'=>counts[3]+=1,_=>{}}
+                        }
+                    }
+                    counts
+                };
+                eprintln!("EXTENSION_STOP length={} right_reads={} right_bases={:?} left_reads={} left_bases={:?}",
+                          seq.len(),right_reads.len(),summarize(&right_reads),
+                          left_reads.len(),summarize(&left_reads));
+            }
+            stagnant+=1; if stagnant>=2 {break;}
+        }
         else {stagnant=0;}
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
@@ -201,62 +263,105 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
                 seq = next;
                 break;
             }
+            record_extension_support(&right_reads,&right_ids,&right,&mut supporting_reads);
+            record_extension_support(&left_reads,&left_ids,&left_rc,&mut supporting_reads);
             seq=next;
         }
     }
-    seq
+    (seq,supporting_reads.len())
 }
-fn parse() -> Result<(String,String,String,usize,Option<usize>),String>{
+// A first-pass ranking heuristic, not a calibrated confidence score:
+// independent extension-supporting FASTQ records (with multiplicity) times
+// assembled span. Preserve G2P-derived seeds before applying the safety cap.
+fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
+                            n:usize, protected:usize)->Vec<Vec<u8>> {
+    assert_eq!(seqs.len(),counts.len());
+    let mut candidates=seqs.into_iter().zip(counts).enumerate().collect::<Vec<_>>();
+    candidates.sort_unstable_by(|a,b|{
+        let a_protected=a.0<protected;
+        let b_protected=b.0<protected;
+        let a_score=(a.1.1 as u128)*(a.1.0.len() as u128);
+        let b_score=(b.1.1 as u128)*(b.1.0.len() as u128);
+        b_protected.cmp(&a_protected)
+            .then_with(||b_score.cmp(&a_score))
+            .then_with(||b.1.1.cmp(&a.1.1))
+            .then_with(||b.1.0.len().cmp(&a.1.0.len()))
+            .then_with(||a.1.0.cmp(&b.1.0))
+    });
+    candidates.truncate(n);
+    candidates.into_iter().map(|(_, (seq,_))|seq).collect()
+}
+fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
     let args=std::env::args().collect::<Vec<_>>();
-    let mut a=None;let mut b=None;let mut output=None;let mut max=12usize;let mut max_pairs=None;
+    let mut a=None;let mut b=None;let mut output=None;let mut max=1000usize;let mut max_pairs=None;let mut seeds=None;
     let mut i=1;
     while i<args.len() {
         match args[i].as_str() {
-            "--reads1"|"--reads2"|"--output"|"--max-contigs"|"--max-pairs" if i+1<args.len()=>{
+            "--reads1"|"--reads2"|"--output"|"--max-contigs"|"--max-pairs"|"--seeds" if i+1<args.len()=>{
                 match args[i].as_str(){
                     "--reads1"=>a=Some(args[i+1].clone()),
                     "--reads2"=>b=Some(args[i+1].clone()),
                     "--output"=>output=Some(args[i+1].clone()),
                     "--max-contigs"=>max=args[i+1].parse().map_err(|_|"invalid max-contigs")?,
                     "--max-pairs"=>max_pairs=Some(args[i+1].parse().map_err(|_|"invalid max-pairs")?),
+                    "--seeds"=>seeds=Some(args[i+1].clone()),
                     _=>{}
                 }
                 i+=2;
             },
             "--help"|"-h" => {
-                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 12] [--max-pairs N]");
+                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 1000] [--max-pairs N] [--seeds seeds.fasta]");
                 std::process::exit(0);
             },
             _=>return Err(format!("unknown/incomplete argument: {}",args[i])),
         }
     }
-    Ok((a.ok_or("missing --reads1")?, b.ok_or("missing --reads2")?,output.ok_or("missing --output")?,max,max_pairs))
+    if max == 0 || max > 1000 { return Err("max-contigs must be in 1..=1000".to_string()); }
+    Ok((a.ok_or("missing --reads1")?, b.ok_or("missing --reads2")?,output.ok_or("missing --output")?,max,max_pairs,seeds))
 }
 fn main()->Result<(),Box<dyn std::error::Error>> {
-    let (a,b,out,max,max_pairs)=parse().map_err(io::Error::other)?;
+    let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
     let now=Instant::now();
     let reads=Reads::load(&a,&b,max_pairs)?;
     let mut candidates=reads.seed_counts.iter().map(|(k,c)|(*k,*c)).collect::<Vec<_>>();
     candidates.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
     let mut contigs=Vec::<Vec<u8>>::new();
+    let mut supporting_counts=Vec::<usize>::new();
+    if let Some(ref seeds_file) = seeds_path {
+        let supplied=fasta_seeds(seeds_file)?;
+        eprintln!("received {} MiCall G2P seed contigs", supplied.len());
+        let seed_quota=(max / 3).max(1);
+        for seed in supplied.into_iter().filter(|seq|seq.len()>=K).take(seed_quota) {
+            let supplied_len=seed.len(); let (extended,support)=extend(seed,&reads,6,2);
+            if extended.len()>=supplied_len &&
+               !contigs.iter().any(|c|c.windows(extended.len()).any(|w|w==extended)) {
+                contigs.push(extended);
+                supporting_counts.push(support);
+            }
+        }
+    }
+    let protected_seed_count=contigs.len();
     let mut attempted=0usize;
     for (seed,count) in candidates {
-        if contigs.len()>=max || attempted>=500 {break;}
-        if count<25 {break;}
+        if attempted>=1000 {break;}
+        if count<15 {break;}
         let seedseq=decode(seed);
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
-        let seq=extend(seedseq,&reads,10,4);
-        if seq.len()>=SEED_TARGET*3/4 {
+        let (seq,support)=extend(seedseq,&reads,6,2);
+        if !seq.is_empty() {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
             if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {
                 contigs.push(seq);
+                supporting_counts.push(support);
             }
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
+    eprintln!("Riva ranking {} candidates by distinct contributing FASTQ records × contig length; {} MiCall seeds protected",contigs.len(),protected_seed_count);
+    let contigs=select_supported_contigs(contigs,supporting_counts,max,protected_seed_count);
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">riva_{} len={}",i+1,c.len())?;
@@ -269,8 +374,43 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn cap_prefers_read_supported_quality_over_length(){
+        let input=vec![vec![b'A';900],vec![b'C';180],vec![b'T';31]];
+        let output=select_supported_contigs(input,vec![1,9,0],2,0);
+        assert_eq!(output.len(),2);
+        assert_eq!(output[0].len(),180);
+        assert_eq!(output[1].len(),900);
+    }
+    #[test] fn cap_preserves_short_g2p_seed_and_respects_1000(){
+        let seqs=(1..=1200).map(|n|vec![b'A';n]).collect::<Vec<_>>();
+        let counts=(1..=1200).map(|n|n).collect::<Vec<_>>();
+        let out=select_supported_contigs(seqs,counts,1000,1);
+        assert_eq!(out.len(),1000);
+        assert_eq!(out[0].len(),1);
+        assert_eq!(out[1].len(),1200);
+        assert!(!out.iter().any(|s|s.len()==31));
+    }
+    #[test] fn support_deduplicates_reused_reads_not_multiplicity(){
+        let mut support=HashSet::new();
+        let x=vec![b"ACGT".to_vec(),b"ACTG".to_vec(),b"ACGT".to_vec()];
+        let ids=vec![3,3,4];
+        record_extension_support(&x,&ids,b"AC",&mut support);
+        assert_eq!(support,HashSet::from([3,4]));
+        record_extension_support(&x,&ids,b"ACG",&mut support);
+        assert_eq!(support.len(),2);
+        let mut none=HashSet::new();
+        record_extension_support(&x,&ids,b"TT",&mut none);
+        assert!(none.is_empty());
+    }
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
+    #[test] fn read_external_fasta_seeds() {
+        let path=std::env::temp_dir().join(format!("riva-seeds-{}.fasta",std::process::id()));
+        std::fs::write(&path,">seed-one\nacgtACGT\n>seed-two\nGGGG\n>ambiguous\nANNN\n").unwrap();
+        let seeds=fasta_seeds(path.to_str().unwrap()).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(seeds,vec![b"ACGTACGT".to_vec(),b"GGGG".to_vec()]);
+    }
     #[test] fn internal_seed_overhang_can_extend() {
         let seed=b"ACGTACGTACGTACGTACGTACGTACGTACG";
         let mut read=vec![b'G';40];
@@ -279,7 +419,7 @@ mod tests {
         let mut index=HashMap::new();
         index.insert(encode(seed).unwrap(),vec![Hit{read:0,pos:40}]);
         let reads=Reads{seqs:vec![read],index,seed_counts:HashMap::new()};
-        let ov=reads.overhangs(seed);
+        let ov=reads.overhangs_with_ids(seed).0;
         assert_eq!(ov,vec![b"TTAACCGG".to_vec()]);
     }
     #[test] fn distant_cycle_is_stopped() {

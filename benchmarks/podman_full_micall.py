@@ -206,13 +206,14 @@ def project_aware_acceptance(iva_dir, riva_dir):
             "riva_final_max_count":len(candidates)}
 
 
-def baseline_provenance(row, iva_image_id, hxb2_sha256):
+def baseline_provenance(row, iva_image_id, hxb2_sha256, all_projects=False):
     sample = row["sample"]
     sample_dir = DATA / "samples" / sample
     fastqs = [sample_dir / f"{sample}_L001_R{i}_001.fastq.gz" for i in (1, 2)]
     return {
         "iva_image_id": iva_image_id,
         "hxb2_sha256": hxb2_sha256,
+        "all_projects": bool(all_projects),
         "fastq_sha256": [sha(f) for f in fastqs],
         "micall_project_code": row.get("micall_project_code", "").strip(),
     }
@@ -245,7 +246,7 @@ def save_iva_baseline(sample, provenance, arm):
     temp.replace(path)
 
 
-def run_arm(row, arm, image, reference, timeout, invocation):
+def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False):
     name = row["sample"]
     folder = RESULTS / invocation / name / arm
     folder.mkdir(parents=True, exist_ok=True)
@@ -282,6 +283,8 @@ def run_arm(row, arm, image, reference, timeout, invocation):
     ]
     if project:
         command.extend(["--project_code", project])
+    if all_projects:
+        command.append("--all_projects")
     start = time.monotonic()
     with (folder / "podman.stdout.log").open("w") as stdout, \
          (folder / "podman.stderr.log").open("w") as stderr:
@@ -320,7 +323,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
             record["error"]="No global time budget before starting sample"
             record["failed"]=True
             return record
-        provenance=baseline_provenance(row,pinned_iva_id,hxb2_hash)
+        provenance=baseline_provenance(row,pinned_iva_id,hxb2_hash,getattr(args,"all_projects",False))
         record["provenance"]=provenance
         reused_baseline=None
         if args.mode=="riva":
@@ -343,7 +346,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                 result=run_arm(row,arm,images[arm],
                                str(reference) if row.get("project")=="NFLHIVDNA" else None,
                                min(args.timeout_per_arm,max(1,int(remaining))),
-                               invocation)
+                               invocation, getattr(args,"all_projects",False))
             except Exception as exc:
                 result={"exit_code":1,"error":f"{type(exc).__name__}: {exc}"}
             return arm,result
@@ -442,6 +445,8 @@ def main():
     parser.add_argument("--total-time-limit", type=int, default=2380,
                         help="Global seconds for all samples, default below 40-minute hard cap")
     parser.add_argument("--qualify",action="store_true", help="Strict 20-sample full-alpha run requiring pinned manifest SHA-256")
+    parser.add_argument("--all-projects",action="store_true",
+                        help="Symmetrically enable MiCall --all_projects for IVA and Riva; recorded in baseline provenance")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
     if args.jobs<1 or args.total_time_limit<1 or args.timeout_per_arm<1:
@@ -536,6 +541,7 @@ def main():
         "hxb2_sha256":hxb2_hash,"manifest_sha256":manifest_hash,
         "project_reference_catalog_sha256":catalog_hash,
         "qualification_requested":args.qualify,
+        "all_projects":getattr(args,"all_projects",False),
         "manifest_sample_count":manifest_sample_count,
         "selected_samples":len(rows),"finished_samples":len(completed_records),
         "accepted_samples":accepted,

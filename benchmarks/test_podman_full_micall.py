@@ -100,13 +100,14 @@ class BenchmarkTests(TestCase):
         patch.object(m,"image_id",return_value="sha256:img"), \
         patch.object(m,"score_outputs",return_value={"outputs":{}}), \
         patch.object(m.subprocess,"run",return_value=Mock(returncode=0)) as runner:
-    result=m.run_arm({"sample":"TEST"},"riva","image:tag","ACGT",123,"invocation")
+    result=m.run_arm({"sample":"TEST"},"riva","image:tag","ACGT",123,"invocation",all_projects=True)
    argv=runner.call_args.args[0]
    self.assertEqual(argv[argv.index("--entrypoint")+1],"/usr/bin/timeout")
    self.assertEqual(argv[argv.index("--timeout")+1],"121")
    self.assertEqual(argv[argv.index("--stop-timeout")+1],"2")
    self.assertIn("108s",argv)
    self.assertIn("micall",argv)
+   self.assertIn("--all_projects",argv)
    self.assertEqual(result["exit_code"],0)
 
  def test_depth_metrics_streamed_from_final_micall_report(self):

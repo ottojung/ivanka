@@ -123,3 +123,24 @@ A full-alpha pass requires *both* IVA and Riva MiCall pipelines to finish
 together within the global 40-minute run (mode both). A Riva-only run
 using provenance-verified cached IVA controls is reported separately as
 cached_iva_comparison_pass, not as a two-arm wall-clock pass.
+
+
+## Contig reporting and read-support ranking
+
+Riva does not impose any minimum assembled contig length. It considers up to
+1,000 seed-extension attempts, and the final FASTA includes **at most 1,000
+contigs** (configurable downward with `--max-contigs`). This is a safety cap,
+not a target or a guarantee of 1,000 useful contigs.
+
+When more candidates exist than the cap, they are ranked by the number of
+distinct input FASTQ read records supporting **chosen sequence extensions**
+multiplied by assembled sequence length; read count and then length break ties.
+Individual observations with identical sequence count separately (multiplicity),
+but a record used repeatedly within a contig contributes only once to its
+support count. Each read remains available to other extensions and contigs.
+MiCall-derived G2P seed contigs are kept ahead of ordinary candidates to
+preserve downstream seed support.
+
+This initial construction-time quality heuristic is *not* a validated
+likelihood or confidence score. Actual full-MiCall comparisons, including
+short regions and variant-rich inputs, remain necessary for qualification.

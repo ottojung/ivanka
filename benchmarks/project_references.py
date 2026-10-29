@@ -30,9 +30,11 @@ def choose_reference(iva_dir, projects, project_code):
                     continue
                 label = label.removeprefix("remap-final ")
                 _, _, label = label.partition("-")
-                label = label.removesuffix("-seed-excluded")
-                if label in names:
-                    candidates.append((int(row.get("count") or 0), label))
+                matches = (label, label.removesuffix("-excluded"),
+                           label.removesuffix("-seed-excluded"))
+                name = next((candidate for candidate in matches if candidate in names), None)
+                if name is not None:
+                    candidates.append((int(row.get("count") or 0), name))
         break
     if candidates:
         _, name = max(candidates, key=lambda x: (x[0], x[1]))

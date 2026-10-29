@@ -37,6 +37,14 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual(result["riva_best_local_score"], 9)
         self.assertEqual(len(result["reference_sha256"]), 64)
 
+    def test_seed_excluded_suffix_selects_seed_name(self):
+        self.catalog["regions"]["HLA-B"] = {"is_nucleotide": True, "reference": ["CCCC"]}
+        self.catalog["projects"]["HLA-B"]["regions"][0]["seed_region_names"].append("HLA-B")
+        (self.iva / "remap_counts.csv").write_text(
+            "sample,type,count\nx,remap-final 1-HLA-B-seed-excluded,23\n")
+        name, sequence = choose_reference(self.iva, self.catalog, "HLA-B")
+        self.assertEqual((name, sequence), ("HLA-B-seed", "AAACCCGGGTTT"))
+
     def test_no_hxb2_fallback_for_unknown_project(self):
         with self.assertRaises(KeyError):
             choose_reference(self.iva, self.catalog, "MidHCV")

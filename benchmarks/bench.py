@@ -80,8 +80,18 @@ def to_fasta(path, sequences):
             for i in range(0,len(seq),80):
                 handle.write(seq[i:i+80]+"\n")
 
-def prepare_reads(row):
+def prepare_reads(row, cached_only=False):
     """Reuse deterministic MiCall preprocessing; don't silently use raw BaseCalls."""
+    if cached_only:
+        folder = CACHE / row["sample"]
+        r1, r2 = (folder / "trimmed_R1.fastq", folder / "trimmed_R2.fastq")
+        marker = folder / "trim-complete.json"
+        if not marker.is_file() or not r1.is_file() or not r2.is_file():
+            raise FileNotFoundError("Missing original cached reads for " + row["sample"])
+        provenance = json.loads(marker.read_text())
+        if provenance.get("micall_source") != micall_commit():
+            raise ValueError("Cached MiCall preprocessing version has changed")
+        return r1, r2
     # Private cached output; no patient data added to repository.
     r1,r2=input_files(row)
     cache_dir = CACHE/row["sample"]
@@ -150,8 +160,17 @@ def run():
     ap.add_argument("--mode", choices=("baseline","riva","all"),default="all")
     ap.add_argument("--only", default=None,help="Exact sample ID (private dataset)")
     ap.add_argument("--riva",default=str(ROOT/"target/release/riva"))
+    ap.add_argument("--cached-inputs",action="store_true",
+                    help="Pin the original private seven-sample acceptance set to cached trimmed reads, not a mutable source manifest")
     args=ap.parse_args()
-    manifest=read_manifest()
+    if args.cached_inputs:
+        saved = json.loads((CACHE/"baselines.json").read_text())
+        # Canonical acceptance order from the cache, independent of the
+        # mutable source manifest. Never synthesize new baselines here.
+        manifest = [{"sample": sample, "kive_run_id": entry["run_id"]}
+                    for sample, entry in saved.items()]
+    else:
+        manifest=read_manifest()
     if args.only:
         manifest=[r for r in manifest if r["sample"]==args.only]
         if not manifest: raise SystemExit("No selected sample matches --only")
@@ -190,10 +209,11 @@ def run():
             t0=time.monotonic()
             record={"sample":sample,"run_id":row["kive_run_id"],
                     "invocation_id":invocation_id,"riva_binary_sha256":binary_sha256,
-                    "mode":args.mode,"timestamp":time.time(),"status":"started"}
+                    "mode":args.mode,"timestamp":time.time(),"status":"started",
+                    "cached_inputs":args.cached_inputs}
             report.write(json.dumps(record)+"\n")
             try:
-                fq1,fq2=prepare_reads(row)
+                fq1,fq2=prepare_reads(row,cached_only=args.cached_inputs)
                 idx=build_read_index(fq1,fq2)
                 if not idx: raise ValueError("Read index empty; refusing disabled read-support")
                 read_length=max(idx, key=lambda n:sum(idx[n].values()))

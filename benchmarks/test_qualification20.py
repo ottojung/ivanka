@@ -16,7 +16,8 @@ spec.loader.exec_module(m)
 
 class Qualification20Tests(unittest.TestCase):
     def execute(self, size=20, qualify=True, mode='both', pinned=True,
-                duplicate=False, missing_arm=False, wrong_sample=False):
+                duplicate=False, missing_arm=False, wrong_sample=False,
+                missing_reference=False):
         with TemporaryDirectory() as d:
             root = Path(d)
             samples = [f'S{i}' for i in range(size)]
@@ -28,10 +29,13 @@ class Qualification20Tests(unittest.TestCase):
             def fake_case(row, *unused):
                 record = {'sample': row['sample'], 'status': 'finished',
                           'failed': False, 'best_contig_acceptance': {'pass': True},
+                          'project_reference_alignment': {'name': 'example'},
                           'iva': {'exit_code': 0, 'metrics': {}},
                           'riva': {'exit_code': 0, 'metrics': {}}}
                 if missing_arm:
                     del record['riva']
+                if missing_reference:
+                    del record['project_reference_alignment']
                 return record
             argv = ['bench', '--mode', mode]
             if qualify:
@@ -43,6 +47,7 @@ class Qualification20Tests(unittest.TestCase):
                  patch.object(m, 'image_id', return_value='sha256:fixed'), \
                  patch.object(m, 'verify_identical_micall_base'), \
                  patch.object(m, 'sha', return_value='pinned'), \
+                 patch.object(m, 'load_micall_projects', return_value=({'projects':{},'regions':{}},'pinned')), \
                  patch.object(m, 'evaluate_sample', side_effect=fake_case), \
                  patch.dict(os.environ, env, clear=True), \
                  patch.object(sys, 'argv', argv):
@@ -94,6 +99,12 @@ class Qualification20Tests(unittest.TestCase):
 
     def test_missing_arm_fails_closed_even_if_pass_field_true(self):
         rc, error, summary = self.execute(missing_arm=True)
+        self.assertIsNone(error)
+        self.assertEqual(rc, 1)
+        self.assertFalse(summary['full_alpha_pass'])
+
+    def test_missing_project_native_reference_fails_closed(self):
+        rc, error, summary = self.execute(missing_reference=True)
         self.assertIsNone(error)
         self.assertEqual(rc, 1)
         self.assertFalse(summary['full_alpha_pass'])

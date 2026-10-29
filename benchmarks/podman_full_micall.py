@@ -16,6 +16,7 @@ import time
 
 from Bio import SeqIO
 from Bio.Align import PairwiseAligner
+from reference_catalog import load_micall_projects
 
 DATA = Path(os.environ.get("RIVA_DATA", "/workspace/denovo-example-io-1"))
 RESULTS = Path(os.environ.get("RIVA_PODMAN_RESULTS", "/workspace/riva-podman-results"))
@@ -306,7 +307,7 @@ def run_arm(row, arm, image, reference, timeout, invocation):
 
 
 def evaluate_sample(row, args, images, checked, pinned_iva_id,
-                    hxb2_hash, reference, invocation, deadline):
+                    hxb2_hash, reference, project_catalog, invocation, deadline):
     """Run one sample through selected real MiCall image(s), with no shared scratch."""
     name = row["sample"]
     record={"sample":name,"invocation":invocation,
@@ -371,17 +372,17 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
         if "riva" in checked:
             if ("riva" in record and "metrics" in record["riva"] and
                 baseline and baseline.get("exit_code")==0 and "metrics" in baseline):
-                catalog_path=os.environ.get("RIVA_PROJECTS_JSON")
-                if catalog_path:
+                if project_catalog is not None:
                     try:
                         from project_references import aligned_to_project_reference
-                        projects=json.loads(Path(catalog_path).read_text())
+                        projects=project_catalog
                         ref_iva=Path(baseline.get("artifact_dir",str(RESULTS/invocation/name/"iva")))
                         ref_riva=Path(record["riva"].get("artifact_dir",str(RESULTS/invocation/name/"riva")))
                         record["project_reference_alignment"]=aligned_to_project_reference(
                             ref_iva,ref_riva,projects,row["micall_project_code"])
                     except (OSError,KeyError,ValueError) as exc:
                         record["project_reference_error"]=str(exc)
+                        if args.qualify: failures+=1
                 a=baseline["metrics"]["best_hxb2_final_max_conseq_score"]
                 b=record["riva"]["metrics"]["best_hxb2_final_max_conseq_score"]
                 if row.get("project") == "NFLHIVDNA":
@@ -472,9 +473,11 @@ def main():
     if not rows: raise ValueError("No samples selected")
     with (DATA/"hxb2.fasta").open() as reference_file:
         hxb2=next(SeqIO.parse(reference_file,"fasta")).seq
+    projects,catalog_hash=load_micall_projects(IVA_IMAGE)
     if args.probe:
         print(json.dumps({"images":checked,"sample_count":len(rows),
-                          "hxb2_sha256":sha(DATA/"hxb2.fasta")},indent=2))
+                          "hxb2_sha256":sha(DATA/"hxb2.fasta"),
+                          "project_reference_catalog_sha256":catalog_hash},indent=2))
         return 0
     RESULTS.mkdir(parents=True,exist_ok=True)
     invocation=str(int(time.time()))+"-"+str(os.getpid())
@@ -491,7 +494,7 @@ def main():
                 out.write(json.dumps({"sample":row["sample"],
                                       "invocation":invocation,"status":"started"})+"\n")
                 task=executor.submit(evaluate_sample,row,args,images,checked,
-                                     pinned_iva_id,hxb2_hash,hxb2,invocation,deadline)
+                                     pinned_iva_id,hxb2_hash,hxb2,projects,invocation,deadline)
                 futures[task]=row["sample"]
             for task in as_completed(futures):
                 name=futures[task]
@@ -519,7 +522,8 @@ def main():
                 len(completed_records)==20 and
                 len(set(finished_names))==20 and
                 set(finished_names)==set(names) and
-                both_arms_complete)
+                both_arms_complete and
+                all("project_reference_alignment" in r for r in completed_records))
     global_seconds=time.monotonic()-benchmark_start
     complete_noninferiority=(full_scope and
                             qualification_within_cap(args.total_time_limit,global_seconds)
@@ -530,7 +534,7 @@ def main():
     summary={
         "invocation":invocation,"mode":args.mode,"images":checked,
         "hxb2_sha256":hxb2_hash,"manifest_sha256":manifest_hash,
-        "project_reference_catalog_sha256":sha(Path(os.environ["RIVA_PROJECTS_JSON"])) if os.environ.get("RIVA_PROJECTS_JSON") else None,
+        "project_reference_catalog_sha256":catalog_hash,
         "qualification_requested":args.qualify,
         "manifest_sample_count":manifest_sample_count,
         "selected_samples":len(rows),"finished_samples":len(completed_records),

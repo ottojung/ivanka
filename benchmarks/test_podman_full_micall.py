@@ -144,7 +144,7 @@ class BenchmarkTests(TestCase):
        patch.object(m,"save_iva_baseline"), \
        patch.object(m,"run_arm",side_effect=fake_arm) as runner:
    result=m.evaluate_sample({"sample":"S","project":"NFLHIVDNA"},args,{"iva":"A","riva":"B"},
-           {"iva":"hashA","riva":"hashB"},"base-id","refhash","ACGT","inv",
+           {"iva":"hashA","riva":"hashB"},"base-id","refhash","ACGT",None,"inv",
            time.monotonic()+5)
   self.assertFalse(result["failed"])
   self.assertEqual(runner.call_count,2)
@@ -160,7 +160,7 @@ class BenchmarkTests(TestCase):
   with patch.object(m,"baseline_provenance",return_value={"verified":True}), \
        patch.object(m,"load_iva_baseline",side_effect=ValueError("missing control")), \
        patch.object(m,"run_arm",return_value={"exit_code":0,"metrics":{"best_hxb2_final_max_conseq_score":1000,"outputs":{}}}) as runner:
-   r=m.evaluate_sample({"sample":"S"},args,{"riva":"img"},{"riva":"hash"},"base","hxb2","ACGT","inv",time.monotonic()+20)
+   r=m.evaluate_sample({"sample":"S"},args,{"riva":"img"},{"riva":"hash"},"base","hxb2","ACGT",None,"inv",time.monotonic()+20)
   self.assertTrue(r["failed"])
   self.assertEqual(r["riva"]["exit_code"],0)
   self.assertIn("baseline_error",r)

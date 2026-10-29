@@ -160,6 +160,8 @@ def run():
     ap.add_argument("--mode", choices=("baseline","riva","all"),default="all")
     ap.add_argument("--only", default=None,help="Exact sample ID (private dataset)")
     ap.add_argument("--riva",default=str(ROOT/"target/release/riva"))
+    ap.add_argument("--fail-fast",action="store_true",
+                    help="Diagnostic mode: stop after first failed acceptance case; never claim full-suite PASS")
     ap.add_argument("--cached-inputs",action="store_true",
                     help="Pin the original private seven-sample acceptance set to cached trimmed reads, not a mutable source manifest")
     args=ap.parse_args()
@@ -167,8 +169,11 @@ def run():
         saved = json.loads((CACHE/"baselines.json").read_text())
         # Canonical acceptance order from the cache, independent of the
         # mutable source manifest. Never synthesize new baselines here.
-        manifest = [{"sample": sample, "kive_run_id": entry["run_id"]}
-                    for sample, entry in saved.items()]
+        frozen_roles = json.loads((CACHE/"roles.json").read_text())
+        if len(frozen_roles) != 7 or any(sample not in saved for sample in frozen_roles):
+            raise ValueError("Expected the seven original acceptance controls in private cache")
+        manifest = [{"sample": sample, "kive_run_id": saved[sample]["run_id"]}
+                    for sample in sorted(frozen_roles)]
     else:
         manifest=read_manifest()
     if args.only:
@@ -266,6 +271,10 @@ def run():
             report.write(json.dumps(record,sort_keys=True)+"\n")
             records.append(record)
             print(f"{sample}: {record['status']} in {record['seconds']}s",flush=True)
+            if args.fail_fast and (record["status"] != "evaluated" or
+                                   (args.mode != "baseline" and not record.get("alpha_pass",False))):
+                print("Fail-fast diagnostic stopped at first failure",flush=True)
+                break
     print(f"Finished invocation in {time.monotonic()-start:.1f}s; results={current}")
     failures=[r for r in records if r.get("status")!="evaluated" or
               (args.mode!="baseline" and not r.get("alpha_pass",False))]

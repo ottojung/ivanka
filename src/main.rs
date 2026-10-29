@@ -270,7 +270,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         if seq.len()<SEED_TARGET*3/4 {continue;}
         if contigs.iter().chain(supplemental.iter()).any(|c|
                 c.windows(seq.len()).any(|w|w==seq)
-) {continue;}
+            || seq.windows(c.len()).any(|w|w==c)) {continue;}
         supplemental.push(seq);
     }
     eprintln!("conservative {} and majority {} contigs",primary_count,supplemental.len());

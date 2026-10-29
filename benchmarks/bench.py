@@ -179,7 +179,7 @@ def run():
     if args.only:
         manifest=[r for r in manifest if r["sample"]==args.only]
         if not manifest: raise SystemExit("No selected sample matches --only")
-    RESULTS.mkdir(exist_ok=True)
+    RESULTS.mkdir(parents=True,exist_ok=True)
     ref_recs=list(SeqIO.parse(DATA/"hxb2.fasta","fasta"))
     if len(ref_recs)!=1: raise ValueError("Reference must have exactly one HXB2 sequence")
     ref=str(ref_recs[0].seq).upper()

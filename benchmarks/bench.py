@@ -22,7 +22,7 @@ from acceptance import accept_sample, reference_fidelity, STRUCTURAL_ROLES
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("RIVA_DATA", "/workspace/denovo-example-io-1"))
 CACHE = Path(os.environ.get("RIVA_BENCH_CACHE", "/workspace/riva-benchmark-cache"))
-RESULTS = ROOT / "benchmark-results"
+RESULTS = Path(os.environ.get("RIVA_RESULTS", str(ROOT / "benchmark-results")))
 MICALL = Path(os.environ.get("MICALL_REPO", "/workspace/qai-repo/repos/MiCall"))
 sys.path.insert(0, str(MICALL))
 try:
@@ -257,8 +257,10 @@ def run():
                     record["ordinary_score_threshold_met"]=record["score_fraction"] is not None and record["score_fraction"]>=0.95
                     structural=None
                     if roles[sample] in STRUCTURAL_ROLES:
-                        structural=reference_fidelity(folder/"iva.raw.fasta",
-                                                      folder/"riva.stitched.fasta")
+                        iva_raw = folder/"iva.raw.fasta"
+                        if not iva_raw.is_file():
+                            iva_raw = ROOT/"benchmark-results"/sample/"iva.raw.fasta"
+                        structural=reference_fidelity(iva_raw, folder/"riva.stitched.fasta")
                         record["structural_check"]=structural
                     ok,problems=accept_sample(roles[sample],base["metrics"],riva,structural)
                     record["alpha_pass"]=ok

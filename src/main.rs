@@ -291,8 +291,8 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         eprintln!("received {} MiCall G2P seed contigs", supplied.len());
         let seed_quota=(max / 3).max(1);
         for seed in supplied.into_iter().filter(|seq|seq.len()>=K).take(seed_quota) {
-            let extended=extend(seed,&reads,6,2);
-            if extended.len()>=SEED_TARGET/2 &&
+            let supplied_len=seed.len(); let extended=extend(seed,&reads,6,2);
+            if extended.len()>=supplied_len &&
                !contigs.iter().any(|c|c.windows(extended.len()).any(|w|w==extended)) {
                 contigs.push(extended);
             }

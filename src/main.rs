@@ -7,7 +7,6 @@ use std::time::Instant;
 
 const K: usize = 31;
 const INDEX_STEP: usize = 12;
-const SEED_TARGET: usize = 720;
 const MAX_EXTENSION: usize = 100;
 const MAX_CONTIG_LENGTH: usize = 25000;
 
@@ -252,9 +251,14 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> Vec<
     }
     seq
 }
+fn select_longest(mut seqs:Vec<Vec<u8>>,n:usize)->Vec<Vec<u8>> {
+    seqs.sort_unstable_by(|a,b|b.len().cmp(&a.len()).then_with(||a.cmp(b)));
+    seqs.truncate(n);
+    seqs
+}
 fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
     let args=std::env::args().collect::<Vec<_>>();
-    let mut a=None;let mut b=None;let mut output=None;let mut max=12usize;let mut max_pairs=None;let mut seeds=None;
+    let mut a=None;let mut b=None;let mut output=None;let mut max=1000usize;let mut max_pairs=None;let mut seeds=None;
     let mut i=1;
     while i<args.len() {
         match args[i].as_str() {
@@ -271,7 +275,7 @@ fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),S
                 i+=2;
             },
             "--help"|"-h" => {
-                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 12] [--max-pairs N] [--seeds seeds.fasta]");
+                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 1000] [--max-pairs N] [--seeds seeds.fasta]");
                 std::process::exit(0);
             },
             _=>return Err(format!("unknown/incomplete argument: {}",args[i])),
@@ -300,14 +304,14 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
     }
     let mut attempted=0usize;
     for (seed,count) in candidates {
-        if contigs.len()>=max || attempted>=1000 {break;}
+        if attempted>=1000 {break;}
         if count<15 {break;}
         let seedseq=decode(seed);
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
         let seq=extend(seedseq,&reads,6,2);
-        if seq.len()>=SEED_TARGET/2 {
+        if !seq.is_empty() {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
             if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {
@@ -316,6 +320,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
+    let contigs=select_longest(contigs,max);
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">riva_{} len={}",i+1,c.len())?;
@@ -328,6 +333,14 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn selects_longest_1000_without_short_filter(){
+        let c=(1..=1200).map(|n|vec![b'A';n]).collect();
+        let chosen=select_longest(c,1000);
+        assert_eq!(chosen.len(),1000);
+        assert_eq!(chosen[0].len(),1200);
+        assert_eq!(chosen[999].len(),201);
+        assert_eq!(select_longest(vec![vec![b'C';31]],1000).len(),1);
+    }
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
     #[test] fn read_external_fasta_seeds() {

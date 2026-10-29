@@ -27,7 +27,7 @@ class BenchmarkTests(TestCase):
    prov={"iva_image_id":"sha256:a","hxb2_sha256":"sha256:b",
          "fastq_sha256":["x","y"],"micall_project_code":""}
    arm={"exit_code":0,"metrics":{
-     "best_hxb2_final_max_conseq_score":1000,
+     "best_hxb2_final_max_conseq_score":1000,"num_final_max_conseqs":1,
      "outputs":{"conseq.csv":{"exists":True,"rows":1,"sha256":"x"}}}}
    m.save_iva_baseline("S1",prov,arm)
    self.assertEqual(m.load_iva_baseline("S1",prov),arm)

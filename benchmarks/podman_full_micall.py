@@ -85,8 +85,9 @@ def score_outputs(folder, reference):
                         continue
                     seq = row.get("sequence","").upper()
                     if seq:
-                        scores.append(float(aligner.score(reference,seq)))
                         lengths.append(len(seq))
+                        if reference is not None:
+                            scores.append(float(aligner.score(reference,seq)))
                 elif basename == "genome_coverage.csv":
                     value = row.get("coverage")
                     if value in (None,""):
@@ -112,7 +113,7 @@ def score_outputs(folder, reference):
                         if coverage >= 100: unique_ge_100.add(coordinate)
         result[basename]={"exists":True,"rows":rowcount,"sha256":sha(file)}
     return {"best_hxb2_final_max_conseq_score": max(scores,default=None),
-            "num_final_max_conseqs":len(scores),
+            "num_final_max_conseqs":len(lengths),
             "final_max_conseq_lengths":sorted(lengths,reverse=True),
             "coverage_depth": {
                 "positions":depth["positions"],
@@ -228,13 +229,13 @@ def load_iva_baseline(sample, expected_provenance):
     if stored["provenance"] != expected_provenance:
         raise ValueError("IVA baseline provenance differs from current MiCall image, FASTQs, or HXB2")
     arm = stored["iva"]
-    if arm["exit_code"] != 0 or arm["metrics"]["best_hxb2_final_max_conseq_score"] is None:
+    if arm["exit_code"] != 0 or arm["metrics"]["num_final_max_conseqs"] <= 0:
         raise ValueError("The stored IVA baseline is not a completed scored MiCall run")
     return arm
 
 
 def save_iva_baseline(sample, provenance, arm):
-    if arm["exit_code"] != 0 or arm["metrics"]["best_hxb2_final_max_conseq_score"] is None:
+    if arm["exit_code"] != 0 or arm["metrics"]["num_final_max_conseqs"] <= 0:
         raise ValueError("Cannot cache an incomplete or unscored IVA baseline")
     path = iva_baseline_path(sample)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -338,7 +339,8 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                 return arm,{"exit_code":124,
                             "error":"Global time limit exhausted before arm"}
             try:
-                result=run_arm(row,arm,images[arm],str(reference),
+                result=run_arm(row,arm,images[arm],
+                               str(reference) if row.get("project")=="NFLHIVDNA" else None,
                                min(args.timeout_per_arm,max(1,int(remaining))),
                                invocation)
             except Exception as exc:
@@ -369,6 +371,17 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
         if "riva" in checked:
             if ("riva" in record and "metrics" in record["riva"] and
                 baseline and baseline.get("exit_code")==0 and "metrics" in baseline):
+                catalog_path=os.environ.get("RIVA_PROJECTS_JSON")
+                if catalog_path:
+                    try:
+                        from project_references import aligned_to_project_reference
+                        projects=json.loads(Path(catalog_path).read_text())
+                        ref_iva=Path(baseline.get("artifact_dir",str(RESULTS/invocation/name/"iva")))
+                        ref_riva=Path(record["riva"].get("artifact_dir",str(RESULTS/invocation/name/"riva")))
+                        record["project_reference_alignment"]=aligned_to_project_reference(
+                            ref_iva,ref_riva,projects,row["micall_project_code"])
+                    except (OSError,KeyError,ValueError) as exc:
+                        record["project_reference_error"]=str(exc)
                 a=baseline["metrics"]["best_hxb2_final_max_conseq_score"]
                 b=record["riva"]["metrics"]["best_hxb2_final_max_conseq_score"]
                 if row.get("project") == "NFLHIVDNA":
@@ -517,6 +530,7 @@ def main():
     summary={
         "invocation":invocation,"mode":args.mode,"images":checked,
         "hxb2_sha256":hxb2_hash,"manifest_sha256":manifest_hash,
+        "project_reference_catalog_sha256":sha(Path(os.environ["RIVA_PROJECTS_JSON"])) if os.environ.get("RIVA_PROJECTS_JSON") else None,
         "qualification_requested":args.qualify,
         "manifest_sample_count":manifest_sample_count,
         "selected_samples":len(rows),"finished_samples":len(completed_records),

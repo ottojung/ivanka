@@ -68,8 +68,17 @@ class BenchmarkTests(TestCase):
    m.verify_identical_micall_base("iva","ivanka")
    verifier.assert_called_once()
    self.assertEqual(verifier.call_args.args[0][6], "ivanka")
+   self.assertEqual(verifier.call_args.kwargs["timeout"], 180)
    with self.assertRaisesRegex(ValueError,"does not derive"):
     m.verify_identical_micall_base("iva","foreign")
+ def test_slow_image_startup_fails_closed_without_misdiagnosing_binding(self):
+  from unittest.mock import patch
+  from subprocess import TimeoutExpired
+  layers={"iva":["a","b"],"ivanka":["a","b","c"]}
+  with patch.object(m,"image_layers",side_effect=lambda name:layers[name]), \
+       patch.object(m.subprocess,"run",side_effect=TimeoutExpired(["podman","run"],180)):
+   with self.assertRaisesRegex(ValueError,"Timed out waiting"):
+    m.verify_identical_micall_base("iva","ivanka")
  def test_missing_conseq(self):
   with TemporaryDirectory() as d:
    self.assertIsNone(m.score_outputs(Path(d),"ACGT")["best_hxb2_final_max_conseq_score"])

@@ -265,6 +265,10 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec
             }
             record_extension_support(&right_reads,&right_ids,&right,&mut supporting_reads);
             record_extension_support(&left_reads,&left_ids,&left_rc,&mut supporting_reads);
+            if next.len()>MAX_CONTIG_LENGTH {
+                eprintln!("rejecting assembly path exceeding {} nt",MAX_CONTIG_LENGTH);
+                return (Vec::new(),0);
+            }
             seq=next;
         }
     }
@@ -273,27 +277,84 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec
 // A first-pass ranking heuristic, not a calibrated confidence score:
 // independent extension-supporting FASTQ records (with multiplicity) times
 // assembled span. Preserve G2P-derived seeds before applying the safety cap.
+// Orientation-neutral 31-mer identity, used only to avoid reporting
+// redundant assembled paths; it never consumes or filters FASTQ reads.
+fn canonical_kmer(seq:&[u8])->Option<u64> {
+    let f=encode(seq)?;
+    let mut r=0u64;
+    for i in 0..K {r=(r<<2)|(3-((f>>(2*i))&3));}
+    Some(f.min(r))
+}
 fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
                             n:usize, protected:usize)->Vec<Vec<u8>> {
     assert_eq!(seqs.len(),counts.len());
     let mut candidates=seqs.into_iter().zip(counts).enumerate().collect::<Vec<_>>();
+    let mut spans=candidates.iter().filter(|(i,(_,reads))|*i>=protected && *reads>0)
+        .map(|(i,(seq,reads))|(*i,(*reads as u128)*(seq.len() as u128)))
+        .collect::<Vec<_>>();
+    spans.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+    let span_favorites=spans.into_iter().take(if candidates.len()>n.saturating_mul(2) {(n/2).min(8)} else {0})
+        .map(|(i,_)|i).collect::<HashSet<_>>();
     candidates.sort_unstable_by(|a,b|{
+        let a_span=span_favorites.contains(&a.0);
+        let b_span=span_favorites.contains(&b.0);
         let a_protected=a.0<protected;
         let b_protected=b.0<protected;
-        let a_score=(a.1.1 as u128)*(a.1.0.len() as u128);
-        let b_score=(b.1.1 as u128)*(b.1.0.len() as u128);
+        // Approximate read support per assembled base, to avoid rewarding
+        // overextended paths purely for being long. Compare ratios using
+        // multiplication rather than truncating integer division.
+        let a_score=(a.1.1 as u128)*(b.1.0.len() as u128);
+        let b_score=(b.1.1 as u128)*(a.1.0.len() as u128);
         b_protected.cmp(&a_protected)
+            .then_with(||b_span.cmp(&a_span))
             .then_with(||b_score.cmp(&a_score))
             .then_with(||b.1.1.cmp(&a.1.1))
             .then_with(||b.1.0.len().cmp(&a.1.0.len()))
             .then_with(||a.1.0.cmp(&b.1.0))
     });
-    candidates.truncate(n);
-    candidates.into_iter().map(|(_, (seq,_))|seq).collect()
+    // Use read support to prioritize assemblies and k-mer novelty to avoid
+    // passing hundreds of near-identical contigs into MiCall's stitcher.
+    let mut retained=Vec::new();
+    let mut represented=HashSet::new();
+    let mut duplicates=0usize;
+    let mut no_extension_support=0usize;
+    for (index,(seq,support)) in candidates {
+        if retained.len()>=n {break;}
+        let is_seed=index<protected;
+        if !is_seed && support==0 {
+            no_extension_support+=1;
+            continue;
+        }
+        let mut valid=0usize;
+        let mut shared=0usize;
+        for window in seq.windows(K) {
+            if let Some(k)=canonical_kmer(window) {
+                valid+=1;
+                if represented.contains(&k){shared+=1;}
+            }
+        }
+        // A short sequence nearly contained in a longer supported contig adds
+        // little assembly coverage but can divert reads during MiCall remapping.
+        // Use a less strict overlap threshold only for these short fragments;
+        // equal-length alternatives retain the normal haplotype-diversity rule.
+        let longest=retained.iter().map(Vec::len).max().unwrap_or(0);
+        let short_shadow=seq.len()*4<=longest*3 && shared*20>=valid*17;
+        if !is_seed && valid>0 && (shared*20>=valid*19 || short_shadow) {
+            duplicates+=1;
+            continue;
+        }
+        for window in seq.windows(K) {
+            if let Some(k)=canonical_kmer(window) {represented.insert(k);}
+        }
+        retained.push(seq);
+    }
+    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={}",
+              retained.len(),duplicates,no_extension_support);
+    retained
 }
 fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
     let args=std::env::args().collect::<Vec<_>>();
-    let mut a=None;let mut b=None;let mut output=None;let mut max=1000usize;let mut max_pairs=None;let mut seeds=None;
+    let mut a=None;let mut b=None;let mut output=None;let mut max=16usize;let mut max_pairs=None;let mut seeds=None;
     let mut i=1;
     while i<args.len() {
         match args[i].as_str() {
@@ -319,12 +380,34 @@ fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),S
     if max == 0 || max > 1000 { return Err("max-contigs must be in 1..=1000".to_string()); }
     Ok((a.ok_or("missing --reads1")?, b.ok_or("missing --reads2")?,output.ok_or("missing --output")?,max,max_pairs,seeds))
 }
+// Equal attention to solid k-mers at different sequencing depths prevents
+// oversampled regions monopolizing the bounded seed-extension budget.
+// This is reference-free and never removes or consumes any reads.
+fn balanced_seed_candidates(counts:&HashMap<u64,u32>) -> Vec<(u64,u32)> {
+    let mut buckets=vec![Vec::<(u64,u32)>::new();32];
+    for (&key,&count) in counts {
+        if count < 15 {continue;}
+        let level=(31-count.leading_zeros()) as usize;
+        buckets[level].push((key,count));
+    }
+    let mut longest=0usize;
+    for bucket in &mut buckets {
+        bucket.sort_unstable_by_key(|&(key,_)| key.wrapping_mul(0x9e3779b97f4a7c15));
+        longest=longest.max(bucket.len());
+    }
+    let mut selected=Vec::with_capacity(buckets.iter().map(Vec::len).sum());
+    for rank in 0..longest {
+        for bucket in buckets.iter().rev() {
+            if let Some(&seed)=bucket.get(rank) {selected.push(seed);}
+        }
+    }
+    selected
+}
 fn main()->Result<(),Box<dyn std::error::Error>> {
     let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
     let now=Instant::now();
     let reads=Reads::load(&a,&b,max_pairs)?;
-    let mut candidates=reads.seed_counts.iter().map(|(k,c)|(*k,*c)).collect::<Vec<_>>();
-    candidates.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+    let candidates=balanced_seed_candidates(&reads.seed_counts);
     let mut contigs=Vec::<Vec<u8>>::new();
     let mut supporting_counts=Vec::<usize>::new();
     if let Some(ref seeds_file) = seeds_path {
@@ -346,10 +429,13 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         if attempted>=1000 {break;}
         if count<15 {break;}
         let seedseq=decode(seed);
-        let seedrev=rc(&seedseq);
-        if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
+        // A k-mer can occur in both a dominant strain and a distinct supported
+        // haplotype. Keep independent seed starts rather than treating a
+        // previously traversed 31-mer as proof of redundant full contigs.
+        // The bounded attempt budget and final read-support/novelty ranking
+        // still cap work and reported output.
         attempted+=1;
-        let (seq,support)=extend(seedseq,&reads,6,2);
+        let (seq,support)=extend(seedseq,&reads,4,1);
         if !seq.is_empty() {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
@@ -360,6 +446,28 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
+    // A second bounded, high-evidence search complements balanced-depth
+    // exploration. We deliberately revisit seeds represented in an earlier
+    // contig: a different internal anchor can extend through a difficult
+    // junction, while final support/novelty selection still de-duplicates.
+    let mut deep=reads.seed_counts.iter()
+        .filter(|(_,count)|**count>=15)
+        .map(|(&seed,&count)|(seed,count)).collect::<Vec<_>>();
+    deep.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+    let mut rescued=0usize;
+    for (seed,count) in deep.into_iter().take(400) {
+        let (seq,support)=extend(decode(seed),&reads,4,1);
+        if seq.is_empty() {continue;}
+        if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {
+            contigs.push(seq);
+            supporting_counts.push(support);
+            rescued+=1;
+        }
+        if rescued%20==0 && rescued>0 {
+            eprintln!("high-depth rescue considered seed support {}",count);
+        }
+    }
+    eprintln!("Ivanka supplementary high-depth seeds produced {} novel contigs",rescued);
     eprintln!("Ivanka ranking {} candidates by distinct contributing FASTQ records × contig length; {} MiCall seeds protected",contigs.len(),protected_seed_count);
     let contigs=select_supported_contigs(contigs,supporting_counts,max,protected_seed_count);
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
@@ -374,6 +482,30 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn seed_search_spreads_depth_buckets_deterministically() {
+        let mut counts=HashMap::new();
+        for i in 0..40u64 {
+            counts.insert(i+1000,8000);
+            counts.insert(i+2000,90);
+            counts.insert(i+3000,32);
+        }
+        counts.insert(7,14);
+        let selected=balanced_seed_candidates(&counts);
+        assert_eq!(selected.len(),120);
+        let early=selected.iter().take(12).map(|(_,c)|*c).collect::<Vec<_>>();
+        for expected in [8000,90,32] {
+            assert_eq!(early.iter().filter(|c|**c==expected).count(),4);
+        }
+        assert!(!selected.iter().any(|(k,_)|*k==7));
+        assert_eq!(selected,balanced_seed_candidates(&counts));
+    }
+    #[test] fn ranking_favors_evidence_density_over_unverified_span() {
+        let long=vec![b'A';800];
+        let short=vec![b'C';400];
+        let output=select_supported_contigs(
+            vec![long.clone(),short.clone()],vec![90,80],1,0);
+        assert_eq!(output,vec![short]);
+    }
     #[test] fn cap_prefers_read_supported_quality_over_length(){
         let input=vec![vec![b'A';900],vec![b'C';180],vec![b'T';31]];
         let output=select_supported_contigs(input,vec![1,9,0],2,0);
@@ -385,10 +517,36 @@ mod tests {
         let seqs=(1..=1200).map(|n|vec![b'A';n]).collect::<Vec<_>>();
         let counts=(1..=1200).map(|n|n).collect::<Vec<_>>();
         let out=select_supported_contigs(seqs,counts,1000,1);
-        assert_eq!(out.len(),1000);
+        assert!(out.len()<=1000);
+        assert!(out.len()>1);
         assert_eq!(out[0].len(),1);
         assert_eq!(out[1].len(),1200);
         assert!(!out.iter().any(|s|s.len()==31));
+    }
+    #[test] fn drops_short_nearly_contained_path_but_keeps_novel_locus(){
+        let mut rng=0x1234_5678_1234_5678u64;
+        let long=(0..900).map(|_|{
+            rng^=rng<<13; rng^=rng>>7; rng^=rng<<17;
+            b"ACGT"[(rng&3) as usize]
+        }).collect::<Vec<u8>>();
+        let mut shorter=long[100..700].to_vec();
+        shorter[300]=if shorter[300]==b'A' {b'C'} else {b'A'};
+        let novel=vec![b'T';400];
+        let result=select_supported_contigs(
+            vec![long.clone(),shorter,novel.clone()],vec![240,90,60],1000,0);
+        assert_eq!(result,vec![long,novel]);
+    }
+    #[test] fn supported_full_length_path_survives_dense_short_fragments(){
+        let mut seqs=(0..40usize).map(|i|{
+            let mut seq=vec![b'A';K];
+            for j in 0..5 {seq[j*6]=b"ACGT"[(i>>(j*2))&3];}
+            seq
+        }).collect::<Vec<_>>();
+        seqs.push(vec![b'G';900]);
+        let mut support=vec![100usize;40];support.push(80);
+        let retained=select_supported_contigs(seqs,support,16,0);
+        assert!(retained.len()<=16);
+        assert!(retained.iter().any(|seq|seq.len()==900));
     }
     #[test] fn support_deduplicates_reused_reads_not_multiplicity(){
         let mut support=HashSet::new();

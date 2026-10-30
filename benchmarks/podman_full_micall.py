@@ -165,6 +165,9 @@ def best_consensus_acceptance(iva_score, riva_score):
 
 
 QUALIFICATION_MAX_SECONDS = 1200
+QUALIFY_SAMPLE_COUNT = 18
+ORIGINAL_COHORT_SIZE = 20
+IVA_INELIGIBLE_COUNT = 2
 
 
 def qualification_within_cap(configured_limit, elapsed):
@@ -176,6 +179,44 @@ def qualification_within_cap(configured_limit, elapsed):
             isinstance(elapsed, (int,float)) and
             0 < configured_limit <= QUALIFICATION_MAX_SECONDS and
             0 <= elapsed <= configured_limit)
+
+
+def verify_iva_eligibility(manifest_sha, eligible_names):
+    """Require independently recorded IVA-only exclusions, never Riva-based culling.
+
+    The private evidence file records the original frozen cohort and two
+    successful, zero-MAX IVA controls independently repeated with and
+    without the MiCall all-projects mode.
+    """
+    path = DATA / "iva_eligibility_evidence.json"
+    try:
+        info = json.loads(path.read_text())
+        excluded = info["excluded"]
+        valid = (
+            info["source_count"] == ORIGINAL_COHORT_SIZE
+            and info["eligible_count"] == QUALIFY_SAMPLE_COUNT
+            and info["excluded_count"] == IVA_INELIGIBLE_COUNT
+            and info["eligible_manifest_sha256"] == manifest_sha
+            and len(excluded) == IVA_INELIGIBLE_COUNT
+            and len({entry["sample"] for entry in excluded}) == IVA_INELIGIBLE_COUNT
+            and not ({entry["sample"] for entry in excluded} & set(eligible_names))
+            and all(
+                entry[mode]["iva_exit"] == 0 and entry[mode]["iva_max"] == 0
+                for entry in excluded
+                for mode in ("all_projects", "without_all_projects")
+            )
+            and isinstance(info["source_manifest_sha256"], str)
+            and len(info["source_manifest_sha256"]) == 64
+        )
+        if not valid:
+            raise ValueError("IVA eligibility evidence is inconsistent with the frozen cohort")
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Missing or invalid pinned IVA eligibility evidence") from exc
+    return {
+        "source_manifest_sha256": info["source_manifest_sha256"],
+        "iva_ineligible_excluded": IVA_INELIGIBLE_COUNT,
+        "iva_eligibility_evidence_sha256": sha(path),
+    }
 
 
 def project_aware_acceptance(iva_dir, riva_dir):
@@ -461,7 +502,7 @@ def main():
                         help="Per-arm bound, further limited by the shared per-sample deadline")
     parser.add_argument("--sample-time-limit", type=int, default=1200,
                         help="Maximum elapsed seconds for EACH sample, including both MiCall arms and scoring")
-    parser.add_argument("--qualify",action="store_true", help="Strict 20-sample full-alpha run requiring pinned manifest SHA-256")
+    parser.add_argument("--qualify",action="store_true", help="Strict 18-sample IVA-eligible alpha run requiring pinned manifest and IVA eligibility evidence")
     parser.add_argument("--diagnose-project-reference",action="store_true",
                         help="Optional expensive legacy IVA-selected project reference diagnostic; not used for acceptance")
     parser.add_argument("--all-projects",action="store_true",
@@ -489,10 +530,13 @@ def main():
     manifest_hash=sha(DATA/"manifest.tsv")
     if args.qualify:
         expected=os.environ.get("RIVA_EXPECTED_MANIFEST_SHA256", "")
-        if args.mode!="both" or args.sample is not None or manifest_sample_count!=20:
-            raise ValueError("Full alpha requires all 20 predeclared samples in one both-arm invocation")
+        if args.mode!="both" or args.sample is not None or manifest_sample_count!=QUALIFY_SAMPLE_COUNT:
+            raise ValueError("Full alpha requires all 18 predeclared IVA-eligible samples in one both-arm invocation")
         if not expected or manifest_hash!=expected:
             raise ValueError("Qualification manifest SHA-256 missing or mismatched")
+        eligibility = verify_iva_eligibility(manifest_hash, names)
+    else:
+        eligibility = {}
     rows=[row for row in rows if args.sample is None or row["sample"] in args.sample]
     if not rows: raise ValueError("No samples selected")
     with (DATA/"hxb2.fasta").open() as reference_file:
@@ -546,9 +590,9 @@ def main():
         r.get("riva",{}).get("exit_code")==0 and
         "metrics" in r.get("iva",{}) and "metrics" in r.get("riva",{})
         for r in completed_records)
-    full_scope=(args.qualify and len(rows)==20 and
-                len(completed_records)==20 and
-                len(set(finished_names))==20 and
+    full_scope=(args.qualify and len(rows)==QUALIFY_SAMPLE_COUNT and
+                len(completed_records)==QUALIFY_SAMPLE_COUNT and
+                len(set(finished_names))==QUALIFY_SAMPLE_COUNT and
                 set(finished_names)==set(names) and
                 both_arms_complete and
                 all("best_contig_acceptance" in r for r in completed_records))
@@ -584,11 +628,12 @@ def main():
         "max_sample_seconds":(round(max_sample_seconds,2) if max_sample_seconds is not None else None),
         "reference_panel_sha256":reference_panel_hash,
         "reference_panel_count":len(references),
+        **eligibility,
         "jobs":args.jobs,"parallel_arms":args.parallel_arms,
         "allow_missing_baseline":args.allow_missing_baseline,
         "full_alpha_pass":full_alpha_pass,
         "cached_iva_comparison_pass":cached_iva_comparison_pass,
-        "note":"Full alpha requires all 20 samples in one complete A/B run; EACH sample has its own 20-minute budget, with no whole-set deadline. Riva-only comparisons are reported separately."
+        "note":"Full alpha requires all 18 IVA-eligible samples in one complete A/B run; EACH sample has its own 20-minute budget, with no whole-set deadline. Riva-only comparisons are reported separately."
     }
     (RESULTS/f"summary-{invocation}.json").write_text(
         json.dumps(summary,indent=2,sort_keys=True))

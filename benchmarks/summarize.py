@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed reports of the current complete 20-sample full-MiCall runs.
+"""Fail-closed reports of the current complete 18-sample IVA-eligible full-MiCall runs.
 
 Consumes runner-written summary-<invocation>.json objects, not the superseded
 seven-control Riva-only benchmark JSONL format.
@@ -11,7 +11,7 @@ import re
 import sys
 
 MAX_SAMPLE_SECONDS = 1200
-REQUIRED_SAMPLES = 20
+REQUIRED_SAMPLES = 18
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -44,6 +44,12 @@ def evaluate(summary):
             reasons.append(f"missing or invalid {name}")
     if type(summary.get("reference_panel_count")) is not int or summary["reference_panel_count"] < 2:
         reasons.append("missing reference panel count")
+    if summary.get("iva_ineligible_excluded") != 2:
+        reasons.append("missing evidence for two IVA-ineligible exclusions")
+    for name in ("source_manifest_sha256", "iva_eligibility_evidence_sha256"):
+        value = summary.get(name)
+        if not isinstance(value, str) or not SHA256.fullmatch(value):
+            reasons.append(f"missing or invalid {name}")
     images = summary.get("images")
     for role in ("iva", "riva"):
         value = images.get(role) if isinstance(images, dict) else None

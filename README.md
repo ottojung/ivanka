@@ -101,24 +101,36 @@ modifying MiCall's production Python environment.
 beginning when its task actually starts, and covering both IVA and Riva
 MiCall arms and scoring. The arms share that same per-sample budget;
 `--parallel-arms` permits them to run concurrently. There is **no
-40-minute global limit** on the entire 20-sample batch.
+40-minute global limit** on the entire eligible 18-sample batch.
 
 For the strict, complete real-input benchmark:
 
 ```sh
-export RIVA_DATA=/workspace/riva-normal20-prepared-io
+export RIVA_DATA=/workspace/riva-normal18-iva-eligible-20261030
 export RIVA_EXPECTED_MANIFEST_SHA256=<pinned-manifest-sha256>
-export RIVA_PODMAN_RESULTS=/workspace/riva-full20-reference-panel-results
+export RIVA_PODMAN_RESULTS=/workspace/riva-full18-reference-panel-results
 ./scripts/benchmark_podman_full_micall.sh --mode both --qualify \
   --all-projects --jobs 3 --parallel-arms --sample-time-limit 1200
 ```
 
-The strict verdict requires exactly all 20 frozen samples, both complete
+The strict verdict requires exactly all 18 frozen IVA-eligible samples, both complete
 MiCall arms for every sample in the same invocation, correct pinned
 provenance, the 95% reference-panel rule for each sample, and each sample
 under its own 20-minute cap. Even if a batch runs longer than 40 minutes,
 it may qualify, provided **each** sample meets its limit. Incomplete,
 uncached, or mixed-invocation controls cannot qualify.
+
+The original 20 paired inputs were audited using unmodified IVA/MiCall.
+Two inputs produced zero final MAX consensus despite successful IVA
+exits, confirmed independently with and without the all-projects option.
+Those two are excluded from the frozen qualification cohort *before*
+evaluating Riva. The eligible manifest has 18 paired inputs; its SHA-256
+is supplied in RIVA_EXPECTED_MANIFEST_SHA256. The private file
+RIVA_DATA/iva_eligibility_evidence.json records the original manifest
+hash and both exclusion checks. The qualification runner validates the
+evidence and **does not allow other exclusions**, including Riva
+failures or IVA timeouts. Keep excluded sample identities and source
+data private.
 
 Use `python benchmarks/summarize.py --results RESULTS_DIR` to report
 individual invocation results, or `--invocation ID` for a strict CI exit

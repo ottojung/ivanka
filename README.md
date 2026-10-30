@@ -95,30 +95,57 @@ export PYTHONPATH="/workspace/ivanka-benchmark-accel:${PYTHONPATH:-}"
 Install the optional acceleration in a separate directory rather than
 modifying MiCall's production Python environment.
 
-### Time budget and qualification
+### Cached IVA comparison and the 30-minute budget
 
-**Each sample has its own 20-minute (1,200-second) wall-clock limit**,
-beginning when its task actually starts, and covering both IVA and Ivanka
-MiCall arms and scoring. The arms share that same per-sample budget;
-`--parallel-arms` permits them to run concurrently. There is **no
-40-minute global limit** on the entire eligible 18-sample batch.
-
-For the strict, complete real-input benchmark:
+The normal full-MiCall benchmark **does not rerun IVA**. It reuses previously
+completed IVA controls, copied into a persistent cache independent of the
+experiment's results directory. The default cache location is
+`/workspace/ivanka-iva-baseline-cache` (override using
+`IVANKA_IVA_BASELINE_CACHE`). Each control retains its actual MiCall
+final-MAX consensus, exit status, image identity and provenance. Importing
+checks the immutable IVA image ID, both FASTQ checksums, HXB2 checksum,
+MiCall project and `--all-projects` configuration, and the final-consensus
+checksum. Controls with inconsistent evidence are rejected.
 
 ```sh
 export IVANKA_DATA=/workspace/ivanka-normal18-iva-eligible-20261030
-export IVANKA_EXPECTED_MANIFEST_SHA256=<pinned-manifest-sha256>
-export IVANKA_PODMAN_RESULTS=/workspace/ivanka-full18-reference-panel-results
-./scripts/benchmark_podman_full_micall.sh --mode both --qualify \
-  --all-projects --jobs 3 --parallel-arms --sample-time-limit 1200
+export IVANKA_EXPECTED_MANIFEST_SHA256=<pinned-original-18-manifest-sha256>
+export IVANKA_IVA_IMAGE=localhost/ivanka-micall-iva:base
+export IVANKA_IVANKA_IMAGE=localhost/ivanka-micall-ivanka:<verified-candidate-tag>
+export IVANKA_IVA_BASELINE_CACHE=/workspace/ivanka-iva-baseline-cache
+
+# Run once for each source with existing successful IVA MiCall outputs:
+./scripts/benchmark_podman_full_micall.sh --mode ivanka --all-projects \
+  --cache-status --import-iva-from /workspace/previous-results
+
+# Verify that all 18 controls are cached before starting expensive work:
+./scripts/benchmark_podman_full_micall.sh --mode ivanka --all-projects --cache-status
 ```
 
-The strict verdict requires exactly all 18 frozen IVA-eligible samples, both complete
-MiCall arms for every sample in the same invocation, correct pinned
-provenance, the 95% reference-panel rule for each sample, and each sample
-under its own 20-minute cap. Even if a batch runs longer than 40 minutes,
-it may qualify, provided **each** sample meets its limit. Incomplete,
-uncached, or mixed-invocation controls cannot qualify.
+A missing or mismatched control aborts the benchmark before Ivanka is launched.
+Do not synthesize missing controls or silently run IVA.
+
+Every sample has its own **30-minute (1,800-second) wall-clock budget**,
+starting when that sample begins, including full MiCall processing and
+scoring. The requested concurrency is **10 independent Ivanka sample
+pipelines**; no global 30-minute limit applies to all 18 samples.
+
+```sh
+export IVANKA_PODMAN_RESULTS=/workspace/ivanka-cached18-unique-results
+./scripts/benchmark_podman_full_micall.sh --mode ivanka --qualify \
+  --all-projects --jobs 10 --sample-time-limit 1800 --timeout-per-arm 1780
+```
+
+The qualification cohort is still the **original, frozen 18 IVA-eligible
+samples**. All 18 must finish and pass together in one Ivanka invocation,
+using pinned MiCall images and the unchanged 33-reference panel; each
+best final MiCall MAX consensus score must be at least 95% of the verified
+IVA score, and every sample must meet the 1,800-second limit.
+
+The summary field `cached_iva_comparison_pass` is the verdict for
+this new workflow. It is **not** `full_alpha_pass`: that flag is reserved
+for a fresh two-arm IVA+Ivanka invocation. Earlier 20-minute paired runs
+remain valid historical evidence, but are not the normal new test flow.
 
 The original 20 paired inputs were audited using unmodified IVA/MiCall.
 Two inputs produced zero final MAX consensus despite successful IVA

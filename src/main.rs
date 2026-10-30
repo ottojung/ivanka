@@ -417,8 +417,11 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         if attempted>=1000 {break;}
         if count<15 {break;}
         let seedseq=decode(seed);
-        let seedrev=rc(&seedseq);
-        if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
+        // A k-mer can occur in both a dominant strain and a distinct supported
+        // haplotype. Keep independent seed starts rather than treating a
+        // previously traversed 31-mer as proof of redundant full contigs.
+        // The bounded attempt budget and final read-support/novelty ranking
+        // still cap work and reported output.
         attempted+=1;
         let (seq,support)=extend(seedseq,&reads,4,1);
         if !seq.is_empty() {

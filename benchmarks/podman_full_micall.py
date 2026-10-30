@@ -349,7 +349,8 @@ def save_iva_baseline(sample, provenance, arm):
     """
     if arm.get("exit_code") != 0 or arm.get("metrics", {}).get("num_final_max_conseqs", 0) <= 0:
         raise ValueError("Cannot cache an incomplete or unscored IVA baseline")
-    source = Path(arm.get("artifact_dir", "")) / "conseq.csv"
+    folder = Path(arm.get("artifact_dir", ""))
+    source = next((p for p in (folder/"conseq.csv", folder/"scratch"/"conseq.csv") if p.is_file()), folder/"conseq.csv")
     expected = arm["metrics"].get("outputs", {}).get("conseq.csv", {}).get("sha256")
     if not expected or not source.is_file() or sha(source) != expected:
         raise ValueError("IVA final MAX artifact missing or checksum mismatched")
@@ -381,6 +382,7 @@ def import_iva_baselines(sources, rows, image, hxb2_hash, all_projects):
     by_sample = {row["sample"]: row for row in rows}
     imported = 0
     rejected = 0
+    memo = {}
     for source in sources:
         root = Path(source)
         if not root.is_dir():
@@ -401,13 +403,15 @@ def import_iva_baselines(sources, rows, image, hxb2_hash, all_projects):
                     except ValueError:
                         rejected += 1
                         continue
-                    if record.get("status") == "finished" and isinstance(record.get("iva"), dict):
+                    if isinstance(record.get("iva"), dict):
                         candidates.append((record.get("sample"), record.get("provenance"), record["iva"]))
         for name, provenance, arm in candidates:
             row = by_sample.get(name)
             if row is None or not isinstance(arm, dict):
                 continue
-            expected = baseline_provenance(row, image, hxb2_hash, all_projects)
+            if name not in memo:
+                memo[name] = baseline_provenance(row, image, hxb2_hash, all_projects)
+            expected = memo[name]
             if provenance != expected:
                 rejected += 1
                 continue

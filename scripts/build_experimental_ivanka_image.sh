@@ -26,6 +26,12 @@ COPY src ./src
 RUN cargo build --release --locked
 FROM localhost/ivanka-micall-ivanka:seeded
 COPY --from=ivanka-variant-builder /src/target/release/ivanka /usr/local/bin/ivanka
+# The inherited MiCall image may still invoke an obsolete assembler, so replacing
+# the executable alone does NOT guarantee that the evaluated binary is used.
+COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_ivanka.py
+RUN python /tmp/patch_ivanka.py && rm /tmp/patch_ivanka.py
+RUN python -c 'import importlib.util; from pathlib import Path; s=Path(importlib.util.find_spec("micall.core.denovo").origin).read_text(); assert "command = [\"ivanka\"" in s'
+RUN test -x /usr/local/bin/ivanka
 LABEL org.ottojung.ivanka.experimental.commit="$branch_sha"
 EOF
 podman build --pull=never --file "$containerfile" --tag "$image" "$src"

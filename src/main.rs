@@ -362,12 +362,34 @@ fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),S
     if max == 0 || max > 1000 { return Err("max-contigs must be in 1..=1000".to_string()); }
     Ok((a.ok_or("missing --reads1")?, b.ok_or("missing --reads2")?,output.ok_or("missing --output")?,max,max_pairs,seeds))
 }
+// Equal attention to solid k-mers at different sequencing depths prevents
+// oversampled regions monopolizing the bounded seed-extension budget.
+// This is reference-free and never removes or consumes any reads.
+fn balanced_seed_candidates(counts:&HashMap<u64,u32>) -> Vec<(u64,u32)> {
+    let mut buckets=vec![Vec::<(u64,u32)>::new();32];
+    for (&key,&count) in counts {
+        if count < 15 {continue;}
+        let level=(31-count.leading_zeros()) as usize;
+        buckets[level].push((key,count));
+    }
+    let mut longest=0usize;
+    for bucket in &mut buckets {
+        bucket.sort_unstable_by_key(|&(key,_)| key.wrapping_mul(0x9e3779b97f4a7c15));
+        longest=longest.max(bucket.len());
+    }
+    let mut selected=Vec::with_capacity(buckets.iter().map(Vec::len).sum());
+    for rank in 0..longest {
+        for bucket in buckets.iter().rev() {
+            if let Some(&seed)=bucket.get(rank) {selected.push(seed);}
+        }
+    }
+    selected
+}
 fn main()->Result<(),Box<dyn std::error::Error>> {
     let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
     let now=Instant::now();
     let reads=Reads::load(&a,&b,max_pairs)?;
-    let mut candidates=reads.seed_counts.iter().map(|(k,c)|(*k,*c)).collect::<Vec<_>>();
-    candidates.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+    let candidates=balanced_seed_candidates(&reads.seed_counts);
     let mut contigs=Vec::<Vec<u8>>::new();
     let mut supporting_counts=Vec::<usize>::new();
     if let Some(ref seeds_file) = seeds_path {
@@ -417,6 +439,23 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test] fn seed_search_spreads_depth_buckets_deterministically() {
+        let mut counts=HashMap::new();
+        for i in 0..40u64 {
+            counts.insert(i+1000,8000);
+            counts.insert(i+2000,90);
+            counts.insert(i+3000,32);
+        }
+        counts.insert(7,14);
+        let selected=balanced_seed_candidates(&counts);
+        assert_eq!(selected.len(),120);
+        let early=selected.iter().take(12).map(|(_,c)|*c).collect::<Vec<_>>();
+        for expected in [8000,90,32] {
+            assert_eq!(early.iter().filter(|c|**c==expected).count(),4);
+        }
+        assert!(!selected.iter().any(|(k,_)|*k==7));
+        assert_eq!(selected,balanced_seed_candidates(&counts));
+    }
     #[test] fn cap_prefers_read_supported_quality_over_length(){
         let input=vec![vec![b'A';900],vec![b'C';180],vec![b'T';31]];
         let output=select_supported_contigs(input,vec![1,9,0],2,0);

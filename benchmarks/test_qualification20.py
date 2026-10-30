@@ -15,7 +15,7 @@ spec.loader.exec_module(m)
 
 
 class EligibleQualificationTests(unittest.TestCase):
-    def execute(self, size=18, qualify=True, mode='both', pinned=True,
+    def execute(self, size=18, qualify=True, mode='ivanka', pinned=True,
                 duplicate=False, missing_arm=False, wrong_sample=False,
                 missing_reference=False):
         with TemporaryDirectory() as d:
@@ -43,7 +43,8 @@ class EligibleQualificationTests(unittest.TestCase):
             def fake_case(row, *unused, **kwargs):
                 record = {'sample': row['sample'], 'status': 'finished',
                           'failed': False, 'total_seconds': 8,
-                          'sample_time_limit_seconds': 1200,
+                          'sample_time_limit_seconds': 1800,
+                          'iva_baseline_reused': mode == 'ivanka',
                           'best_contig_acceptance': {'pass': True},
                           'project_reference_alignment': {'name': 'example'},
                           'iva': {'exit_code': 0, 'metrics': {}},
@@ -62,6 +63,8 @@ class EligibleQualificationTests(unittest.TestCase):
             with patch.object(m, 'DATA', root), patch.object(m, 'RESULTS', results), \
                  patch.object(m, 'image_id', return_value='sha256:fixed'), \
                  patch.object(m, 'verify_identical_micall_base'), \
+                 patch.object(m, 'verify_ivanka_image_binding'), \
+                 patch.object(m, 'iva_cache_status', return_value={'verified': samples, 'missing_or_invalid': []}), \
                  patch.object(m, 'sha', return_value='pinned'), \
                  patch.object(m, 'load_micall_projects', return_value=({'projects':{},'regions':{}},'pinned')), \
                  patch('reference_panel.build_reference_panel',return_value=(('HXB2','ACGT'),('HCV-1a','ACGT'))), \
@@ -77,19 +80,23 @@ class EligibleQualificationTests(unittest.TestCase):
             summary = json.loads(summaries[0].read_text()) if summaries else None
             return rc, error, summary
 
-    def test_exact_eighteen_two_arm_pinned_is_eligible(self):
+    def test_exact_eighteen_cached_iva_controls_qualify_without_rerunning_iva(self):
         rc, error, summary = self.execute()
         self.assertIsNone(error)
         self.assertEqual(rc, 0)
         self.assertEqual(summary['selected_samples'], 18)
         self.assertEqual(summary['finished_samples'], 18)
         self.assertEqual(summary['accepted_samples'], 18)
-        self.assertTrue(summary['full_alpha_pass'])
+        self.assertTrue(summary['cached_iva_comparison_pass'])
+        self.assertFalse(summary['full_alpha_pass'])
+        self.assertEqual(summary['mode'], 'ivanka')
+        self.assertEqual(summary['sample_limit_seconds'], 1800)
 
     def test_unqualified_eighteen_does_not_claim_alpha(self):
         rc, _, summary = self.execute(qualify=False)
         self.assertEqual(rc, 0)
         self.assertFalse(summary['full_alpha_pass'])
+        self.assertFalse(summary['cached_iva_comparison_pass'])
 
     def test_missing_manifest_pin_is_rejected(self):
         rc, error, _ = self.execute(pinned=False)
@@ -109,16 +116,17 @@ class EligibleQualificationTests(unittest.TestCase):
         self.assertIn('Duplicate', error)
 
     def test_qualification_rejects_one_arm_or_sample_filter(self):
-        for option in ({'mode': 'ivanka'}, {'wrong_sample': True}):
+        for option in ({'mode': 'both'}, {'wrong_sample': True}):
             rc, error, _ = self.execute(**option)
             self.assertIsNone(rc)
-            self.assertIn('both-arm', error)
+            self.assertIn('Ivanka-only', error)
 
     def test_missing_arm_fails_closed_even_if_pass_field_true(self):
         rc, error, summary = self.execute(missing_arm=True)
         self.assertIsNone(error)
         self.assertEqual(rc, 1)
         self.assertFalse(summary['full_alpha_pass'])
+        self.assertFalse(summary['cached_iva_comparison_pass'])
 
     def test_missing_reference_panel_score_fails_closed(self):
         rc, error, summary = self.execute(missing_reference=True)

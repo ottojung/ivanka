@@ -29,26 +29,38 @@ class BenchmarkTests(TestCase):
   self.assertFalse(d["same_sha256"])
  def test_verified_iva_baseline_roundtrip(self):
   from unittest.mock import patch
-  with TemporaryDirectory() as d, patch.object(m, "RESULTS", Path(d)):
+  with TemporaryDirectory() as d, patch.object(m, "IVA_BASELINE_CACHE", Path(d)/"cache"):
    artifacts=Path(d)/"baseline-artifacts"
    artifacts.mkdir()
    conseq=artifacts/"conseq.csv"
    conseq.write_text("consensus-percent-cutoff,sequence\nMAX,ACGT\n")
    prov={"iva_image_id":"sha256:a","hxb2_sha256":"sha256:b",
          "fastq_sha256":["x","y"],"micall_project_code":""}
-   arm={"exit_code":0,"artifact_dir":str(artifacts),"metrics":{
+   arm={"exit_code":0,"image_id":"sha256:a","artifact_dir":str(artifacts),"metrics":{
      "best_hxb2_final_max_conseq_score":1000,"num_final_max_conseqs":1,
      "outputs":{"conseq.csv":{"exists":True,"rows":1,"sha256":m.sha(conseq)}}}}
    m.save_iva_baseline("S1",prov,arm)
-   self.assertEqual(m.load_iva_baseline("S1",prov),arm)
+   self.assertEqual((Path(d)/"cache").stat().st_mode & 0o777, 0o700)
+   self.assertEqual((Path(d)/"cache"/"S1").stat().st_mode & 0o777, 0o700)
+   self.assertEqual((Path(d)/"cache"/"S1"/"conseq.csv").stat().st_mode & 0o777, 0o600)
+   self.assertEqual((Path(d)/"cache"/"S1"/"baseline.json").stat().st_mode & 0o777, 0o600)
+   stored=m.load_iva_baseline("S1",prov)
+   self.assertEqual(stored["exit_code"],0)
+   self.assertEqual(stored["source_artifact_dir"],str(artifacts))
+   self.assertNotEqual(stored["artifact_dir"],str(artifacts))
    conseq.write_text("consensus-percent-cutoff,sequence\nMAX,AAAA\n")
+   self.assertEqual(m.load_iva_baseline("S1",prov),stored)
+   cached=Path(stored["artifact_dir"])/"conseq.csv"
+   cached.write_text("consensus-percent-cutoff,sequence\nMAX,AAAA\n")
    with self.assertRaisesRegex(ValueError,"final MAX artifact"):
     m.load_iva_baseline("S1",prov)
-   conseq.unlink()
+   cached.unlink()
    with self.assertRaisesRegex(ValueError,"final MAX artifact"):
     m.load_iva_baseline("S1",prov)
    with self.assertRaisesRegex(ValueError,"provenance"):
     m.load_iva_baseline("S1",prov | {"iva_image_id":"sha256:DIFFERENT"})
+   with self.assertRaisesRegex(ValueError,"image ID"):
+    m.save_iva_baseline("S1",prov,arm | {"image_id":"sha256:WRONG"})
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
     m.load_iva_baseline("S2",prov)
  def test_wrong_assembler_binding_fails_closed(self):
@@ -116,7 +128,7 @@ class BenchmarkTests(TestCase):
         patch.object(m,"verify_ivanka_image_binding"), \
         patch.object(m,"sha",return_value="abc"), \
         patch.object(m,"evaluate_sample",side_effect=fake_sample), \
-        patch.object(sys,"argv",["benchmark","--jobs","2"]):
+        patch.object(sys,"argv",["benchmark","--mode","both","--jobs","2"]):
     self.assertEqual(m.main(),0)
    events=[json.loads(line) for line in (destination/"results.jsonl").read_text().splitlines()]
    self.assertEqual(len(events),4)
@@ -223,13 +235,13 @@ class BenchmarkTests(TestCase):
   self.assertEqual(runner.call_count,1)
 
 
- def test_qualification_enforces_twenty_minutes_per_sample(self):
-  self.assertTrue(m.qualification_within_cap(1200,1200))
-  self.assertTrue(m.qualification_within_cap(1180,1179))
-  self.assertFalse(m.qualification_within_cap(1201,100))
-  self.assertFalse(m.qualification_within_cap(1190,1191))
+ def test_qualification_enforces_thirty_minutes_per_sample(self):
+  self.assertTrue(m.qualification_within_cap(1800,1800))
+  self.assertTrue(m.qualification_within_cap(1780,1779))
+  self.assertFalse(m.qualification_within_cap(1801,100))
+  self.assertFalse(m.qualification_within_cap(1790,1791))
   self.assertFalse(m.qualification_within_cap(0,100))
-  self.assertFalse(m.qualification_within_cap(1200,-1))
+  self.assertFalse(m.qualification_within_cap(1800,-1))
 
  def test_project_aware_comparison_uses_full_consensus_not_hxb2(self):
   with TemporaryDirectory() as d:
@@ -282,6 +294,7 @@ class BenchmarkTests(TestCase):
         patch.object(m,"verify_ivanka_image_binding"), \
         patch.object(m,"sha",return_value="sample-hash"), \
         patch.object(m,"evaluate_sample",side_effect=fake_case), \
+        patch.object(m,"iva_cache_status",return_value={"verified":[],"missing_or_invalid":[]}), \
         patch.object(m.time,"time",side_effect=[1234,1235]):
     with patch.object(sys,"argv",["bench","--mode","ivanka"]):
      self.assertEqual(m.main(),0)
@@ -294,3 +307,73 @@ class BenchmarkTests(TestCase):
    paired=next(r for r in summaries if r["mode"]=="both")
    self.assertFalse(paired["full_alpha_pass"])
    self.assertFalse(paired["cached_iva_comparison_pass"])
+
+
+ def test_import_successful_iva_even_if_ivanka_pipeline_failed(self):
+  import json
+  from unittest.mock import patch
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   original=root/"prior"
+   original.mkdir()
+   artifacts=original/"inv"/"S1"/"iva"
+   artifacts.mkdir(parents=True)
+   conseq=artifacts/"conseq.csv"
+   conseq.write_text("consensus-percent-cutoff,sequence\nMAX,ACGT\n")
+   provenance={"iva_image_id":"id","hxb2_sha256":"ref",
+               "fastq_sha256":["fastq1","fastq2"],"micall_project_code":"", "all_projects":True}
+   arm={"exit_code":0,"image_id":"id","artifact_dir":str(artifacts),"metrics":{
+    "num_final_max_conseqs":1,
+    "outputs":{"conseq.csv":{"sha256":m.sha(conseq)}}}}
+   (original/"results.jsonl").write_text(json.dumps({
+    "status":"error","failed":True,"sample":"S1","provenance":provenance,"iva":arm})+"\n")
+   with patch.object(m,"IVA_BASELINE_CACHE",root/"cache"), \
+        patch.object(m,"baseline_provenance",return_value=provenance) as evidence:
+    result=m.import_iva_baselines([original],[{"sample":"S1"}],"id","ref",True)
+    self.assertEqual(result["imported"],1)
+    self.assertEqual(result["rejected"],0)
+    self.assertEqual(evidence.call_args.args[3],True)
+    imported=m.load_iva_baseline("S1",provenance)
+    self.assertEqual(Path(imported["artifact_dir"]).joinpath("conseq.csv").read_text(),conseq.read_text())
+    conseq.unlink()
+    self.assertEqual(m.load_iva_baseline("S1",provenance),imported)
+    self.assertEqual(m.import_iva_baselines([original],[{"sample":"S1"}],"id","ref",True)["imported"],0)
+    self.assertEqual(m.iva_cache_status([{"sample":"S1"}],"id","ref",True)["verified"],["S1"])
+
+ def test_cached_iva_qualification_accepts_all_original_eighteen_without_control_execution(self):
+  import json
+  import sys
+  from unittest.mock import patch
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   (root/"manifest.tsv").write_text("sample\n"+"".join("S"+str(i)+"\n" for i in range(18)))
+   (root/"hxb2.fasta").write_text(">HXB2\nACGT\n")
+   results=root/"results"
+   def fake_case(row,*args,**kwargs):
+    return {"sample":row["sample"],"status":"finished","failed":False,
+            "iva_baseline_reused":True,
+            "iva":{"exit_code":0,"metrics":{"num_final_max_conseqs":1}},
+            "ivanka":{"exit_code":0,"metrics":{"num_final_max_conseqs":1}},
+            "total_seconds":1799,
+            "best_contig_acceptance":{"pass":True}}
+   with patch.object(m,"DATA",root),patch.object(m,"RESULTS",results), \
+        patch.object(m,"image_id",return_value="sha256:base"), \
+        patch.object(m,"load_micall_projects",return_value=({},"catalog")), \
+        patch("reference_panel.build_reference_panel",return_value=(("HXB2","ACGT"),)), \
+        patch.object(m,"verify_identical_micall_base"), \
+        patch.object(m,"verify_ivanka_image_binding"), \
+        patch.object(m,"verify_iva_eligibility",return_value={"eligibility_verified":True}), \
+        patch.object(m,"iva_cache_status",return_value={"verified":["all"],"missing_or_invalid":[]}), \
+        patch.object(m,"sha",return_value="manifest-hash"), \
+        patch.object(m,"evaluate_sample",side_effect=fake_case), \
+        patch.dict(m.os.environ,{"IVANKA_EXPECTED_MANIFEST_SHA256":"manifest-hash"}), \
+        patch.object(sys,"argv",["benchmark","--qualify","--mode","ivanka","--jobs","10",
+                                "--sample-time-limit","1800","--timeout-per-arm","1780"]):
+    self.assertEqual(m.main(),0)
+   summary=json.loads(list(results.glob("summary-*.json"))[0].read_text())
+   self.assertEqual(summary["selected_samples"],18)
+   self.assertEqual(summary["accepted_samples"],18)
+   self.assertTrue(summary["cached_iva_comparison_pass"])
+   self.assertFalse(summary["full_alpha_pass"])
+   self.assertEqual(summary["jobs"],10)
+   self.assertEqual(summary["sample_limit_seconds"],1800)

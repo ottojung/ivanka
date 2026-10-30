@@ -224,6 +224,17 @@ fn record_extension_support(suffixes:&[Vec<u8>], ids:&[u32],
         }
     }
 }
+// Truncate long, near-perfect reverse-complement foldbacks, not true paths.
+fn foldback_end(seq: &[u8]) -> Option<usize> {
+    if seq.len()<2000 { return None; }
+    let half=seq.len()/2;
+    let mirror=rc(&seq[seq.len()-half..]);
+    let matches=seq[..half].iter().zip(mirror.iter()).filter(|(a,b)|a==b).count();
+    if matches*100<96*half { return None; }
+    let diversity=seq[..half].windows(K).step_by(32).filter_map(encode).collect::<HashSet<_>>().len();
+    if diversity<16 { return None; }
+    Some(half)
+}
 fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec<u8>,usize){
     let mut stagnant=0usize;
     let mut supporting_reads=HashSet::<u32>::new();
@@ -271,6 +282,10 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec
             }
             seq=next;
         }
+    }
+    if let Some(cut)=foldback_end(&seq) {
+        eprintln!("trimming near-perfect mirrored foldback {} -> {} nt",seq.len(),cut);
+        seq.truncate(cut);
     }
     (seq,supporting_reads.len())
 }
@@ -417,6 +432,26 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn trims_long_diverse_foldbacks_but_not_unrelated_or_short_sequence() {
+        let mut state=0x123456789abcdefu64;
+        let mut original=Vec::new();
+        for _ in 0..1200 {
+            state^=state<<13;state^=state>>7;state^=state<<17;
+            original.push(b"ACGT"[(state&3) as usize]);
+        }
+        let mut folded=original.clone();
+        folded.extend(rc(&original));
+        assert_eq!(foldback_end(&folded),Some(1200));
+        for base in folded.iter_mut().skip(1200).take(12) { *base=b'N'; }
+        assert_eq!(foldback_end(&folded),Some(1200));
+        assert_eq!(foldback_end(&folded[..1800]),None);
+        let mut unfurled=original.clone();unfurled.extend(original);
+        assert_eq!(foldback_end(&unfurled),None);
+        let mut low=vec![b'A';1200];low.extend(vec![b'T';1200]);
+        assert_eq!(foldback_end(&low),None);
+    }
+
     #[test] fn cap_prefers_read_supported_quality_over_length(){
         let input=vec![vec![b'A';900],vec![b'C';180],vec![b'T';31]];
         let output=select_supported_contigs(input,vec![1,9,0],2,0);

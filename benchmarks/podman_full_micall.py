@@ -359,7 +359,9 @@ def save_iva_baseline(sample, provenance, arm):
     if not expected or not source.is_file() or sha(source) != expected:
         raise ValueError("IVA final MAX artifact missing or checksum mismatched")
     path = iva_baseline_path(sample)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    IVA_BASELINE_CACHE.chmod(0o700)
+    path.parent.chmod(0o700)
     target = path.parent / "conseq.csv"
     temporary = path.parent / (".conseq-" + str(os.getpid()) + "-" + str(time.time_ns()))
     shutil.copyfile(source, temporary)
@@ -367,6 +369,7 @@ def save_iva_baseline(sample, provenance, arm):
         if sha(temporary) != expected:
             raise ValueError("IVA artifact changed during cache import")
         temporary.replace(target)
+        target.chmod(0o600)
     finally:
         temporary.unlink(missing_ok=True)
     cached_arm = dict(arm)
@@ -375,6 +378,7 @@ def save_iva_baseline(sample, provenance, arm):
     metadata = path.parent / (".baseline-" + str(os.getpid()) + "-" + str(time.time_ns()))
     try:
         metadata.write_text(json.dumps({"provenance": provenance, "iva": cached_arm}, sort_keys=True))
+        metadata.chmod(0o600)
         metadata.replace(path)
     finally:
         metadata.unlink(missing_ok=True)

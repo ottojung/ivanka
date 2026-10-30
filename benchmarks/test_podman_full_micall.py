@@ -36,7 +36,7 @@ class BenchmarkTests(TestCase):
    conseq.write_text("consensus-percent-cutoff,sequence\nMAX,ACGT\n")
    prov={"iva_image_id":"sha256:a","hxb2_sha256":"sha256:b",
          "fastq_sha256":["x","y"],"micall_project_code":""}
-   arm={"exit_code":0,"artifact_dir":str(artifacts),"metrics":{
+   arm={"exit_code":0,"image_id":"sha256:a","artifact_dir":str(artifacts),"metrics":{
      "best_hxb2_final_max_conseq_score":1000,"num_final_max_conseqs":1,
      "outputs":{"conseq.csv":{"exists":True,"rows":1,"sha256":m.sha(conseq)}}}}
    m.save_iva_baseline("S1",prov,arm)
@@ -55,6 +55,8 @@ class BenchmarkTests(TestCase):
     m.load_iva_baseline("S1",prov)
    with self.assertRaisesRegex(ValueError,"provenance"):
     m.load_iva_baseline("S1",prov | {"iva_image_id":"sha256:DIFFERENT"})
+   with self.assertRaisesRegex(ValueError,"image ID"):
+    m.save_iva_baseline("S1",prov,arm | {"image_id":"sha256:WRONG"})
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
     m.load_iva_baseline("S2",prov)
  def test_wrong_assembler_binding_fails_closed(self):

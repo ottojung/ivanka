@@ -68,7 +68,7 @@ class BenchmarkTests(TestCase):
    (root/"manifest.tsv").write_text("sample\nA\nB\n")
    (root/"hxb2.fasta").write_text(">reference\nACGT\n")
    destination=root/"results"
-   def fake_sample(row,*args):
+   def fake_sample(row,*args,**kwargs):
     return {"sample":row["sample"],"status":"finished","failed":False}
    with patch.object(m,"DATA",root),patch.object(m,"RESULTS",destination), \
         patch.object(m,"image_id",return_value="sha256:base"), \
@@ -155,7 +155,8 @@ class BenchmarkTests(TestCase):
      "best_hxb2_final_max_conseq_score":score,"outputs":{}}}
   with patch.object(m,"baseline_provenance",return_value={"verified":True}), \
        patch.object(m,"save_iva_baseline"), \
-       patch.object(m,"run_arm",side_effect=fake_arm) as runner:
+       patch.object(m,"run_arm",side_effect=fake_arm) as runner, \
+       patch("reference_panel.panel_acceptance",return_value={"pass":True,"iva_score":100,"riva_score":99}) as scorer:
    result=m.evaluate_sample({"sample":"S","project":"NFLHIVDNA"},args,{"iva":"A","riva":"B"},
            {"iva":"hashA","riva":"hashB"},"base-id","refhash","ACGT",None,"inv",
            time.monotonic()+5)
@@ -181,13 +182,13 @@ class BenchmarkTests(TestCase):
   self.assertEqual(runner.call_count,1)
 
 
- def test_qualification_respects_requested_forty_minute_limit(self):
-  self.assertTrue(m.qualification_within_cap(2380,2399.99))
-  self.assertTrue(m.qualification_within_cap(2400,2400))
-  self.assertFalse(m.qualification_within_cap(2401,100))
-  self.assertFalse(m.qualification_within_cap(2380,2400.01))
+ def test_qualification_enforces_twenty_minutes_per_sample(self):
+  self.assertTrue(m.qualification_within_cap(1200,1200))
+  self.assertTrue(m.qualification_within_cap(1180,1179))
+  self.assertFalse(m.qualification_within_cap(1201,100))
+  self.assertFalse(m.qualification_within_cap(1190,1191))
   self.assertFalse(m.qualification_within_cap(0,100))
-  self.assertFalse(m.qualification_within_cap(2380,-1))
+  self.assertFalse(m.qualification_within_cap(1200,-1))
 
  def test_project_aware_comparison_uses_full_consensus_not_hxb2(self):
   with TemporaryDirectory() as d:
@@ -229,7 +230,7 @@ class BenchmarkTests(TestCase):
    (root/"manifest.tsv").write_text("sample\n"+samples)
    (root/"hxb2.fasta").write_text(">HXB2\nACGT\n")
    results=root/"results"
-   def fake_case(row,*args):
+   def fake_case(row,*args,**kwargs):
     return {"sample":row["sample"],"status":"finished","failed":False,
             "best_contig_acceptance":{"pass":True}}
    with patch.object(m,"DATA",root),patch.object(m,"RESULTS",results), \

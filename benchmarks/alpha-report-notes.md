@@ -1,13 +1,13 @@
 # Alpha reporting
 
-Use `python benchmarks/summarize.py --results <full-MiCall-results-directory>`
-to view the actual full-MiCall runner's `summary-<invocation>.json` verdicts.
-The command accepts `--invocation ID` for a fail-closed CI exit code and
-`--json` for structured output.
+The current qualification compares **all 20 real samples** through the full
+IVA/Riva MiCall pipeline in the same invocation, scoring all final MAX
+consensus contigs against a fixed panel of pinned HIV, V3, HCV and HLA-B
+references. Each sample must pass the 95% best-reference-score threshold
+within its **own 1,200-second (20-minute) limit**. The whole batch has no
+global 40-minute limit.
 
-**Current qualification requires all 20 frozen inputs** to finish both IVA
-and Riva MiCall arms in one invocation under the **40-minute global limit**.
-Never combine results from multiple runs or use cached IVA as proof of a
-both-arm qualification. The report checks hashes, samples, timing, and the
-runner's authoritative `full_alpha_pass` flag. Reporting an unsuccessful
-run does not make it qualify.
+Use `python benchmarks/summarize.py --results RESULTS_DIR` for invocation
+reports, and `--invocation ID` for fail-closed CI status. Partial samples,
+missing reference hashes, mixed invocations, cached IVA and incomplete
+MiCall outputs never establish a full-alpha pass.

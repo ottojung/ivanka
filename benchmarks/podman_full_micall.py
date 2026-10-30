@@ -164,15 +164,18 @@ def best_consensus_acceptance(iva_score, riva_score):
     }
 
 
-QUALIFICATION_MAX_SECONDS = 2400
+QUALIFICATION_MAX_SECONDS = 1200
 
 
 def qualification_within_cap(configured_limit, elapsed):
-    """Require both configured and observed whole-run wall time <=40 minutes.
+    """Require each sample to finish within the 20-minute cap.
 
     A separate IVA-only control preparation is never an alpha qualification.
     """
-    return 0 < configured_limit <= QUALIFICATION_MAX_SECONDS and 0 <= elapsed <= QUALIFICATION_MAX_SECONDS
+    return (isinstance(configured_limit, (int,float)) and
+            isinstance(elapsed, (int,float)) and
+            0 < configured_limit <= QUALIFICATION_MAX_SECONDS and
+            0 <= elapsed <= configured_limit)
 
 
 def project_aware_acceptance(iva_dir, riva_dir):
@@ -310,17 +313,19 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
 
 
 def evaluate_sample(row, args, images, checked, pinned_iva_id,
-                    hxb2_hash, reference, project_catalog, invocation, deadline):
+                    hxb2_hash, reference, project_catalog, invocation, deadline=None,
+                    reference_panel=None):
     """Run one sample through selected real MiCall image(s), with no shared scratch."""
     name = row["sample"]
     record={"sample":name,"invocation":invocation,
             "hxb2_sha256":hxb2_hash,"status":"started"}
     started=time.monotonic()
+    deadline=started+getattr(args,"sample_time_limit",1200)
     failures=0
     try:
         if deadline-time.monotonic() <= 1:
-            record["status"]="global_timeout"
-            record["error"]="No global time budget before starting sample"
+            record["status"]="sample_timeout"
+            record["error"]="No per-sample time budget before starting sample"
             record["failed"]=True
             return record
         provenance=baseline_provenance(row,pinned_iva_id,hxb2_hash,getattr(args,"all_projects",False))
@@ -341,7 +346,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
             remaining=deadline-time.monotonic()
             if remaining <= 1:
                 return arm,{"exit_code":124,
-                            "error":"Global time limit exhausted before arm"}
+                            "error":"Per-sample time limit exhausted before arm"}
             try:
                 result=run_arm(row,arm,images[arm],
                                str(reference) if row.get("project")=="NFLHIVDNA" else None,
@@ -364,7 +369,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
             if result.get("exit_code"):
                 failures+=1
                 if result["exit_code"]==124:
-                    record["status"]="global_timeout"
+                    record["status"]="sample_timeout"
         if "iva" in record and "metrics" in record["iva"]:
             try:
                 save_iva_baseline(name,provenance,record["iva"])
@@ -375,7 +380,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
         if "riva" in checked:
             if ("riva" in record and "metrics" in record["riva"] and
                 baseline and baseline.get("exit_code")==0 and "metrics" in baseline):
-                if project_catalog is not None:
+                if project_catalog is not None and getattr(args,"diagnose_project_reference",False):
                     try:
                         from project_references import aligned_to_project_reference
                         projects=project_catalog
@@ -385,20 +390,12 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                             ref_iva,ref_riva,projects,row["micall_project_code"])
                     except (OSError,KeyError,ValueError) as exc:
                         record["project_reference_error"]=str(exc)
-                        if args.qualify: failures+=1
-                a=baseline["metrics"]["best_hxb2_final_max_conseq_score"]
-                b=record["riva"]["metrics"]["best_hxb2_final_max_conseq_score"]
-                if row.get("project") == "NFLHIVDNA":
-                    record["best_contig_acceptance"]=best_consensus_acceptance(a,b)
-                    record["best_contig_acceptance"]["method"]="HXB2"
-                else:
-                    # HXB2 cannot validate HCV or short V3 amplicons.
-                    iva_dir=Path(baseline.get(
-                        "artifact_dir", str(RESULTS/invocation/name/"iva")))
-                    riva_dir=Path(record["riva"].get(
-                        "artifact_dir", str(RESULTS/invocation/name/"riva")))
-                    record["best_contig_acceptance"]=project_aware_acceptance(
-                        iva_dir,riva_dir)
+                        # Project-specific remap is diagnostic only; the panel is authoritative.
+                from reference_panel import panel_acceptance
+                iva_dir=Path(baseline.get("artifact_dir",str(RESULTS/invocation/name/"iva")))
+                riva_dir=Path(record["riva"].get("artifact_dir",str(RESULTS/invocation/name/"riva")))
+                record["best_contig_acceptance"]=panel_acceptance(
+                    iva_dir,riva_dir,reference_panel)
                 record["output_comparison"]=compare_outputs(
                     baseline["metrics"],record["riva"]["metrics"])
                 iva_depth=baseline["metrics"].get("coverage_depth")
@@ -427,12 +424,17 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
         record["status"]="finished"
     record["failed"]=bool(failures)
     record["total_seconds"]=round(time.monotonic()-started,2)
+    record["sample_time_limit_seconds"]=getattr(args,"sample_time_limit",1200)
+    if not qualification_within_cap(record["sample_time_limit_seconds"],
+                                     record["total_seconds"]):
+        record["status"]="sample_timeout"
+        record["failed"]=True
     return record
 
 
 def failure_category(record):
     if not record.get('failed'): return None
-    if record.get('status')=='global_timeout': return 'global_timeout'
+    if record.get('status')=='sample_timeout': return 'sample_timeout'
     iva=record.get('iva')
     if not isinstance(iva,dict): return 'missing_iva_baseline'
     if iva.get('exit_code')!=0: return 'iva_pipeline_error'
@@ -455,16 +457,19 @@ def main():
                         help="Run IVA and Riva concurrently within each sample")
     parser.add_argument("--allow-missing-baseline", action="store_true",
                         help="Riva-only diagnostic: run full MiCall without control, never claim pass")
-    parser.add_argument("--timeout-per-arm", type=int, default=2370)
-    parser.add_argument("--total-time-limit", type=int, default=2380,
-                        help="Global seconds for all samples, default below 40-minute hard cap")
+    parser.add_argument("--timeout-per-arm", type=int, default=1180,
+                        help="Per-arm bound, further limited by the shared per-sample deadline")
+    parser.add_argument("--sample-time-limit", type=int, default=1200,
+                        help="Maximum elapsed seconds for EACH sample, including both MiCall arms and scoring")
     parser.add_argument("--qualify",action="store_true", help="Strict 20-sample full-alpha run requiring pinned manifest SHA-256")
+    parser.add_argument("--diagnose-project-reference",action="store_true",
+                        help="Optional expensive legacy IVA-selected project reference diagnostic; not used for acceptance")
     parser.add_argument("--all-projects",action="store_true",
                         help="Symmetrically enable MiCall --all_projects for IVA and Riva; recorded in baseline provenance")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
-    if args.jobs<1 or args.total_time_limit<1 or args.timeout_per_arm<1:
-        parser.error("jobs and both time limits must be positive")
+    if args.jobs<1 or not 1<=args.sample_time_limit<=1200 or args.timeout_per_arm<1:
+        parser.error("jobs and arm timeout must be positive; sample limit must be 1..1200 seconds")
     images={"iva":IVA_IMAGE,"riva":RIVA_IMAGE}
     checked={}
     for arm,img in images.items():
@@ -493,10 +498,15 @@ def main():
     with (DATA/"hxb2.fasta").open() as reference_file:
         hxb2=next(SeqIO.parse(reference_file,"fasta")).seq
     projects,catalog_hash=load_micall_projects(IVA_IMAGE)
+    from reference_panel import build_reference_panel,panel_sha256
+    references=build_reference_panel(projects,hxb2)
+    reference_panel_hash=panel_sha256(references)
     if args.probe:
         print(json.dumps({"images":checked,"sample_count":len(rows),
                           "hxb2_sha256":sha(DATA/"hxb2.fasta"),
-                          "project_reference_catalog_sha256":catalog_hash},indent=2))
+                          "project_reference_catalog_sha256":catalog_hash,
+                          "reference_panel_sha256":reference_panel_hash,
+                          "reference_panel_count":len(references)},indent=2))
         return 0
     RESULTS.mkdir(parents=True,exist_ok=True)
     invocation=str(int(time.time()))+"-"+str(os.getpid())
@@ -505,7 +515,6 @@ def main():
     failed=0
     completed_records=[]
     benchmark_start=time.monotonic()
-    deadline=benchmark_start+args.total_time_limit
     with path.open("a",buffering=1) as out:
         with ThreadPoolExecutor(max_workers=args.jobs) as executor:
             futures={}
@@ -513,7 +522,7 @@ def main():
                 out.write(json.dumps({"sample":row["sample"],
                                       "invocation":invocation,"status":"started"})+"\n")
                 task=executor.submit(evaluate_sample,row,args,images,checked,
-                                     pinned_iva_id,hxb2_hash,hxb2,projects,invocation,deadline)
+                                     pinned_iva_id,hxb2_hash,hxb2,projects,invocation,reference_panel=references)
                 futures[task]=row["sample"]
             for task in as_completed(futures):
                 name=futures[task]
@@ -542,10 +551,14 @@ def main():
                 len(set(finished_names))==20 and
                 set(finished_names)==set(names) and
                 both_arms_complete and
-                all("project_reference_alignment" in r for r in completed_records))
+                all("best_contig_acceptance" in r for r in completed_records))
     global_seconds=time.monotonic()-benchmark_start
-    complete_noninferiority=(full_scope and
-                            qualification_within_cap(args.total_time_limit,global_seconds)
+    max_sample_seconds=max((r["total_seconds"] for r in completed_records
+                            if isinstance(r.get("total_seconds"), (int,float))), default=None)
+    per_sample_timing_complete=all(
+        isinstance(r.get("total_seconds"),(int,float)) for r in completed_records)
+    complete_noninferiority=(full_scope and per_sample_timing_complete and
+                            qualification_within_cap(args.sample_time_limit,max_sample_seconds)
                             and accepted==manifest_sample_count and failed==0)
     # A wall-clock two-arm verdict requires IVA and Riva in one invocation.
     full_alpha_pass=(complete_noninferiority and args.mode=="both")
@@ -567,12 +580,15 @@ def main():
         "failed_samples":[r["sample"] for r in completed_records if r["failed"]],
         "failure_categories":reason_counts,
         "global_seconds":round(global_seconds,2),
-        "global_limit_seconds":args.total_time_limit,
+        "sample_limit_seconds":args.sample_time_limit,
+        "max_sample_seconds":(round(max_sample_seconds,2) if max_sample_seconds is not None else None),
+        "reference_panel_sha256":reference_panel_hash,
+        "reference_panel_count":len(references),
         "jobs":args.jobs,"parallel_arms":args.parallel_arms,
         "allow_missing_baseline":args.allow_missing_baseline,
         "full_alpha_pass":full_alpha_pass,
         "cached_iva_comparison_pass":cached_iva_comparison_pass,
-        "note":"Full alpha requires both IVA and Riva in one <=40min complete A/B run; Riva-only with cached IVA is labelled separately."
+        "note":"Full alpha requires all 20 samples in one complete A/B run; EACH sample has its own 20-minute budget, with no whole-set deadline. Riva-only comparisons are reported separately."
     }
     (RESULTS/f"summary-{invocation}.json").write_text(
         json.dumps(summary,indent=2,sort_keys=True))

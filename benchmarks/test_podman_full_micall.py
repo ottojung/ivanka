@@ -38,8 +38,11 @@ class BenchmarkTests(TestCase):
  def test_base_layers_must_match(self):
   from unittest.mock import patch
   layers={"iva":["a","b"],"ivanka":["a","b","c"],"foreign":["x","y"]}
-  with patch.object(m,"image_layers",side_effect=lambda name:layers[name]):
+  with patch.object(m,"image_layers",side_effect=lambda name:layers[name]), \
+       patch.object(m.subprocess,"run") as verifier:
    m.verify_identical_micall_base("iva","ivanka")
+   verifier.assert_called_once()
+   self.assertEqual(verifier.call_args.args[0][6], "ivanka")
    with self.assertRaisesRegex(ValueError,"does not derive"):
     m.verify_identical_micall_base("iva","foreign")
  def test_missing_conseq(self):

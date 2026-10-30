@@ -54,6 +54,17 @@ def verify_identical_micall_base(iva_image, ivanka_image):
     experiment = image_layers(ivanka_image)
     if not baseline or experiment[:len(baseline)] != baseline:
         raise ValueError("Ivanka image does not derive from the selected IVA MiCall base image")
+    # Layer ancestry alone cannot prove the installed binary is used by MiCall.
+    # Run the exact verifier used during image construction, before any samples.
+    verifier = Path(__file__).with_name("verify_ivanka_binding.py").read_text()
+    try:
+        subprocess.run(
+            ["podman","run","--rm","--pull=never","--entrypoint","python",
+             ivanka_image,"-c",verifier],
+            check=True, capture_output=True, text=True, timeout=45,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise ValueError("Ivanka image does not invoke its installed assembler") from exc
 
 
 def score_outputs(folder, reference):

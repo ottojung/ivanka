@@ -321,7 +321,7 @@ fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
                 if represented.contains(&k){shared+=1;}
             }
         }
-        if !is_seed && valid>0 && shared*10>=valid*9 {
+        if !is_seed && valid>0 && shared*20>=valid*19 {
             duplicates+=1;
             continue;
         }

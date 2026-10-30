@@ -321,7 +321,13 @@ fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
                 if represented.contains(&k){shared+=1;}
             }
         }
-        if !is_seed && valid>0 && shared*20>=valid*19 {
+        // A short sequence nearly contained in a longer supported contig adds
+        // little assembly coverage but can divert reads during MiCall remapping.
+        // Use a less strict overlap threshold only for these short fragments;
+        // equal-length alternatives retain the normal haplotype-diversity rule.
+        let longest=retained.iter().map(Vec::len).max().unwrap_or(0);
+        let short_shadow=seq.len()*4<=longest*3 && shared*20>=valid*17;
+        if !is_seed && valid>0 && (shared*20>=valid*19 || short_shadow) {
             duplicates+=1;
             continue;
         }
@@ -494,6 +500,19 @@ mod tests {
         assert_eq!(out[0].len(),1);
         assert_eq!(out[1].len(),1200);
         assert!(!out.iter().any(|s|s.len()==31));
+    }
+    #[test] fn drops_short_nearly_contained_path_but_keeps_novel_locus(){
+        let mut rng=0x1234_5678_1234_5678u64;
+        let long=(0..900).map(|_|{
+            rng^=rng<<13; rng^=rng>>7; rng^=rng<<17;
+            b"ACGT"[(rng&3) as usize]
+        }).collect::<Vec<u8>>();
+        let mut shorter=long[100..700].to_vec();
+        shorter[300]=if shorter[300]==b'A' {b'C'} else {b'A'};
+        let novel=vec![b'T';400];
+        let result=select_supported_contigs(
+            vec![long.clone(),shorter,novel.clone()],vec![100,90,60],1000,0);
+        assert_eq!(result,vec![long,novel]);
     }
     #[test] fn support_deduplicates_reused_reads_not_multiplicity(){
         let mut support=HashSet::new();

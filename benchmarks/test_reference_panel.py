@@ -17,20 +17,20 @@ def write_conseq(folder, sequences):
 
 
 class ReferencePanelTests(TestCase):
-    def test_chooses_best_independently_for_iva_and_riva(self):
+    def test_chooses_best_independently_for_iva_and_ivanka(self):
         a = "ACGT" * 80
         b = "TGCATGCA" * 40
         references = (("A", a), ("B", b))
         with TemporaryDirectory() as directory:
             root = Path(directory)
             write_conseq(root / "iva", ["TT", a, "AA"])
-            write_conseq(root / "riva", ["CC", b, "GG"])
-            result = panel_acceptance(root / "iva", root / "riva", references)
+            write_conseq(root / "ivanka", ["CC", b, "GG"])
+            result = panel_acceptance(root / "iva", root / "ivanka", references)
         self.assertEqual(result["iva_score"], 320)
-        self.assertEqual(result["riva_score"], 320)
+        self.assertEqual(result["ivanka_score"], 320)
         self.assertTrue(result["pass"])
         self.assertEqual(result["iva_best_reference"], "A")
-        self.assertEqual(result["riva_best_reference"], "B")
+        self.assertEqual(result["ivanka_best_reference"], "B")
         self.assertEqual(result["reference_count"], 2)
 
     def test_five_percent_threshold_not_weakened(self):
@@ -44,11 +44,11 @@ class ReferencePanelTests(TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             write_conseq(root / "iva", [ref])
-            write_conseq(root / "riva", ["".join(good)])
-            self.assertTrue(panel_acceptance(root / "iva",root / "riva",[("ref",ref)])["pass"])
-            (root / "riva" / "conseq.csv").write_text(
+            write_conseq(root / "ivanka", ["".join(good)])
+            self.assertTrue(panel_acceptance(root / "iva",root / "ivanka",[("ref",ref)])["pass"])
+            (root / "ivanka" / "conseq.csv").write_text(
                 "region,consensus-percent-cutoff,sequence\nr,MAX,"+"".join(bad)+"\n")
-            self.assertFalse(panel_acceptance(root / "iva",root / "riva",[("ref",ref)])["pass"])
+            self.assertFalse(panel_acceptance(root / "iva",root / "ivanka",[("ref",ref)])["pass"])
 
     def test_local_alignment_ignores_flanks_and_checks_reverse_strand(self):
         ref = "ACGTGCAATGCGATCGTACGTATCGGACCTTATACG" * 8
@@ -78,9 +78,9 @@ class ReferencePanelTests(TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             write_conseq(root / "iva", ["ACGT" * 30])
-            write_conseq(root / "riva", [])
+            write_conseq(root / "ivanka", [])
             with self.assertRaisesRegex(ValueError, "Missing contigs"):
-                panel_acceptance(root / "iva", root / "riva", [("ref", "ACGT" * 30)])
+                panel_acceptance(root / "iva", root / "ivanka", [("ref", "ACGT" * 30)])
 
     def test_panel_from_pinned_catalog_and_ambiguity(self):
         hiv = "HIV1-B-TEST-seed"

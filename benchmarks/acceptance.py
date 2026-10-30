@@ -10,7 +10,7 @@ STRUCTURAL_ROLES = {"mixed", "deletion", "fragmented"}
 def reference_fidelity(reference_fasta: Path, output_fasta: Path, min_coverage: float = 0.85) -> dict:
     """Compare output molecules to real IVA raw structural controls.
 
-    Use alignment ONLY in the evaluator; never feed truth or HXB2 into Riva.
+    Use alignment ONLY in the evaluator; never feed truth or HXB2 into Ivanka.
     This is a conservative check, not proof of no recombinant chimeras.
     """
     targets = sorted(
@@ -22,7 +22,7 @@ def reference_fidelity(reference_fasta: Path, output_fasta: Path, min_coverage: 
         return {"pass": False, "reason": "no substantial IVA reference molecules", "coverage": []}
     aligner = mappy.Aligner(str(output_fasta), preset="asm5", best_n=25)
     if not aligner:
-        return {"pass": False, "reason": "no indexed Riva output", "coverage": []}
+        return {"pass": False, "reason": "no indexed Ivanka output", "coverage": []}
     by_target = []
     for original in targets:
         best = (0.0, 0.0)
@@ -40,21 +40,21 @@ def reference_fidelity(reference_fasta: Path, output_fasta: Path, min_coverage: 
             "min_coverage": min_coverage, "min_identity": 0.95}
 
 
-def accept_sample(role: str, iva: dict, riva: dict, structural: dict | None = None) -> tuple[bool, list[str]]:
+def accept_sample(role: str, iva: dict, ivanka: dict, structural: dict | None = None) -> tuple[bool, list[str]]:
     problems = []
-    expected, actual = iva.get("hxb2_score"), riva.get("hxb2_score")
+    expected, actual = iva.get("hxb2_score"), ivanka.get("hxb2_score")
     if expected is None or actual is None:
         problems.append("missing HXB2 score")
     elif expected > 0:
         if actual < expected * 0.95:
             problems.append(f"HXB2 score {actual} below 95% IVA score {expected}")
     elif actual < expected:
-        problems.append(f"nonpositive IVA baseline {expected}; Riva {actual} is worse")
-    if riva.get("stitched_count", 0) <= 0:
+        problems.append(f"nonpositive IVA baseline {expected}; Ivanka {actual} is worse")
+    if ivanka.get("stitched_count", 0) <= 0:
         problems.append("no surviving contigs after 600-base filtering/stitching")
     # Structural-control comparison is reported as a separate diagnostic.
     # The alpha acceptance criterion is existential over individual assembled
     # contigs: one contig meeting the HXB2 threshold is enough. In particular,
-    # do not require all IVA controls or all Riva output contigs to match.
+    # do not require all IVA controls or all Ivanka output contigs to match.
     # This does not imply that an alignment-scoring contig is chimera-free.
     return not problems, problems

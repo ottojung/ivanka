@@ -236,7 +236,7 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec
         let left_rc=choose_extension(&left_reads,min_cov,min_ratio);
         let left=rc(&left_rc);
         if right.is_empty() && left.is_empty() {
-            if std::env::var_os("RIVA_TRACE_EXTENSIONS").is_some() {
+            if std::env::var_os("IVANKA_TRACE_EXTENSIONS").is_some() {
                 let summarize = |overhangs:&[Vec<u8>]| -> [usize;4] {
                     let mut counts=[0usize;4];
                     for o in overhangs {
@@ -310,7 +310,7 @@ fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),S
                 i+=2;
             },
             "--help"|"-h" => {
-                println!("riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 1000] [--max-pairs N] [--seeds seeds.fasta]");
+                println!("ivanka --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 1000] [--max-pairs N] [--seeds seeds.fasta]");
                 std::process::exit(0);
             },
             _=>return Err(format!("unknown/incomplete argument: {}",args[i])),
@@ -360,15 +360,15 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         }
         if attempted%20==0 {eprintln!("tried {} seeds, accepted {}",attempted,contigs.len());}
     }
-    eprintln!("Riva ranking {} candidates by distinct contributing FASTQ records × contig length; {} MiCall seeds protected",contigs.len(),protected_seed_count);
+    eprintln!("Ivanka ranking {} candidates by distinct contributing FASTQ records × contig length; {} MiCall seeds protected",contigs.len(),protected_seed_count);
     let contigs=select_supported_contigs(contigs,supporting_counts,max,protected_seed_count);
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
-        writeln!(w,">riva_{} len={}",i+1,c.len())?;
+        writeln!(w,">ivanka_{} len={}",i+1,c.len())?;
         for line in c.chunks(80){w.write_all(line)?;w.write_all(b"\n")?;}
     }
     w.flush()?;
-    eprintln!("Riva wrote {} contigs in {:.1}s",contigs.len(),now.elapsed().as_secs_f64());
+    eprintln!("Ivanka wrote {} contigs in {:.1}s",contigs.len(),now.elapsed().as_secs_f64());
     Ok(())
 }
 #[cfg(test)]
@@ -405,7 +405,7 @@ mod tests {
     #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG"; assert_eq!(decode(encode(x).unwrap()),x);}
     #[test] fn read_external_fasta_seeds() {
-        let path=std::env::temp_dir().join(format!("riva-seeds-{}.fasta",std::process::id()));
+        let path=std::env::temp_dir().join(format!("ivanka-seeds-{}.fasta",std::process::id()));
         std::fs::write(&path,">seed-one\nacgtACGT\n>seed-two\nGGGG\n>ambiguous\nANNN\n").unwrap();
         let seeds=fasta_seeds(path.to_str().unwrap()).unwrap();
         std::fs::remove_file(&path).unwrap();

@@ -47,9 +47,9 @@ class EligibleQualificationTests(unittest.TestCase):
                           'best_contig_acceptance': {'pass': True},
                           'project_reference_alignment': {'name': 'example'},
                           'iva': {'exit_code': 0, 'metrics': {}},
-                          'riva': {'exit_code': 0, 'metrics': {}}}
+                          'ivanka': {'exit_code': 0, 'metrics': {}}}
                 if missing_arm:
-                    del record['riva']
+                    del record['ivanka']
                 if missing_reference:
                     del record['best_contig_acceptance']
                 return record
@@ -58,7 +58,7 @@ class EligibleQualificationTests(unittest.TestCase):
                 argv.append('--qualify')
             if wrong_sample:
                 argv.extend(['--sample', 'S0'])
-            env = {'RIVA_EXPECTED_MANIFEST_SHA256': 'pinned'} if pinned else {}
+            env = {'IVANKA_EXPECTED_MANIFEST_SHA256': 'pinned'} if pinned else {}
             with patch.object(m, 'DATA', root), patch.object(m, 'RESULTS', results), \
                  patch.object(m, 'image_id', return_value='sha256:fixed'), \
                  patch.object(m, 'verify_identical_micall_base'), \
@@ -109,7 +109,7 @@ class EligibleQualificationTests(unittest.TestCase):
         self.assertIn('Duplicate', error)
 
     def test_qualification_rejects_one_arm_or_sample_filter(self):
-        for option in ({'mode': 'riva'}, {'wrong_sample': True}):
+        for option in ({'mode': 'ivanka'}, {'wrong_sample': True}):
             rc, error, _ = self.execute(**option)
             self.assertIsNone(rc)
             self.assertIn('both-arm', error)

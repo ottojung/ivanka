@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 ABSOLUTE_RIVA_SOURCE_DIR localhost/riva-micall-riva:variant" >&2
+    echo "Usage: $0 ABSOLUTE_IVANKA_SOURCE_DIR localhost/ivanka-micall-ivanka:variant" >&2
     exit 2
 fi
 src=$1
@@ -19,15 +19,15 @@ branch_sha=$(git -C "$src" rev-parse HEAD)
 containerfile=$(mktemp)
 trap 'rm -f "$containerfile"' EXIT HUP INT TERM
 cat >"$containerfile" <<EOF
-FROM docker.io/library/rust:1.93-bookworm AS riva-variant-builder
+FROM docker.io/library/rust:1.93-bookworm AS ivanka-variant-builder
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 RUN cargo build --release --locked
-FROM localhost/riva-micall-riva:seeded
-COPY --from=riva-variant-builder /src/target/release/riva /usr/local/bin/riva
-LABEL org.ottojung.riva.experimental.commit="$branch_sha"
+FROM localhost/ivanka-micall-ivanka:seeded
+COPY --from=ivanka-variant-builder /src/target/release/ivanka /usr/local/bin/ivanka
+LABEL org.ottojung.ivanka.experimental.commit="$branch_sha"
 EOF
 podman build --pull=never --file "$containerfile" --tag "$image" "$src"
-podman run --rm --pull=never --entrypoint /usr/local/bin/riva "$image" --help
+podman run --rm --pull=never --entrypoint /usr/local/bin/ivanka "$image" --help
 echo "Created variant $image from $branch_sha; unchanged inherited MiCall image."

@@ -33,7 +33,7 @@ def valid():
         "source_manifest_sha256": sha,
         "iva_eligibility_evidence_sha256": sha,
         "iva_ineligible_excluded": 2,
-        "images": {"iva": sha, "riva": sha},
+        "images": {"iva": sha, "ivanka": sha},
         "full_alpha_pass": True,
     }
 
@@ -44,7 +44,7 @@ class SummarizeTests(unittest.TestCase):
 
     def test_bad_conditions_fail_closed(self):
         changes = [
-            {"mode": "riva"},
+            {"mode": "ivanka"},
             {"qualification_requested": False},
             {"allow_missing_baseline": True},
             {"accepted_samples": 17},

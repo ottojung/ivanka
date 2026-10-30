@@ -16,7 +16,7 @@ def reference_names(projects, project_code):
 
 
 def choose_reference(iva_dir, projects, project_code):
-    """Select one reference from the IVA arm's MiCall remap, not the Riva arm."""
+    """Select one reference from the IVA arm's MiCall remap, not the Ivanka arm."""
     names = reference_names(projects, project_code)
     candidates = []
     for path in (Path(iva_dir) / "remap_counts.csv",
@@ -71,10 +71,10 @@ def raw_contigs(directory, maximum=16):
     return sorted(seqs, key=len, reverse=True)[:maximum], len(seqs)
 
 
-def aligned_to_project_reference(iva_dir, riva_dir, projects, project_code):
+def aligned_to_project_reference(iva_dir, ivanka_dir, projects, project_code):
     """Same IVA-selected project seed reference for both real final MiCall arms.
 
-    Diagnostic only. Do not replace the strict IVA/Riva acceptance test.
+    Diagnostic only. Do not replace the strict IVA/Ivanka acceptance test.
     """
     name, sequence = choose_reference(iva_dir, projects, project_code)
     aligner = PairwiseAligner()
@@ -88,7 +88,7 @@ def aligned_to_project_reference(iva_dir, riva_dir, projects, project_code):
               "source": "MiCall project seed reference selected by IVA final remap",
               "method": "local alignment of final MAX consensus",
               "project_code": project_code}
-    for arm, path in (("iva", iva_dir), ("riva", riva_dir)):
+    for arm, path in (("iva", iva_dir), ("ivanka", ivanka_dir)):
         seqs = final_max_sequences(path)
         raw, raw_total = raw_contigs(path)
         result[arm + "_raw_total"] = raw_total

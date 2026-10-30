@@ -1,0 +1,11 @@
+FROM docker.io/library/rust:1.93-bookworm AS ivanka-builder
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo build --release --locked
+
+FROM localhost/ivanka-micall-iva:base
+COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka
+COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_micall_for_ivanka.py
+RUN python /tmp/patch_micall_for_ivanka.py && rm /tmp/patch_micall_for_ivanka.py
+LABEL org.opencontainers.image.description="MiCall de novo with Ivanka substituted at IVA boundary; other stages unchanged"

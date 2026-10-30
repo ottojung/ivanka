@@ -1,4 +1,4 @@
-"""Regression tests for twenty-input, forty-minute full-alpha report summaries."""
+"""Regression tests for IVA-eligible eighteen-input, per-sample twenty-minute full-alpha report summaries."""
 import importlib.util
 import json
 from pathlib import Path
@@ -18,10 +18,10 @@ def valid():
         "mode": "both",
         "qualification_requested": True,
         "allow_missing_baseline": False,
-        "manifest_sample_count": 20,
-        "selected_samples": 20,
-        "finished_samples": 20,
-        "accepted_samples": 20,
+        "manifest_sample_count": 18,
+        "selected_samples": 18,
+        "finished_samples": 18,
+        "accepted_samples": 18,
         "failed_samples": [],
         "max_sample_seconds": 1199.0,
         "sample_limit_seconds": 1200,
@@ -29,14 +29,17 @@ def valid():
         "hxb2_sha256": sha,
         "project_reference_catalog_sha256": sha,
         "reference_panel_sha256": sha,
-        "reference_panel_count": 20,
+        "reference_panel_count": 33,
+        "source_manifest_sha256": sha,
+        "iva_eligibility_evidence_sha256": sha,
+        "iva_ineligible_excluded": 2,
         "images": {"iva": sha, "riva": sha},
         "full_alpha_pass": True,
     }
 
 
 class SummarizeTests(unittest.TestCase):
-    def test_complete_twenty_within_each_sample_limit_passes(self):
+    def test_complete_eligible_eighteen_within_each_sample_limit_passes(self):
         self.assertTrue(summarize.evaluate(valid())["pass"])
 
     def test_bad_conditions_fail_closed(self):
@@ -44,9 +47,9 @@ class SummarizeTests(unittest.TestCase):
             {"mode": "riva"},
             {"qualification_requested": False},
             {"allow_missing_baseline": True},
-            {"accepted_samples": 19},
-            {"selected_samples": 19},
-            {"finished_samples": 19},
+            {"accepted_samples": 17},
+            {"selected_samples": 17},
+            {"finished_samples": 17},
             {"manifest_sample_count": 7},
             {"failed_samples": ["private-sample"]},
             {"max_sample_seconds": 1201},
@@ -56,6 +59,11 @@ class SummarizeTests(unittest.TestCase):
             {"images": {"iva": "a"*64}},
             {"manifest_sha256": "bogus"},
             {"project_reference_catalog_sha256": None},
+            {"iva_ineligible_excluded": 0},
+            {"source_manifest_sha256": None},
+            {"iva_eligibility_evidence_sha256": None},
+            {"manifest_sample_count": 20, "selected_samples": 20,
+             "finished_samples": 20, "accepted_samples": 20},
         ]
         for change in changes:
             with self.subTest(change=change):

@@ -1,4 +1,4 @@
-"""Fail-closed normal-20 full-MiCall qualification tests with synthetic IDs."""
+"""Fail-closed IVA-eligible eighteen-sample full-MiCall qualification tests with synthetic IDs."""
 import importlib.util
 import json
 import os
@@ -14,8 +14,8 @@ m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
 
-class Qualification20Tests(unittest.TestCase):
-    def execute(self, size=20, qualify=True, mode='both', pinned=True,
+class EligibleQualificationTests(unittest.TestCase):
+    def execute(self, size=18, qualify=True, mode='both', pinned=True,
                 duplicate=False, missing_arm=False, wrong_sample=False,
                 missing_reference=False):
         with TemporaryDirectory() as d:
@@ -25,6 +25,20 @@ class Qualification20Tests(unittest.TestCase):
                 samples[-1] = samples[0]
             (root / 'manifest.tsv').write_text('sample\n' + ''.join(x+'\n' for x in samples))
             (root / 'hxb2.fasta').write_text('>HXB2\nACGT\n')
+            evidence = {
+                'source_count': 20,
+                'eligible_count': 18,
+                'excluded_count': 2,
+                'eligible_manifest_sha256': 'pinned',
+                'source_manifest_sha256': 'a'*64,
+                'excluded': [
+                    {'sample': 'EXCLUDED_A', 'all_projects': {'iva_exit': 0, 'iva_max': 0},
+                     'without_all_projects': {'iva_exit': 0, 'iva_max': 0}},
+                    {'sample': 'EXCLUDED_B', 'all_projects': {'iva_exit': 0, 'iva_max': 0},
+                     'without_all_projects': {'iva_exit': 0, 'iva_max': 0}},
+                ],
+            }
+            (root / 'iva_eligibility_evidence.json').write_text(json.dumps(evidence))
             results = root / 'results'
             def fake_case(row, *unused, **kwargs):
                 record = {'sample': row['sample'], 'status': 'finished',
@@ -63,16 +77,16 @@ class Qualification20Tests(unittest.TestCase):
             summary = json.loads(summaries[0].read_text()) if summaries else None
             return rc, error, summary
 
-    def test_exact_twenty_two_arm_pinned_is_eligible(self):
+    def test_exact_eighteen_two_arm_pinned_is_eligible(self):
         rc, error, summary = self.execute()
         self.assertIsNone(error)
         self.assertEqual(rc, 0)
-        self.assertEqual(summary['selected_samples'], 20)
-        self.assertEqual(summary['finished_samples'], 20)
-        self.assertEqual(summary['accepted_samples'], 20)
+        self.assertEqual(summary['selected_samples'], 18)
+        self.assertEqual(summary['finished_samples'], 18)
+        self.assertEqual(summary['accepted_samples'], 18)
         self.assertTrue(summary['full_alpha_pass'])
 
-    def test_unqualified_twenty_does_not_claim_alpha(self):
+    def test_unqualified_eighteen_does_not_claim_alpha(self):
         rc, _, summary = self.execute(qualify=False)
         self.assertEqual(rc, 0)
         self.assertFalse(summary['full_alpha_pass'])
@@ -82,12 +96,12 @@ class Qualification20Tests(unittest.TestCase):
         self.assertIsNone(rc)
         self.assertIn('SHA-256', error)
 
-    def test_nineteen_and_twenty_one_cannot_qualify(self):
-        for count in (19, 21):
+    def test_seventeen_and_nineteen_cannot_qualify(self):
+        for count in (17, 19):
             with self.subTest(count=count):
                 rc, error, _ = self.execute(size=count)
                 self.assertIsNone(rc)
-                self.assertIn('20', error)
+                self.assertIn('18', error)
 
     def test_duplicate_manifest_rejected(self):
         rc, error, _ = self.execute(duplicate=True)

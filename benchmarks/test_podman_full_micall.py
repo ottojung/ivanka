@@ -309,7 +309,7 @@ class BenchmarkTests(TestCase):
    self.assertFalse(paired["cached_iva_comparison_pass"])
 
 
- def test_import_prior_completed_iva_control_without_rerunning_iva(self):
+ def test_import_successful_iva_even_if_ivanka_pipeline_failed(self):
   import json
   from unittest.mock import patch
   with TemporaryDirectory() as d:
@@ -326,7 +326,7 @@ class BenchmarkTests(TestCase):
     "num_final_max_conseqs":1,
     "outputs":{"conseq.csv":{"sha256":m.sha(conseq)}}}}
    (original/"results.jsonl").write_text(json.dumps({
-    "status":"finished","sample":"S1","provenance":provenance,"iva":arm})+"\n")
+    "status":"error","failed":True,"sample":"S1","provenance":provenance,"iva":arm})+"\n")
    with patch.object(m,"IVA_BASELINE_CACHE",root/"cache"), \
         patch.object(m,"baseline_provenance",return_value=provenance) as evidence:
     result=m.import_iva_baselines([original],[{"sample":"S1"}],"id","ref",True)

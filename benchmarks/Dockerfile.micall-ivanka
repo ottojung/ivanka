@@ -8,4 +8,6 @@ FROM localhost/ivanka-micall-iva:base
 COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka
 COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_micall_for_ivanka.py
 RUN python /tmp/patch_micall_for_ivanka.py && rm /tmp/patch_micall_for_ivanka.py
+COPY benchmarks/verify_ivanka_binding.py /tmp/verify_ivanka_binding.py
+RUN python /tmp/verify_ivanka_binding.py && rm /tmp/verify_ivanka_binding.py
 LABEL org.opencontainers.image.description="MiCall de novo with Ivanka substituted at IVA boundary; other stages unchanged"

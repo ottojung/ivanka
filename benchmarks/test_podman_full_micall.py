@@ -35,6 +35,15 @@ class BenchmarkTests(TestCase):
     m.load_iva_baseline("S1",prov | {"iva_image_id":"sha256:DIFFERENT"})
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
     m.load_iva_baseline("S2",prov)
+ def test_wrong_assembler_binding_fails_closed(self):
+  from unittest.mock import patch
+  from subprocess import CalledProcessError
+  with patch.object(m.subprocess, "run", side_effect=CalledProcessError(1, "podman")) as runner:
+   with self.assertRaisesRegex(ValueError, "executable-binding"):
+    m.verify_ivanka_image_binding("image:tag")
+  self.assertIn("podman", runner.call_args.args[0])
+  self.assertIn("run_subprocess", runner.call_args.args[0][-1])
+
  def test_base_layers_must_match(self):
   from unittest.mock import patch
   layers={"iva":["a","b"],"ivanka":["a","b","c"],"foreign":["x","y"]}
@@ -73,6 +82,7 @@ class BenchmarkTests(TestCase):
    with patch.object(m,"DATA",root),patch.object(m,"RESULTS",destination), \
         patch.object(m,"image_id",return_value="sha256:base"), \
         patch.object(m,"verify_identical_micall_base"), \
+        patch.object(m,"verify_ivanka_image_binding"), \
         patch.object(m,"sha",return_value="abc"), \
         patch.object(m,"evaluate_sample",side_effect=fake_sample), \
         patch.object(sys,"argv",["benchmark","--jobs","2"]):
@@ -236,6 +246,7 @@ class BenchmarkTests(TestCase):
    with patch.object(m,"DATA",root),patch.object(m,"RESULTS",results), \
         patch.object(m,"image_id",return_value="sha256:fixed"), \
         patch.object(m,"verify_identical_micall_base"), \
+        patch.object(m,"verify_ivanka_image_binding"), \
         patch.object(m,"sha",return_value="sample-hash"), \
         patch.object(m,"evaluate_sample",side_effect=fake_case), \
         patch.object(m.time,"time",side_effect=[1234,1235]):

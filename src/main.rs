@@ -289,7 +289,15 @@ fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
                             n:usize, protected:usize)->Vec<Vec<u8>> {
     assert_eq!(seqs.len(),counts.len());
     let mut candidates=seqs.into_iter().zip(counts).enumerate().collect::<Vec<_>>();
+    let mut spans=candidates.iter().filter(|(i,(_,reads))|*i>=protected && *reads>0)
+        .map(|(i,(seq,reads))|(*i,(*reads as u128)*(seq.len() as u128)))
+        .collect::<Vec<_>>();
+    spans.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
+    let span_favorites=spans.into_iter().take(if candidates.len()>n.saturating_mul(2) {(n/2).min(8)} else {0})
+        .map(|(i,_)|i).collect::<HashSet<_>>();
     candidates.sort_unstable_by(|a,b|{
+        let a_span=span_favorites.contains(&a.0);
+        let b_span=span_favorites.contains(&b.0);
         let a_protected=a.0<protected;
         let b_protected=b.0<protected;
         // Approximate read support per assembled base, to avoid rewarding
@@ -298,6 +306,7 @@ fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
         let a_score=(a.1.1 as u128)*(b.1.0.len() as u128);
         let b_score=(b.1.1 as u128)*(a.1.0.len() as u128);
         b_protected.cmp(&a_protected)
+            .then_with(||b_span.cmp(&a_span))
             .then_with(||b_score.cmp(&a_score))
             .then_with(||b.1.1.cmp(&a.1.1))
             .then_with(||b.1.0.len().cmp(&a.1.0.len()))
@@ -526,6 +535,18 @@ mod tests {
         let result=select_supported_contigs(
             vec![long.clone(),shorter,novel.clone()],vec![240,90,60],1000,0);
         assert_eq!(result,vec![long,novel]);
+    }
+    #[test] fn supported_full_length_path_survives_dense_short_fragments(){
+        let mut seqs=(0..40usize).map(|i|{
+            let mut seq=vec![b'A';K];
+            for j in 0..5 {seq[j*6]=b"ACGT"[(i>>(j*2))&3];}
+            seq
+        }).collect::<Vec<_>>();
+        seqs.push(vec![b'G';900]);
+        let mut support=vec![100usize;40];support.push(80);
+        let retained=select_supported_contigs(seqs,support,16,0);
+        assert!(retained.len()<=16);
+        assert!(retained.iter().any(|seq|seq.len()==900));
     }
     #[test] fn support_deduplicates_reused_reads_not_multiplicity(){
         let mut support=HashSet::new();

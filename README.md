@@ -1,6 +1,6 @@
-# Riva (alpha development)
+# Ivanka (alpha development)
 
-Riva is a standalone **Rust** implementation of IVA-style abundant-k-mer
+Ivanka is a standalone **Rust** implementation of IVA-style abundant-k-mer
 seeding and iterative bidirectional extension. It deliberately does **not**
 map reads, merge contigs, or select a reference during assembly.
 
@@ -9,26 +9,26 @@ This is early experimental code. It is **not** validated for clinical use.
 ## CLI
 
     cargo build --release
-    target/release/riva --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta
+    target/release/ivanka --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta
     # Optional: --max-contigs 12 --max-pairs N
 
 ## Private benchmark
 
 The real-data input is kept outside Git at
 \`/workspace/denovo-example-io-1/\`. The benchmark runs the **same**
-post-assembly processing for both real-IVA and Riva: remove raw contigs shorter
+post-assembly processing for both real-IVA and Ivanka: remove raw contigs shorter
 than 600 bp, invoke modern MiCall referenceless stitching **with a read index
 and minimum depth 1**, then score the resulting contigs against the pinned HXB2
 sequence using MiCall's global PairwiseAligner settings.
 
     ./scripts/benchmark.sh --mode baseline
-    ./scripts/benchmark.sh --mode riva
+    ./scripts/benchmark.sh --mode ivanka
 
 Use \`--only SAMPLE_ID\` to debug one sample. The total invocation, including
 preprocessing and evaluation, is limited to 20 minutes. Status records are
 written incrementally to ignored \`benchmark-results/results.jsonl\`. Private
 prepared inputs, IVA baselines and a private roles.json are outside Git under
-\`/workspace/riva-benchmark-cache/\`.
+\`/workspace/ivanka-benchmark-cache/\`.
 
 A positive fixed-HXB2 score must reach at least 95% of IVA for each ordinary
 success sample. Nonpositive baseline scores and the mixed/deletion samples
@@ -51,13 +51,13 @@ A best-contig HXB2 pass does not prove the absence of chimeras and is not
 clinical validation.
 
 The role mapping is private because it contains sample names. Store it in
-`/workspace/riva-benchmark-cache/roles.json`.
+`/workspace/ivanka-benchmark-cache/roles.json`.
 
-## Full MiCall IVA/Riva A/B benchmark
+## Full MiCall IVA/Ivanka A/B benchmark
 
-The Podman harness substitutes Riva at the IVA assembler boundary in a pinned
+The Podman harness substitutes Ivanka at the IVA assembler boundary in a pinned
 MiCall container. Other MiCall steps (G2P, stitching, remapping and final
-consensus) are unchanged. Both IVA and Riva process the same sample FASTQs and
+consensus) are unchanged. Both IVA and Ivanka process the same sample FASTQs and
 use the same MiCall base image.
 
 ### Current reference-panel acceptance
@@ -70,16 +70,16 @@ and HLA-B. The panel's SHA-256 and reference count are reported with each
 invocation. IUPAC ambiguous nucleotide bases in references are masked as N.
 
 For each sample, every final MiCall `MAX` consensus contig from IVA and
-every final MiCall `MAX` consensus contig from Riva are locally aligned to
+every final MiCall `MAX` consensus contig from Ivanka are locally aligned to
 **each reference in the common panel**, considering both orientations.
 Scores are +1 match, -1 mismatch, -2 gap opening and -1 gap extension.
 The best score from *any* contig/reference pair is selected separately for
-IVA and Riva; the winning reference may differ. **Riva passes only when its
+IVA and Ivanka; the winning reference may differ. **Ivanka passes only when its
 best score is at least 95% of IVA's best positive score.** Missing final
 MAX consensus or missing reference provenance fails closed. The panel is
 independent of either assembler's output.
 
-This changes the benchmark acceptance calculation, not how Riva assembles
+This changes the benchmark acceptance calculation, not how Ivanka assembles
 reads or how MiCall processes contigs.
 
 The score uses exact local affine-gap Smith-Waterman alignment. The optional
@@ -87,9 +87,9 @@ The score uses exact local affine-gap Smith-Waterman alignment. The optional
 it the benchmark falls back to the same scoring via Biopython:
 
 ```sh
-python3 -m pip install --target /workspace/riva-benchmark-accel \
+python3 -m pip install --target /workspace/ivanka-benchmark-accel \
   -r benchmarks/requirements-acceleration.txt
-export PYTHONPATH="/workspace/riva-benchmark-accel:${PYTHONPATH:-}"
+export PYTHONPATH="/workspace/ivanka-benchmark-accel:${PYTHONPATH:-}"
 ```
 
 Install the optional acceleration in a separate directory rather than
@@ -98,7 +98,7 @@ modifying MiCall's production Python environment.
 ### Time budget and qualification
 
 **Each sample has its own 20-minute (1,200-second) wall-clock limit**,
-beginning when its task actually starts, and covering both IVA and Riva
+beginning when its task actually starts, and covering both IVA and Ivanka
 MiCall arms and scoring. The arms share that same per-sample budget;
 `--parallel-arms` permits them to run concurrently. There is **no
 40-minute global limit** on the entire eligible 18-sample batch.
@@ -106,9 +106,9 @@ MiCall arms and scoring. The arms share that same per-sample budget;
 For the strict, complete real-input benchmark:
 
 ```sh
-export RIVA_DATA=/workspace/riva-normal18-iva-eligible-20261030
-export RIVA_EXPECTED_MANIFEST_SHA256=<pinned-manifest-sha256>
-export RIVA_PODMAN_RESULTS=/workspace/riva-full18-reference-panel-results
+export IVANKA_DATA=/workspace/ivanka-normal18-iva-eligible-20261030
+export IVANKA_EXPECTED_MANIFEST_SHA256=<pinned-manifest-sha256>
+export IVANKA_PODMAN_RESULTS=/workspace/ivanka-full18-reference-panel-results
 ./scripts/benchmark_podman_full_micall.sh --mode both --qualify \
   --all-projects --jobs 3 --parallel-arms --sample-time-limit 1200
 ```
@@ -124,23 +124,23 @@ The original 20 paired inputs were audited using unmodified IVA/MiCall.
 Two inputs produced zero final MAX consensus despite successful IVA
 exits, confirmed independently with and without the all-projects option.
 Those two are excluded from the frozen qualification cohort *before*
-evaluating Riva. The eligible manifest has 18 paired inputs; its SHA-256
-is supplied in RIVA_EXPECTED_MANIFEST_SHA256. The private file
-RIVA_DATA/iva_eligibility_evidence.json records the original manifest
+evaluating Ivanka. The eligible manifest has 18 paired inputs; its SHA-256
+is supplied in IVANKA_EXPECTED_MANIFEST_SHA256. The private file
+IVANKA_DATA/iva_eligibility_evidence.json records the original manifest
 hash and both exclusion checks. The qualification runner validates the
-evidence and **does not allow other exclusions**, including Riva
+evidence and **does not allow other exclusions**, including Ivanka
 failures or IVA timeouts. Keep excluded sample identities and source
 data private.
 
 Use `python benchmarks/summarize.py --results RESULTS_DIR` to report
 individual invocation results, or `--invocation ID` for a strict CI exit
-status. A cached IVA baseline can support Riva-only experiments, but cannot
+status. A cached IVA baseline can support Ivanka-only experiments, but cannot
 claim two-arm full-alpha qualification. IVA control preparation has its own
 declared setup budget and does not count as a qualifying run.
 
 ## Contig reporting and read-support ranking
 
-Riva does not impose any minimum assembled contig length. It considers up to
+Ivanka does not impose any minimum assembled contig length. It considers up to
 1,000 seed-extension attempts, and the final FASTA includes **at most 1,000
 contigs** (configurable downward with `--max-contigs`). This is a safety cap,
 not a target or a guarantee of 1,000 useful contigs.

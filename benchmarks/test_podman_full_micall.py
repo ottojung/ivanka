@@ -40,6 +40,10 @@ class BenchmarkTests(TestCase):
      "best_hxb2_final_max_conseq_score":1000,"num_final_max_conseqs":1,
      "outputs":{"conseq.csv":{"exists":True,"rows":1,"sha256":m.sha(conseq)}}}}
    m.save_iva_baseline("S1",prov,arm)
+   self.assertEqual((Path(d)/"cache").stat().st_mode & 0o777, 0o700)
+   self.assertEqual((Path(d)/"cache"/"S1").stat().st_mode & 0o777, 0o700)
+   self.assertEqual((Path(d)/"cache"/"S1"/"conseq.csv").stat().st_mode & 0o777, 0o600)
+   self.assertEqual((Path(d)/"cache"/"S1"/"baseline.json").stat().st_mode & 0o777, 0o600)
    stored=m.load_iva_baseline("S1",prov)
    self.assertEqual(stored["exit_code"],0)
    self.assertEqual(stored["source_artifact_dir"],str(artifacts))

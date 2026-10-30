@@ -24,7 +24,7 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 RUN cargo build --release --locked
-FROM localhost/ivanka-micall-ivanka:seeded
+FROM ${IVANKA_EXPERIMENT_BASE_IMAGE:-localhost/ivanka-micall-ivanka:seeded}
 COPY --from=ivanka-variant-builder /src/target/release/ivanka /usr/local/bin/ivanka
 LABEL org.ottojung.ivanka.experimental.commit="$branch_sha"
 EOF

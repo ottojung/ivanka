@@ -67,6 +67,34 @@ def verify_identical_micall_base(iva_image, ivanka_image):
         raise ValueError("Ivanka image does not invoke its installed assembler") from exc
 
 
+def verify_ivanka_image_binding(image):
+    """Fail closed if MiCall is not actually invoking the proposed assembler."""
+    code = """
+import ast
+import importlib.util
+from pathlib import Path
+spec = importlib.util.find_spec("micall.core.denovo")
+assert spec is not None and spec.origin is not None
+module = ast.parse(Path(spec.origin).read_text())
+functions = [node for node in module.body
+             if isinstance(node, ast.FunctionDef) and node.name == "run_subprocess"]
+assert len(functions) == 1
+commands = [node.value for node in ast.walk(functions[0])
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "command"
+                    for target in node.targets)]
+assert len(commands) == 1 and isinstance(commands[0], ast.List)
+assert commands[0].elts and isinstance(commands[0].elts[0], ast.Constant)
+assert commands[0].elts[0].value == "ivanka", "MiCall assembler command does not invoke Ivanka"
+"""
+    try:
+        subprocess.run(["podman", "run", "--rm", "--pull=never",
+                        "--entrypoint", "/opt/venv/bin/python", image, "-c", code],
+                       check=True, capture_output=True, text=True, timeout=120)
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise ValueError("Ivanka image failed executable-binding verification") from exc
+
+
 def score_outputs(folder, reference):
     """Inspect the final MiCall products without materializing whole CSVs in RAM."""
     aligner = PairwiseAligner()
@@ -532,6 +560,7 @@ def main():
     pinned_iva_id = checked.get("iva") or image_id(IVA_IMAGE)
     if "ivanka" in checked:
         verify_identical_micall_base(IVA_IMAGE, IVANKA_IMAGE)
+        verify_ivanka_image_binding(IVANKA_IMAGE)
     with (DATA/"manifest.tsv").open(newline="") as manifest:
         rows=list(csv.DictReader(manifest,delimiter="\t"))
     manifest_sample_count=len(rows)

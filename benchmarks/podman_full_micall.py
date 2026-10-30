@@ -316,6 +316,13 @@ def load_iva_baseline(sample, expected_provenance):
     arm = stored["iva"]
     if arm["exit_code"] != 0 or arm["metrics"]["num_final_max_conseqs"] <= 0:
         raise ValueError("The stored IVA baseline is not a completed scored MiCall run")
+    # A matching metadata record is not sufficient: MiCall's final MAX
+    # sequences are needed again to score Ivanka against the same references.
+    # Check this before launching the expensive experimental arm.
+    output = Path(arm.get("artifact_dir", "")) / "conseq.csv"
+    expected = arm["metrics"].get("outputs", {}).get("conseq.csv", {}).get("sha256")
+    if not expected or not output.is_file() or sha(output) != expected:
+        raise ValueError("Cached IVA final MAX artifact missing or changed: rerun IVA control")
     return arm
 
 

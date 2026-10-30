@@ -24,13 +24,23 @@ class BenchmarkTests(TestCase):
  def test_verified_iva_baseline_roundtrip(self):
   from unittest.mock import patch
   with TemporaryDirectory() as d, patch.object(m, "RESULTS", Path(d)):
+   artifacts=Path(d)/"baseline-artifacts"
+   artifacts.mkdir()
+   conseq=artifacts/"conseq.csv"
+   conseq.write_text("consensus-percent-cutoff,sequence\nMAX,ACGT\n")
    prov={"iva_image_id":"sha256:a","hxb2_sha256":"sha256:b",
          "fastq_sha256":["x","y"],"micall_project_code":""}
-   arm={"exit_code":0,"metrics":{
+   arm={"exit_code":0,"artifact_dir":str(artifacts),"metrics":{
      "best_hxb2_final_max_conseq_score":1000,"num_final_max_conseqs":1,
-     "outputs":{"conseq.csv":{"exists":True,"rows":1,"sha256":"x"}}}}
+     "outputs":{"conseq.csv":{"exists":True,"rows":1,"sha256":m.sha(conseq)}}}}
    m.save_iva_baseline("S1",prov,arm)
    self.assertEqual(m.load_iva_baseline("S1",prov),arm)
+   conseq.write_text("consensus-percent-cutoff,sequence\nMAX,AAAA\n")
+   with self.assertRaisesRegex(ValueError,"final MAX artifact"):
+    m.load_iva_baseline("S1",prov)
+   conseq.unlink()
+   with self.assertRaisesRegex(ValueError,"final MAX artifact"):
+    m.load_iva_baseline("S1",prov)
    with self.assertRaisesRegex(ValueError,"provenance"):
     m.load_iva_baseline("S1",prov | {"iva_image_id":"sha256:DIFFERENT"})
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):

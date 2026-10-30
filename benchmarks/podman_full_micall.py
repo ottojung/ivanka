@@ -69,9 +69,14 @@ def verify_identical_micall_base(iva_image, ivanka_image):
         subprocess.run(
             ["podman","run","--rm","--pull=never","--entrypoint","python",
              ivanka_image,"-c",verifier],
-            check=True, capture_output=True, text=True, timeout=45,
+            # Large rootless/VFS MiCall images can take over 45 seconds to
+            # start under concurrent builds; this is preflight, outside sample
+            # execution, and must still fail closed on a real verifier error.
+            check=True, capture_output=True, text=True, timeout=180,
         )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("Timed out waiting for Ivanka image binding verification") from exc
+    except subprocess.CalledProcessError as exc:
         raise ValueError("Ivanka image does not invoke its installed assembler") from exc
 
 

@@ -7,6 +7,12 @@ spec=importlib.util.spec_from_file_location("podman_compare",Path(__file__).with
 m=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 class BenchmarkTests(TestCase):
+ def test_executed_images_are_pinned_by_id(self):
+  configured={"iva":"test/iva:mutable","ivanka":"test/ivanka:mutable"}
+  verified={"iva":"a"*64,"ivanka":"b"*64}
+  self.assertEqual(m.pinned_run_images(configured,verified,verified["iva"]),verified)
+  self.assertEqual(m.pinned_run_images(configured,{"ivanka":verified["ivanka"]},verified["iva"]),verified)
+  self.assertEqual(m.pinned_run_images(configured,{"iva":verified["iva"]},verified["iva"])["iva"],verified["iva"])
  def test_best_conseq(self):
   with TemporaryDirectory() as d:
    p=Path(d)/"scratch"
@@ -91,9 +97,12 @@ class BenchmarkTests(TestCase):
    (root/"hxb2.fasta").write_text(">reference\nACGT\n")
    destination=root/"results"
    def fake_sample(row,*args,**kwargs):
+    self.assertEqual(args[1],{"iva":"sha256:base","ivanka":"sha256:base"})
     return {"sample":row["sample"],"status":"finished","failed":False}
    with patch.object(m,"DATA",root),patch.object(m,"RESULTS",destination), \
         patch.object(m,"image_id",return_value="sha256:base"), \
+        patch.object(m,"load_micall_projects",return_value=({}, "test-catalog")), \
+        patch("reference_panel.build_reference_panel",return_value=(("HXB2","ACGT"),)), \
         patch.object(m,"verify_identical_micall_base"), \
         patch.object(m,"verify_ivanka_image_binding"), \
         patch.object(m,"sha",return_value="abc"), \
@@ -258,6 +267,8 @@ class BenchmarkTests(TestCase):
             "best_contig_acceptance":{"pass":True}}
    with patch.object(m,"DATA",root),patch.object(m,"RESULTS",results), \
         patch.object(m,"image_id",return_value="sha256:fixed"), \
+        patch.object(m,"load_micall_projects",return_value=({}, "test-catalog")), \
+        patch("reference_panel.build_reference_panel",return_value=(("HXB2","ACGT"),)), \
         patch.object(m,"verify_identical_micall_base"), \
         patch.object(m,"verify_ivanka_image_binding"), \
         patch.object(m,"sha",return_value="sample-hash"), \

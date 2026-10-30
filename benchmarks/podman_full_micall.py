@@ -41,6 +41,14 @@ def image_id(ref):
                                     "--format", "{{.Id}}", ref], text=True).strip()
 
 
+def pinned_run_images(configured, verified, pinned_iva_id):
+    """Run by immutable image IDs, never by mutable tags after preflight."""
+    return {
+        arm: verified.get(arm, pinned_iva_id if arm == "iva" else ref)
+        for arm, ref in configured.items()
+    }
+
+
 def image_layers(ref):
     raw = subprocess.check_output(
         ["podman", "image", "inspect", "--format", "{{json .RootFS.Layers}}", ref],
@@ -565,9 +573,10 @@ def main():
     # Even Ivanka-only runs must verify the exact IVA image that produced the
     # baseline; image tags by themselves are not immutable.
     pinned_iva_id = checked.get("iva") or image_id(IVA_IMAGE)
+    images = pinned_run_images(images, checked, pinned_iva_id)
     if "ivanka" in checked:
-        verify_identical_micall_base(IVA_IMAGE, IVANKA_IMAGE)
-        verify_ivanka_image_binding(IVANKA_IMAGE)
+        verify_identical_micall_base(images["iva"], images["ivanka"])
+        verify_ivanka_image_binding(images["ivanka"])
     with (DATA/"manifest.tsv").open(newline="") as manifest:
         rows=list(csv.DictReader(manifest,delimiter="\t"))
     manifest_sample_count=len(rows)
@@ -588,7 +597,7 @@ def main():
     if not rows: raise ValueError("No samples selected")
     with (DATA/"hxb2.fasta").open() as reference_file:
         hxb2=next(SeqIO.parse(reference_file,"fasta")).seq
-    projects,catalog_hash=load_micall_projects(IVA_IMAGE)
+    projects,catalog_hash=load_micall_projects(images["iva"])
     from reference_panel import build_reference_panel,panel_sha256
     references=build_reference_panel(projects,hxb2)
     reference_panel_hash=panel_sha256(references)

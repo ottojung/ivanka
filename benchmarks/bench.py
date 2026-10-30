@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Real-data Riva alpha benchmark. Keeps all private sample results outside Git.
+"""Real-data Ivanka alpha benchmark. Keeps all private sample results outside Git.
 
-Biology and code paths are intentionally identical for IVA and Riva AFTER the
+Biology and code paths are intentionally identical for IVA and Ivanka AFTER the
 assembler boundary: >=600 bp raw contigs -> MiCall referenceless stitcher (with
 read support) -> fixed HXB2 global PairwiseAligner score.
 """
@@ -20,9 +20,9 @@ import time
 from acceptance import accept_sample, reference_fidelity, STRUCTURAL_ROLES
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = Path(os.environ.get("RIVA_DATA", "/workspace/denovo-example-io-1"))
-CACHE = Path(os.environ.get("RIVA_BENCH_CACHE", "/workspace/riva-benchmark-cache"))
-RESULTS = Path(os.environ.get("RIVA_RESULTS", str(ROOT / "benchmark-results")))
+DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
+CACHE = Path(os.environ.get("IVANKA_BENCH_CACHE", "/workspace/ivanka-benchmark-cache"))
+RESULTS = Path(os.environ.get("IVANKA_RESULTS", str(ROOT / "benchmark-results")))
 MICALL = Path(os.environ.get("MICALL_REPO", "/workspace/qai-repo/repos/MiCall"))
 sys.path.insert(0, str(MICALL))
 try:
@@ -157,9 +157,9 @@ def stitch_and_score(seqs, read_index, read_length, reference, out_dir, arm):
 
 def run():
     ap=argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=("baseline","riva","all"),default="all")
+    ap.add_argument("--mode", choices=("baseline","ivanka","all"),default="all")
     ap.add_argument("--only", default=None,help="Exact sample ID (private dataset)")
-    ap.add_argument("--riva",default=str(ROOT/"target/release/riva"))
+    ap.add_argument("--ivanka",default=str(ROOT/"target/release/ivanka"))
     ap.add_argument("--fail-fast",action="store_true",
                     help="Diagnostic mode: stop after first failed acceptance case; never claim full-suite PASS")
     ap.add_argument("--cached-inputs",action="store_true",
@@ -201,9 +201,9 @@ def run():
     # best scores from unrelated experimental builds into a fictitious 7/7 run.
     invocation_id=f"{int(time.time())}-{os.getpid()}"
     binary_sha256=None
-    if args.mode in ("riva", "all"):
-        binary_sha256=hashlib.sha256(Path(args.riva).read_bytes()).hexdigest()
-    print(f"Invocation: {invocation_id} Riva SHA256: {binary_sha256 or 'baseline-only'}",flush=True)
+    if args.mode in ("ivanka", "all"):
+        binary_sha256=hashlib.sha256(Path(args.ivanka).read_bytes()).hexdigest()
+    print(f"Invocation: {invocation_id} Ivanka SHA256: {binary_sha256 or 'baseline-only'}",flush=True)
     start=time.monotonic()
     records=[]
     current=RESULTS/"results.jsonl"
@@ -213,7 +213,7 @@ def run():
             if ABORT: break
             t0=time.monotonic()
             record={"sample":sample,"run_id":row["kive_run_id"],
-                    "invocation_id":invocation_id,"riva_binary_sha256":binary_sha256,
+                    "invocation_id":invocation_id,"ivanka_binary_sha256":binary_sha256,
                     "mode":args.mode,"timestamp":time.time(),"status":"started",
                     "cached_inputs":args.cached_inputs}
             report.write(json.dumps(record)+"\n")
@@ -234,24 +234,24 @@ def run():
                                        "stitcher":"modern MiCall referenceless with read_index"}
                     write_atomic(baseline_path,baselines)
                     record["iva"]=iva
-                if args.mode in ("riva","all"):
+                if args.mode in ("ivanka","all"):
                     base=baselines.get(sample)
                     if not base or base.get("hxb2_sha256")!=reference_hash:
                         raise ValueError("Missing or mismatched IVA HXB2 baseline; first run --mode baseline")
                     if base.get("micall_commit")!=micall_commit():
                         raise ValueError("MiCall has changed since baseline; regenerate both consistently")
-                    out=folder/"riva.fasta"
+                    out=folder/"ivanka.fasta"
                     out.parent.mkdir(parents=True,exist_ok=True)
                     t_asm=time.monotonic()
-                    proc=subprocess.run([args.riva,"--reads1",str(fq1),"--reads2",str(fq2),
+                    proc=subprocess.run([args.ivanka,"--reads1",str(fq1),"--reads2",str(fq2),
                                          "--output",str(out)], text=True,capture_output=True)
                     record["assembler_seconds"]=round(time.monotonic()-t_asm,2)
-                    (folder/"riva.stderr.txt").write_text(proc.stderr[-10000:])
-                    if proc.returncode: raise RuntimeError(f"Riva exit {proc.returncode}: {proc.stderr[-300:]}")
-                    riva=stitch_and_score(fasta_sequences(out),idx,read_length,ref,folder,"riva")
-                    record["riva"]=riva
+                    (folder/"ivanka.stderr.txt").write_text(proc.stderr[-10000:])
+                    if proc.returncode: raise RuntimeError(f"Ivanka exit {proc.returncode}: {proc.stderr[-300:]}")
+                    ivanka=stitch_and_score(fasta_sequences(out),idx,read_length,ref,folder,"ivanka")
+                    record["ivanka"]=ivanka
                     target=base["metrics"]["hxb2_score"]
-                    got=riva["hxb2_score"]
+                    got=ivanka["hxb2_score"]
                     record["score_fraction"]=(got/target if got is not None and target is not None and target>0 else None)
                     # Explicitly avoid PASS claims for undefined/negative scores and structural cases.
                     record["ordinary_score_threshold_met"]=record["score_fraction"] is not None and record["score_fraction"]>=0.95
@@ -260,9 +260,9 @@ def run():
                         iva_raw = folder/"iva.raw.fasta"
                         if not iva_raw.is_file():
                             iva_raw = ROOT/"benchmark-results"/sample/"iva.raw.fasta"
-                        structural=reference_fidelity(iva_raw, folder/"riva.stitched.fasta")
+                        structural=reference_fidelity(iva_raw, folder/"ivanka.stitched.fasta")
                         record["structural_check"]=structural
-                    ok,problems=accept_sample(roles[sample],base["metrics"],riva,structural)
+                    ok,problems=accept_sample(roles[sample],base["metrics"],ivanka,structural)
                     record["alpha_pass"]=ok
                     record["alpha_problems"]=problems
                 record["status"]="evaluated"
@@ -289,7 +289,7 @@ def run():
             print(f"  {r['sample']}: {r.get('error') or '; '.join(r.get('alpha_problems', []))}")
         return 1
     if args.mode=="baseline":
-        print("IVA baseline evaluation succeeded (not an Riva alpha PASS)")
+        print("IVA baseline evaluation succeeded (not an Ivanka alpha PASS)")
     else:
         print("ALPHA SCORE/FIDELITY GATES PASS for selected samples")
     return 0

@@ -1,7 +1,7 @@
-"""Versioned reference panel for alignment-based Riva qualification.
+"""Versioned reference panel for alignment-based Ivanka qualification.
 
 All sequences are sourced from the pinned MiCall IVA image (projects.json)
-or the pinned dataset's HXB2 FASTA, never from an IVA/Riva assembly.
+or the pinned dataset's HXB2 FASTA, never from an IVA/Ivanka assembly.
 """
 import hashlib
 import json
@@ -117,20 +117,20 @@ def best_panel_alignment(sequences, references):
             "contig_length": winner[2], "contig_count": len(ordered)}
 
 
-def panel_acceptance(iva_dir, riva_dir, references):
+def panel_acceptance(iva_dir, ivanka_dir, references):
     """Score all final MiCall MAX contigs against the SAME fixed reference panel."""
     iva = best_panel_alignment(final_max_sequences(iva_dir), references)
-    riva = best_panel_alignment(final_max_sequences(riva_dir), references)
+    ivanka = best_panel_alignment(final_max_sequences(ivanka_dir), references)
     threshold = 0.95 * iva["score"]
     return {
         "method": "best_final_max_contig_local_alignment_over_reference_panel",
-        "iva_score": iva["score"], "riva_score": riva["score"],
-        "threshold": threshold, "pass": iva["score"] > 0 and riva["score"] >= threshold,
-        "iva_best_reference": iva["reference"], "riva_best_reference": riva["reference"],
+        "iva_score": iva["score"], "ivanka_score": ivanka["score"],
+        "threshold": threshold, "pass": iva["score"] > 0 and ivanka["score"] >= threshold,
+        "iva_best_reference": iva["reference"], "ivanka_best_reference": ivanka["reference"],
         "iva_contig_count": iva["contig_count"],
-        "riva_contig_count": riva["contig_count"],
+        "ivanka_contig_count": ivanka["contig_count"],
         "iva_best_contig_length": iva["contig_length"],
-        "riva_best_contig_length": riva["contig_length"],
+        "ivanka_best_contig_length": ivanka["contig_length"],
         "reference_count": len(references),
         "reference_panel_sha256": panel_sha256(references),
     }

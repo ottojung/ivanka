@@ -18,10 +18,10 @@ from Bio import SeqIO
 from Bio.Align import PairwiseAligner
 from reference_catalog import load_micall_projects
 
-DATA = Path(os.environ.get("RIVA_DATA", "/workspace/denovo-example-io-1"))
-RESULTS = Path(os.environ.get("RIVA_PODMAN_RESULTS", "/workspace/riva-podman-results"))
-IVA_IMAGE = os.environ.get("RIVA_IVA_IMAGE", "localhost/riva-micall-iva:base")
-RIVA_IMAGE = os.environ.get("RIVA_RIVA_IMAGE", "localhost/riva-micall-riva:seeded")
+DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
+RESULTS = Path(os.environ.get("IVANKA_PODMAN_RESULTS", "/workspace/ivanka-podman-results"))
+IVA_IMAGE = os.environ.get("IVANKA_IVA_IMAGE", "localhost/ivanka-micall-iva:base")
+IVANKA_IMAGE = os.environ.get("IVANKA_IVANKA_IMAGE", "localhost/ivanka-micall-ivanka:seeded")
 OUTPUT_NAMES = ("conseq.csv", "conseq_all.csv", "contigs.csv", "unstitched_contigs.csv",
                 "stitched_contigs.csv", "genome_coverage.csv", "genome_concordance.csv",
                 "remap_counts.csv", "coverage_summary.csv", "concordance.csv",
@@ -48,12 +48,12 @@ def image_layers(ref):
     return json.loads(raw)
 
 
-def verify_identical_micall_base(iva_image, riva_image):
+def verify_identical_micall_base(iva_image, ivanka_image):
     """Compare immutable container layer digests, not mutable image tags."""
     baseline = image_layers(iva_image)
-    experiment = image_layers(riva_image)
+    experiment = image_layers(ivanka_image)
     if not baseline or experiment[:len(baseline)] != baseline:
-        raise ValueError("Riva image does not derive from the selected IVA MiCall base image")
+        raise ValueError("Ivanka image does not derive from the selected IVA MiCall base image")
 
 
 def score_outputs(folder, reference):
@@ -130,9 +130,9 @@ def score_outputs(folder, reference):
             },
             "outputs":result}
 
-def compare_outputs(iva, riva):
+def compare_outputs(iva, ivanka):
     """Report downstream MiCall differences without assuming only one contig."""
-    left, right = iva["outputs"], riva["outputs"]
+    left, right = iva["outputs"], ivanka["outputs"]
     results = {}
     for filename in sorted(set(left) | set(right)):
         a = left.get(filename, {})
@@ -142,14 +142,14 @@ def compare_outputs(iva, riva):
             "same_sha256": (a.get("sha256") == b.get("sha256")
                             if a.get("sha256") and b.get("sha256") else None),
             "iva_rows": a.get("rows"),
-            "riva_rows": b.get("rows"),
+            "ivanka_rows": b.get("rows"),
             "row_delta": (b["rows"] - a["rows"]
                           if "rows" in a and "rows" in b else None),
         }
     return results
 
 
-def best_consensus_acceptance(iva_score, riva_score):
+def best_consensus_acceptance(iva_score, ivanka_score):
     """A single good final MiCall MAX consensus is sufficient.
 
     Non-positive baselines use absolute comparison rather than a relative
@@ -158,9 +158,9 @@ def best_consensus_acceptance(iva_score, riva_score):
     threshold = (0.95*iva_score if iva_score > 0 else iva_score) if iva_score is not None else None
     return {
         "iva_score": iva_score,
-        "riva_score": riva_score,
+        "ivanka_score": ivanka_score,
         "threshold": threshold,
-        "pass": threshold is not None and riva_score is not None and riva_score >= threshold,
+        "pass": threshold is not None and ivanka_score is not None and ivanka_score >= threshold,
     }
 
 
@@ -182,7 +182,7 @@ def qualification_within_cap(configured_limit, elapsed):
 
 
 def verify_iva_eligibility(manifest_sha, eligible_names):
-    """Require independently recorded IVA-only exclusions, never Riva-based culling.
+    """Require independently recorded IVA-only exclusions, never Ivanka-based culling.
 
     The private evidence file records the original frozen cohort and two
     successful, zero-MAX IVA controls independently repeated with and
@@ -219,8 +219,8 @@ def verify_iva_eligibility(manifest_sha, eligible_names):
     }
 
 
-def project_aware_acceptance(iva_dir, riva_dir):
-    """Score real final MiCall Riva consensus against final IVA consensus."""
+def project_aware_acceptance(iva_dir, ivanka_dir):
+    """Score real final MiCall Ivanka consensus against final IVA consensus."""
     def sequences(directory):
         path=next((p for p in (directory/"conseq.csv", directory/"scratch"/"conseq.csv")
                    if p.is_file()),None)
@@ -231,7 +231,7 @@ def project_aware_acceptance(iva_dir, riva_dir):
             return [row["sequence"].upper() for row in reader
                     if row.get("consensus-percent-cutoff")=="MAX" and row.get("sequence")]
     targets=sequences(iva_dir)
-    candidates=sequences(riva_dir)
+    candidates=sequences(ivanka_dir)
     if not targets or not candidates:
         raise ValueError("No final MAX MiCall consensus")
     maxlen=max(map(len,targets))
@@ -244,10 +244,10 @@ def project_aware_acceptance(iva_dir, riva_dir):
     best=max(aligner.score(ref,seq) for ref in targets
              if len(ref)>=0.95*maxlen for seq in candidates)
     return {"method":"final_iva_max_consensus_global_alignment",
-            "iva_score":float(maxlen),"riva_score":float(best),
+            "iva_score":float(maxlen),"ivanka_score":float(best),
             "threshold":0.95*maxlen,"pass":best>=0.95*maxlen,
             "iva_final_max_count":len(targets),
-            "riva_final_max_count":len(candidates)}
+            "ivanka_final_max_count":len(candidates)}
 
 
 def baseline_provenance(row, iva_image_id, hxb2_sha256, all_projects=False):
@@ -304,7 +304,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     container_sample = "/bench/samples/" + name
     # The manifest project is a cohort label, NOT MiCall primer project_code.
     project = row.get("micall_project_code", "").strip()
-    container_name = f"riva-bench-{arm}-{invocation}-{hashlib.sha256(name.encode()).hexdigest()[:8]}"
+    container_name = f"ivanka-bench-{arm}-{invocation}-{hashlib.sha256(name.encode()).hexdigest()[:8]}"
     command = [
         "podman", "run", "--rm", "--pull=never", "--name", container_name,
         # Podman enforces a container lifetime even when the supervising
@@ -314,7 +314,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         "-v", f"{RESULTS.resolve()}:/results:rw",
         # PID 1 has its own deadline: an interrupted host-side benchmark
         # cannot leave a container running indefinitely.
-        "--label", f"org.ottojung.riva.benchmark.invocation={invocation}",
+        "--label", f"org.ottojung.ivanka.benchmark.invocation={invocation}",
         "--entrypoint", "/usr/bin/timeout", image,
         "--signal=TERM", "--kill-after=10s",
         f"{max(1,int(timeout)-15)}s", "micall",
@@ -372,17 +372,17 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
         provenance=baseline_provenance(row,pinned_iva_id,hxb2_hash,getattr(args,"all_projects",False))
         record["provenance"]=provenance
         reused_baseline=None
-        if args.mode=="riva":
+        if args.mode=="ivanka":
             try:
                 reused_baseline=load_iva_baseline(name,provenance)
                 record["iva_baseline_reused"]=True
             except (ValueError,OSError,KeyError) as exc:
                 if not args.allow_missing_baseline:
                     raise
-                # Useful to measure real Riva-MiCall runtime/output while
+                # Useful to measure real Ivanka-MiCall runtime/output while
                 # preparing costly IVA controls. Never mark it as accepted.
                 record["baseline_error"]=str(exc)
-        arms=[arm for arm in ("iva","riva") if arm in checked]
+        arms=[arm for arm in ("iva","ivanka") if arm in checked]
         def attempt(arm):
             remaining=deadline-time.monotonic()
             if remaining <= 1:
@@ -418,44 +418,44 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                 record["baseline_error"]=str(exc)
                 failures+=1
         baseline=record.get("iva",reused_baseline)
-        if "riva" in checked:
-            if ("riva" in record and "metrics" in record["riva"] and
+        if "ivanka" in checked:
+            if ("ivanka" in record and "metrics" in record["ivanka"] and
                 baseline and baseline.get("exit_code")==0 and "metrics" in baseline):
                 if project_catalog is not None and getattr(args,"diagnose_project_reference",False):
                     try:
                         from project_references import aligned_to_project_reference
                         projects=project_catalog
                         ref_iva=Path(baseline.get("artifact_dir",str(RESULTS/invocation/name/"iva")))
-                        ref_riva=Path(record["riva"].get("artifact_dir",str(RESULTS/invocation/name/"riva")))
+                        ref_ivanka=Path(record["ivanka"].get("artifact_dir",str(RESULTS/invocation/name/"ivanka")))
                         record["project_reference_alignment"]=aligned_to_project_reference(
-                            ref_iva,ref_riva,projects,row["micall_project_code"])
+                            ref_iva,ref_ivanka,projects,row["micall_project_code"])
                     except (OSError,KeyError,ValueError) as exc:
                         record["project_reference_error"]=str(exc)
                         # Project-specific remap is diagnostic only; the panel is authoritative.
                 from reference_panel import panel_acceptance
                 iva_dir=Path(baseline.get("artifact_dir",str(RESULTS/invocation/name/"iva")))
-                riva_dir=Path(record["riva"].get("artifact_dir",str(RESULTS/invocation/name/"riva")))
+                ivanka_dir=Path(record["ivanka"].get("artifact_dir",str(RESULTS/invocation/name/"ivanka")))
                 record["best_contig_acceptance"]=panel_acceptance(
-                    iva_dir,riva_dir,reference_panel)
+                    iva_dir,ivanka_dir,reference_panel)
                 record["output_comparison"]=compare_outputs(
-                    baseline["metrics"],record["riva"]["metrics"])
+                    baseline["metrics"],record["ivanka"]["metrics"])
                 iva_depth=baseline["metrics"].get("coverage_depth")
-                riva_depth=record["riva"]["metrics"].get("coverage_depth")
-                if iva_depth and riva_depth:
+                ivanka_depth=record["ivanka"]["metrics"].get("coverage_depth")
+                if iva_depth and ivanka_depth:
                     record["coverage_comparison"]={
                         "iva":iva_depth,
-                        "riva":riva_depth,
+                        "ivanka":ivanka_depth,
                         "covered_position_delta":(
-                            riva_depth["covered_positions"]-
+                            ivanka_depth["covered_positions"]-
                             iva_depth["covered_positions"]),
                         "ge_10_position_delta":(
-                            riva_depth["positions_ge_10"]-
+                            ivanka_depth["positions_ge_10"]-
                             iva_depth["positions_ge_10"]),
                     }
                 if not record["best_contig_acceptance"]["pass"]:
                     failures+=1
             else:
-                record["evaluation_error"]="Missing valid IVA baseline or completed Riva MiCall outputs"
+                record["evaluation_error"]="Missing valid IVA baseline or completed Ivanka MiCall outputs"
                 failures+=1
     except Exception as exc:
         record["status"]="error"
@@ -480,24 +480,24 @@ def failure_category(record):
     if not isinstance(iva,dict): return 'missing_iva_baseline'
     if iva.get('exit_code')!=0: return 'iva_pipeline_error'
     if (iva.get('metrics',{}).get('num_final_max_conseqs') or 0)==0: return 'iva_no_final_max'
-    riva=record.get('riva')
-    if not isinstance(riva,dict): return 'missing_riva_run'
-    if riva.get('exit_code')!=0: return 'riva_pipeline_error'
-    if (riva.get('metrics',{}).get('num_final_max_conseqs') or 0)==0: return 'riva_no_final_max'
-    if record.get('best_contig_acceptance',{}).get('pass') is False: return 'riva_below_noninferiority_threshold'
+    ivanka=record.get('ivanka')
+    if not isinstance(ivanka,dict): return 'missing_ivanka_run'
+    if ivanka.get('exit_code')!=0: return 'ivanka_pipeline_error'
+    if (ivanka.get('metrics',{}).get('num_final_max_conseqs') or 0)==0: return 'ivanka_no_final_max'
+    if record.get('best_contig_acceptance',{}).get('pass') is False: return 'ivanka_below_noninferiority_threshold'
     return 'other_evaluation_error'
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="append",
                         help="Run only a selected sample ID (repeatable)")
-    parser.add_argument("--mode", choices=("both","iva","riva"), default="both")
+    parser.add_argument("--mode", choices=("both","iva","ivanka"), default="both")
     parser.add_argument("--jobs", type=int, default=1,
                         help="Independent sample pipelines to run concurrently")
     parser.add_argument("--parallel-arms", action="store_true",
-                        help="Run IVA and Riva concurrently within each sample")
+                        help="Run IVA and Ivanka concurrently within each sample")
     parser.add_argument("--allow-missing-baseline", action="store_true",
-                        help="Riva-only diagnostic: run full MiCall without control, never claim pass")
+                        help="Ivanka-only diagnostic: run full MiCall without control, never claim pass")
     parser.add_argument("--timeout-per-arm", type=int, default=1180,
                         help="Per-arm bound, further limited by the shared per-sample deadline")
     parser.add_argument("--sample-time-limit", type=int, default=1200,
@@ -506,21 +506,21 @@ def main():
     parser.add_argument("--diagnose-project-reference",action="store_true",
                         help="Optional expensive legacy IVA-selected project reference diagnostic; not used for acceptance")
     parser.add_argument("--all-projects",action="store_true",
-                        help="Symmetrically enable MiCall --all_projects for IVA and Riva; recorded in baseline provenance")
+                        help="Symmetrically enable MiCall --all_projects for IVA and Ivanka; recorded in baseline provenance")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
     if args.jobs<1 or not 1<=args.sample_time_limit<=1200 or args.timeout_per_arm<1:
         parser.error("jobs and arm timeout must be positive; sample limit must be 1..1200 seconds")
-    images={"iva":IVA_IMAGE,"riva":RIVA_IMAGE}
+    images={"iva":IVA_IMAGE,"ivanka":IVANKA_IMAGE}
     checked={}
     for arm,img in images.items():
         if args.mode not in ("both",arm): continue
         checked[arm]=image_id(img)
-    # Even Riva-only runs must verify the exact IVA image that produced the
+    # Even Ivanka-only runs must verify the exact IVA image that produced the
     # baseline; image tags by themselves are not immutable.
     pinned_iva_id = checked.get("iva") or image_id(IVA_IMAGE)
-    if "riva" in checked:
-        verify_identical_micall_base(IVA_IMAGE, RIVA_IMAGE)
+    if "ivanka" in checked:
+        verify_identical_micall_base(IVA_IMAGE, IVANKA_IMAGE)
     with (DATA/"manifest.tsv").open(newline="") as manifest:
         rows=list(csv.DictReader(manifest,delimiter="\t"))
     manifest_sample_count=len(rows)
@@ -529,7 +529,7 @@ def main():
         raise ValueError("Duplicate sample identities in manifest")
     manifest_hash=sha(DATA/"manifest.tsv")
     if args.qualify:
-        expected=os.environ.get("RIVA_EXPECTED_MANIFEST_SHA256", "")
+        expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
         if args.mode!="both" or args.sample is not None or manifest_sample_count!=QUALIFY_SAMPLE_COUNT:
             raise ValueError("Full alpha requires all 18 predeclared IVA-eligible samples in one both-arm invocation")
         if not expected or manifest_hash!=expected:
@@ -587,8 +587,8 @@ def main():
     both_arms_complete=all(
         r.get("status")=="finished" and
         r.get("iva",{}).get("exit_code")==0 and
-        r.get("riva",{}).get("exit_code")==0 and
-        "metrics" in r.get("iva",{}) and "metrics" in r.get("riva",{})
+        r.get("ivanka",{}).get("exit_code")==0 and
+        "metrics" in r.get("iva",{}) and "metrics" in r.get("ivanka",{})
         for r in completed_records)
     full_scope=(args.qualify and len(rows)==QUALIFY_SAMPLE_COUNT and
                 len(completed_records)==QUALIFY_SAMPLE_COUNT and
@@ -604,9 +604,9 @@ def main():
     complete_noninferiority=(full_scope and per_sample_timing_complete and
                             qualification_within_cap(args.sample_time_limit,max_sample_seconds)
                             and accepted==manifest_sample_count and failed==0)
-    # A wall-clock two-arm verdict requires IVA and Riva in one invocation.
+    # A wall-clock two-arm verdict requires IVA and Ivanka in one invocation.
     full_alpha_pass=(complete_noninferiority and args.mode=="both")
-    cached_iva_comparison_pass=(complete_noninferiority and args.mode=="riva")
+    cached_iva_comparison_pass=(complete_noninferiority and args.mode=="ivanka")
     reason_counts={}
     for record in completed_records:
         reason=failure_category(record)
@@ -633,7 +633,7 @@ def main():
         "allow_missing_baseline":args.allow_missing_baseline,
         "full_alpha_pass":full_alpha_pass,
         "cached_iva_comparison_pass":cached_iva_comparison_pass,
-        "note":"Full alpha requires all 18 IVA-eligible samples in one complete A/B run; EACH sample has its own 20-minute budget, with no whole-set deadline. Riva-only comparisons are reported separately."
+        "note":"Full alpha requires all 18 IVA-eligible samples in one complete A/B run; EACH sample has its own 20-minute budget, with no whole-set deadline. Ivanka-only comparisons are reported separately."
     }
     (RESULTS/f"summary-{invocation}.json").write_text(
         json.dumps(summary,indent=2,sort_keys=True))

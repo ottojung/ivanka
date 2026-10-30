@@ -19,7 +19,7 @@ class ProjectCatalogTests(TestCase):
         self.assertEqual(len(checksum), 64)
         command = call.call_args.args[0]
         self.assertIn('immutable-iva-image', command)
-        self.assertNotIn('riva-image', command)
+        self.assertNotIn('ivanka-image', command)
         self.assertIn('--pull=never', command)
 
     def test_mismatched_external_catalog_is_rejected(self):
@@ -28,6 +28,6 @@ class ProjectCatalogTests(TestCase):
             reference = Path(folder) / 'projects.json'
             reference.write_text('{"projects": {"wrong": {}}, "regions": {}}')
             with patch('reference_catalog.subprocess.check_output', return_value=image_data), \
-                 patch.dict(os.environ, {'RIVA_PROJECTS_JSON': str(reference)}):
+                 patch.dict(os.environ, {'IVANKA_PROJECTS_JSON': str(reference)}):
                 with self.assertRaisesRegex(ValueError, 'does not match'):
                     load_micall_projects('immutable-iva-image')

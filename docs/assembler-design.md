@@ -1,6 +1,6 @@
-# Riva assembly design and evidence gates
+# Ivanka assembly design and evidence gates
 
-Riva is a **reference-free** seed-and-read assembler. MiCall, not Riva,
+Ivanka is a **reference-free** seed-and-read assembler. MiCall, not Ivanka,
 provides reference assignment, referenceless/reference-informed contig
 stitching, mapping, remapping and final consensus scoring.
 
@@ -53,7 +53,7 @@ contigs alone must not be mistaken for equivalent IVA functionality.
 - Each step must pass Rust tests and the **real complete MiCall Podman**
   A/B benchmark (40-minute whole-run ceiling), not only the older
   stitcher-based surrogate.
-- Do not feed HXB2, an IVA consensus, or Kive results into Riva. Those
+- Do not feed HXB2, an IVA consensus, or Kive results into Ivanka. Those
   are for evaluation only. HCV/V3 final consensuses need project-aware
   scoring rather than an HIV HXB2 alignment.
 - Treat each experiment and image as immutable: source commit, container

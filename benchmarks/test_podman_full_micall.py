@@ -37,9 +37,9 @@ class BenchmarkTests(TestCase):
     m.load_iva_baseline("S2",prov)
  def test_base_layers_must_match(self):
   from unittest.mock import patch
-  layers={"iva":["a","b"],"riva":["a","b","c"],"foreign":["x","y"]}
+  layers={"iva":["a","b"],"ivanka":["a","b","c"],"foreign":["x","y"]}
   with patch.object(m,"image_layers",side_effect=lambda name:layers[name]):
-   m.verify_identical_micall_base("iva","riva")
+   m.verify_identical_micall_base("iva","ivanka")
    with self.assertRaisesRegex(ValueError,"does not derive"):
     m.verify_identical_micall_base("iva","foreign")
  def test_missing_conseq(self):
@@ -88,14 +88,14 @@ class BenchmarkTests(TestCase):
    self.assertFalse(summary["cached_iva_comparison_pass"])
    self.assertEqual(summary["selected_samples"],2)
 
- def test_failure_categories_do_not_confuse_unscorable_iva_with_riva_failure(self):
+ def test_failure_categories_do_not_confuse_unscorable_iva_with_ivanka_failure(self):
   record={"failed":True,"status":"error",
           "iva":{"exit_code":0,"metrics":{"num_final_max_conseqs":0}},
-          "riva":{"exit_code":0,"metrics":{"num_final_max_conseqs":1}}}
+          "ivanka":{"exit_code":0,"metrics":{"num_final_max_conseqs":1}}}
   self.assertEqual(m.failure_category(record),"iva_no_final_max")
   record["iva"]["metrics"]["num_final_max_conseqs"]=1
   record["best_contig_acceptance"]={"pass":False}
-  self.assertEqual(m.failure_category(record),"riva_below_noninferiority_threshold")
+  self.assertEqual(m.failure_category(record),"ivanka_below_noninferiority_threshold")
   record["best_contig_acceptance"]["pass"]=True
   record["failed"]=False
   self.assertIsNone(m.failure_category(record))
@@ -112,7 +112,7 @@ class BenchmarkTests(TestCase):
         patch.object(m,"image_id",return_value="sha256:img"), \
         patch.object(m,"score_outputs",return_value={"outputs":{}}), \
         patch.object(m.subprocess,"run",return_value=Mock(returncode=0)) as runner:
-    result=m.run_arm({"sample":"TEST"},"riva","image:tag","ACGT",123,"invocation",all_projects=True)
+    result=m.run_arm({"sample":"TEST"},"ivanka","image:tag","ACGT",123,"invocation",all_projects=True)
    argv=runner.call_args.args[0]
    self.assertEqual(argv[argv.index("--entrypoint")+1],"/usr/bin/timeout")
    self.assertEqual(argv[argv.index("--timeout")+1],"121")
@@ -144,7 +144,7 @@ class BenchmarkTests(TestCase):
    self.assertEqual(depth["unique_reference_positions_covered"],2)
    self.assertEqual(depth["unique_reference_positions_ge_10"],1)
 
- def test_parallel_iva_and_riva_arms_keep_separate_results(self):
+ def test_parallel_iva_and_ivanka_arms_keep_separate_results(self):
   import time
   from types import SimpleNamespace
   from unittest.mock import patch
@@ -156,27 +156,27 @@ class BenchmarkTests(TestCase):
   with patch.object(m,"baseline_provenance",return_value={"verified":True}), \
        patch.object(m,"save_iva_baseline"), \
        patch.object(m,"run_arm",side_effect=fake_arm) as runner, \
-       patch("reference_panel.panel_acceptance",return_value={"pass":True,"iva_score":100,"riva_score":99}) as scorer:
-   result=m.evaluate_sample({"sample":"S","project":"NFLHIVDNA"},args,{"iva":"A","riva":"B"},
-           {"iva":"hashA","riva":"hashB"},"base-id","refhash","ACGT",None,"inv",
+       patch("reference_panel.panel_acceptance",return_value={"pass":True,"iva_score":100,"ivanka_score":99}) as scorer:
+   result=m.evaluate_sample({"sample":"S","project":"NFLHIVDNA"},args,{"iva":"A","ivanka":"B"},
+           {"iva":"hashA","ivanka":"hashB"},"base-id","refhash","ACGT",None,"inv",
            time.monotonic()+5)
   self.assertFalse(result["failed"])
   self.assertEqual(runner.call_count,2)
   self.assertTrue(result["best_contig_acceptance"]["pass"])
   self.assertEqual(result["iva"]["metrics"]["best_hxb2_final_max_conseq_score"],100)
-  self.assertEqual(result["riva"]["metrics"]["best_hxb2_final_max_conseq_score"],99)
+  self.assertEqual(result["ivanka"]["metrics"]["best_hxb2_final_max_conseq_score"],99)
 
- def test_missing_iva_can_run_riva_diagnostic_but_never_pass(self):
+ def test_missing_iva_can_run_ivanka_diagnostic_but_never_pass(self):
   import time
   from types import SimpleNamespace
   from unittest.mock import patch
-  args=SimpleNamespace(mode="riva",timeout_per_arm=6,parallel_arms=False,allow_missing_baseline=True)
+  args=SimpleNamespace(mode="ivanka",timeout_per_arm=6,parallel_arms=False,allow_missing_baseline=True)
   with patch.object(m,"baseline_provenance",return_value={"verified":True}), \
        patch.object(m,"load_iva_baseline",side_effect=ValueError("missing control")), \
        patch.object(m,"run_arm",return_value={"exit_code":0,"metrics":{"best_hxb2_final_max_conseq_score":1000,"outputs":{}}}) as runner:
-   r=m.evaluate_sample({"sample":"S"},args,{"riva":"img"},{"riva":"hash"},"base","hxb2","ACGT",None,"inv",time.monotonic()+20)
+   r=m.evaluate_sample({"sample":"S"},args,{"ivanka":"img"},{"ivanka":"hash"},"base","hxb2","ACGT",None,"inv",time.monotonic()+20)
   self.assertTrue(r["failed"])
-  self.assertEqual(r["riva"]["exit_code"],0)
+  self.assertEqual(r["ivanka"]["exit_code"],0)
   self.assertIn("baseline_error",r)
   self.assertNotIn("best_contig_acceptance",r)
   self.assertEqual(runner.call_count,1)
@@ -193,13 +193,13 @@ class BenchmarkTests(TestCase):
  def test_project_aware_comparison_uses_full_consensus_not_hxb2(self):
   with TemporaryDirectory() as d:
    root=Path(d)
-   for arm,seq in (("iva","ACGT"*100),("riva","TTTT"*100)):
+   for arm,seq in (("iva","ACGT"*100),("ivanka","TTTT"*100)):
     folder=root/arm
     folder.mkdir()
     (folder/"conseq.csv").write_text(
         "region,consensus-percent-cutoff,sequence\n"
         "synthetic,MAX,"+seq+"\n")
-   result=m.project_aware_acceptance(root/"iva",root/"riva")
+   result=m.project_aware_acceptance(root/"iva",root/"ivanka")
    self.assertFalse(result["pass"])
    self.assertEqual(result["iva_score"],400)
    self.assertEqual(result["method"],"final_iva_max_consensus_global_alignment")
@@ -208,17 +208,17 @@ class BenchmarkTests(TestCase):
   with TemporaryDirectory() as d:
    root=Path(d)
    seq="ACGT"*100
-   for arm in ("iva","riva"):
+   for arm in ("iva","ivanka"):
     folder=root/arm
     folder.mkdir()
     (folder/"conseq.csv").write_text(
         "region,consensus-percent-cutoff,sequence\n"
         "synthetic,MAX,"+seq+"\n")
-   self.assertTrue(m.project_aware_acceptance(root/"iva",root/"riva")["pass"])
-   (root/"riva"/"conseq.csv").write_text(
+   self.assertTrue(m.project_aware_acceptance(root/"iva",root/"ivanka")["pass"])
+   (root/"ivanka"/"conseq.csv").write_text(
        "region,consensus-percent-cutoff,sequence\n"
        "synthetic,MAX,"+seq[:100]+"\n")
-   self.assertFalse(m.project_aware_acceptance(root/"iva",root/"riva")["pass"])
+   self.assertFalse(m.project_aware_acceptance(root/"iva",root/"ivanka")["pass"])
 
  def test_cached_control_never_claims_two_arm_alpha(self):
   import json
@@ -239,7 +239,7 @@ class BenchmarkTests(TestCase):
         patch.object(m,"sha",return_value="sample-hash"), \
         patch.object(m,"evaluate_sample",side_effect=fake_case), \
         patch.object(m.time,"time",side_effect=[1234,1235]):
-    with patch.object(sys,"argv",["bench","--mode","riva"]):
+    with patch.object(sys,"argv",["bench","--mode","ivanka"]):
      self.assertEqual(m.main(),0)
     cached=json.loads(list(results.glob("summary-*.json"))[0].read_text())
     self.assertFalse(cached["cached_iva_comparison_pass"])

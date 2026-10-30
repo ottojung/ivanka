@@ -12,7 +12,7 @@ def load_micall_projects(iva_image):
     content = subprocess.check_output(
         ['podman', 'run', '--rm', '--pull=never', '--entrypoint', 'python3',
          iva_image, '-c', script], timeout=120)
-    expected = os.environ.get('RIVA_PROJECTS_JSON')
+    expected = os.environ.get('IVANKA_PROJECTS_JSON')
     if expected and Path(expected).read_bytes() != content:
         raise ValueError('Project reference catalog does not match the IVA MiCall image')
     projects = json.loads(content)

@@ -2,7 +2,7 @@
 """Fail-closed reports of the current complete 18-sample IVA-eligible full-MiCall runs.
 
 Consumes runner-written summary-<invocation>.json objects, not the superseded
-seven-control Riva-only benchmark JSONL format.
+seven-control Ivanka-only benchmark JSONL format.
 """
 import argparse
 import json
@@ -51,7 +51,7 @@ def evaluate(summary):
         if not isinstance(value, str) or not SHA256.fullmatch(value):
             reasons.append(f"missing or invalid {name}")
     images = summary.get("images")
-    for role in ("iva", "riva"):
+    for role in ("iva", "ivanka"):
         value = images.get(role) if isinstance(images, dict) else None
         if not isinstance(value, str) or not SHA256.fullmatch(value):
             reasons.append(f"missing or invalid {role} image digest")

@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import sys
 
-MAX_WALL_SECONDS = 2400
+MAX_SAMPLE_SECONDS = 1200
 REQUIRED_SAMPLES = 20
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -31,17 +31,19 @@ def evaluate(summary):
             reasons.append(f"not exactly {REQUIRED_SAMPLES} {name}")
     if summary.get("failed_samples") != []:
         reasons.append("failed or unspecified samples")
-    elapsed = summary.get("global_seconds")
-    configured = summary.get("global_limit_seconds")
+    elapsed = summary.get("max_sample_seconds")
+    configured = summary.get("sample_limit_seconds")
     if (type(elapsed) not in (int, float) or type(configured) not in (int, float)
-            or not (0 <= elapsed <= MAX_WALL_SECONDS)
-            or not (0 < configured <= MAX_WALL_SECONDS)
-            or elapsed > configured):
-        reasons.append("40-minute qualification limit missing or exceeded")
-    for name in ("manifest_sha256", "hxb2_sha256", "project_reference_catalog_sha256"):
+            or not (0 <= elapsed <= configured)
+            or not (0 < configured <= MAX_SAMPLE_SECONDS)
+):
+        reasons.append("20-minute per-sample limit missing or exceeded")
+    for name in ("manifest_sha256", "hxb2_sha256", "project_reference_catalog_sha256", "reference_panel_sha256"):
         value = summary.get(name)
         if not isinstance(value, str) or not SHA256.fullmatch(value):
             reasons.append(f"missing or invalid {name}")
+    if type(summary.get("reference_panel_count")) is not int or summary["reference_panel_count"] < 2:
+        reasons.append("missing reference panel count")
     images = summary.get("images")
     for role in ("iva", "riva"):
         value = images.get(role) if isinstance(images, dict) else None
@@ -53,7 +55,7 @@ def evaluate(summary):
         "invocation": invocation, "pass": not reasons,
         "accepted_samples": summary.get("accepted_samples"),
         "finished_samples": summary.get("finished_samples"),
-        "global_seconds": elapsed,
+        "max_sample_seconds": elapsed,
         "full_alpha_pass": summary.get("full_alpha_pass") is True,
         "reasons": reasons,
     }
@@ -108,7 +110,7 @@ def main(argv=None):
         for report in reports:
             print(f'{"PASS" if report["pass"] else "NOT PASS"} {report["invocation"]}: '
                   f'{report["accepted_samples"]}/{REQUIRED_SAMPLES} accepted, '
-                  f'elapsed={report["global_seconds"]}')
+                  f'slowest_sample={report["max_sample_seconds"]}')
             for reason in report["reasons"]:
                 print("  -", reason)
     return 0 if not args.invocation or reports[0]["pass"] else 1

@@ -53,77 +53,78 @@ clinical validation.
 The role mapping is private because it contains sample names. Store it in
 `/workspace/riva-benchmark-cache/roles.json`.
 
-## Full MiCall A/B with Podman
+## Full MiCall IVA/Riva A/B benchmark
 
-`benchmarks/Dockerfile.micall-riva` builds Riva and overlays only the IVA assembler function in a pinned official MiCall image. All MiCall mapping, stitching, consensus, and coverage steps are unchanged. This follows the assembler boundary in MiCall PR #1015, without its unrelated stitcher changes.
+The Podman harness substitutes Riva at the IVA assembler boundary in a pinned
+MiCall container. Other MiCall steps (G2P, stitching, remapping and final
+consensus) are unchanged. Both IVA and Riva process the same sample FASTQs and
+use the same MiCall base image.
 
-To build: `podman tag ghcr.io/cfe-lab/micall:latest localhost/riva-micall-iva:base` then `podman build --layers -t localhost/riva-micall-riva:alpha -f benchmarks/Dockerfile.micall-riva .`. Run: `./scripts/benchmark_podman_full_micall.sh --mode both`. Private dataset and outputs are selected by `RIVA_DATA` and `RIVA_PODMAN_RESULTS` and are never committed. Results include source image identity, final HXB2 MAX-consensus best score and report file hashes and row counts.
+### Current reference-panel acceptance
 
-The seeded Riva image accepts G2P contigs at the assembler boundary; MiCall also appends those contigs before stitching in both arms.
+The runner reads immutable HXB2 FASTA and the nucleotide references in the
+**actual IVA MiCall image** (`projects.json`). It constructs a deterministic
+panel comprising HXB2, representative HIV-1 subtype and recombinant genomes,
+HXB2's V3 region and flanks, representative HCV genotypes (including HCV-3k),
+and HLA-B. The panel's SHA-256 and reference count are reported with each
+invocation. IUPAC ambiguous nucleotide bases in references are masked as N.
 
+For each sample, every final MiCall `MAX` consensus contig from IVA and
+every final MiCall `MAX` consensus contig from Riva are locally aligned to
+**each reference in the common panel**, considering both orientations.
+Scores are +1 match, -1 mismatch, -2 gap opening and -1 gap extension.
+The best score from *any* contig/reference pair is selected separately for
+IVA and Riva; the winning reference may differ. **Riva passes only when its
+best score is at least 95% of IVA's best positive score.** Missing final
+MAX consensus or missing reference provenance fails closed. The panel is
+independent of either assembler's output.
 
-The Podman full-MiCall comparison enforces a single global 40-minute
-deadline and a separate per-arm timeout. A verified IVA baseline may be
-reused with --mode riva only when IVA image ID, input FASTQ hashes,
-HXB2 hash and MiCall project code match. The default Riva image is
-localhost/riva-micall-riva:seeded. Both images share MiCall base layers.
-All samples must produce a final MAX-cutoff MiCall consensus after mapping,
-and the selected pipeline arms must exit successfully.
+This changes the benchmark acceptance calculation, not how Riva assembles
+reads or how MiCall processes contigs.
 
+The score uses exact local affine-gap Smith-Waterman alignment. The optional
+`parasail==1.3.4` SIMD backend is much faster on long MiCall contigs; without
+it the benchmark falls back to the same scoring via Biopython:
 
-For the seven-sample full-MiCall benchmark, --jobs 4 runs independent
-sample pipelines concurrently within the same global deadline:
+```sh
+python3 -m pip install --target /workspace/riva-benchmark-accel \
+  -r benchmarks/requirements-acceleration.txt
+export PYTHONPATH="/workspace/riva-benchmark-accel:${PYTHONPATH:-}"
+```
 
-    ./scripts/benchmark_podman_full_micall.sh --mode both --jobs 4
+Install the optional acceleration in a separate directory rather than
+modifying MiCall's production Python environment.
 
-Each sample has separate private output and container names. The output
-JSONL contains start/finish events that remain parseable even when
-samples finish out of order. The persistent IVA baseline cache is
-per-sample and validated against the same immutable MiCall image and
-FASTQ input hashes; this is preferable for Riva-only iterations.
+### Time budget and qualification
 
-Option --parallel-arms permits the IVA and Riva MiCall pipelines for a sample to run simultaneously, sharing only immutable input FASTQs and the same pinned MiCall base. Use this with --jobs only when host capacity permits.
+**Each sample has its own 20-minute (1,200-second) wall-clock limit**,
+beginning when its task actually starts, and covering both IVA and Riva
+MiCall arms and scoring. The arms share that same per-sample budget;
+`--parallel-arms` permits them to run concurrently. There is **no
+40-minute global limit** on the entire 20-sample batch.
 
+For the strict, complete real-input benchmark:
 
-## Genuine IVA control preparation (not an alpha qualification)
+```sh
+export RIVA_DATA=/workspace/riva-normal20-prepared-io
+export RIVA_EXPECTED_MANIFEST_SHA256=<pinned-manifest-sha256>
+export RIVA_PODMAN_RESULTS=/workspace/riva-full20-reference-panel-results
+./scripts/benchmark_podman_full_micall.sh --mode both --qualify \
+  --all-projects --jobs 3 --parallel-arms --sample-time-limit 1200
+```
 
-Large HIV samples take more than 20 minutes for a full IVA MiCall run on
-this host. The 40-minute Riva qualification limit remains mandatory.
-For repeated development, prepare genuine IVA controls once:
+The strict verdict requires exactly all 20 frozen samples, both complete
+MiCall arms for every sample in the same invocation, correct pinned
+provenance, the 95% reference-panel rule for each sample, and each sample
+under its own 20-minute cap. Even if a batch runs longer than 40 minutes,
+it may qualify, provided **each** sample meets its limit. Incomplete,
+uncached, or mixed-invocation controls cannot qualify.
 
-    ./scripts/prepare_full_micall_iva_baselines.sh
-
-This uses the exact same MiCall image and all de novo stages, but with
-a separately disclosed, longer setup budget. It is **not** an alpha
-benchmark pass. Complete scored IVA baselines are pinned to image ID,
-FASTQ SHA256, HXB2 SHA256 and MiCall project-code configuration.
-An incomplete or unscored IVA run cannot become a cached control. Then
-validate the full Riva MiCall pipeline with a 40-minute global deadline:
-
-    ./scripts/benchmark_podman_full_micall.sh --mode riva --jobs 4
-
-To test the absolute end-to-end runtime for both arms together, use
---mode both and optional --parallel-arms within the 40-minute limit.
-If that run does not complete, the summary must say FAIL.
-
-
-While real IVA controls are being prepared, diagnose the fully mapped Riva
-pipeline independently with --mode riva --allow-missing-baseline --jobs 4.
-This keeps MiCall mapping/stitching/counting intact and records real final
-outputs, but every missing-control sample is explicitly flagged FAILED
-and cannot be used to claim an alpha pass. No cached IVA surrogate is fabricated.
-
-As of 2026-10-28 the benchmark global limit is 40 minutes: the shell hard cap is 2400 seconds, Python soft deadline 2380 seconds, and per-arm default 2370 seconds. The separate IVA-control preparation budget is unchanged. This supersedes the earlier 20-minute alpha runtime constraint.
-
-## Mixed-project scoring
-
-NFLHIVDNA samples retain the historical best-final-MAX-consensus HXB2 comparison. The V3LOOP and HCV samples cannot be evaluated against whole-genome HIV HXB2: their final mapped MiCall MAX consensuses are globally compared against the longest final IVA MAX consensus for their own sample instead, using +1 match, -1 mismatch, -2 gap-open and -1 gap-extension scores. A Riva final contig must score at least 95% of the full IVA consensus self-score. Incomplete/short fragments do not qualify. Genuine raw MiCall outputs are saved outside Git and a cached IVA control records its provenance and private artifact path.
-
-A full-alpha pass requires *both* IVA and Riva MiCall pipelines to finish
-together within the global 40-minute run (mode both). A Riva-only run
-using provenance-verified cached IVA controls is reported separately as
-cached_iva_comparison_pass, not as a two-arm wall-clock pass.
-
+Use `python benchmarks/summarize.py --results RESULTS_DIR` to report
+individual invocation results, or `--invocation ID` for a strict CI exit
+status. A cached IVA baseline can support Riva-only experiments, but cannot
+claim two-arm full-alpha qualification. IVA control preparation has its own
+declared setup budget and does not count as a qualifying run.
 
 ## Contig reporting and read-support ranking
 

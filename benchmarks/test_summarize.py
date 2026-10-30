@@ -23,18 +23,20 @@ def valid():
         "finished_samples": 20,
         "accepted_samples": 20,
         "failed_samples": [],
-        "global_seconds": 2399.0,
-        "global_limit_seconds": 2400,
+        "max_sample_seconds": 1199.0,
+        "sample_limit_seconds": 1200,
         "manifest_sha256": sha,
         "hxb2_sha256": sha,
         "project_reference_catalog_sha256": sha,
+        "reference_panel_sha256": sha,
+        "reference_panel_count": 20,
         "images": {"iva": sha, "riva": sha},
         "full_alpha_pass": True,
     }
 
 
 class SummarizeTests(unittest.TestCase):
-    def test_complete_twenty_within_forty_minutes_passes(self):
+    def test_complete_twenty_within_each_sample_limit_passes(self):
         self.assertTrue(summarize.evaluate(valid())["pass"])
 
     def test_bad_conditions_fail_closed(self):
@@ -47,9 +49,9 @@ class SummarizeTests(unittest.TestCase):
             {"finished_samples": 19},
             {"manifest_sample_count": 7},
             {"failed_samples": ["private-sample"]},
-            {"global_seconds": 2401},
-            {"global_limit_seconds": 2401},
-            {"global_seconds": 2399, "global_limit_seconds": 2380},
+            {"max_sample_seconds": 1201},
+            {"sample_limit_seconds": 1201},
+            {"max_sample_seconds": 1199, "sample_limit_seconds": 1180},
             {"full_alpha_pass": False},
             {"images": {"iva": "a"*64}},
             {"manifest_sha256": "bogus"},

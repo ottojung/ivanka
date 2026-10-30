@@ -26,16 +26,18 @@ class Qualification20Tests(unittest.TestCase):
             (root / 'manifest.tsv').write_text('sample\n' + ''.join(x+'\n' for x in samples))
             (root / 'hxb2.fasta').write_text('>HXB2\nACGT\n')
             results = root / 'results'
-            def fake_case(row, *unused):
+            def fake_case(row, *unused, **kwargs):
                 record = {'sample': row['sample'], 'status': 'finished',
-                          'failed': False, 'best_contig_acceptance': {'pass': True},
+                          'failed': False, 'total_seconds': 8,
+                          'sample_time_limit_seconds': 1200,
+                          'best_contig_acceptance': {'pass': True},
                           'project_reference_alignment': {'name': 'example'},
                           'iva': {'exit_code': 0, 'metrics': {}},
                           'riva': {'exit_code': 0, 'metrics': {}}}
                 if missing_arm:
                     del record['riva']
                 if missing_reference:
-                    del record['project_reference_alignment']
+                    del record['best_contig_acceptance']
                 return record
             argv = ['bench', '--mode', mode]
             if qualify:
@@ -48,6 +50,7 @@ class Qualification20Tests(unittest.TestCase):
                  patch.object(m, 'verify_identical_micall_base'), \
                  patch.object(m, 'sha', return_value='pinned'), \
                  patch.object(m, 'load_micall_projects', return_value=({'projects':{},'regions':{}},'pinned')), \
+                 patch('reference_panel.build_reference_panel',return_value=(('HXB2','ACGT'),('HCV-1a','ACGT'))), \
                  patch.object(m, 'evaluate_sample', side_effect=fake_case), \
                  patch.dict(os.environ, env, clear=True), \
                  patch.object(sys, 'argv', argv):
@@ -103,7 +106,7 @@ class Qualification20Tests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertFalse(summary['full_alpha_pass'])
 
-    def test_missing_project_native_reference_fails_closed(self):
+    def test_missing_reference_panel_score_fails_closed(self):
         rc, error, summary = self.execute(missing_reference=True)
         self.assertIsNone(error)
         self.assertEqual(rc, 1)

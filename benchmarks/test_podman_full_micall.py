@@ -288,6 +288,7 @@ class BenchmarkTests(TestCase):
         patch.object(m,"verify_ivanka_image_binding"), \
         patch.object(m,"sha",return_value="sample-hash"), \
         patch.object(m,"evaluate_sample",side_effect=fake_case), \
+        patch.object(m,"iva_cache_status",return_value={"verified":[],"missing_or_invalid":[]}), \
         patch.object(m.time,"time",side_effect=[1234,1235]):
     with patch.object(sys,"argv",["bench","--mode","ivanka"]):
      self.assertEqual(m.main(),0)

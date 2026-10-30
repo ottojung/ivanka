@@ -332,6 +332,8 @@ def load_iva_baseline(sample, expected_provenance):
     if stored["provenance"] != expected_provenance:
         raise ValueError("IVA baseline provenance differs from current MiCall image, FASTQs, or HXB2")
     arm = stored["iva"]
+    if arm.get("image_id") != expected_provenance["iva_image_id"]:
+        raise ValueError("Cached IVA arm image ID differs from verified control provenance")
     if arm["exit_code"] != 0 or arm["metrics"]["num_final_max_conseqs"] <= 0:
         raise ValueError("The stored IVA baseline is not a completed scored MiCall run")
     output = Path(arm.get("artifact_dir", "")) / "conseq.csv"
@@ -349,6 +351,8 @@ def save_iva_baseline(sample, provenance, arm):
     """
     if arm.get("exit_code") != 0 or arm.get("metrics", {}).get("num_final_max_conseqs", 0) <= 0:
         raise ValueError("Cannot cache an incomplete or unscored IVA baseline")
+    if arm.get("image_id") != provenance.get("iva_image_id"):
+        raise ValueError("IVA result image ID does not match control provenance")
     folder = Path(arm.get("artifact_dir", ""))
     source = next((p for p in (folder/"conseq.csv", folder/"scratch"/"conseq.csv") if p.is_file()), folder/"conseq.csv")
     expected = arm["metrics"].get("outputs", {}).get("conseq.csv", {}).get("sha256")

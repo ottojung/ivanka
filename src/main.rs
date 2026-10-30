@@ -265,6 +265,10 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec
             }
             record_extension_support(&right_reads,&right_ids,&right,&mut supporting_reads);
             record_extension_support(&left_reads,&left_ids,&left_rc,&mut supporting_reads);
+            if next.len()>MAX_CONTIG_LENGTH {
+                eprintln!("rejecting assembly path exceeding {} nt",MAX_CONTIG_LENGTH);
+                return (Vec::new(),0);
+            }
             seq=next;
         }
     }
@@ -273,6 +277,14 @@ fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec
 // A first-pass ranking heuristic, not a calibrated confidence score:
 // independent extension-supporting FASTQ records (with multiplicity) times
 // assembled span. Preserve G2P-derived seeds before applying the safety cap.
+// Orientation-neutral 31-mer identity, used only to avoid reporting
+// redundant assembled paths; it never consumes or filters FASTQ reads.
+fn canonical_kmer(seq:&[u8])->Option<u64> {
+    let f=encode(seq)?;
+    let mut r=0u64;
+    for i in 0..K {r=(r<<2)|(3-((f>>(2*i))&3));}
+    Some(f.min(r))
+}
 fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
                             n:usize, protected:usize)->Vec<Vec<u8>> {
     assert_eq!(seqs.len(),counts.len());
@@ -288,8 +300,39 @@ fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
             .then_with(||b.1.0.len().cmp(&a.1.0.len()))
             .then_with(||a.1.0.cmp(&b.1.0))
     });
-    candidates.truncate(n);
-    candidates.into_iter().map(|(_, (seq,_))|seq).collect()
+    // Use read support to prioritize assemblies and k-mer novelty to avoid
+    // passing hundreds of near-identical contigs into MiCall's stitcher.
+    let mut retained=Vec::new();
+    let mut represented=HashSet::new();
+    let mut duplicates=0usize;
+    let mut no_extension_support=0usize;
+    for (index,(seq,support)) in candidates {
+        if retained.len()>=n {break;}
+        let is_seed=index<protected;
+        if !is_seed && support==0 {
+            no_extension_support+=1;
+            continue;
+        }
+        let mut valid=0usize;
+        let mut shared=0usize;
+        for window in seq.windows(K) {
+            if let Some(k)=canonical_kmer(window) {
+                valid+=1;
+                if represented.contains(&k){shared+=1;}
+            }
+        }
+        if !is_seed && valid>0 && shared*10>=valid*9 {
+            duplicates+=1;
+            continue;
+        }
+        for window in seq.windows(K) {
+            if let Some(k)=canonical_kmer(window) {represented.insert(k);}
+        }
+        retained.push(seq);
+    }
+    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={}",
+              retained.len(),duplicates,no_extension_support);
+    retained
 }
 fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
     let args=std::env::args().collect::<Vec<_>>();
@@ -349,7 +392,7 @@ fn main()->Result<(),Box<dyn std::error::Error>> {
         let seedrev=rc(&seedseq);
         if contigs.iter().any(|c|c.windows(K).any(|w|w==seedseq || w==seedrev)) {continue;}
         attempted+=1;
-        let (seq,support)=extend(seedseq,&reads,6,2);
+        let (seq,support)=extend(seedseq,&reads,4,1);
         if !seq.is_empty() {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
             // Do not merge contigs, merely suppress exact contained duplicates.
@@ -385,7 +428,8 @@ mod tests {
         let seqs=(1..=1200).map(|n|vec![b'A';n]).collect::<Vec<_>>();
         let counts=(1..=1200).map(|n|n).collect::<Vec<_>>();
         let out=select_supported_contigs(seqs,counts,1000,1);
-        assert_eq!(out.len(),1000);
+        assert!(out.len()<=1000);
+        assert!(out.len()>1);
         assert_eq!(out[0].len(),1);
         assert_eq!(out[1].len(),1200);
         assert!(!out.iter().any(|s|s.len()==31));

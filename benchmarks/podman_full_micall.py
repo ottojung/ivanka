@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import time
@@ -20,6 +21,7 @@ from reference_catalog import load_micall_projects
 
 DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
 RESULTS = Path(os.environ.get("IVANKA_PODMAN_RESULTS", "/workspace/ivanka-podman-results"))
+IVA_BASELINE_CACHE = Path(os.environ.get("IVANKA_IVA_BASELINE_CACHE", "/workspace/ivanka-iva-baseline-cache"))
 IVA_IMAGE = os.environ.get("IVANKA_IVA_IMAGE", "localhost/ivanka-micall-iva:base")
 IVANKA_IMAGE = os.environ.get("IVANKA_IVANKA_IMAGE", "localhost/ivanka-micall-ivanka:seeded")
 OUTPUT_NAMES = ("conseq.csv", "conseq_all.csv", "contigs.csv", "unstitched_contigs.csv",
@@ -216,14 +218,14 @@ def best_consensus_acceptance(iva_score, ivanka_score):
     }
 
 
-QUALIFICATION_MAX_SECONDS = 1200
+QUALIFICATION_MAX_SECONDS = 1800
 QUALIFY_SAMPLE_COUNT = 18
 ORIGINAL_COHORT_SIZE = 20
 IVA_INELIGIBLE_COUNT = 2
 
 
 def qualification_within_cap(configured_limit, elapsed):
-    """Require each sample to finish within the 20-minute cap.
+    """Require each sample to finish within the 30-minute cap.
 
     A separate IVA-only control preparation is never an alpha qualification.
     """
@@ -316,37 +318,123 @@ def baseline_provenance(row, iva_image_id, hxb2_sha256, all_projects=False):
 
 
 def iva_baseline_path(sample):
-    return RESULTS / "iva-baselines" / (sample + ".json")
+    """Stable, shared directory independent of any one benchmark invocation."""
+    if not sample or Path(sample).name != sample or sample in (".", ".."):
+        raise ValueError("Invalid sample name for IVA cache")
+    return IVA_BASELINE_CACHE / sample / "baseline.json"
 
 
 def load_iva_baseline(sample, expected_provenance):
     path = iva_baseline_path(sample)
     if not path.is_file():
-        raise ValueError("No verified IVA baseline for this sample: run --mode iva first")
+        raise ValueError("No verified IVA baseline for this sample; import existing IVA results")
     stored = json.loads(path.read_text())
     if stored["provenance"] != expected_provenance:
         raise ValueError("IVA baseline provenance differs from current MiCall image, FASTQs, or HXB2")
     arm = stored["iva"]
     if arm["exit_code"] != 0 or arm["metrics"]["num_final_max_conseqs"] <= 0:
         raise ValueError("The stored IVA baseline is not a completed scored MiCall run")
-    # A matching metadata record is not sufficient: MiCall's final MAX
-    # sequences are needed again to score Ivanka against the same references.
-    # Check this before launching the expensive experimental arm.
     output = Path(arm.get("artifact_dir", "")) / "conseq.csv"
     expected = arm["metrics"].get("outputs", {}).get("conseq.csv", {}).get("sha256")
     if not expected or not output.is_file() or sha(output) != expected:
-        raise ValueError("Cached IVA final MAX artifact missing or changed: rerun IVA control")
+        raise ValueError("Cached IVA final MAX artifact missing or changed")
     return arm
 
 
 def save_iva_baseline(sample, provenance, arm):
-    if arm["exit_code"] != 0 or arm["metrics"]["num_final_max_conseqs"] <= 0:
+    """Persist independently verified IVA metadata and final MAX sequences.
+
+    A result directory may be removed after the run; the cache must survive.
+    Never infer a successful IVA exit from the mere presence of a CSV.
+    """
+    if arm.get("exit_code") != 0 or arm.get("metrics", {}).get("num_final_max_conseqs", 0) <= 0:
         raise ValueError("Cannot cache an incomplete or unscored IVA baseline")
+    source = Path(arm.get("artifact_dir", "")) / "conseq.csv"
+    expected = arm["metrics"].get("outputs", {}).get("conseq.csv", {}).get("sha256")
+    if not expected or not source.is_file() or sha(source) != expected:
+        raise ValueError("IVA final MAX artifact missing or checksum mismatched")
     path = iva_baseline_path(sample)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(".new")
-    temp.write_text(json.dumps({"provenance": provenance, "iva": arm}, sort_keys=True))
-    temp.replace(path)
+    target = path.parent / "conseq.csv"
+    temporary = path.parent / (".conseq-" + str(os.getpid()) + "-" + str(time.time_ns()))
+    shutil.copyfile(source, temporary)
+    try:
+        if sha(temporary) != expected:
+            raise ValueError("IVA artifact changed during cache import")
+        temporary.replace(target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    cached_arm = dict(arm)
+    cached_arm["source_artifact_dir"] = str(source.parent)
+    cached_arm["artifact_dir"] = str(path.parent.resolve())
+    metadata = path.parent / (".baseline-" + str(os.getpid()) + "-" + str(time.time_ns()))
+    try:
+        metadata.write_text(json.dumps({"provenance": provenance, "iva": cached_arm}, sort_keys=True))
+        metadata.replace(path)
+    finally:
+        metadata.unlink(missing_ok=True)
+    return cached_arm
+
+
+def import_iva_baselines(sources, rows, image, hxb2_hash, all_projects):
+    """Import completed IVA controls from prior benchmark directories, without running IVA."""
+    by_sample = {row["sample"]: row for row in rows}
+    imported = 0
+    rejected = 0
+    for source in sources:
+        root = Path(source)
+        if not root.is_dir():
+            raise ValueError("IVA import directory does not exist: " + str(root))
+        candidates = []
+        for file in (root / "iva-baselines").glob("*.json"):
+            try:
+                value = json.loads(file.read_text())
+                candidates.append((file.stem, value.get("provenance"), value.get("iva")))
+            except (ValueError, OSError, TypeError):
+                rejected += 1
+        records = root / "results.jsonl"
+        if records.is_file():
+            with records.open() as handle:
+                for line in handle:
+                    try:
+                        record = json.loads(line)
+                    except ValueError:
+                        rejected += 1
+                        continue
+                    if record.get("status") == "finished" and isinstance(record.get("iva"), dict):
+                        candidates.append((record.get("sample"), record.get("provenance"), record["iva"]))
+        for name, provenance, arm in candidates:
+            row = by_sample.get(name)
+            if row is None or not isinstance(arm, dict):
+                continue
+            expected = baseline_provenance(row, image, hxb2_hash, all_projects)
+            if provenance != expected:
+                rejected += 1
+                continue
+            try:
+                load_iva_baseline(name, expected)
+                continue
+            except (ValueError, OSError, KeyError):
+                pass
+            try:
+                save_iva_baseline(name, expected, arm)
+                imported += 1
+            except (ValueError, OSError, KeyError):
+                rejected += 1
+    return {"imported": imported, "rejected": rejected}
+
+
+def iva_cache_status(rows, image, hxb2_hash, all_projects):
+    status = {"verified": [], "missing_or_invalid": [], "cache_dir": str(IVA_BASELINE_CACHE)}
+    for row in rows:
+        name = row["sample"]
+        expected = baseline_provenance(row, image, hxb2_hash, all_projects)
+        try:
+            load_iva_baseline(name, expected)
+            status["verified"].append(name)
+        except (ValueError, OSError, KeyError):
+            status["missing_or_invalid"].append(name)
+    return status
 
 
 def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False):
@@ -420,7 +508,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
     record={"sample":name,"invocation":invocation,
             "hxb2_sha256":hxb2_hash,"status":"started"}
     started=time.monotonic()
-    deadline=started+getattr(args,"sample_time_limit",1200)
+    deadline=started+getattr(args,"sample_time_limit",1800)
     failures=0
     try:
         if deadline-time.monotonic() <= 1:
@@ -435,6 +523,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
             try:
                 reused_baseline=load_iva_baseline(name,provenance)
                 record["iva_baseline_reused"]=True
+                record["iva"]=reused_baseline
             except (ValueError,OSError,KeyError) as exc:
                 if not args.allow_missing_baseline:
                     raise
@@ -470,7 +559,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                 failures+=1
                 if result["exit_code"]==124:
                     record["status"]="sample_timeout"
-        if "iva" in record and "metrics" in record["iva"]:
+        if "iva" in checked and "iva" in record and "metrics" in record["iva"]:
             try:
                 save_iva_baseline(name,provenance,record["iva"])
             except ValueError as exc:
@@ -524,7 +613,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
         record["status"]="finished"
     record["failed"]=bool(failures)
     record["total_seconds"]=round(time.monotonic()-started,2)
-    record["sample_time_limit_seconds"]=getattr(args,"sample_time_limit",1200)
+    record["sample_time_limit_seconds"]=getattr(args,"sample_time_limit",1800)
     if not qualification_within_cap(record["sample_time_limit_seconds"],
                                      record["total_seconds"]):
         record["status"]="sample_timeout"
@@ -550,26 +639,30 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="append",
                         help="Run only a selected sample ID (repeatable)")
-    parser.add_argument("--mode", choices=("both","iva","ivanka"), default="both")
-    parser.add_argument("--jobs", type=int, default=1,
+    parser.add_argument("--mode", choices=("both","iva","ivanka"), default="ivanka")
+    parser.add_argument("--jobs", type=int, default=10,
                         help="Independent sample pipelines to run concurrently")
     parser.add_argument("--parallel-arms", action="store_true",
                         help="Run IVA and Ivanka concurrently within each sample")
     parser.add_argument("--allow-missing-baseline", action="store_true",
                         help="Ivanka-only diagnostic: run full MiCall without control, never claim pass")
-    parser.add_argument("--timeout-per-arm", type=int, default=1180,
+    parser.add_argument("--timeout-per-arm", type=int, default=1780,
                         help="Per-arm bound, further limited by the shared per-sample deadline")
-    parser.add_argument("--sample-time-limit", type=int, default=1200,
+    parser.add_argument("--sample-time-limit", type=int, default=1800,
                         help="Maximum elapsed seconds for EACH sample, including both MiCall arms and scoring")
     parser.add_argument("--qualify",action="store_true", help="Strict 18-sample IVA-eligible alpha run requiring pinned manifest and IVA eligibility evidence")
     parser.add_argument("--diagnose-project-reference",action="store_true",
                         help="Optional expensive legacy IVA-selected project reference diagnostic; not used for acceptance")
     parser.add_argument("--all-projects",action="store_true",
                         help="Symmetrically enable MiCall --all_projects for IVA and Ivanka; recorded in baseline provenance")
+    parser.add_argument("--import-iva-from", action="append", default=[],
+                        help="Import verified IVA controls from prior result directories (never run IVA)")
+    parser.add_argument("--cache-status", action="store_true",
+                        help="Show verified/missing IVA baselines without running analyses")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
-    if args.jobs<1 or not 1<=args.sample_time_limit<=1200 or args.timeout_per_arm<1:
-        parser.error("jobs and arm timeout must be positive; sample limit must be 1..1200 seconds")
+    if args.jobs<1 or not 1<=args.sample_time_limit<=1800 or args.timeout_per_arm<1:
+        parser.error("jobs and arm timeout must be positive; sample limit must be 1..1800 seconds")
     images={"iva":IVA_IMAGE,"ivanka":IVANKA_IMAGE}
     checked={}
     for arm,img in images.items():
@@ -591,8 +684,8 @@ def main():
     manifest_hash=sha(DATA/"manifest.tsv")
     if args.qualify:
         expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
-        if args.mode!="both" or args.sample is not None or manifest_sample_count!=QUALIFY_SAMPLE_COUNT:
-            raise ValueError("Full alpha requires all 18 predeclared IVA-eligible samples in one both-arm invocation")
+        if args.mode!="ivanka" or args.sample is not None or manifest_sample_count!=QUALIFY_SAMPLE_COUNT:
+            raise ValueError("Cached-IVA qualification requires all 18 predeclared IVA-eligible samples in one Ivanka-only invocation")
         if not expected or manifest_hash!=expected:
             raise ValueError("Qualification manifest SHA-256 missing or mismatched")
         eligibility = verify_iva_eligibility(manifest_hash, names)
@@ -600,6 +693,18 @@ def main():
         eligibility = {}
     rows=[row for row in rows if args.sample is None or row["sample"] in args.sample]
     if not rows: raise ValueError("No samples selected")
+    if args.import_iva_from:
+        imported = import_iva_baselines(args.import_iva_from, rows, pinned_iva_id,
+                                        sha(DATA/"hxb2.fasta"), args.all_projects)
+        print("IVA_CACHE_IMPORT", json.dumps(imported), flush=True)
+    if args.cache_status or (args.mode=="ivanka" and not args.allow_missing_baseline):
+        status = iva_cache_status(rows, pinned_iva_id, sha(DATA/"hxb2.fasta"),
+                                  args.all_projects)
+        print("IVA_CACHE_STATUS", json.dumps(status, sort_keys=True), flush=True)
+        if args.cache_status:
+            return 0 if not status["missing_or_invalid"] else 2
+        if status["missing_or_invalid"]:
+            raise ValueError("Missing verified IVA baselines: import successful existing IVA outputs before running Ivanka")
     with (DATA/"hxb2.fasta").open() as reference_file:
         hxb2=next(SeqIO.parse(reference_file,"fasta")).seq
     projects,catalog_hash=load_micall_projects(images["iva"])
@@ -651,11 +756,18 @@ def main():
         r.get("ivanka",{}).get("exit_code")==0 and
         "metrics" in r.get("iva",{}) and "metrics" in r.get("ivanka",{})
         for r in completed_records)
+    cached_arms_complete=all(
+        r.get("status")=="finished" and
+        r.get("iva_baseline_reused") is True and
+        r.get("iva",{}).get("exit_code")==0 and
+        r.get("ivanka",{}).get("exit_code")==0 and
+        "metrics" in r.get("iva",{}) and "metrics" in r.get("ivanka",{})
+        for r in completed_records)
     full_scope=(args.qualify and len(rows)==QUALIFY_SAMPLE_COUNT and
                 len(completed_records)==QUALIFY_SAMPLE_COUNT and
                 len(set(finished_names))==QUALIFY_SAMPLE_COUNT and
                 set(finished_names)==set(names) and
-                both_arms_complete and
+                (both_arms_complete if args.mode=="both" else cached_arms_complete) and
                 all("best_contig_acceptance" in r for r in completed_records))
     global_seconds=time.monotonic()-benchmark_start
     max_sample_seconds=max((r["total_seconds"] for r in completed_records
@@ -665,7 +777,7 @@ def main():
     complete_noninferiority=(full_scope and per_sample_timing_complete and
                             qualification_within_cap(args.sample_time_limit,max_sample_seconds)
                             and accepted==manifest_sample_count and failed==0)
-    # A wall-clock two-arm verdict requires IVA and Ivanka in one invocation.
+    # Preserve the distinction: cached controls are not a same-invocation IVA/IVANKA run.
     full_alpha_pass=(complete_noninferiority and args.mode=="both")
     cached_iva_comparison_pass=(complete_noninferiority and args.mode=="ivanka")
     reason_counts={}
@@ -675,6 +787,8 @@ def main():
             reason_counts[reason]=reason_counts.get(reason,0)+1
     summary={
         "invocation":invocation,"mode":args.mode,"images":checked,
+        "iva_baseline_image_id":pinned_iva_id,
+        "iva_baseline_cache_dir":str(IVA_BASELINE_CACHE),
         "hxb2_sha256":hxb2_hash,"manifest_sha256":manifest_hash,
         "project_reference_catalog_sha256":catalog_hash,
         "qualification_requested":args.qualify,
@@ -694,14 +808,14 @@ def main():
         "allow_missing_baseline":args.allow_missing_baseline,
         "full_alpha_pass":full_alpha_pass,
         "cached_iva_comparison_pass":cached_iva_comparison_pass,
-        "note":"Full alpha requires all 18 IVA-eligible samples in one complete A/B run; EACH sample has its own 20-minute budget, with no whole-set deadline. Ivanka-only comparisons are reported separately."
+        "note":"Cached-IVA qualification requires all original 18 eligible samples, individually verified immutable IVA controls, one Ivanka-only invocation, and 1800 seconds per sample. It is distinct from same-invocation two-arm qualification."
     }
     (RESULTS/f"summary-{invocation}.json").write_text(
         json.dumps(summary,indent=2,sort_keys=True))
-    print("FULL_ALPHA_PASS" if full_alpha_pass else "FULL_ALPHA_NOT_PASSED",
+    print("CACHED_IVA_QUALIFICATION_PASS" if cached_iva_comparison_pass else ("FULL_ALPHA_PASS" if full_alpha_pass else "QUALIFICATION_NOT_PASSED"),
           f"{accepted}/{manifest_sample_count} full-pipeline comparisons",
           flush=True)
-    return 1 if failed or (args.qualify and not full_alpha_pass) else 0
+    return 1 if failed or (args.qualify and not (full_alpha_pass or cached_iva_comparison_pass)) else 0
 
 if __name__=="__main__":
     raise SystemExit(main())

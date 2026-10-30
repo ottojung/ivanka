@@ -318,7 +318,7 @@ class BenchmarkTests(TestCase):
    conseq.write_text("consensus-percent-cutoff,sequence\nMAX,ACGT\n")
    provenance={"iva_image_id":"id","hxb2_sha256":"ref",
                "fastq_sha256":["fastq1","fastq2"],"micall_project_code":"", "all_projects":True}
-   arm={"exit_code":0,"artifact_dir":str(artifacts),"metrics":{
+   arm={"exit_code":0,"image_id":"id","artifact_dir":str(artifacts),"metrics":{
     "num_final_max_conseqs":1,
     "outputs":{"conseq.csv":{"sha256":m.sha(conseq)}}}}
    (original/"results.jsonl").write_text(json.dumps({

@@ -264,3 +264,33 @@ authentic IVA baseline hashes, and applies the same 198-sample/90%/six-PSI
 acceptance. It writes a **separate** summary and restored records; the
 original diagnostic artifacts are not edited. A missing baseline is a
 failed comparison, not an invented or skipped sample.
+
+### Durable 198-sample qualification over Lubko
+
+A normal command tied to a short Lubko session can be interrupted after it has
+written all 198 *started* events, leaving no valid qualification. For long runs,
+use the detached launcher, which redirects all output, records the child PID
+and its actual exit status, and holds a cross-run nonblocking `flock` while
+active. This **does not** waive the immutable-image, cohort, score or PSI gates.
+
+Choose a **fresh** state directory and a separate, fresh results directory;
+preflight the 198 authentic IVA control cache and pinned candidate image first.
+The environment is inherited by the detached child. For example, on
+`marceline-dev`, after exporting the documented `IVANKA_IVA_IMAGE`,
+`IVANKA_IVANKA_IMAGE`, `IVANKA_IVA_BASELINE_CACHE`, `IVANKA_DATA` and
+`IVANKA_PODMAN_RESULTS` settings:
+
+```sh
+./scripts/launch_detached_locked.sh /workspace/ivanka-qualification-state-UNIQUE \\
+  ./scripts/benchmark_podman_full_micall.sh --qualify-198 --all-projects --jobs 10
+```
+
+The launcher exits promptly; check `state/output.log`, `state/started_at`,
+`state/pid`, `state/finished_at`, and `state/exit_code` using separate Lubko
+commands. A missing `finished_at` is **never** proof of completion; exit code
+zero alone is **not** proof of the six positive PSI requirements. Do not launch
+a second overlapping cohort. Every cooperating launcher shares the default
+`/workspace/ivanka-milestone198-exclusive.lock` (override using
+`IVANKA_GLOBAL_LAUNCH_LOCK` for smoke tests). Launch collisions fail with
+exit 75; attempts to reuse a previous state directory fail with exit 74.
+Direct invocations that bypass the launcher are not governed by its lock.

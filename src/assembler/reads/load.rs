@@ -8,7 +8,7 @@ use super::index::build_index;
 
 // Count exactly the same every-third 31-mers, but slide both strand
 // encodings across the read rather than rebuilding each 31-base window.
-fn count_sampled_seed_kmers(read:&[u8], counts:&mut HashMap<u64,u32>) {
+pub(super) fn count_sampled_seed_kmers(read:&[u8], counts:&mut HashMap<u64,u32>) {
     let (mut f,mut r,mut valid)=(0u64,0u64,0usize);
     for (i,&b) in read.iter().enumerate() {
         let d=match b {b'A'=>0,b'C'=>1,b'G'=>2,b'T'=>3,

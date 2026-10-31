@@ -1,11 +1,13 @@
 mod choose;
 mod cycle;
+mod cycle_state;
 mod support;
 mod trace;
 pub(crate) use choose::choose_extension;
-pub(crate) use cycle::cycle_end;
+pub(crate) use cycle_state::CycleTracker;
 pub(crate) use support::record_extension_support;
 pub(crate) use trace::summarize;
 #[cfg(test)] mod test_cycle;
 #[cfg(test)] mod test_choose;
 #[cfg(test)] mod test_cycle_rolling;
+#[cfg(test)] mod test_cycle_state;

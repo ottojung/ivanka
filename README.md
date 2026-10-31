@@ -56,9 +56,30 @@ The role mapping is private because it contains sample names. Store it in
 ## Full MiCall IVA/Ivanka A/B benchmark
 
 The Podman harness substitutes Ivanka at the IVA assembler boundary in a pinned
-MiCall container. Other MiCall steps (G2P, stitching, remapping and final
-consensus) are unchanged. Both IVA and Ivanka process the same sample FASTQs and
-use the same MiCall base image.
+MiCall container. The default assembler-only A/B leaves the other MiCall steps (G2P,
+referenceless stitching, remapping and final consensus) unchanged. However,
+**the referenceless stitcher is explicitly part of the mutable Ivanka candidate
+pipeline**. Both arms still process the same genuine sample FASTQs against the
+pinned MiCall reference panel; authentic cached IVA controls are never modified.
+
+### Mutable referenceless stitcher: requirements
+
+The scientific milestone permits improvements to MiCall's **referenceless
+contig stitcher**, not just Ivanka's Rust assembler. Candidate changes may
+improve overlap evaluation, avoid chimeric joins, preserve phased variants,
+reduce redundant representations or change the post-stitch contigs supplied to
+remapping. The implementation may live in MiCall Python.
+
+**Post-stitch filtering by read support is an idea to test, not a mandated
+algorithm.** It might improve performance but could discard genuine minority
+haplotypes. Do not infer biological validity from contig count or the maximum
+final consensus score alone: check loss of read-supported sequence diversity,
+distinct canonical k-mers, alternative paths and potential chimeras. The
+baseline IVA image and frozen controls remain unchanged; build a traceable
+candidate image and measure whole-pipeline remapping, alignment and runtime
+under the original six PSI requirements.
+
+See [Mutable pipeline scope and acceptance safeguards](docs/mutable-pipeline-scope.md).
 
 ### Current reference-panel acceptance
 

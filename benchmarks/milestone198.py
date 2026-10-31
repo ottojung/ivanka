@@ -51,23 +51,33 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
     for record in records:
         sample = record.get("sample", "<unidentified>")
         try:
-            assert record.get("status") == "finished" and record.get("failed") is False
-            assert record.get("iva_baseline_reused") is True
+            if record.get("status") != "finished" or record.get("failed") is not False:
+                raise ValueError("Sample did not complete successfully")
+            if record.get("iva_baseline_reused") is not True:
+                raise ValueError("Missing verified IVA control")
             iva, ivanka = record["iva"], record["ivanka"]
-            assert iva["exit_code"] == 0 and ivanka["exit_code"] == 0
-            assert iva["image_id"] == iva_image and ivanka["image_id"] == ivanka_image
-            assert "metrics" in iva and "metrics" in ivanka
+            if iva["exit_code"] != 0 or ivanka["exit_code"] != 0:
+                raise ValueError("One or both MiCall arms failed")
+            if iva["image_id"] != iva_image or ivanka["image_id"] != ivanka_image:
+                raise ValueError("Image provenance mismatch")
+            if "metrics" not in iva or "metrics" not in ivanka:
+                raise ValueError("Missing MiCall metrics")
             final = record["best_contig_acceptance"]
-            assert final["method"] == "best_final_max_contig_local_alignment_over_reference_panel"
-            assert final["reference_panel_sha256"] == PANEL_SHA256
-            assert final["reference_count"] == 33
+            if (final["method"] != "best_final_max_contig_local_alignment_over_reference_panel"
+                    or final["reference_panel_sha256"] != PANEL_SHA256
+                    or final["reference_count"] != 33):
+                raise ValueError("Final MAX reference-panel evidence mismatch")
             pa, pk = final["iva_score"], final["ivanka_score"]
             ta, tk = iva["seconds"], ivanka["seconds"]
             elapsed = record["total_seconds"]
-            assert all(finite(v, positive=True) for v in (pa, ta, tk))
-            assert finite(pk) and pk >= SCORE_FLOOR * pa
-            assert finite(elapsed) and 0 <= elapsed <= sample_limit
-            assert final["pass"] is True
+            if not all(finite(v, positive=True) for v in (pa, ta, tk)):
+                raise ValueError("Missing or invalid IVA score or paired runtime")
+            if not finite(pk) or pk < SCORE_FLOOR * pa:
+                raise ValueError("Missing or insufficient Ivanka alignment score")
+            if not finite(elapsed) or not 0 <= elapsed <= sample_limit:
+                raise ValueError("Missing or excessive sample elapsed time")
+            if final["pass"] is not True:
+                raise ValueError("Per-sample alignment acceptance failed")
             score_deltas.append(pk - pa)
             time_deltas.append(ta - tk)
         except (AssertionError, KeyError, TypeError, ValueError):

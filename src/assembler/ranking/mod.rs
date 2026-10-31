@@ -1,7 +1,9 @@
 use super::ranking_score::ranked_candidates;
 use std::collections::HashSet;
 use super::reads::rolling_canonical_kmers;
-use super::reads::{K, encode};
+use super::reads::{K, encode, rc};
+mod phase;
+#[cfg(test)] mod test_phase;
 
 // A first-pass ranking heuristic, not a calibrated confidence score:
 // independent extension-supporting FASTQ records (with multiplicity) times
@@ -22,6 +24,7 @@ pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
     let mut retained=Vec::new();
     let mut represented=HashSet::new();
     let mut duplicates=0usize;
+    let mut deferred=Vec::new();
     let mut no_extension_support=0usize;
     for (index,(seq,support)) in candidates {
         if retained.len()>=n {break;}
@@ -44,12 +47,14 @@ pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
         let short_shadow=seq.len()*4<=longest*3 && shared*20>=valid*17;
         if !is_seed && valid>0 && (shared*20>=valid*19 || short_shadow) {
             duplicates+=1;
+            deferred.push(seq);
             continue;
         }
         for k in rolling_canonical_kmers(&seq) {represented.insert(k);}
         retained.push(seq);
     }
-    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={}",
-              retained.len(),duplicates,no_extension_support);
+    let phased=phase::append_phased(&mut retained,deferred,n);
+    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} phased_rescued={} no_extension_support={}",
+              retained.len(),duplicates,phased,no_extension_support);
     retained
 }

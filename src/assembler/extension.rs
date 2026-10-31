@@ -5,14 +5,14 @@ pub(super) use super::extension_helpers::record_extension_support;
 
 pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec<u8>,usize){
     let mut supporting_reads=HashSet::<u32>::new();
-    let (mut right_stalled,mut left_stalled,mut cycles)=(false,false,CycleTracker::new());
+    let (mut right_stalled,mut left_stalled,mut cycles)=(false,false,CycleTracker::new());let empty=(Vec::new(),Vec::new());
     for _ in 0..600 {
         if seq.len()>MAX_CONTIG_LENGTH {break;}
-        let (right_reads,right_ids)=if right_stalled {(Vec::new(),Vec::new())}
-            else {reads.overhangs_with_ids(&seq)};
+        let right_cached=if right_stalled {None} else {Some(reads.cached_overhangs(&seq))};
+        let (right_reads,right_ids)=right_cached.as_deref().unwrap_or(&empty);
         let right=choose_with_limit(&right_reads,min_cov,min_ratio,MAX_EXTENSION);
-        let (left_reads,left_ids)=if left_stalled {(Vec::new(),Vec::new())}
-            else {reads.overhangs_with_ids(&rc(&seq))};
+        let left_cached=if left_stalled {None} else {Some(reads.cached_overhangs(&rc(&seq)))};
+        let (left_reads,left_ids)=left_cached.as_deref().unwrap_or(&empty);
         let left_rc=choose_with_limit(&left_reads,min_cov,min_ratio,MAX_EXTENSION);
         let left=rc(&left_rc);
         // Once a contig covers every possible read, extending the opposite

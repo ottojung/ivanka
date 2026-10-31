@@ -1,9 +1,9 @@
 use std::collections::HashSet;
-use super::dna::{K, encode};
-use super::types::Reads;
+use super::{K,encode};
+use super::Reads;
 // Scan successive query 31-mers by shifting their two-bit codes rather than
 // re-encoding 31 bases on every overlapping index lookup.
-pub(super) fn rolling_query(seq: &[u8], q: usize, previous: Option<u64>) -> Option<u64> {
+pub(crate) fn rolling_query(seq: &[u8], q: usize, previous: Option<u64>) -> Option<u64> {
     if let Some(p) = previous {
         let d = match seq[q+K-1] {
             b'A'=>Some(0), b'C'=>Some(1), b'G'=>Some(2), b'T'=>Some(3), _=>None

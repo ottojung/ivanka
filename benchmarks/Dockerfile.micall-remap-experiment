@@ -1,0 +1,6 @@
+ARG BASE_IMAGE=localhost/ivanka-micall-ivanka:seeded
+FROM ${BASE_IMAGE}
+ARG BOWTIE_THREADS=2
+COPY benchmarks/patch_remap_threads.py /tmp/patch_remap_threads.py
+RUN python /tmp/patch_remap_threads.py --threads "${BOWTIE_THREADS}" && rm /tmp/patch_remap_threads.py
+LABEL org.ottojung.ivanka.experimental.remap_threads="${BOWTIE_THREADS}"

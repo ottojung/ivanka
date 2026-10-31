@@ -35,10 +35,10 @@ pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
     eprintln!("Ivanka ranking {} candidates by distinct contributing FASTQ records × contig length; {} MiCall seeds protected",contigs.len(),protected_seed_count);
     let mut contigs=select_supported_contigs(contigs,supporting_counts,max,protected_seed_count);
     if let Some(rescue)=rescue {
-        // Reserve one supplementary rescue slot instead of replacing a distinct
-        // full-depth path. This exception applies only after verified overlength
-        // failures; retaining all originals protects possible linked haplotypes.
-        append_preserving_diversity(&mut contigs,rescue,max.saturating_add(1),protected_seed_count);
+        // Never exceed the user-requested max-contigs cap. Replace only a
+        // non-protected path whose canonical 31-mers remain represented;
+        // otherwise withhold the rescue to avoid losing distinct evidence.
+        append_preserving_diversity(&mut contigs,rescue,max,protected_seed_count);
     }
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){

@@ -184,3 +184,19 @@ preserve downstream seed support.
 This initial construction-time quality heuristic is *not* a validated
 likelihood or confidence score. Actual full-MiCall comparisons, including
 short regions and variant-rich inputs, remain necessary for qualification.
+
+### Rust source structure checks
+
+Ivanka enforces these limits for Rust source only (not Python or shell):
+each `.rs` file has at most 50 nonempty, noncomment lines; a Rust source
+directory has at most 10 immediate files/subdirectories; and local module
+imports may reference sibling modules but not nested descendants.
+Cargo invokes the lightweight `build.rs` structural lint checks automatically
+during `cargo build`, `cargo check`, `cargo test`, and any Clippy build.
+The same checks run during the pinned container image build.
+Run the structural-lint unit tests with:
+
+```sh
+rustc --test source_lints/mod.rs -o /tmp/ivanka-source-lint-tests
+/tmp/ivanka-source-lint-tests
+```

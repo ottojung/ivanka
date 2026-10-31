@@ -1,0 +1,6 @@
+ARG BASE_IMAGE=localhost/ivanka-micall-ivanka:main-0aaec70
+FROM ${BASE_IMAGE}
+COPY benchmarks/patch_micall_stitcher_kmer_veto.py /tmp/patch_micall_stitcher.py
+RUN python /tmp/patch_micall_stitcher.py && rm /tmp/patch_micall_stitcher.py
+RUN python -c 'import importlib.util; from pathlib import Path; s=Path(importlib.util.find_spec("micall.utils.referenceless_contig_stitcher").origin).read_text(); assert "def preserves_source_kmers(" in s'
+LABEL org.ottojung.ivanka.experimental.stitcher="canonical-31mer-veto"

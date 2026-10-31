@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io;
 use super::dna::{K, rc};
 use super::input::read_open;
-use super::fastq::fastq_seq;
+use super::fastq::FastqSeqReader;
 use super::types::Reads;
 use super::index::build_index;
 
@@ -23,14 +23,14 @@ pub(super) fn count_sampled_seed_kmers(read:&[u8], counts:&mut HashMap<u64,u32>)
 }
 impl Reads {
     pub(crate) fn load(fq1: &str, fq2: &str, max_pairs: Option<usize>) -> io::Result<Self> {
-        let mut r1=read_open(fq1)?;
-        let mut r2=read_open(fq2)?;
+        let mut r1=FastqSeqReader::new(read_open(fq1)?);
+        let mut r2=FastqSeqReader::new(read_open(fq2)?);
         let mut seqs=Vec::new();
         let mut seed_counts=HashMap::new();
         let mut pairs=0usize;
         loop {
             if max_pairs.is_some_and(|m|pairs>=m) {break;}
-            let (a,b)=(fastq_seq(&mut *r1)?,fastq_seq(&mut *r2)?);
+            let (a,b)=(r1.read_seq()?,r2.read_seq()?);
             let mismatch=a.is_some()!=b.is_some();
             let (Some(a),Some(b))=(a,b) else {
                 if mismatch {return Err(io::Error::new(io::ErrorKind::InvalidData,"unequal mate counts"));}

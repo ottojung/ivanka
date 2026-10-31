@@ -62,6 +62,7 @@ class ReplayTests(unittest.TestCase):
             self.assertNotIn("evaluation_error", restored)
             self.assertGreaterEqual(restored["total_seconds"], 100.)
 
+    def test_mismatched_input_provenance_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "sample"
             folder.mkdir()

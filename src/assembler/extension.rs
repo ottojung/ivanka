@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use super::reads::{K, MAX_EXTENSION, MAX_CONTIG_LENGTH, encode, rc, Reads};
-use super::extension_helpers::{summarize, choose_extension as choose_with_limit, cycle_end as detect_cycle};
+use super::extension_helpers::{summarize, choose_extension as choose_with_limit, CycleTracker};
 pub(super) use super::extension_helpers::record_extension_support;
 
 pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec<u8>,usize){
     let mut supporting_reads=HashSet::<u32>::new();
-    let (mut right_stalled,mut left_stalled)=(false,false);
+    let (mut right_stalled,mut left_stalled,mut cycles)=(false,false,CycleTracker::new());
     for _ in 0..600 {
         if seq.len()>MAX_CONTIG_LENGTH {break;}
         let (right_reads,right_ids)=if right_stalled {(Vec::new(),Vec::new())}
@@ -36,7 +36,7 @@ pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usi
             next.extend_from_slice(&left);
             next.extend_from_slice(&seq);
             next.extend_from_slice(&right);
-            if let Some(cut) = detect_cycle(&next,K,encode) {
+            if let Some(cut) = cycles.check(&next,K,encode,!left.is_empty()) {
                 eprintln!("extension stopped at repeated 512-nt tract ({} nt retained)", cut);
                 next.truncate(cut);
                 seq = next;

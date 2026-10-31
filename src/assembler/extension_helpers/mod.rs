@@ -8,3 +8,4 @@ pub(crate) use support::record_extension_support;
 pub(crate) use trace::summarize;
 #[cfg(test)] mod test_cycle;
 #[cfg(test)] mod test_choose;
+#[cfg(test)] mod test_cycle_rolling;

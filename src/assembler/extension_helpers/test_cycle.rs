@@ -1,5 +1,5 @@
 use super::cycle::{cycle_end, CYCLE_MATCH};
-fn encode(seq:&[u8])->Option<u64> {
+pub(super) fn encode(seq:&[u8])->Option<u64> {
     if seq.len()!=31 {return None;}
     let mut n=0u64;
     for b in seq {

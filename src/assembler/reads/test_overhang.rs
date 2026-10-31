@@ -10,7 +10,7 @@ use super::types::{Hit, Reads};
         let mut index=HashMap::new();
         index.insert(encode(seed).unwrap(),vec![Hit{read:0,pos:40}]);
         let max_read_len=read.len();
-        let reads=Reads{seqs:vec![read],index,seed_counts:HashMap::new(),max_read_len};
+        let reads=Reads{seqs:vec![read],index,seed_counts:HashMap::new(),max_read_len,overhang_cache:Default::default()};
         let ov=reads.overhangs_with_ids(seed).0;
         assert_eq!(ov,vec![b"TTAACCGG".to_vec()]);
     }
@@ -39,7 +39,7 @@ use super::types::{Hit, Reads};
         read.extend_from_slice(b"AG");
         let max_read_len=read.len();
         let index=build_index(&[read.clone()]);
-        let reads=Reads{seqs:vec![read],index,seed_counts:HashMap::new(),max_read_len};
+        let reads=Reads{seqs:vec![read],index,seed_counts:HashMap::new(),max_read_len,overhang_cache:Default::default()};
         assert!(contig.len()>=reads.max_read_len);
         let original=reads.overhangs_with_ids(&contig);
         let mut prefixed=b"TGCA".repeat(20);

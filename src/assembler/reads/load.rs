@@ -48,6 +48,6 @@ impl Reads {
         let max_read_len=seqs.iter().map(Vec::len).max().unwrap_or(0);
         let index=build_index(&seqs);
         eprintln!("index built: {} keys, {} distinct sampled seed kmers",index.len(),seed_counts.len());
-        Ok(Self{seqs,index,seed_counts,max_read_len})
+        Ok(Self{seqs,index,seed_counts,max_read_len,overhang_cache:Default::default()})
     }
 }

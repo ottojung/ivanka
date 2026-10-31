@@ -52,6 +52,17 @@ def pinned_run_images(configured, verified, pinned_iva_id):
     }
 
 
+def recorded_image_id(ref):
+    """Reuse an immutable preflight-pinned Podman ID without another inspect.
+
+    The benchmark pins image references to verified IDs before starting any
+    sample. Mutable tags still require an actual Podman inspection.
+    """
+    if len(ref) == 64 and all(char in "0123456789abcdef" for char in ref):
+        return ref
+    return image_id(ref)
+
+
 def image_layers(ref):
     raw = subprocess.check_output(
         ["podman", "image", "inspect", "--format", "{{json .RootFS.Layers}}", ref],
@@ -504,7 +515,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
             exitcode = 124
     result = {
         "exit_code": exitcode, "seconds": round(time.monotonic()-start, 2),
-        "image_id": image_id(image), "image": image,
+        "image_id": recorded_image_id(image), "image": image,
         "artifact_dir": str(folder.resolve()),
         "metrics": score_outputs(folder, reference),
     }

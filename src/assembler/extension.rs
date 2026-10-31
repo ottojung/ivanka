@@ -11,7 +11,7 @@ pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usi
         let right_cached=if right_stalled {None} else {Some(reads.cached_overhangs(&seq))};
         let (right_reads,right_ids)=right_cached.as_deref().unwrap_or(&empty);
         let right=choose_with_limit(&right_reads,min_cov,min_ratio,MAX_EXTENSION);
-        let left_cached=if left_stalled {None} else {Some(reads.cached_overhangs(&rc(&seq)))};
+        let left_cached=if left_stalled {None} else {Some(reads.cached_overhangs(&rc(&seq[..seq.len().min(reads.max_read_len)])))};
         let (left_reads,left_ids)=left_cached.as_deref().unwrap_or(&empty);
         let left_rc=choose_with_limit(&left_reads,min_cov,min_ratio,MAX_EXTENSION);
         let left=rc(&left_rc);

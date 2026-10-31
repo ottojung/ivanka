@@ -76,49 +76,18 @@ def verify_identical_micall_base(iva_image, ivanka_image):
     experiment = image_layers(ivanka_image)
     if not baseline or experiment[:len(baseline)] != baseline:
         raise ValueError("Ivanka image does not derive from the selected IVA MiCall base image")
-    # Layer ancestry alone cannot prove the installed binary is used by MiCall.
-    # Run the exact verifier used during image construction, before any samples.
-    verifier = Path(__file__).with_name("verify_ivanka_binding.py").read_text()
-    try:
-        subprocess.run(
-            ["podman","run","--rm","--pull=never","--entrypoint","python",
-             ivanka_image,"-c",verifier],
-            # Large rootless/VFS MiCall images can take over 45 seconds to
-            # start under concurrent builds; this is preflight, outside sample
-            # execution, and must still fail closed on a real verifier error.
-            check=True, capture_output=True, text=True, timeout=180,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise ValueError("Timed out waiting for Ivanka image binding verification") from exc
-    except subprocess.CalledProcessError as exc:
-        raise ValueError("Ivanka image does not invoke its installed assembler") from exc
 
 
 def verify_ivanka_image_binding(image):
-    """Fail closed if MiCall is not actually invoking the proposed assembler."""
-    code = """
-import ast
-import importlib.util
-from pathlib import Path
-spec = importlib.util.find_spec("micall.core.denovo")
-assert spec is not None and spec.origin is not None
-module = ast.parse(Path(spec.origin).read_text())
-functions = [node for node in module.body
-             if isinstance(node, ast.FunctionDef) and node.name == "run_subprocess"]
-assert len(functions) == 1
-commands = [node.value for node in ast.walk(functions[0])
-            if isinstance(node, ast.Assign)
-            and any(isinstance(target, ast.Name) and target.id == "command"
-                    for target in node.targets)]
-assert len(commands) == 1 and isinstance(commands[0], ast.List)
-assert commands[0].elts and isinstance(commands[0].elts[0], ast.Constant)
-assert commands[0].elts[0].value == "ivanka", "MiCall assembler command does not invoke Ivanka"
-"""
+    """One container startup verifies AST binding, cache key, both reads and binary."""
+    verifier = Path(__file__).with_name("verify_ivanka_binding.py").read_text()
     try:
-        subprocess.run(["podman", "run", "--rm", "--pull=never",
-                        "--entrypoint", "/opt/venv/bin/python", image, "-c", code],
-                       check=True, capture_output=True, text=True, timeout=120)
-    except (subprocess.SubprocessError, OSError) as exc:
+        subprocess.run(["podman", "run", "--rm", "--pull=never", "--entrypoint",
+                        "python", image, "-c", verifier],
+                       check=True, capture_output=True, text=True, timeout=180)
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("Timed out waiting for Ivanka image binding verification") from exc
+    except (subprocess.CalledProcessError, OSError) as exc:
         raise ValueError("Ivanka image failed executable-binding verification") from exc
 
 

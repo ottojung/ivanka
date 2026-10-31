@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from .files import fanout, tracked
+from .__main__ import source_kind
 
 class TrackedFilesTests(unittest.TestCase):
     def test_directory_entries_include_subdirectories(self):
@@ -23,3 +24,8 @@ class TrackedFilesTests(unittest.TestCase):
             names = tracked(root)
             self.assertIn(Path("one.py"), names)
             self.assertNotIn(Path("ignored.py"), names)
+
+    def test_shebang_source_detection(self):
+        self.assertEqual(source_kind(Path("launcher"), "#!/bin/sh\necho hi\n"), ".sh")
+        self.assertEqual(source_kind(Path("runner"), "#!/usr/bin/env python3\nprint(1)\n"), ".py")
+        self.assertIsNone(source_kind(Path("README"), "just prose"))

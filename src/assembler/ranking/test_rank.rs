@@ -1,5 +1,4 @@
-use super::ranking::select_supported_contigs;
-use super::reads::K;
+use super::select_supported_contigs;
     #[test] fn cap_preserves_short_g2p_seed_and_respects_1000(){
         let seqs=(1..=1200).map(|n|vec![b'A';
         n]).collect::<Vec<_>>();
@@ -28,9 +27,10 @@ use super::reads::K;
         assert_eq!(result,vec![long,novel]);
     }
     #[test] fn supported_full_length_path_survives_dense_short_fragments(){
+        let k=crate::assembler::reads::K;
         let mut seqs=(0..40usize).map(|i|{
             let mut seq=vec![b'A';
-            K];
+            k];
             for j in 0..5 {seq[j*6]=b"ACGT"[(i>>(j*2))&3];}
             seq
         }).collect::<Vec<_>>();

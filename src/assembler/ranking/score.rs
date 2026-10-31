@@ -29,7 +29,7 @@ pub(super) fn ranked_candidates(seqs: Vec<Vec<u8>>, counts: Vec<usize>, n: usize
     candidates
 }
 
-#[cfg(test)] use super::ranking::select_supported_contigs;
+#[cfg(test)] use super::select_supported_contigs;
     #[test] fn ranking_favors_evidence_density_over_unverified_span() {
         let long=vec![b'A';
         800];

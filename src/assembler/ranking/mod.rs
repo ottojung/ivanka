@@ -1,6 +1,10 @@
-use super::ranking_score::ranked_candidates;
-use std::collections::HashSet;
 use super::reads::{K, encode};
+use std::collections::HashSet;
+mod filter;
+mod score;
+mod extra;
+#[cfg(test)] mod test_rank;
+use score::ranked_candidates;
 
 // A first-pass ranking heuristic, not a calibrated confidence score:
 // independent extension-supporting FASTQ records (with multiplicity) times
@@ -22,36 +26,16 @@ pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
     let mut represented=HashSet::new();
     let mut duplicates=0usize;
     let mut no_extension_support=0usize;
+    let high_redundancy=candidates.len()>n.saturating_mul(2);
+    let candref=candidates.clone();
     for (index,(seq,support)) in candidates {
         if retained.len()>=n {break;}
-        let is_seed=index<protected;
-        if !is_seed && support==0 {
-            no_extension_support+=1;
-            continue;
-        }
-        let mut valid=0usize;
-        let mut shared=0usize;
-        for window in seq.windows(K) {
-            if let Some(k)=canonical_kmer(window) {
-                valid+=1;
-                if represented.contains(&k){shared+=1;}
-            }
-        }
-        // A short sequence nearly contained in a longer supported contig adds
-        // little assembly coverage but can divert reads during MiCall remapping.
-        // Use a less strict overlap threshold only for these short fragments;
-        // equal-length alternatives retain the normal haplotype-diversity rule.
-        let longest=retained.iter().map(Vec::len).max().unwrap_or(0);
-        let short_shadow=seq.len()*4<=longest*3 && shared*20>=valid*17;
-        if !is_seed && valid>0 && (shared*20>=valid*19 || short_shadow) {
-            duplicates+=1;
-            continue;
-        }
-        for window in seq.windows(K) {
-            if let Some(k)=canonical_kmer(window) {represented.insert(k);}
-        }
-        retained.push(seq);
+        let seq_copy=seq;
+        filter::select(&mut retained,&mut represented,&mut duplicates,
+                       &mut no_extension_support,index,seq_copy,support,
+                       protected,n,high_redundancy);
     }
+    extra::recover(&mut retained,&mut represented,&mut duplicates,&candref,protected,n);
     eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={}",
               retained.len(),duplicates,no_extension_support);
     retained

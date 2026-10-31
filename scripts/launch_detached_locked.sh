@@ -12,6 +12,15 @@ mkdir -p "$state"
 state=$(realpath "$state")
 lock=${IVANKA_GLOBAL_LAUNCH_LOCK:-/workspace/ivanka-milestone198-exclusive.lock}
 mkdir -p "$(dirname "$lock")"
+# Reject an already active run without starting another process or changing its state.
+# The detached child independently takes the lock again for the entire run.
+exec 8>"$lock"
+if ! flock -n 8; then
+  echo "A runner is already active with lock $lock" >&2
+  exit 75
+fi
+flock -u 8
+exec 8>&-
 # The detached child owns the lock until the entire benchmark finishes.
 # Locking only here would serialize launches but not the running experiments.
 if [[ -e "$state/started_at" || -e "$state/finished_at" || -e "$state/pid" || -e "$state/output.log" ]]; then
@@ -39,7 +48,11 @@ nohup setsid bash -c '
   date -u "+%Y-%m-%dT%H:%M:%SZ" > "$state/finished_at"
   exit "$result"
 ' -- "$state" "$lock" "$@" >"$state/output.log" 2>&1 </dev/null &
-sleep 0.2
+# Wait for the child to acquire (or reject) its lock, not merely to fork.
+for attempt in {1..100}; do
+  [[ ! -e "$state/started_at" && ! -e "$state/finished_at" ]] || break
+  sleep 0.02
+done
 if [[ ! -s "$state/pid" ]] || {
   ! kill -0 "$(cat "$state/pid")" 2>/dev/null &&
   [[ ! -e "$state/finished_at" ]]

@@ -18,6 +18,7 @@ import time
 from Bio import SeqIO
 from Bio.Align import PairwiseAligner
 from reference_catalog import load_micall_projects
+import milestone198
 
 DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
 RESULTS = Path(os.environ.get("IVANKA_PODMAN_RESULTS", "/workspace/ivanka-podman-results"))
@@ -596,7 +597,9 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                 iva_dir=Path(baseline.get("artifact_dir",str(RESULTS/invocation/name/"iva")))
                 ivanka_dir=Path(record["ivanka"].get("artifact_dir",str(RESULTS/invocation/name/"ivanka")))
                 record["best_contig_acceptance"]=panel_acceptance(
-                    iva_dir,ivanka_dir,reference_panel)
+                    iva_dir,ivanka_dir,reference_panel,
+                    min_ratio=(milestone198.SCORE_FLOOR
+                               if getattr(args,"qualify_198",False) else 0.95))
                 record["output_comparison"]=compare_outputs(
                     baseline["metrics"],record["ivanka"]["metrics"])
                 iva_depth=baseline["metrics"].get("coverage_depth")
@@ -663,6 +666,8 @@ def main():
     parser.add_argument("--sample-time-limit", type=int, default=1800,
                         help="Maximum elapsed seconds for EACH sample, including both MiCall arms and scoring")
     parser.add_argument("--qualify",action="store_true", help="Strict 18-sample IVA-eligible alpha run requiring pinned manifest and IVA eligibility evidence")
+    parser.add_argument("--qualify-198",action="store_true",
+                        help="Strict 198-sample alignment and runtime signed-power PSI milestone")
     parser.add_argument("--diagnose-project-reference",action="store_true",
                         help="Optional expensive legacy IVA-selected project reference diagnostic; not used for acceptance")
     parser.add_argument("--all-projects",action="store_true",
@@ -694,6 +699,17 @@ def main():
     if len(set(names))!=len(names):
         raise ValueError("Duplicate sample identities in manifest")
     manifest_hash=sha(DATA/"manifest.tsv")
+    if args.qualify and args.qualify_198:
+        parser.error("--qualify and --qualify-198 are mutually exclusive")
+    if args.qualify_198:
+        expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
+        if (args.mode!="ivanka" or args.sample is not None or
+            args.allow_missing_baseline or not args.all_projects or
+            args.parallel_arms or args.jobs!=10 or
+            manifest_sample_count!=milestone198.SAMPLE_COUNT or
+            manifest_hash!=milestone198.MANIFEST_SHA256 or
+            (expected and expected!=milestone198.MANIFEST_SHA256)):
+            raise ValueError("198-sample milestone requires the pinned full cohort, IVA cache, all projects, Ivanka-only and 10 workers")
     if args.qualify:
         expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
         if args.mode!="ivanka" or args.sample is not None or manifest_sample_count!=QUALIFY_SAMPLE_COUNT:
@@ -723,6 +739,9 @@ def main():
     from reference_panel import build_reference_panel,panel_sha256
     references=build_reference_panel(projects,hxb2)
     reference_panel_hash=panel_sha256(references)
+    if args.qualify_198 and (reference_panel_hash!=milestone198.PANEL_SHA256 or
+                             len(references)!=33):
+        raise ValueError("198-sample panel differs from the frozen 33-reference panel")
     if args.probe:
         print(json.dumps({"images":checked,"sample_count":len(rows),
                           "hxb2_sha256":sha(DATA/"hxb2.fasta"),
@@ -803,7 +822,8 @@ def main():
         "iva_baseline_cache_dir":str(IVA_BASELINE_CACHE),
         "hxb2_sha256":hxb2_hash,"manifest_sha256":manifest_hash,
         "project_reference_catalog_sha256":catalog_hash,
-        "qualification_requested":args.qualify,
+        "qualification_requested":args.qualify or args.qualify_198,
+        "qualification198_requested":args.qualify_198,
         "all_projects":getattr(args,"all_projects",False),
         "manifest_sample_count":manifest_sample_count,
         "selected_samples":len(rows),"finished_samples":len(completed_records),
@@ -822,11 +842,20 @@ def main():
         "cached_iva_comparison_pass":cached_iva_comparison_pass,
         "note":"Cached-IVA qualification requires all original 18 eligible samples, individually verified immutable IVA controls, one Ivanka-only invocation, and 1800 seconds per sample. It is distinct from same-invocation two-arm qualification."
     }
+    if args.qualify_198:
+        summary.update(milestone198.qualify(
+            completed_records,names,pinned_iva_id,checked["ivanka"],
+            args.sample_time_limit,reference_panel_hash))
     (RESULTS/f"summary-{invocation}.json").write_text(
         json.dumps(summary,indent=2,sort_keys=True))
-    print("CACHED_IVA_QUALIFICATION_PASS" if cached_iva_comparison_pass else ("FULL_ALPHA_PASS" if full_alpha_pass else "QUALIFICATION_NOT_PASSED"),
-          f"{accepted}/{manifest_sample_count} full-pipeline comparisons",
-          flush=True)
+    if not args.qualify_198:
+        print("CACHED_IVA_QUALIFICATION_PASS" if cached_iva_comparison_pass else ("FULL_ALPHA_PASS" if full_alpha_pass else "QUALIFICATION_NOT_PASSED"),
+              f"{accepted}/{manifest_sample_count} full-pipeline comparisons",
+              flush=True)
+    if args.qualify_198:
+        print("MILESTONE_198_PASS" if summary["milestone198_pass"] else "MILESTONE_198_NOT_PASSED",
+              "198/198 required, score and runtime PSI(0,1,2) strictly positive",flush=True)
+        return 0 if summary["milestone198_pass"] else 1
     return 1 if failed or (args.qualify and not (full_alpha_pass or cached_iva_comparison_pass)) else 0
 
 if __name__=="__main__":

@@ -200,3 +200,42 @@ Run the structural-lint unit tests with:
 rustc --test source_lints/mod.rs -o /tmp/ivanka-source-lint-tests
 /tmp/ivanka-source-lint-tests
 ```
+
+### Full 198-sample milestone qualification
+
+The full-cohort benchmark is **separate** from the historical 18-sample,
+95%-of-IVA alpha gate. It requires the exact private cohort manifest SHA-256
+`4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192`,
+198 unique samples, and the unchanged, pinned 33-reference MiCall panel.
+
+For each sample it requires a verified real IVA baseline's final MiCall MAX
+alignment score, full MiCall arm execution duration, and original output
+checksum; both arms must use identical scoring and timing definitions.
+**Historical Kive run_time and stats_subset alignment_score are genuine
+observations but are not interchangeable with these pinned-image arm
+measurements.** The full 198 milestone fails closed until the missing archived
+IVA outputs are imported with valid image, FASTQ, panel and output provenance.
+It never invents IVA scores, and does not rerun IVA when supplied a cache.
+
+Run from a host with the frozen, access-controlled private dataset and
+matching Podman images:
+
+```sh
+export IVANKA_DATA=/workspace/denovo-example-io-1
+export IVANKA_EXPECTED_MANIFEST_SHA256=4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192
+export IVANKA_IVA_BASELINE_CACHE=/workspace/ivanka-iva-baseline-cache
+export IVANKA_PODMAN_RESULTS=/workspace/ivanka-milestone198-results
+# First check genuine IVA cache readiness. No IVA analysis is launched.
+./scripts/benchmark_podman_full_micall.sh --mode ivanka --qualify-198 --all-projects --cache-status
+# Only after ALL 198 cached IVA controls pass verification:
+./scripts/benchmark_podman_full_micall.sh --mode ivanka --qualify-198 --all-projects --jobs 10 --sample-time-limit 1800
+```
+
+Per-sample Ivanka alignment must be at least **90%** of its IVA score;
+every sample must finish within 1,800 seconds. For each paired score delta
+`p = ivanka_score - iva_score`, and paired runtime delta
+`q = iva_arm_seconds - ivanka_arm_seconds`, independently require
+`sum(sign(x) * abs(x)**r)/198 > 0` for each `r=0,1,2`. Exact ties
+contribute zero at all powers. The summary records all six signed-power
+metrics and explicitly fails for incomplete or unmatched controls. Do not
+interpret a zero, missing, or unverified PSI as success.

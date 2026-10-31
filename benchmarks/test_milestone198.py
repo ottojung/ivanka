@@ -135,6 +135,43 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(alpha["threshold"], 95.)
         self.assertEqual(next_milestone["threshold"], 90.)
 
+    def test_optimized_python_cannot_skip_scientific_guards(self):
+        import os
+        from pathlib import Path
+        import subprocess
+        import sys
+
+        code = """
+from copy import deepcopy
+from test_milestone198 import QualificationTests
+test = QualificationTests()
+test.setUp()
+cases = [
+    (("failed",), True),
+    (("status",), "error"),
+    (("iva_baseline_reused",), False),
+    (("ivanka", "image_id"), "wrong"),
+    (("best_contig_acceptance", "reference_count"), 32),
+    (("best_contig_acceptance", "pass"), False),
+    (("total_seconds",), 1801.0),
+    (("iva", "seconds"), 0.0),
+]
+for path, value in cases:
+    records = deepcopy(test.records)
+    item = records[0]
+    for part in path[:-1]:
+        item = item[part]
+    item[path[-1]] = value
+    if test.score(records)["milestone198_pass"]:
+        raise RuntimeError("Optimized Python accepted invalid evidence: " + str(path))
+"""
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parent)
+        result = subprocess.run(
+            [sys.executable, "-O", "-c", code],
+            env=env, capture_output=True, text=True, timeout=30, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_disallow_panel_or_image_mismatch(self):
         self.assertFalse(milestone198.qualify(
             self.records, self.names, "iva-id", "ivanka-id", 1800, "wrong")["milestone198_pass"])

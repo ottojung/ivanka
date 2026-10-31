@@ -11,7 +11,7 @@ use super::reads::K;
         assert_eq!(out[1].len(),1200);
         assert!(!out.iter().any(|s|s.len()==31));
     }
-    #[test] fn drops_short_nearly_contained_path_but_keeps_novel_locus(){
+    #[test] fn restores_supported_short_variant_without_displacing_novel_locus(){
         let mut rng=0x1234_5678_1234_5678u64;
         let long=(0..900).map(|_|{
             rng^=rng<<13;
@@ -24,8 +24,8 @@ use super::reads::K;
         let novel=vec![b'T';
         400];
         let result=select_supported_contigs(
-            vec![long.clone(),shorter,novel.clone()],vec![240,90,60],1000,0);
-        assert_eq!(result,vec![long,novel]);
+            vec![long.clone(),shorter.clone(),novel.clone()],vec![240,90,60],1000,0);
+        assert_eq!(result,vec![long,novel,shorter]);
     }
     #[test] fn supported_full_length_path_survives_dense_short_fragments(){
         let mut seqs=(0..40usize).map(|i|{

@@ -90,6 +90,8 @@ class BenchmarkTests(TestCase):
   with patch.object(m,"image_layers",side_effect=lambda name:layers[name]), \
        patch.object(m.subprocess,"run") as verifier:
    m.verify_identical_micall_base("iva","ivanka")
+   verifier.assert_not_called()
+   m.verify_ivanka_image_binding("ivanka")
    verifier.assert_called_once()
    self.assertEqual(verifier.call_args.args[0][6], "ivanka")
    self.assertEqual(verifier.call_args.kwargs["timeout"], 180)
@@ -98,11 +100,9 @@ class BenchmarkTests(TestCase):
  def test_slow_image_startup_fails_closed_without_misdiagnosing_binding(self):
   from unittest.mock import patch
   from subprocess import TimeoutExpired
-  layers={"iva":["a","b"],"ivanka":["a","b","c"]}
-  with patch.object(m,"image_layers",side_effect=lambda name:layers[name]), \
-       patch.object(m.subprocess,"run",side_effect=TimeoutExpired(["podman","run"],180)):
+  with patch.object(m.subprocess,"run",side_effect=TimeoutExpired(["podman","run"],180)):
    with self.assertRaisesRegex(ValueError,"Timed out waiting"):
-    m.verify_identical_micall_base("iva","ivanka")
+    m.verify_ivanka_image_binding("ivanka")
  def test_missing_conseq(self):
   with TemporaryDirectory() as d:
    self.assertIsNone(m.score_outputs(Path(d),"ACGT")["best_hxb2_final_max_conseq_score"])

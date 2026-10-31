@@ -239,3 +239,28 @@ every sample must finish within 1,800 seconds. For each paired score delta
 contribute zero at all powers. The summary records all six signed-power
 metrics and explicitly fails for incomplete or unmatched controls. Do not
 interpret a zero, missing, or unverified PSI as success.
+
+#### Replaying a completed Ivanka-only diagnostic without new assemblies
+
+An Ivanka-only run made with `--allow-missing-baseline` is **not a
+qualification**, but its complete, checksum-verified final MiCall outputs
+and arm duration can be retained. Once **all 198** authentic pinned-image
+IVA baselines have been imported into the cache, score those original
+outputs without rerunning either assembler:
+
+```sh
+export IVANKA_DATA=/workspace/denovo-example-io-1
+export IVANKA_IVA_IMAGE=localhost/ivanka-micall-iva:base
+export IVANKA_IVANKA_IMAGE=localhost/ivanka-micall-ivanka:rust-refactor-ea2cd7d
+export IVANKA_IVA_BASELINE_CACHE=/workspace/ivanka-iva-baseline-cache
+python benchmarks/replay_milestone198.py \
+  --results-dir /workspace/ivanka-full198-diagnostic-20261031 \
+  --output /workspace/ivanka-198-replayed-20261031/summary.json
+```
+
+The replay verifies the manifest, run identity, original Ivanka executable
+image, FASTQ/provenance hashes, final output hashes, all 33 references and
+authentic IVA baseline hashes, and applies the same 198-sample/90%/six-PSI
+acceptance. It writes a **separate** summary and restored records; the
+original diagnostic artifacts are not edited. A missing baseline is a
+failed comparison, not an invented or skipped sample.

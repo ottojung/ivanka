@@ -2,9 +2,8 @@ mod reads;
 mod extension;
 mod extension_helpers;
 mod ranking;
-mod ranking_score;
 mod setup;
 mod run_seed;
 mod run;
-#[cfg(test)] mod ranking_tests;
+
 pub(crate) use run::run;

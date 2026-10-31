@@ -38,8 +38,7 @@ impl Reads {
             };
             for read in [a,b] {
                 if pairs < 50000 {count_sampled_seed_kmers(&read,&mut seed_counts);}
-                seqs.push(read.clone());
-                seqs.push(rc(&read));
+                let reverse=rc(&read);seqs.push(read);seqs.push(reverse);
             }
             pairs += 1;
             if pairs%1000000==0 { eprintln!("loaded {} read pairs",pairs); }

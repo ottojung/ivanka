@@ -37,8 +37,9 @@ impl Reads {
             if pairs%1000000==0 { eprintln!("loaded {} read pairs",pairs); }
         }
         eprintln!("building index for {} read pairs ({} oriented sequences)",pairs,seqs.len());
+        let max_read_len=seqs.iter().map(Vec::len).max().unwrap_or(0);
         let index=build_index(&seqs);
         eprintln!("index built: {} keys, {} distinct sampled seed kmers",index.len(),seed_counts.len());
-        Ok(Self{seqs,index,seed_counts})
+        Ok(Self{seqs,index,seed_counts,max_read_len})
     }
 }

@@ -3,7 +3,18 @@ use std::path::Path;
 pub fn check(path: &Path, source: &str, issues: &mut Vec<String>) {
     let directory = path.parent().unwrap();
     for (index, line) in source.lines().enumerate() {
-        let statement = line.trim().strip_prefix("pub ").unwrap_or(line.trim());
+        let statement = line.trim();
+        if statement.starts_with("#[path") || statement.contains("include!(") {
+            if let Some(source_path) = statement.split('"').nth(1) {
+                if source_path.contains('/') || source_path.contains("..") {
+                    issues.push(format!("{}:{}: nested module source", path.display(), index + 1));
+                }
+            }
+        }
+        let statement = statement.strip_prefix("pub ").unwrap_or(statement);
+        let statement = if statement.starts_with("pub(") {
+            statement.split_once(')').map(|(_, rest)| rest.trim()).unwrap_or(statement)
+        } else { statement };
         let Some(import) = statement.strip_prefix("use ") else { continue };
         let import = import.trim_end_matches(';');
         let mut parts = import.split("::").map(str::trim);
@@ -13,6 +24,8 @@ pub fn check(path: &Path, source: &str, issues: &mut Vec<String>) {
             "self" => directory.to_path_buf(),
             "crate" => directory.ancestors().find(|p| p.ends_with("src"))
                 .unwrap_or(directory).to_path_buf(),
+            _ if directory.join(head).is_dir() || directory.join(head).with_extension("rs").exists()
+                => directory.to_path_buf(),
             _ => continue,
         };
         if head == "super" && import.starts_with("super::super::") {

@@ -26,3 +26,5 @@ pub fn check(root: &Path) {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod test_extra;

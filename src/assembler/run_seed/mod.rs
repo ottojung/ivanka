@@ -57,3 +57,5 @@ mod rescue_rank;
 pub(super) use rescue::rescue_short;
 
 pub(super) use rescue_rank::append_preserving_diversity;
+
+#[cfg(test)] mod rescue_rank_test;

@@ -74,6 +74,16 @@ class CompositeAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "manifest SHA256 mismatch"):
             diag.audit([], self.manifest)
 
+    def test_negative_elapsed_rejected(self):
+        self.rows[1]["total_seconds"] = -1
+        report = self.audit()
+        self.assertEqual(report["errors"]["sample1"], "runtime_limit")
+
+    def test_malformed_pass_flag_rejected(self):
+        self.rows[1]["best_contig_acceptance"]["pass"] = "yes"
+        report = self.audit()
+        self.assertEqual(report["errors"]["sample1"], "unexplained_failure")
+
     def test_low_alignment_rejected(self):
         self.rows[1]["best_contig_acceptance"]["ivanka_score"] = 89
         report = self.audit()

@@ -39,6 +39,7 @@ def pair(record, iva_id, ivanka_id):
         if sk < SCORE_FLOOR * sa:
             return None, "below_strict_90_percent_floor"
         if (not finite(record["total_seconds"]) or
+                record["total_seconds"] < 0 or
                 record["total_seconds"] > SAMPLE_CAP_SECONDS or
                 tk > SAMPLE_CAP_SECONDS or
                 record["sample_time_limit_seconds"] != SAMPLE_CAP_SECONDS):
@@ -46,10 +47,12 @@ def pair(record, iva_id, ivanka_id):
         provenance = record["provenance"]
         if (provenance["iva_image_id"] != iva_id or
                 len(provenance["fastq_sha256"]) != 2 or
-                not all(len(x) == 64 for x in provenance["fastq_sha256"])):
+                not all(isinstance(x, str) and len(x) == 64 and
+                        all(c in "0123456789abcdef" for c in x)
+                        for x in provenance["fastq_sha256"])):
             return None, "input_provenance"
         corrected = False
-        if record["failed"] or not f["pass"]:
+        if record["failed"] is not False or f["pass"] is not True:
             old_floor = f["threshold"]
             if not (record["failed"] is True and f["pass"] is False and
                     finite(old_floor) and old_floor > SCORE_FLOOR and

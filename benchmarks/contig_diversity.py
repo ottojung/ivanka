@@ -5,6 +5,8 @@ This is a diagnostic, not a biological minority-haplotype or MiCall score gate.
 Compare canonical k-mers so reverse-complemented contigs are not false losses.
 """
 import argparse
+from collections import Counter
+import gzip
 import json
 from pathlib import Path
 
@@ -70,14 +72,72 @@ def audit(before, after, k=31):
     }
 
 
+def read_record_support(read_paths, target_kmers, k=31, max_records=10000):
+    """Count exact canonical k-mers once per sampled FASTQ *record*, not molecule."""
+    if k < 1 or max_records < 1:
+        raise ValueError("k and max_records must be positive")
+    support = Counter()
+    sampled = []
+    for path in read_paths:
+        path = Path(path)
+        opener = gzip.open if path.suffix == ".gz" else open
+        count = 0
+        with opener(path, "rt") as stream:
+            while count < max_records:
+                header = stream.readline()
+                if not header:
+                    break
+                bases = stream.readline().strip().upper()
+                plus = stream.readline()
+                quality = stream.readline().strip()
+                if not header.startswith("@") or not plus.startswith("+") or len(bases) != len(quality):
+                    raise ValueError(f"{path}: invalid/truncated FASTQ record")
+                support.update(canonical_kmers(bases, k) & target_kmers)
+                count += 1
+        sampled.append(count)
+    if len(sampled) != 2 or sampled[0] != sampled[1] or sampled[0] == 0:
+        raise ValueError("Two nonempty FASTQ mates must have equal sampled record counts")
+    return support, sum(sampled)
+
+
+def read_supported_loss(before, after, read_paths, k=31, max_records=10000):
+    """Supplement sequence-diversity loss with independent FASTQ-record counts."""
+    old = set().union(*(canonical_kmers(s.upper(), k) for s in before))
+    new = set().union(*(canonical_kmers(s.upper(), k) for s in after))
+    lost = old - new
+    support, sampled = read_record_support(read_paths, lost, k, max_records)
+    values = [support[x] for x in lost]
+    return {
+        "sampled_read_records": sampled,
+        "max_records_per_mate": max_records,
+        "lost_unique_kmers": len(lost),
+        "lost_kmers_supported_by_at_least_1_record": sum(n >= 1 for n in values),
+        "lost_kmers_supported_by_at_least_3_records": sum(n >= 3 for n in values),
+        "lost_kmers_supported_by_at_least_10_records": sum(n >= 10 for n in values),
+        "lost_kmers_supported_by_at_least_100_records": sum(n >= 100 for n in values),
+        "warning": "Read-record support does not establish independent molecules or phasing",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("old_fasta", type=Path)
     parser.add_argument("new_fasta", type=Path)
     parser.add_argument("--k", type=int, default=31)
+    parser.add_argument("--reads1", type=Path)
+    parser.add_argument("--reads2", type=Path)
+    parser.add_argument("--max-read-records", type=int, default=10000,
+                        help="Sample at most this many FASTQ records from each mate")
     args = parser.parse_args()
-    print(json.dumps(audit(read_fasta(args.old_fasta),
-                           read_fasta(args.new_fasta), args.k), indent=2))
+    if (args.reads1 is None) != (args.reads2 is None):
+        parser.error("--reads1 and --reads2 must be supplied together")
+    before = read_fasta(args.old_fasta)
+    after = read_fasta(args.new_fasta)
+    report = audit(before, after, args.k)
+    if args.reads1 is not None:
+        report["lost_kmer_read_record_support"] = read_supported_loss(
+            before, after, [args.reads1, args.reads2], args.k, args.max_read_records)
+    print(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":

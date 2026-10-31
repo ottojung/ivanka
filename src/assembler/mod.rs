@@ -1,5 +1,3 @@
-mod dna;
-mod input;
 mod reads;
 mod extension;
 mod ranking;

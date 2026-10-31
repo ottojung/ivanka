@@ -1,19 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io;
 use super::dna::{K, INDEX_STEP, encode, rc};
 use super::input::{read_open, fastq_seq};
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct Hit { pub(super) read: u32, pub(super) pos: u16 }
-
-pub(super) struct Reads {
-    pub(super) seqs: Vec<Vec<u8>>,  // forward and reverse complement; index by orientation-specific ID
-    pub(super) index: HashMap<u64, Vec<Hit>>,
-    pub(super) seed_counts: HashMap<u64, u32>,
-}
-
+use super::types::{Hit, Reads};
 impl Reads {
-    pub(super) fn load(fq1: &str, fq2: &str, max_pairs: Option<usize>) -> io::Result<Self> {
+    pub(crate) fn load(fq1: &str, fq2: &str, max_pairs: Option<usize>) -> io::Result<Self> {
         let mut r1=read_open(fq1)?; let mut r2=read_open(fq2)?;
         let mut seqs=Vec::new(); let mut seed_counts=HashMap::new();
         let mut pairs=0usize;
@@ -57,37 +48,5 @@ impl Reads {
         }
         eprintln!("index built: {} keys, {} distinct sampled seed kmers",index.len(),seed_counts.len());
         Ok(Self{seqs,index,seed_counts})
-    }
-    // Returns overhangs from reads overlapping the right end of contig. No aligner or
-    // read mapper: a k-mer is only an inverted-index lookup; the full overlap must be exact.
-    pub(super) fn overhangs_with_ids(&self, contig:&[u8]) -> (Vec<Vec<u8>>,Vec<u32>) {
-        if contig.len()<K {return (Vec::new(),Vec::new());}
-        let start=contig.len().saturating_sub(250);
-        let mut used=HashSet::<u32>::new();
-        let mut ext=Vec::new();
-        let mut ids=Vec::new();
-        for q in start..=contig.len()-K {
-            let Some(key)=encode(&contig[q..q+K]) else {continue;};
-            let Some(hits)=self.index.get(&key) else {continue;};
-            // Pathological repetitive k-mers cannot be used as reliable extension anchors.
-            if hits.len()>50000 {continue;}
-            for hit in hits {
-                let original=hit.read/2;
-                if used.contains(&original) {continue;}
-                let pos=hit.pos as usize;
-                // The contig may be shorter than the aligned read, especially
-                // during seeding. In that case the read starts *before* the
-                // contig, and the matching anchor is internal to the read.
-                let (begin,read_start)=if q>=pos {(q-pos,0)} else {(0,pos-q)};
-                let overlap=contig.len()-begin;
-                let read=&self.seqs[hit.read as usize];
-                if overlap<K || read_start+overlap>=read.len() {continue;}
-                if read[read_start..read_start+overlap]!=contig[begin..] {continue;}
-                used.insert(original);
-                ext.push(read[read_start+overlap..].to_vec());
-                ids.push(original);
-            }
-        }
-        (ext,ids)
     }
 }

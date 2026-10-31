@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use super::dna::{K, MAX_EXTENSION, MAX_CONTIG_LENGTH, encode, rc};
-use super::reads::Reads;
+use super::reads::{K, MAX_EXTENSION, MAX_CONTIG_LENGTH, encode, rc, Reads};
 
 pub(super) fn choose_extension(overhangs:&[Vec<u8>], min_cov:usize, min_ratio:usize)->Vec<u8>{
     let mut out=Vec::new();

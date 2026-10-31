@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use super::dna::{K, encode, decode, rc};
-use super::reads::{Hit, Reads};
-use super::input::fasta_seeds;
+use super::reads::{K, encode, decode, rc, Hit, Reads, fasta_seeds};
 use super::extension::{CYCLE_MATCH, choose_extension, cycle_end, record_extension_support};
 use super::ranking::select_supported_contigs;
 use super::seeds::balanced_seed_candidates;

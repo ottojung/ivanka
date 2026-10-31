@@ -1,8 +1,9 @@
+
 use flate2::read::MultiGzDecoder;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 
-pub(super) fn read_open(path: &str) -> io::Result<Box<dyn BufRead>> {
+pub(crate) fn read_open(path: &str) -> io::Result<Box<dyn BufRead>> {
     let f = File::open(path)?;
     if path.ends_with(".gz") {
         Ok(Box::new(BufReader::new(MultiGzDecoder::new(f))))
@@ -10,7 +11,7 @@ pub(super) fn read_open(path: &str) -> io::Result<Box<dyn BufRead>> {
 }
 // G2P-derived MiCall seed contigs. These seed candidates are supplied before
 // assembly; this does not require any reference mapping or coordinate lookup.
-pub(super) fn fasta_seeds(path: &str) -> io::Result<Vec<Vec<u8>>> {
+pub(crate) fn fasta_seeds(path: &str) -> io::Result<Vec<Vec<u8>>> {
     let mut output = Vec::new();
     let mut current = Vec::new();
     let mut started = false;
@@ -35,7 +36,7 @@ pub(super) fn fasta_seeds(path: &str) -> io::Result<Vec<Vec<u8>>> {
     }
     Ok(output)
 }
-pub(super) fn fastq_seq(r: &mut dyn BufRead) -> io::Result<Option<Vec<u8>>> {
+pub(crate) fn fastq_seq(r: &mut dyn BufRead) -> io::Result<Option<Vec<u8>>> {
     let mut a=String::new(); let mut b=String::new();
     if r.read_line(&mut a)? == 0 { return Ok(None); }
     if !a.starts_with('@') { return Err(io::Error::new(io::ErrorKind::InvalidData,"invalid FASTQ header")); }

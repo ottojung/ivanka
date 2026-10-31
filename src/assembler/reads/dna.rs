@@ -1,14 +1,15 @@
 
-pub(super) const K: usize = 31;
-pub(super) const INDEX_STEP: usize = 12;
-pub(super) const MAX_EXTENSION: usize = 100;
-pub(super) const MAX_CONTIG_LENGTH: usize = 25000;
 
-pub(super) fn rc(seq: &[u8]) -> Vec<u8> {
+pub(crate) const K: usize = 31;
+pub(crate) const INDEX_STEP: usize = 12;
+pub(crate) const MAX_EXTENSION: usize = 100;
+pub(crate) const MAX_CONTIG_LENGTH: usize = 25000;
+
+pub(crate) fn rc(seq: &[u8]) -> Vec<u8> {
     seq.iter().rev().map(|b| match b { b'A' => b'T', b'C' => b'G', b'G' => b'C',
         b'T' => b'A', _ => b'N' }).collect()
 }
-pub(super) fn encode(seq: &[u8]) -> Option<u64> {
+pub(crate) fn encode(seq: &[u8]) -> Option<u64> {
     if seq.len() != K { return None; }
     let mut n = 0u64;
     for b in seq {
@@ -17,7 +18,7 @@ pub(super) fn encode(seq: &[u8]) -> Option<u64> {
     }
     Some(n)
 }
-pub(super) fn decode(mut val: u64) -> Vec<u8> {
+pub(crate) fn decode(mut val: u64) -> Vec<u8> {
     let mut out = vec![0; K];
     for x in out.iter_mut().rev() {
         *x = match val & 3 { 0=>b'A',1=>b'C',2=>b'G',_=>b'T' };

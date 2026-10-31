@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use super::dna::{K, encode};
+use super::reads::{K, encode};
 
 // A first-pass ranking heuristic, not a calibrated confidence score:
 // independent extension-supporting FASTQ records (with multiplicity) times

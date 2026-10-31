@@ -19,10 +19,16 @@ pub(crate) fn encode(seq: &[u8]) -> Option<u64> {
     Some(n)
 }
 pub(crate) fn decode(mut val: u64) -> Vec<u8> {
-    let mut out = vec![0; K];
+    let mut out = vec![0;
+    K];
     for x in out.iter_mut().rev() {
         *x = match val & 3 { 0=>b'A',1=>b'C',2=>b'G',_=>b'T' };
         val >>= 2;
     }
     out
 }
+
+    #[test] fn reverse_complement(){assert_eq!(rc(b"AAGTNC"),b"GNACTT");}
+    #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG";
+        assert_eq!(decode(encode(x).unwrap()),x);
+    }

@@ -3,8 +3,9 @@ use std::collections::HashMap;
 // Equal attention to solid k-mers at different sequencing depths prevents
 // oversampled regions monopolizing the bounded seed-extension budget.
 // This is reference-free and never removes or consumes any reads.
-pub(super) fn balanced_seed_candidates(counts:&HashMap<u64,u32>) -> Vec<(u64,u32)> {
-    let mut buckets=vec![Vec::<(u64,u32)>::new();32];
+pub(crate) fn balanced_seed_candidates(counts:&HashMap<u64,u32>) -> Vec<(u64,u32)> {
+    let mut buckets=vec![Vec::<(u64,u32)>::new();
+    32];
     for (&key,&count) in counts {
         if count < 15 {continue;}
         let level=(31-count.leading_zeros()) as usize;

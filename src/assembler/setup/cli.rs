@@ -1,7 +1,12 @@
 
-pub(super) fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
+pub(crate) fn parse() -> Result<(String,String,String,usize,Option<usize>,Option<String>),String>{
     let args=std::env::args().collect::<Vec<_>>();
-    let mut a=None;let mut b=None;let mut output=None;let mut max=16usize;let mut max_pairs=None;let mut seeds=None;
+    let mut a=None;
+    let mut b=None;
+    let mut output=None;
+    let mut max=16usize;
+    let mut max_pairs=None;
+    let mut seeds=None;
     let mut i=1;
     while i<args.len() {
         match args[i].as_str() {

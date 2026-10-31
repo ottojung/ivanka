@@ -11,8 +11,10 @@ impl Reads {
         let mut ext=Vec::new();
         let mut ids=Vec::new();
         for q in start..=contig.len()-K {
-            let Some(key)=encode(&contig[q..q+K]) else {continue;};
-            let Some(hits)=self.index.get(&key) else {continue;};
+            let Some(key)=encode(&contig[q..q+K]) else {continue;
+            };
+            let Some(hits)=self.index.get(&key) else {continue;
+            };
             // Pathological repetitive k-mers cannot be used as reliable extension anchors.
             if hits.len()>50000 {continue;}
             for hit in hits {

@@ -8,8 +8,6 @@ impl Reads {
         let key=&contig[contig.len().saturating_sub(self.max_read_len)..];
         if let Some(v)=self.overhang_cache.borrow().get(key) {return Rc::clone(v);}
         let value=Rc::new(self.overhangs_with_ids(contig));
-        // Limit both entry count and per-entry coverage to bound memory.
-        if value.0.len()>1000 {return value;}
         let mut cache=self.overhang_cache.borrow_mut();
         if cache.len()>=64 {cache.clear();}
         cache.insert(key.to_vec(),Rc::clone(&value));

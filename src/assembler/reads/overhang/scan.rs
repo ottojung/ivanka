@@ -17,7 +17,8 @@ impl Reads {
     // read mapper: a k-mer is only an inverted-index lookup; the full overlap must be exact.
     pub(crate) fn overhangs_with_ids(&self, contig:&[u8]) -> (Vec<Vec<u8>>,Vec<u32>) {
         if contig.len()<K {return (Vec::new(),Vec::new());}
-        let start=contig.len().saturating_sub(250);
+        let window=self.max_read_len.max(250);
+        let start=contig.len().saturating_sub(window);
         let mut used=HashSet::<u32>::new();
         let mut ext=Vec::new();
         let mut ids=Vec::new();

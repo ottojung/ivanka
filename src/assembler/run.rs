@@ -6,7 +6,7 @@ use super::reads::{K, fasta_seeds, Reads};
 use super::extension::extend;
 use super::ranking::select_supported_contigs;
 use super::setup::{parse, balanced_seed_candidates};
-use super::run_seed::{assemble_candidates,rescue_short};
+use super::run_seed::{assemble_candidates,rescue_short,append_preserving_diversity};
 
 pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
     let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
@@ -31,9 +31,12 @@ pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
     }
     let protected_seed_count=contigs.len();
     assemble_candidates(candidates,&reads,&mut contigs,&mut supporting_counts);
-    rescue_short(&a,&b,&reads,max_pairs,&mut contigs,&mut supporting_counts)?;
+    let rescue=rescue_short(&a,&b,&reads,max_pairs,&contigs)?;
     eprintln!("Ivanka ranking {} candidates by distinct contributing FASTQ records × contig length; {} MiCall seeds protected",contigs.len(),protected_seed_count);
-    let contigs=select_supported_contigs(contigs,supporting_counts,max,protected_seed_count);
+    let mut contigs=select_supported_contigs(contigs,supporting_counts,max,protected_seed_count);
+    if let Some(rescue)=rescue {
+        append_preserving_diversity(&mut contigs,rescue,max,protected_seed_count);
+    }
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">ivanka_{} len={}",i+1,c.len())?;

@@ -1,3 +1,5 @@
+use super::ranking::canonical_kmer;
+use super::reads::K;
 use super::reads::{Reads, decode};
 use super::setup::balanced_seed_candidates;
 use super::extension::extend;
@@ -51,4 +53,7 @@ pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, conti
     eprintln!("Ivanka supplementary high-depth seeds produced {} novel contigs",rescued);
 }
 mod rescue;
+mod rescue_rank;
 pub(super) use rescue::rescue_short;
+
+pub(super) use rescue_rank::append_preserving_diversity;

@@ -10,7 +10,7 @@ test -f "$src/Cargo.lock"
 git -C "$src" rev-parse --verify HEAD >/dev/null
 # The image's commit label is trustworthy only if the copied source matches
 # that commit, including no untracked files under src.
-dirty=$(git -C "$src" status --porcelain --untracked-files=all -- Cargo.toml Cargo.lock src)
+dirty=$(git -C "$src" status --porcelain --untracked-files=all -- Cargo.toml Cargo.lock build.rs source_lints src)
 if [ -n "$dirty" ]; then
     echo "Refusing uncommitted Rust source (image provenance would be false)" >&2
     exit 1
@@ -23,6 +23,8 @@ FROM docker.io/library/rust:1.93-bookworm AS ivanka-variant-builder
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY build.rs ./
+COPY source_lints ./source_lints
 RUN cargo build --release --locked
 FROM ${IVANKA_EXPERIMENT_BASE_IMAGE:-localhost/ivanka-micall-ivanka:seeded}
 COPY --from=ivanka-variant-builder /src/target/release/ivanka /usr/local/bin/ivanka

@@ -9,6 +9,7 @@ import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
+import math
 import os
 import shutil
 from pathlib import Path
@@ -417,13 +418,18 @@ def import_iva_baselines(sources, rows, image, hxb2_hash, all_projects):
     return {"imported": imported, "rejected": rejected}
 
 
-def iva_cache_status(rows, image, hxb2_hash, all_projects):
+def iva_cache_status(rows, image, hxb2_hash, all_projects, require_internal_timing=False):
     status = {"verified": [], "missing_or_invalid": [], "cache_dir": str(IVA_BASELINE_CACHE)}
     for row in rows:
         name = row["sample"]
         expected = baseline_provenance(row, image, hxb2_hash, all_projects)
         try:
-            load_iva_baseline(name, expected)
+            control = load_iva_baseline(name, expected)
+            if require_internal_timing and (control.get("timing_origin") != "micall_in_container_monotonic_v1"
+                    or not isinstance(control.get("seconds"), (int, float))
+                    or isinstance(control.get("seconds"), bool)
+                    or not math.isfinite(control["seconds"]) or control["seconds"] <= 0):
+                raise ValueError("IVA control requires genuine in-container execution timing")
             status["verified"].append(name)
         except (ValueError, OSError, KeyError):
             status["missing_or_invalid"].append(name)
@@ -441,6 +447,9 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
             raise FileNotFoundError(file)
     badcycles = folder / "bad_cycles.csv"
     badcycles.write_text("tile,cycle\n")
+    timing_file = folder / "micall_internal_timing.json"
+    timing_file.unlink(missing_ok=True)
+    timer_script = Path(__file__).resolve().with_name("inside_container_timing.py")
     container_sample = "/bench/samples/" + name
     # The manifest project is a cohort label, NOT MiCall primer project_code.
     project = row.get("micall_project_code", "").strip()
@@ -452,13 +461,14 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         "--timeout", str(max(1,int(timeout)-2)), "--stop-timeout", "2",
         "-v", f"{DATA.resolve()}:/bench:ro",
         "-v", f"{RESULTS.resolve()}:/results:rw",
-        # PID 1 has its own deadline: an interrupted host-side benchmark
-        # cannot leave a container running indefinitely.
+        "-v", f"{timer_script}:/ivanka-timer.py:ro",
+        # Both Podman and its host-side supervisor enforce whole-container
+        # deadlines, including startup; there is no separate MiCall deadline.
         "--label", f"org.ottojung.ivanka.benchmark.invocation={invocation}",
-        "--entrypoint", "/usr/bin/timeout", image,
-        "--signal=TERM", "--kill-after=10s",
-        f"{max(1,int(timeout)-15)}s", "micall",
-        "analyze", "sample",
+        "--entrypoint", "python", image,
+        "/ivanka-timer.py",
+        f"/results/{invocation}/{name}/{arm}/micall_internal_timing.json",
+        "micall", "analyze", "sample",
         f"{container_sample}/{fq[0].name}",
         f"{container_sample}/{fq[1].name}",
         f"/results/{invocation}/{name}/{arm}",
@@ -482,14 +492,35 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                            timeout=30, check=False)
             exitcode = 124
+    container_wall_seconds = round(time.monotonic()-start, 2)
+    internal_seconds = None
+    timing_error = None
+    if exitcode == 0:
+        try:
+            measured = json.loads(timing_file.read_text())
+            internal_seconds = measured["seconds"]
+            if (measured.get("timing_origin") != "micall_in_container_monotonic_v1"
+                    or measured.get("exit_code") != 0
+                    or not isinstance(internal_seconds, (float, int))
+                    or isinstance(internal_seconds, bool)
+                    or not math.isfinite(internal_seconds)
+                    or not 0 < internal_seconds <= container_wall_seconds + 1):
+                raise ValueError("Invalid in-container MiCall measurement")
+        except (OSError, KeyError, ValueError, TypeError) as exc:
+            exitcode = 1
+            timing_error = f"Missing or invalid in-container timing evidence: {exc}"
     result = {
-        "exit_code": exitcode, "seconds": round(time.monotonic()-start, 2),
+        "exit_code": exitcode,
+        "container_wall_seconds": container_wall_seconds,
         "image_id": recorded_image_id(image), "image": image,
         "artifact_dir": str(folder.resolve()),
         "metrics": score_outputs(folder, reference),
     }
+    if internal_seconds is not None and not timing_error:
+        result["seconds"] = internal_seconds
+        result["timing_origin"] = "micall_in_container_monotonic_v1"
     if exitcode:
-        result["error"] = (folder / "podman.stderr.log").read_text()[-1200:]
+        result["error"] = timing_error or (folder / "podman.stderr.log").read_text()[-1200:]
     return result
 
 
@@ -717,7 +748,7 @@ def main():
         print("IVA_CACHE_IMPORT", json.dumps(imported), flush=True)
     if args.cache_status or (args.mode=="ivanka" and not args.allow_missing_baseline):
         status = iva_cache_status(rows, pinned_iva_id, sha(DATA/"hxb2.fasta"),
-                                  args.all_projects)
+                                  args.all_projects, require_internal_timing=args.qualify_198)
         print("IVA_CACHE_STATUS", json.dumps(status, sort_keys=True), flush=True)
         if args.cache_status:
             return 0 if not status["missing_or_invalid"] else 2

@@ -294,3 +294,22 @@ a second overlapping cohort. Every cooperating launcher shares the default
 `IVANKA_GLOBAL_LAUNCH_LOCK` for smoke tests). Launch collisions fail with
 exit 75; attempts to reuse a previous state directory fail with exit 74.
 Direct invocations that bypass the launcher are not governed by its lock.
+
+### Diagnostic-only runtime decomposition
+
+For a previously audited `summary.scored.jsonl` containing one completed
+IVA/Ivanka comparison per sample and retained MiCall `podman.stderr.log` files:
+
+```sh
+python3 benchmarks/runtime_decomposition.py \
+  --jsonl /path/to/summary.scored.jsonl --expected-samples 198
+```
+
+This checks every sample and arm duration, then reports authentic Ivanka native
+assembly time and the interval from MiCall's first `Running remap` marker to
+its first `Running sam2aln` marker. It also reports the *hypothetical*
+runtime signed-power PSI if native assembly took zero seconds **and all
+post-assembly durations remained unchanged**. This counterfactual is not an
+optimization prediction. `formal_qualification` is always `false`: neither
+split-invocation records nor these stage timings establish the milestone.
+The private logs and sample datasets are never committed to the repository.

@@ -1,21 +1,19 @@
 use super::reads::{Reads, decode};
+use super::setup::balanced_seed_candidates;
 use super::extension::extend;
 use std::collections::HashSet;
 
 pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, contigs:&mut Vec<Vec<u8>>, supporting_counts:&mut Vec<usize>) {
-    let mut attempted=0usize;
-    let mut attempted_seeds=HashSet::new();
+    let mut attempted=0usize;let mut attempted_seeds=HashSet::new();
     for (seed,count) in candidates {
-        if attempted>=1000 {break;}
-        if count<15 {break;}
+        if attempted>=1000 || count<15 {break;}
         let seedseq=decode(seed);
         // A k-mer can occur in both a dominant strain and a distinct supported
         // haplotype. Keep independent seed starts rather than treating a
         // previously traversed 31-mer as proof of redundant full contigs.
         // The bounded attempt budget and final read-support/novelty ranking
         // still cap work and reported output.
-        attempted+=1;
-        attempted_seeds.insert(seed);
+        attempted+=1;attempted_seeds.insert(seed);
         let (seq,support)=extend(seedseq,&reads,4,1);
         if !seq.is_empty() {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
@@ -52,3 +50,5 @@ pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, conti
     }
     eprintln!("Ivanka supplementary high-depth seeds produced {} novel contigs",rescued);
 }
+mod rescue;
+pub(super) use rescue::rescue_short;

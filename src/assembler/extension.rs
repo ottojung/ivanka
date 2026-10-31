@@ -45,7 +45,7 @@ pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usi
             record_extension_support(&right_reads,&right_ids,&right,&mut supporting_reads);
             record_extension_support(&left_reads,&left_ids,&left_rc,&mut supporting_reads);
             if next.len()>MAX_CONTIG_LENGTH {
-                eprintln!("rejecting assembly path exceeding {} nt",MAX_CONTIG_LENGTH);
+                reads.overlength_rejections.set(reads.overlength_rejections.get()+1);eprintln!("rejecting assembly path exceeding {} nt",MAX_CONTIG_LENGTH);
                 return (Vec::new(),0);
             }
             seq=next;

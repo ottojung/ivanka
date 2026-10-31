@@ -353,3 +353,28 @@ FASTQ or gzip FASTQ. This is diagnostic evidence only: sequencing read records
 are not necessarily independent molecules, and high k-mer support alone does
 not prove a phased biological haplotype. It neither substitutes for authentic
 MiCall final-MAX scores nor alters the strict PSI qualification.
+
+### Experimental MiCall remapping parallelism
+
+Ivanka's standard MiCall image still uses the **unchanged single-threaded**
+MiCall Bowtie2 remapper. To evaluate remapping parallelism separately from
+assembler changes, build an explicitly labeled **experimental descendant**
+image (replace `BASE_IMAGE` with the immutable, previously verified Ivanka
+image reference for the comparison):
+
+```sh
+podman build --pull=never \
+  --build-arg BASE_IMAGE=localhost/ivanka-micall-ivanka:seeded \
+  --build-arg BOWTIE_THREADS=2 \
+  --file benchmarks/Dockerfile.micall-remap-experiment \
+  --tag localhost/ivanka-micall-ivanka:remap-p2-experiment .
+```
+
+The AST-scoped patch fails closed if MiCall's `map_to_reference` interface
+changes. It sets Bowtie2 `-p 2 --reorder` to preserve SAM record order.
+It **does not** patch the IVA control image, the assembler, the stitcher,
+reference panels, or PSI acceptance rules. Different thread counts may alter
+alignment choices and downstream final-MAX outputs: require authentic paired
+MiCall quality/runtime checks and output validation before considering the
+experimental image for a scientific qualification run. This is not itself a
+qualifying image or a claim of speedup.

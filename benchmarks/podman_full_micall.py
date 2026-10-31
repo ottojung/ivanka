@@ -748,7 +748,7 @@ def main():
         print("IVA_CACHE_IMPORT", json.dumps(imported), flush=True)
     if args.cache_status or (args.mode=="ivanka" and not args.allow_missing_baseline):
         status = iva_cache_status(rows, pinned_iva_id, sha(DATA/"hxb2.fasta"),
-                                  args.all_projects, require_internal_timing=args.qualify_198)
+                                  args.all_projects, require_internal_timing=(args.qualify or args.qualify_198))
         print("IVA_CACHE_STATUS", json.dumps(status, sort_keys=True), flush=True)
         if args.cache_status:
             return 0 if not status["missing_or_invalid"] else 2

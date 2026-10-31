@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io;
-use super::dna::{K, encode, rc};
+use super::dna::rc;
+use super::index::add_seed_counts;
 use super::input::read_open;
 use super::fastq::fastq_seq;
 use super::types::Reads;
@@ -21,15 +22,7 @@ impl Reads {
                 break;
             };
             for read in [a,b] {
-                if pairs < 50000 && read.len() >= K {
-                    for pos in (0..=read.len()-K).step_by(3) {
-                        if let Some(kmer)=encode(&read[pos..pos+K]) {
-                            let rev=rc(&read[pos..pos+K]);
-                            let revk=encode(&rev).unwrap();
-                            *seed_counts.entry(kmer.min(revk)).or_insert(0) += 1;
-                        }
-                    }
-                }
+                if pairs < 50000 { add_seed_counts(&read, &mut seed_counts); }
                 seqs.push(read.clone());
                 seqs.push(rc(&read));
             }

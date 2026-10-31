@@ -5,6 +5,7 @@ Never invokes either assembler and never accepts altered artifacts.
 import argparse
 import csv
 import json
+import time
 from pathlib import Path
 
 from Bio import SeqIO
@@ -40,6 +41,7 @@ def restore(row, record, results_root, iva_id, ivanka_id, hxb2_hash, panel):
                  if p.is_file()), None)
     if not expected or file is None or sha(file) != expected:
         raise ValueError("Original final MAX Ivanka consensus missing or modified")
+    replay_started = time.monotonic()
     provenance = baseline_provenance(row, iva_id, hxb2_hash, all_projects=True)
     if provenance != record.get("provenance"):
         raise ValueError("Original input data or project code changed")
@@ -49,6 +51,8 @@ def restore(row, record, results_root, iva_id, ivanka_id, hxb2_hash, panel):
                     best_contig_acceptance=scored, failed=not scored["pass"])
     restored.pop("baseline_error", None)
     restored.pop("evaluation_error", None)
+    restored["total_seconds"] = record["total_seconds"] + max(
+        0, time.monotonic() - replay_started)
     return restored
 
 

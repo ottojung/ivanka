@@ -1,5 +1,6 @@
 use super::ranking_score::ranked_candidates;
 use std::collections::HashSet;
+use super::reads::rolling_canonical_kmers;
 use super::reads::{K, encode};
 
 // A first-pass ranking heuristic, not a calibrated confidence score:
@@ -31,11 +32,9 @@ pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
         }
         let mut valid=0usize;
         let mut shared=0usize;
-        for window in seq.windows(K) {
-            if let Some(k)=canonical_kmer(window) {
-                valid+=1;
-                if represented.contains(&k){shared+=1;}
-            }
+        for k in rolling_canonical_kmers(&seq) {
+            valid+=1;
+            if represented.contains(&k){shared+=1;}
         }
         // A short sequence nearly contained in a longer supported contig adds
         // little assembly coverage but can divert reads during MiCall remapping.
@@ -47,9 +46,7 @@ pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
             duplicates+=1;
             continue;
         }
-        for window in seq.windows(K) {
-            if let Some(k)=canonical_kmer(window) {represented.insert(k);}
-        }
+        for k in rolling_canonical_kmers(&seq) {represented.insert(k);}
         retained.push(seq);
     }
     eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={}",

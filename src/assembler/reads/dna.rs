@@ -32,3 +32,26 @@ pub(crate) fn decode(mut val: u64) -> Vec<u8> {
     #[test] fn encode_roundtrip(){let x=b"ACGTACGTACGTACGTACGTACGTACGTACG";
         assert_eq!(decode(encode(x).unwrap()),x);
     }
+
+// Same canonical 31-mers as full-window encoding, one shift per base.
+pub(crate) fn rolling_canonical_kmers(seq:&[u8])->impl Iterator<Item=u64>+'_ {
+    let (mut forward,mut reverse,mut valid)=(0u64,0u64,0usize);
+    seq.iter().filter_map(move |&b| {
+        let d=match b {
+            b'A'=>0u64,b'C'=>1,b'G'=>2,b'T'=>3,
+            _=>{forward=0;reverse=0;valid=0;return None;}
+        };
+        forward=((forward<<2)&((1u64<<(2*K))-1))|d; reverse=(reverse>>2)|((3-d)<<(2*(K-1)));
+        valid+=1; (valid>=K).then_some(forward.min(reverse))
+    })
+}
+
+#[test] fn rolling_canonical_agrees_with_full_window_encoding() {
+    let mut rng=0x123456789abcdef0_u64; let mut seq=vec![b'A';12000];
+    for (i,b) in seq.iter_mut().enumerate() {
+        rng^=rng<<13; rng^=rng>>7; rng^=rng<<17;
+        *b=if i%101==0 {b'N'} else {b"ACGT"[(rng&3) as usize]};
+    }
+    let expected=seq.windows(K).filter_map(|w|Some(encode(w)?.min(encode(&rc(w))?))).collect::<Vec<_>>();
+    assert_eq!(rolling_canonical_kmers(&seq).collect::<Vec<_>>(),expected);
+}

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from contig_diversity import audit, canonical_kmers, read_fasta
+from contig_diversity import audit, canonical_kmers, read_fasta, read_record_support, read_supported_loss
 
 
 class ContigDiversityTest(unittest.TestCase):
@@ -36,6 +36,32 @@ class ContigDiversityTest(unittest.TestCase):
         self.assertEqual(report["old_kmers_lost"], 0)
         with self.assertRaises(ValueError):
             audit(["ACGT"], [], 0)
+
+    def test_read_support_counts_distinct_fastq_records(self):
+        with tempfile.TemporaryDirectory() as temp:
+            r1, r2 = Path(temp) / "r1.fastq", Path(temp) / "r2.fastq"
+            r1.write_text("@read1\nACGTACGT\n+\n!!!!!!!!\n")
+            r2.write_text("@read1\nTTTTTTTT\n+\n!!!!!!!!\n")
+            support, sampled = read_record_support([r1, r2], {"ACGT"}, k=4)
+            self.assertEqual(sampled, 2)
+            self.assertEqual(support["ACGT"], 1)  # two hits, one read record
+            report = read_supported_loss(["ACGTACGT"], ["TTTTTTTT"], [r1, r2], k=4)
+            self.assertGreater(report["lost_unique_kmers"], 0)
+            self.assertGreater(report["lost_kmers_supported_by_at_least_1_record"], 0)
+            self.assertEqual(report["sampled_read_records"], 2)
+
+    def test_bad_fastq_or_mismatched_pair_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            a, b = Path(temp) / "a.fastq", Path(temp) / "b.fastq"
+            a.write_text("@x\nACGT\n+\n!!!!\n")
+            b.write_text("")
+            with self.assertRaisesRegex(ValueError, "equal sampled"):
+                read_record_support([a, b], {"ACGT"}, k=4)
+            b.write_text("@x\nACGT\n+\n!!!\n")
+            with self.assertRaisesRegex(ValueError, "invalid/truncated"):
+                read_record_support([a, b], {"ACGT"}, k=4)
+            with self.assertRaises(ValueError):
+                read_record_support([a, a], {"ACGT"}, k=4, max_records=0)
 
     def test_fasta_multiline_and_missing_header(self):
         with tempfile.TemporaryDirectory() as temp:

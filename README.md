@@ -313,3 +313,22 @@ post-assembly durations remained unchanged**. This counterfactual is not an
 optimization prediction. `formal_qualification` is always `false`: neither
 split-invocation records nor these stage timings establish the milestone.
 The private logs and sample datasets are never committed to the repository.
+
+### Optional read-supported contig diversity check
+
+Use this after a proposed output-reduction optimization, on **the same genuine
+sample**, to detect evidence-bearing sequences absent from the candidate FASTA:
+
+```sh
+python3 benchmarks/contig_diversity.py before.fasta after.fasta \
+  --reads1 trimmed1.fastq --reads2 trimmed2.fastq --max-read-records 10000
+```
+
+Without FASTQs, the existing canonical k-mer retention report is unchanged.
+With both mates, the report also counts missing canonical k-mers observed in
+at least 1, 3, 10 and 100 FASTQ records, counting each k-mer **once per
+record**, including reverse-complement orientation. Input files can be plain
+FASTQ or gzip FASTQ. This is diagnostic evidence only: sequencing read records
+are not necessarily independent molecules, and high k-mer support alone does
+not prove a phased biological haplotype. It neither substitutes for authentic
+MiCall final-MAX scores nor alters the strict PSI qualification.

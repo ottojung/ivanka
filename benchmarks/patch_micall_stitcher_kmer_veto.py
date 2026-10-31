@@ -61,6 +61,24 @@ def preserves_source_kmers(source_sequences, stitched_sequence, k=31):
     ]
     if "def preserves_source_kmers(" in source:
         raise ValueError("Refusing already-modified MiCall stitcher")
+    pinned_three_field = (
+        "            if result is not None:\n"
+        "                combined, _additional_score, _covered_input = result\n"
+        "                return first, second, combined"
+    )
+    patched_three_field = (
+        "            if result is not None:\n"
+        "                combined, _additional_score, _covered_input = result\n"
+        "                if not preserves_source_kmers((first.seq, second.seq), combined.seq):\n"
+        "                    continue\n"
+        "                return first, second, combined"
+    )
+    if source.count(pairs[1][0]) == 1 and source.count(pinned_three_field) == 0:
+        pass
+    elif source.count(pairs[1][0]) == 0 and source.count(pinned_three_field) == 1:
+        pairs[1] = (pinned_three_field, patched_three_field)
+    else:
+        raise ValueError("Unexpected MiCall try_combine_1 tuple contract")
     for old, new in pairs:
         if source.count(old) != 1:
             raise ValueError(f"Unexpected MiCall stitcher source shape near {old[:35]!r}")

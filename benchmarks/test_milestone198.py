@@ -182,3 +182,17 @@ for path, value in cases:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DiagnosticScoreFloorTests(unittest.TestCase):
+    def test_explicit_90_percent_subset_diagnostic(self):
+        from types import SimpleNamespace
+        from podman_full_micall import alignment_score_floor
+        self.assertEqual(alignment_score_floor(SimpleNamespace()), 0.95)
+        self.assertEqual(alignment_score_floor(SimpleNamespace(diagnostic_90_floor=True)), 0.90)
+        self.assertEqual(alignment_score_floor(SimpleNamespace(qualify_198=True)), 0.90)
+
+    def test_diagnostic_flag_cannot_change_alpha_default(self):
+        from types import SimpleNamespace
+        from podman_full_micall import alignment_score_floor
+        self.assertEqual(alignment_score_floor(SimpleNamespace(qualify=True)), 0.95)

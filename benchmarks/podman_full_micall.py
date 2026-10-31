@@ -524,6 +524,13 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     return result
 
 
+def alignment_score_floor(args):
+    """Diagnostic 90% is opt-in; alpha keeps 95%, formal 198 always uses 90%."""
+    return (milestone198.SCORE_FLOOR
+            if getattr(args, "qualify_198", False)
+            or getattr(args, "diagnostic_90_floor", False) else 0.95)
+
+
 def evaluate_sample(row, args, images, checked, pinned_iva_id,
                     hxb2_hash, reference, project_catalog, invocation, deadline=None,
                     reference_panel=None):
@@ -609,8 +616,7 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
                 ivanka_dir=Path(record["ivanka"].get("artifact_dir",str(RESULTS/invocation/name/"ivanka")))
                 record["best_contig_acceptance"]=panel_acceptance(
                     iva_dir,ivanka_dir,reference_panel,
-                    min_ratio=(milestone198.SCORE_FLOOR
-                               if getattr(args,"qualify_198",False) else 0.95))
+                    min_ratio=alignment_score_floor(args))
                 record["output_comparison"]=compare_outputs(
                     baseline["metrics"],record["ivanka"]["metrics"])
                 iva_depth=baseline["metrics"].get("coverage_depth")
@@ -679,6 +685,8 @@ def main():
     parser.add_argument("--qualify",action="store_true", help="Strict 18-sample IVA-eligible alpha run requiring pinned manifest and IVA eligibility evidence")
     parser.add_argument("--qualify-198",action="store_true",
                         help="Strict 198-sample alignment and runtime signed-power PSI milestone")
+    parser.add_argument("--diagnostic-90-floor", action="store_true",
+                        help="Use the strict milestone's 90%% score floor for selected-sample diagnostics; NOT formal 198 qualification")
     parser.add_argument("--diagnose-project-reference",action="store_true",
                         help="Optional expensive legacy IVA-selected project reference diagnostic; not used for acceptance")
     parser.add_argument("--all-projects",action="store_true",
@@ -710,6 +718,8 @@ def main():
     if len(set(names))!=len(names):
         raise ValueError("Duplicate sample identities in manifest")
     manifest_hash=sha(DATA/"manifest.tsv")
+    if args.qualify and args.diagnostic_90_floor:
+        raise ValueError("18-sample alpha qualification retains its 95% floor")
     if args.qualify and args.qualify_198:
         parser.error("--qualify and --qualify-198 are mutually exclusive")
     if args.qualify_198:

@@ -13,6 +13,18 @@ class BenchmarkTests(TestCase):
   self.assertEqual(m.pinned_run_images(configured,verified,verified["iva"]),verified)
   self.assertEqual(m.pinned_run_images(configured,{"ivanka":verified["ivanka"]},verified["iva"]),verified)
   self.assertEqual(m.pinned_run_images(configured,{"iva":verified["iva"]},verified["iva"])["iva"],verified["iva"])
+ def test_immutable_image_id_avoids_redundant_inspect(self):
+  from unittest.mock import patch
+  immutable="a"*64
+  with patch.object(m,"image_id",side_effect=AssertionError("unexpected inspect")):
+   self.assertEqual(m.recorded_image_id(immutable),immutable)
+  with patch.object(m,"image_id",return_value="b"*64) as inspect:
+   self.assertEqual(m.recorded_image_id("image:mutable"),"b"*64)
+   inspect.assert_called_once_with("image:mutable")
+  with patch.object(m,"image_id",return_value="c"*64) as inspect:
+   self.assertEqual(m.recorded_image_id("A"*64),"c"*64)
+   inspect.assert_called_once()
+
  def test_best_conseq(self):
   with TemporaryDirectory() as d:
    p=Path(d)/"scratch"

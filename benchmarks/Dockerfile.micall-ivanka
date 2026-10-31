@@ -2,6 +2,8 @@ FROM docker.io/library/rust:1.93-bookworm AS ivanka-builder
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY build.rs ./
+COPY source_lints ./source_lints
 RUN cargo build --release --locked
 
 FROM localhost/ivanka-micall-iva:base

@@ -1,0 +1,10 @@
+mod choose;
+mod cycle;
+mod support;
+mod trace;
+pub(crate) use choose::choose_extension;
+pub(crate) use cycle::cycle_end;
+pub(crate) use support::record_extension_support;
+pub(crate) use trace::summarize;
+#[cfg(test)] mod test_cycle;
+#[cfg(test)] mod test_choose;

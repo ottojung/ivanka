@@ -4,7 +4,6 @@ use super::extension_helpers::{summarize, choose_extension as choose_with_limit,
 pub(super) use super::extension_helpers::record_extension_support;
 
 pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec<u8>,usize){
-    let mut stagnant=0usize;
     let mut supporting_reads=HashSet::<u32>::new();
     for _ in 0..600 {
         if seq.len()>MAX_CONTIG_LENGTH {break;}
@@ -20,11 +19,10 @@ pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usi
                           seq.len(),right_reads.len(),summarize(&right_reads),
                           left_reads.len(),summarize(&left_reads));
             }
-            stagnant+=1;
-            if stagnant>=2 {break;
-            }
+            // With no extension, the same immutable reads and contig produce
+            // the same result next iteration. A second probe is redundant.
+            break;
         }
-        else {stagnant=0;}
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
             next.extend_from_slice(&left);

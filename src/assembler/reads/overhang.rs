@@ -1,6 +1,17 @@
 use std::collections::HashSet;
 use super::dna::{K, encode};
 use super::types::Reads;
+// Scan successive query 31-mers by shifting their two-bit codes rather than
+// re-encoding 31 bases on every overlapping index lookup.
+pub(super) fn rolling_query(seq: &[u8], q: usize, previous: Option<u64>) -> Option<u64> {
+    if let Some(p) = previous {
+        let d = match seq[q+K-1] {
+            b'A'=>Some(0), b'C'=>Some(1), b'G'=>Some(2), b'T'=>Some(3), _=>None
+        };
+        if let Some(d)=d {return Some(((p << 2) & ((1u64 << 62)-1))|d);}
+    }
+    encode(&seq[q..q+K])
+}
 impl Reads {
     // Returns overhangs from reads overlapping the right end of contig. No aligner or
     // read mapper: a k-mer is only an inverted-index lookup; the full overlap must be exact.
@@ -10,8 +21,11 @@ impl Reads {
         let mut used=HashSet::<u32>::new();
         let mut ext=Vec::new();
         let mut ids=Vec::new();
+        let mut previous = None;
         for q in start..=contig.len()-K {
-            let Some(key)=encode(&contig[q..q+K]) else {continue;
+            let key=rolling_query(contig,q,previous);
+            previous=key;
+            let Some(key)=key else {continue;
             };
             let Some(hits)=self.index.get(&key) else {continue;
             };

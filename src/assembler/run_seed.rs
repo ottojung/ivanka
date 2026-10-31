@@ -1,8 +1,10 @@
 use super::reads::{Reads, decode};
 use super::extension::extend;
+use std::collections::HashSet;
 
 pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, contigs:&mut Vec<Vec<u8>>, supporting_counts:&mut Vec<usize>) {
     let mut attempted=0usize;
+    let mut attempted_seeds=HashSet::new();
     for (seed,count) in candidates {
         if attempted>=1000 {break;}
         if count<15 {break;}
@@ -13,6 +15,7 @@ pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, conti
         // The bounded attempt budget and final read-support/novelty ranking
         // still cap work and reported output.
         attempted+=1;
+        attempted_seeds.insert(seed);
         let (seq,support)=extend(seedseq,&reads,4,1);
         if !seq.is_empty() {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
@@ -34,6 +37,8 @@ pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, conti
     deep.sort_unstable_by(|a,b|b.1.cmp(&a.1).then_with(||a.0.cmp(&b.0)));
     let mut rescued=0usize;
     for (seed,count) in deep.into_iter().take(400) {
+        // Re-running deterministic extension on an identical anchor adds no contig.
+        if attempted_seeds.contains(&seed) {continue;}
         let (seq,support)=extend(decode(seed),&reads,4,1);
         if seq.is_empty() {continue;}
         if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {

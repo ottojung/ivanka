@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 
 from acceptance import accept_sample, reference_fidelity, STRUCTURAL_ROLES
 
@@ -155,6 +156,11 @@ def stitch_and_score(seqs, read_index, read_length, reference, out_dir, arm):
         "hxb2_score":max(scores,default=None),"per_contig_scores":scores,
     }
 
+def new_invocation_id():
+    """Uniquely identify even simultaneous invocations in PID-reused containers."""
+    return f"{int(time.time())}-{os.getpid()}-{uuid.uuid4().hex}"
+
+
 def run():
     ap=argparse.ArgumentParser()
     ap.add_argument("--mode", choices=("baseline","ivanka","all"),default="all")
@@ -199,7 +205,7 @@ def run():
         roles={}
     # Every JSONL record carries its invoking binary identity. Never combine
     # best scores from unrelated experimental builds into a fictitious 7/7 run.
-    invocation_id=f"{int(time.time())}-{os.getpid()}"
+    invocation_id=new_invocation_id()
     binary_sha256=None
     if args.mode in ("ivanka", "all"):
         binary_sha256=hashlib.sha256(Path(args.ivanka).read_bytes()).hexdigest()

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 pub(crate) const CYCLE_MATCH: usize = 512;
 // The 31-mer index uses two bits per base. Advance an encoded window in O(1)
@@ -19,9 +19,17 @@ pub(super) fn next_anchor(seq: &[u8], i: usize, k: usize, previous: Option<u64>,
 pub(super) const CYCLE_MIN_SPACING: usize = 2000;
 
 pub(super) fn repeats(seq:&[u8],j:usize,i:usize,k:usize,encode:fn(&[u8])->Option<u64>)->bool {
-    i-j>=CYCLE_MIN_SPACING && seq[j..j+CYCLE_MATCH]==seq[i..i+CYCLE_MATCH]
-        && seq[j..j+CYCLE_MATCH].windows(k).step_by(32)
-            .filter_map(encode).collect::<HashSet<_>>().len()>=8
+    if i-j<CYCLE_MIN_SPACING || seq[j..j+CYCLE_MATCH]!=seq[i..i+CYCLE_MATCH] {return false;}
+    // Eight distinct sampled anchors suffice; avoid allocating a HashSet for
+    // every candidate cycle, especially in repetitive high-depth paths.
+    let mut distinct=[0u64;8];let mut count=0;
+    for anchor in seq[j..j+CYCLE_MATCH].windows(k).step_by(32).filter_map(encode) {
+        if !distinct[..count].contains(&anchor) {
+            distinct[count]=anchor;count+=1;
+            if count==8 {return true;}
+        }
+    }
+    false
 }
 pub(crate) fn cycle_end(seq: &[u8], k: usize, encode: fn(&[u8])->Option<u64>) -> Option<usize> {
     if seq.len() < CYCLE_MIN_SPACING + CYCLE_MATCH { return None; }

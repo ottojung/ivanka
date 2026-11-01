@@ -1,4 +1,5 @@
 use super::{Reads,assemble_candidates,balanced_seed_candidates};
+use super::rescue_path::contains_or_rc;
 // A high-depth assembly with no long contig may have followed noisy joins.
 // Supplement, never replace, the full-read candidates with a bounded prefix.
 fn eligible(limit:Option<usize>,oriented:usize,longest:usize,rejects:usize)->bool {
@@ -16,7 +17,7 @@ fn eligible(limit:Option<usize>,oriented:usize,longest:usize,rejects:usize)->boo
 fn best_long(more:Vec<Vec<u8>>,supports:Vec<usize>,original:&[Vec<u8>])->Option<(Vec<u8>,usize)> {
     more.into_iter().zip(supports).filter(|(seq,support)| {
         seq.len()>=1000 && *support>0
-            && !original.iter().any(|c|c.windows(seq.len()).any(|w|w==seq))
+            && !original.iter().any(|c|contains_or_rc(c,seq))
     }).max_by_key(|(seq,support)|(*support as u128)*(seq.len() as u128))
 }
 #[test] fn bounded_rescue_prefers_supported_span() {
@@ -24,6 +25,13 @@ fn best_long(more:Vec<Vec<u8>>,supports:Vec<usize>,original:&[Vec<u8>])->Option<
     let more=vec![vec![b'A';1200],vec![b'C';2300],vec![b'G';700]];
     let (seq,support)=best_long(more,vec![10,8,100],&original).unwrap();
     assert_eq!((seq.len(),support),(2300,8));
+}
+#[test] fn rescue_skips_reverse_strand_duplicate_before_scoring() {
+    let source=[vec![b'A';500],vec![b'C';700]].concat();
+    let reverse=[vec![b'G';700],vec![b'T';500]].concat();
+    let novel=vec![b'G';1200];
+    let (chosen,support)=best_long(vec![reverse,novel.clone()],vec![100,5],&[source]).unwrap();
+    assert_eq!((chosen,support),(novel,5));
 }
 pub(crate) fn rescue_short(a:&str,b:&str,reads:&Reads,limit:Option<usize>,
     contigs:&[Vec<u8>])->std::io::Result<Option<Vec<u8>>> {

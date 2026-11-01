@@ -190,13 +190,13 @@ class DetachedLifecycleTests(unittest.TestCase):
         def slow_start(argv, **kwargs):
             if argv[1] == "start":
                 self.calls.append(list(argv))
-                time.sleep(0.03)
+                time.sleep(0.15)
                 raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
             return self.fake(argv, **kwargs)
 
         with patch.object(lifecycle.subprocess, "run", side_effect=slow_start):
             result = lifecycle.run_detached(
-                self.command, self.stdout, self.stderr, 0.02)
+                self.command, self.stdout, self.stderr, 0.1)
         self.assertEqual((result.returncode, result.stage), (124, "start"))
         self.assertEqual([call[1] for call in self.calls], ["create", "start"])
 

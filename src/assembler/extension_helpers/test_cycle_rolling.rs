@@ -15,3 +15,17 @@ use super::test_cycle::encode;
         prev = rolling;
     }
 }
+
+#[test] fn exact_cycle_diversity_boundary_seven_vs_eight() {
+    use super::cycle::{repeats,CYCLE_MATCH,CYCLE_MIN_SPACING};
+    for distinct in [7,8] {
+        let mut tract=vec![b'A';CYCLE_MATCH];
+        for i in 0..16 {
+            let v=i%distinct;
+            tract[i*32]=b"ACGT"[v%4];tract[i*32+1]=b"ACGT"[v/4];
+        }
+        let mut seq=tract.clone();seq.extend(vec![b'G';CYCLE_MIN_SPACING]);
+        let second=seq.len();seq.extend_from_slice(&tract);
+        assert_eq!(repeats(&seq,0,second,31,encode),distinct==8);
+    }
+}

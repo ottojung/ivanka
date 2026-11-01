@@ -139,6 +139,9 @@ class CompletionEvidenceTests(unittest.TestCase):
             podman_attempt_diagnostics(self.stderr, 0),
             ["Error: beginning transaction: database is locked",
              'time="2026-11-01T16:05:40Z" level=error msg="save failed"'])
+        self.assertEqual(
+            podman_attempt_diagnostics(self.stderr, 0, len(previous.encode())),
+            ["Error: beginning transaction: database is locked"])
 
     def test_attempt_diagnostics_bounded_large_micall_log(self):
         from container_completion import podman_attempt_diagnostics

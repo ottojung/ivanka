@@ -522,8 +522,8 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
             stderr.flush()
             podman_attempts.append({
                 "raw_exit_code": exitcode,
-                "stderr_diagnostics": podman_attempt_diagnostics(
-                    folder / "podman.stderr.log", attempt_stderr_offset),
+                "_start": attempt_stderr_offset,
+                "_end": (folder / "podman.stderr.log").stat().st_size,
             })
             # Podman 5.8 sometimes cannot begin its SQLite creation
             # transaction amid concurrent container cleanup. Such a failure
@@ -541,6 +541,13 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                 continue
             break
     container_wall_seconds = round(time.monotonic()-start, 2)
+    # Analyze stderr AFTER measuring the whole-container wall clock.
+    # Diagnostics must not consume any of the frozen 1800-second allowance.
+    if exitcode or start_retries:
+        for attempt in podman_attempts:
+            attempt["stderr_diagnostics"] = podman_attempt_diagnostics(
+                folder / "podman.stderr.log",
+                attempt.pop("_start"), attempt.pop("_end"))
     internal_seconds = None
     timing_error = None
     recovered_cleanup = False

@@ -19,6 +19,20 @@ _POSTRUN_LOCK = re.compile(
     r'config from DB: database is locked"'
 )
 
+# Podman can also fail while saving the state of a container it has already
+# unmounted. Match the entire diagnostic and the SAME container ID throughout.
+_POSTRUN_SAVE_LOCK = re.compile(
+    r'time="[^"\r\n]+" level=error msg="Removing container '
+    r'(?P<id>[0-9a-f]{64}): cleaning up container (?P=id): '
+    r'unmounting container (?P=id) storage: unmounting container (?P=id): '
+    r'saving container (?P=id) state: beginning container (?P=id) '
+    r'save transaction: database is locked"'
+)
+_PRESTART_SAVE_LOCK = re.compile(
+    r'Error: saving container (?P<id>[0-9a-f]{64}) state: '
+    r'beginning container (?P=id) save transaction: database is locked'
+)
+
 
 def cleanup_lock_after_micall_done(stderr_file: Path) -> bool:
     """Require the actual Podman auto-removal error AFTER MiCall completion."""
@@ -32,7 +46,7 @@ def cleanup_lock_after_micall_done(stderr_file: Path) -> bool:
     before, newline, last = ending.rpartition("\n")
     return bool(
         newline
-        and _POSTRUN_LOCK.fullmatch(last)
+        and (_POSTRUN_LOCK.fullmatch(last) or _POSTRUN_SAVE_LOCK.fullmatch(last))
         and "micall.process_run(): Done." in before
     )
 
@@ -76,5 +90,14 @@ def startup_database_lock(stderr_file: Path) -> bool:
         tail = stderr_file.read_text(errors="replace").rstrip().splitlines()
     except OSError:
         return False
-    return bool(tail and tail[-1] in _STARTUP_LOCK_ERRORS
-                and not any("micall.process_run(): Done." in line for line in tail))
+    # Logs from earlier failed starts are retained in the same file. Allow
+    # only previous recognized pre-start errors and our own retry markers;
+    # never treat arbitrary MiCall output as a pre-start-only failure.
+    retry_marker = re.compile(r"Benchmark: retrying Podman startup after DB lock \(\d+\)")
+    def prestart_line(line: str) -> bool:
+        return bool(line in _STARTUP_LOCK_ERRORS
+                    or _PRESTART_SAVE_LOCK.fullmatch(line)
+                    or retry_marker.fullmatch(line))
+    return bool(tail and all(prestart_line(line) for line in tail)
+                and (tail[-1] in _STARTUP_LOCK_ERRORS
+                     or _PRESTART_SAVE_LOCK.fullmatch(tail[-1])))

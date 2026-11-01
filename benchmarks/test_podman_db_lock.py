@@ -22,6 +22,18 @@ POSTRUN_ERROR = (
     'config from DB: database is locked"\n'
 )
 
+PRESTART_SAVE = (
+    f"Error: saving container {POSTRUN_ID} state: beginning container "
+    f"{POSTRUN_ID} save transaction: database is locked\n"
+)
+POSTRUN_SAVE = (
+    'time="2026-11-01T09:07:23Z" level=error msg="Removing container '
+    f'{POSTRUN_ID}: cleaning up container {POSTRUN_ID}: '
+    f'unmounting container {POSTRUN_ID} storage: unmounting container '
+    f'{POSTRUN_ID}: saving container {POSTRUN_ID} state: beginning container '
+    f'{POSTRUN_ID} save transaction: database is locked"\n'
+)
+
 
 class PodmanLockTests(TestCase):
     def setUp(self):
@@ -69,6 +81,29 @@ class PodmanLockTests(TestCase):
         self.assertTrue(calls[1][name_index].endswith("-dbretry1"))
         self.assertLessEqual(float(calls[1][calls[1].index("--timeout") + 1]), 14)
 
+    def test_exact_prestart_save_state_exit126_retries_with_same_deadline(self):
+        result, calls = self.simulate([
+            (126, PRESTART_SAVE, False),
+            (0, "2026-11-01[INFO]micall.process_run(): Done.\n", True),
+        ])
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(result["podman_start_retries"], 1)
+        self.assertEqual(result["seconds"], 0.02)
+        self.assertLessEqual(float(calls[1][calls[1].index("--timeout") + 1]), 14)
+
+    def test_mixed_prestart_lock_retries_keep_one_deadline(self):
+        result, calls = self.simulate([
+            (125, "Error: beginning transaction: database is locked\n", False),
+            (126, PRESTART_SAVE, False),
+            (0, "2026-11-01[INFO]micall.process_run(): Done.\n", True),
+        ])
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(result["podman_start_retries"], 2)
+        self.assertEqual(result["seconds"], 0.02)
+        self.assertLessEqual(float(calls[2][calls[2].index("--timeout") + 1]), 14)
+
     def test_generic_startup_error_never_retries(self):
         result, calls = self.simulate([
             (125, "Error: missing executable\n", False),
@@ -87,6 +122,16 @@ class PodmanLockTests(TestCase):
         self.assertEqual(result["podman_exit_code"], 127)
         self.assertEqual(result["seconds"], 0.02)
         self.assertEqual(result["timing_origin"], TIMING_ORIGIN)
+
+    def test_save_state_cleanup_exit127_recovers_only_authenticated_micall(self):
+        result, calls = self.simulate([
+            (127, "2026-11-01[INFO]micall.process_run(): Done.\n"
+                  + POSTRUN_SAVE, True),
+        ])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(result["podman_exit_code"], 127)
+        self.assertEqual(result["seconds"], 0.02)
 
     def test_postrun_failure_without_completion_remains_failure(self):
         result, calls = self.simulate([

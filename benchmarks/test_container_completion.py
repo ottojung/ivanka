@@ -17,6 +17,18 @@ CLEANUP_LINE = (
     'config from DB: database is locked"'
 )
 
+SAVE_START = (
+    f"Error: saving container {CONTAINER_ID} state: beginning container "
+    f"{CONTAINER_ID} save transaction: database is locked"
+)
+SAVE_END = (
+    'time="2026-11-01T09:07:23Z" level=error msg="Removing container '
+    f'{CONTAINER_ID}: cleaning up container {CONTAINER_ID}: '
+    f'unmounting container {CONTAINER_ID} storage: '
+    f'unmounting container {CONTAINER_ID}: saving container {CONTAINER_ID} '
+    f'state: beginning container {CONTAINER_ID} save transaction: database is locked"'
+)
+
 
 class CompletionEvidenceTests(unittest.TestCase):
     def setUp(self):
@@ -84,6 +96,27 @@ class CompletionEvidenceTests(unittest.TestCase):
         self.assertTrue(startup_database_lock(self.stderr))
         self.write_evidence(done=False,
             diagnostic="Error: failed to find image")
+        self.assertFalse(startup_database_lock(self.stderr))
+
+    def test_exact_save_state_cleanup_requires_verified_completion(self):
+        self.write_evidence(diagnostic=SAVE_END)
+        self.assertEqual(authenticated_postrun_cleanup(127, self.root, 13), 12.25)
+        self.assertIsNone(authenticated_postrun_cleanup(126, self.root, 13))
+        self.write_evidence(done=False, diagnostic=SAVE_END)
+        self.assertIsNone(authenticated_postrun_cleanup(127, self.root, 13))
+        self.write_evidence(diagnostic=SAVE_END.replace(
+            f"saving container {CONTAINER_ID}", f"saving container {'b' * 64}"))
+        self.assertIsNone(authenticated_postrun_cleanup(127, self.root, 13))
+
+    def test_prestart_save_state_requires_exact_single_error(self):
+        self.write_evidence(done=False, diagnostic=SAVE_START)
+        self.assertTrue(startup_database_lock(self.stderr))
+        self.write_evidence(done=True, diagnostic=SAVE_START)
+        self.assertFalse(startup_database_lock(self.stderr))
+        self.write_evidence(done=False, diagnostic=SAVE_START.replace(
+            f"beginning container {CONTAINER_ID}", f"beginning container {'b' * 64}"))
+        self.assertFalse(startup_database_lock(self.stderr))
+        self.write_evidence(done=False, diagnostic="noise\n" + SAVE_START)
         self.assertFalse(startup_database_lock(self.stderr))
 
     def test_clean_timer_uses_identical_validation(self):

@@ -6,7 +6,7 @@ import unittest
 
 from consensus_mask_stage_audit import reverse_complement
 from mask_read_allele_support import (
-    audit_mask_read_support, fastq_pairs, spanning_alleles,
+    _count_spaced_flanks, audit_mask_read_support, fastq_pairs, spanning_alleles,
 )
 
 LEFT = "ACGT" * 7 + "GTA"
@@ -91,6 +91,30 @@ class ReadSupportTests(unittest.TestCase):
         self.assertEqual(region.count(RIGHT), 1)
         self.assertFalse(report["region_unique_flanks"])
         self.assertEqual(report["exact_bridge_pairs"], 0)
+
+    def test_palindromic_bridge_is_one_locus_not_two_orientations(self):
+        # The masked physical interval is self-reverse-complementary.
+        region = "ACGXXXXCGT"
+        read = "ACGATATCGT"
+        self.assertEqual(_count_spaced_flanks(region, "ACG", "CGT", 4), 1)
+        report = audit_mask_read_support(
+            {("S", "R"): region}, {("S", "R"): read},
+            [(read, "NNNN")], anchor=3)["mask_runs"][0]
+        self.assertTrue(report["region_unique_flanks"])
+        self.assertEqual(report["exact_bridge_pairs"], 1)
+        # A symmetric locus still does not certify seed-strand orientation.
+        self.assertFalse(report["unique_seed_flank_bridge"])
+
+    def test_palindromic_flanks_do_not_force_an_allele_orientation(self):
+        region = "ACGXXXXCGT"
+        read = "ACGAAGCCGT"
+        report = audit_mask_read_support(
+            {("S", "R"): region}, {("S", "R"): read},
+            [(read, "NNNN")], anchor=3)["mask_runs"][0]
+        self.assertTrue(report["region_unique_flanks"])
+        self.assertEqual(report["ambiguous_pairs"], 1)
+        self.assertEqual(report["exact_bridge_pairs"], 0)
+        self.assertEqual(_count_spaced_flanks(region + "TT" + region, "ACG", "CGT", 4), 2)
 
     def test_reverse_complement_other_region(self):
         other = reverse_complement(LEFT + ALT_ALLELE + RIGHT)

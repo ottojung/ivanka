@@ -679,6 +679,27 @@ def failure_category(record):
     if record.get('best_contig_acceptance',{}).get('pass') is False: return 'ivanka_below_noninferiority_threshold'
     return 'other_evaluation_error'
 
+def validate_milestone198_preflight(args, sample_count, manifest_hash, iva_image_id):
+    """Fail closed before any qualification or strict cache audit."""
+    if iva_image_id != milestone198.IVA_IMAGE_SHA256:
+        raise ValueError("198-sample milestone requires the immutable original IVA image")
+    expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
+    # Cache audit is read-only; it may inspect IVA without starting an IVA arm.
+    cache_mode = args.cache_status and args.mode in ("iva", "ivanka")
+    if ((args.mode != "ivanka" and not cache_mode) or
+        args.sample is not None or args.allow_missing_baseline or
+        not args.all_projects or args.parallel_arms or args.jobs != 10 or
+        sample_count != milestone198.SAMPLE_COUNT or
+        manifest_hash != milestone198.MANIFEST_SHA256 or
+        (expected and expected != milestone198.MANIFEST_SHA256)):
+        raise ValueError("198-sample milestone requires the pinned full cohort, IVA cache, all projects, and 10 workers; execution must be Ivanka-only")
+
+
+def validate_milestone198_panel(reference_count, reference_sha256):
+    if reference_count != 33 or reference_sha256 != milestone198.PANEL_SHA256:
+        raise ValueError("198-sample panel differs from the frozen 33-reference panel")
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="append",
@@ -735,14 +756,8 @@ def main():
     if args.qualify and args.qualify_198:
         parser.error("--qualify and --qualify-198 are mutually exclusive")
     if args.qualify_198:
-        expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
-        if (args.mode!="ivanka" or args.sample is not None or
-            args.allow_missing_baseline or not args.all_projects or
-            args.parallel_arms or args.jobs!=10 or
-            manifest_sample_count!=milestone198.SAMPLE_COUNT or
-            manifest_hash!=milestone198.MANIFEST_SHA256 or
-            (expected and expected!=milestone198.MANIFEST_SHA256)):
-            raise ValueError("198-sample milestone requires the pinned full cohort, IVA cache, all projects, Ivanka-only and 10 workers")
+        validate_milestone198_preflight(args, manifest_sample_count, manifest_hash,
+                                       pinned_iva_id)
     if args.qualify:
         expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
         if args.mode!="ivanka" or args.sample is not None or manifest_sample_count!=QUALIFY_SAMPLE_COUNT:
@@ -763,6 +778,14 @@ def main():
                                   args.all_projects, require_internal_timing=(args.qualify or args.qualify_198))
         print("IVA_CACHE_STATUS", json.dumps(status, sort_keys=True), flush=True)
         if args.cache_status:
+            if args.qualify_198 and not status["missing_or_invalid"]:
+                # Cache-only qualification must also authenticate the frozen panel.
+                with (DATA/"hxb2.fasta").open() as reference_file:
+                    frozen_hxb2=next(SeqIO.parse(reference_file,"fasta")).seq
+                frozen_projects,_=load_micall_projects(images["iva"])
+                from reference_panel import build_reference_panel,panel_sha256
+                frozen_panel=build_reference_panel(frozen_projects,frozen_hxb2)
+                validate_milestone198_panel(len(frozen_panel),panel_sha256(frozen_panel))
             return 0 if not status["missing_or_invalid"] else 2
         if status["missing_or_invalid"]:
             raise ValueError("Missing verified IVA baselines: import successful existing IVA outputs before running Ivanka")
@@ -772,9 +795,8 @@ def main():
     from reference_panel import build_reference_panel,panel_sha256
     references=build_reference_panel(projects,hxb2)
     reference_panel_hash=panel_sha256(references)
-    if args.qualify_198 and (reference_panel_hash!=milestone198.PANEL_SHA256 or
-                             len(references)!=33):
-        raise ValueError("198-sample panel differs from the frozen 33-reference panel")
+    if args.qualify_198:
+        validate_milestone198_panel(len(references),reference_panel_hash)
     if args.probe:
         print(json.dumps({"images":checked,"sample_count":len(rows),
                           "hxb2_sha256":sha(DATA/"hxb2.fasta"),

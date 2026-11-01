@@ -6,6 +6,45 @@ from unittest import TestCase
 spec=importlib.util.spec_from_file_location("podman_compare",Path(__file__).with_name("podman_full_micall.py"))
 m=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
+class StrictCacheAuditTests(TestCase):
+ def test_strict_iva_cache_audit_is_read_only_mode(self):
+  from types import SimpleNamespace
+  args=SimpleNamespace(mode="iva",cache_status=True,sample=None,
+                       allow_missing_baseline=False,all_projects=True,
+                       parallel_arms=False,jobs=10)
+  m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+      m.milestone198.MANIFEST_SHA256,m.milestone198.IVA_IMAGE_SHA256)
+  with self.assertRaisesRegex(ValueError,"immutable original IVA"):
+   m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+       m.milestone198.MANIFEST_SHA256,"incorrect-image-id")
+  with self.assertRaisesRegex(ValueError,"pinned full cohort"):
+   m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+       "incorrect-manifest",m.milestone198.IVA_IMAGE_SHA256)
+  args.all_projects=False
+  with self.assertRaisesRegex(ValueError,"pinned full cohort"):
+   m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+       m.milestone198.MANIFEST_SHA256,m.milestone198.IVA_IMAGE_SHA256)
+
+ def test_frozen_panel_requires_exact_digest_and_count(self):
+  m.validate_milestone198_panel(33,m.milestone198.PANEL_SHA256)
+  with self.assertRaisesRegex(ValueError,"frozen 33-reference panel"):
+   m.validate_milestone198_panel(32,m.milestone198.PANEL_SHA256)
+  with self.assertRaisesRegex(ValueError,"frozen 33-reference panel"):
+   m.validate_milestone198_panel(33,"incorrect-panel")
+
+ def test_execution_cannot_use_iva_mode(self):
+  from types import SimpleNamespace
+  args=SimpleNamespace(mode="iva",cache_status=False,sample=None,
+                       allow_missing_baseline=False,all_projects=True,
+                       parallel_arms=False,jobs=10)
+  with self.assertRaisesRegex(ValueError,"execution must be Ivanka-only"):
+   m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+       m.milestone198.MANIFEST_SHA256,m.milestone198.IVA_IMAGE_SHA256)
+  args.mode="ivanka"
+  m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+      m.milestone198.MANIFEST_SHA256,m.milestone198.IVA_IMAGE_SHA256)
+
+
 class BenchmarkTests(TestCase):
  def test_executed_images_are_pinned_by_id(self):
   configured={"iva":"test/iva:mutable","ivanka":"test/ivanka:mutable"}

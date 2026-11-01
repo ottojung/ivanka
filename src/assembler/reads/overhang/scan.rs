@@ -20,9 +20,9 @@ impl Reads {
         // A fixed 250-base search window silently misses valid anchors in
         // longer reads, especially when the terminal sequence is ambiguous.
         let start=contig.len().saturating_sub(self.max_read_len.saturating_sub(1));
-        // Two orientations share one bit per original FASTQ read.
-        let read_count = self.seqs.len().div_ceil(2);
-        let mut used = vec![0u64; (read_count + 63) / 64];
+        // Reuse a sparse-cleared bitset; two orientations share one bit.
+        let mut used = self.seen.borrow_mut();
+        used.clear();
         let mut ext=Vec::new();
         let mut ids=Vec::new();
         let mut previous = None;
@@ -37,9 +37,7 @@ impl Reads {
             if hits.len()>50000 {continue;}
             for hit in hits {
                 let original=hit.read/2;
-                let word = original as usize / 64;
-                let bit = 1u64 << (original as usize % 64);
-                if used[word] & bit != 0 {continue;}
+                if used.contains(original as usize) {continue;}
                 let pos=hit.pos as usize;
                 // The contig may be shorter than the aligned read, especially
                 // during seeding. In that case the read starts *before* the
@@ -49,11 +47,12 @@ impl Reads {
                 let read=&self.seqs[hit.read as usize];
                 if overlap<K || read_start+overlap>=read.len() {continue;}
                 if read[read_start..read_start+overlap]!=contig[begin..] {continue;}
-                used[word] |= bit;
+                used.mark(original as usize);
                 ext.push(read[read_start+overlap..].to_vec());
                 ids.push(original);
             }
         }
+        used.clear();
         (ext,ids)
     }
 }

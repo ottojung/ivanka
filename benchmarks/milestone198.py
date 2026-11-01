@@ -57,7 +57,8 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
             if record.get("iva_baseline_reused") is not True:
                 raise ValueError("Missing verified IVA control")
             iva, ivanka = record["iva"], record["ivanka"]
-            if iva["exit_code"] != 0 or ivanka["exit_code"] != 0:
+            if (type(iva["exit_code"]) is not int or type(ivanka["exit_code"]) is not int
+                    or iva["exit_code"] != 0 or ivanka["exit_code"] != 0):
                 raise ValueError("One or both MiCall arms failed")
             if iva["image_id"] != iva_image or ivanka["image_id"] != ivanka_image:
                 raise ValueError("Image provenance mismatch")

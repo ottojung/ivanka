@@ -9,7 +9,7 @@ impl Reads {
         if let Some(v)=self.overhang_cache.borrow().get(key) {return Rc::clone(v);}
         let value=Rc::new(self.overhangs_with_ids(contig));
         let mut cache=self.overhang_cache.borrow_mut();
-        if cache.len()>=64 {cache.clear();}
+        if cache.len()>=256 {cache.clear();}
         cache.insert(key.to_vec(),Rc::clone(&value));
         value
     }
@@ -36,6 +36,6 @@ impl Reads {
     let second=reads.cached_overhangs(b"TCGTACGT");
     assert!(!Rc::ptr_eq(&first,&second));
     for i in 0..90u32 {reads.cached_overhangs(&i.to_le_bytes());}
-    assert!(reads.overhang_cache.borrow().len()<=64);
+    assert!(reads.overhang_cache.borrow().len()<=256);
     assert_eq!(*first,reads.overhangs_with_ids(b"ACGTACGT"));
 }

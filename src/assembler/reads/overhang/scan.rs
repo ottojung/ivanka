@@ -17,7 +17,7 @@ impl Reads {
     // read mapper: a k-mer is only an inverted-index lookup; the full overlap must be exact.
     pub(crate) fn overhangs_with_ids(&self, contig:&[u8]) -> (Vec<Vec<u8>>,Vec<u32>) {
         if contig.len()<K {return (Vec::new(),Vec::new());}
-        let window=self.max_read_len.max(250);
+        let window=self.max_read_len.max(500);
         let start=contig.len().saturating_sub(window);
         let mut used=HashSet::<u32>::new();
         let mut ext=Vec::new();
@@ -26,19 +26,14 @@ impl Reads {
         for q in start..=contig.len()-K {
             let key=rolling_query(contig,q,previous);
             previous=key;
-            let Some(key)=key else {continue;
-            };
-            let Some(hits)=self.index.get(&key) else {continue;
-            };
+            let Some(key)=key else {continue;};
+            let Some(hits)=self.index.get(&key) else {continue;};
             // Pathological repetitive k-mers cannot be used as reliable extension anchors.
             if hits.len()>50000 {continue;}
             for hit in hits {
                 let original=hit.read/2;
                 if used.contains(&original) {continue;}
                 let pos=hit.pos as usize;
-                // The contig may be shorter than the aligned read, especially
-                // during seeding. In that case the read starts *before* the
-                // contig, and the matching anchor is internal to the read.
                 let (begin,read_start)=if q>=pos {(q-pos,0)} else {(0,pos-q)};
                 let overlap=contig.len()-begin;
                 let read=&self.seqs[hit.read as usize];

@@ -6,6 +6,20 @@ if [ "$#" -ne 1 ]; then
     exit 2
 fi
 image=$1
+threads=${BOWTIE_THREADS:-2}
+case "$threads" in
+    ""|*[!0-9]*) echo "Invalid Bowtie2 thread count: $threads" >&2; exit 2 ;;
+esac
+if [ "$threads" -lt 2 ] || [ "$threads" -gt 32 ]; then
+    echo "Bowtie2 threads must be 2..32" >&2
+    exit 2
+fi
+if [ "$threads" -ne 2 ]; then
+    case "$image" in
+        *"-p$threads") ;;
+        *) echo "Nondefault Bowtie2 threads require image tag suffix -p$threads" >&2; exit 2 ;;
+    esac
+fi
 case "$image" in
     localhost/ivanka-micall-ivanka:milestone198-*) ;;
     *) echo "Refusing unexpected candidate image tag: $image" >&2; exit 2 ;;
@@ -40,11 +54,12 @@ fi
 podman build --pull=never --file benchmarks/Dockerfile.micall-milestone198 \
     --build-arg IVA_CONTROL_IMAGE="$control" \
     --build-arg SOURCE_COMMIT="$source_commit" \
-    --build-arg BOWTIE_THREADS=2 \
+    --build-arg BOWTIE_THREADS="$threads" \
     --tag "$image" .
 candidate_id=$(podman image inspect --format '{{.Id}}' "$image")
 echo "PINNED_IVANKA_CANDIDATE=$image"
 echo "PINNED_IVANKA_IMAGE_ID=${candidate_id#sha256:}"
 echo "SOURCE_COMMIT=$source_commit"
+echo "BOWTIE_THREADS=$threads"
 echo "PINNED_IVA_CONTROL_ID=$pinned"
 echo "Release lock before the next exclusive benchmark invocation."

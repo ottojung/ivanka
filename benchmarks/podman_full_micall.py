@@ -43,9 +43,21 @@ def sha(path):
     return h.hexdigest()
 
 
+PODMAN_INSPECT_TIMEOUT = 60
+
+
+def podman_inspect_output(args):
+    """Bound image metadata reads before committing to a 198-sample run."""
+    try:
+        return subprocess.check_output(
+            ["podman", "image", "inspect", *args],
+            text=True, timeout=PODMAN_INSPECT_TIMEOUT).strip()
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError("Podman image inspection timed out before qualification") from exc
+
+
 def image_id(ref):
-    return subprocess.check_output(["podman", "image", "inspect",
-                                    "--format", "{{.Id}}", ref], text=True).strip()
+    return podman_inspect_output(["--format", "{{.Id}}", ref])
 
 
 def pinned_run_images(configured, verified, pinned_iva_id):
@@ -68,9 +80,7 @@ def recorded_image_id(ref):
 
 
 def image_layers(ref):
-    raw = subprocess.check_output(
-        ["podman", "image", "inspect", "--format", "{{json .RootFS.Layers}}", ref],
-        text=True).strip()
+    raw = podman_inspect_output(["--format", "{{json .RootFS.Layers}}", ref])
     return json.loads(raw)
 
 

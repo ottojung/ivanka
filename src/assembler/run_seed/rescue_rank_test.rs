@@ -19,3 +19,17 @@ use super::rescue_rank::append_preserving_diversity;
     assert!(!append_preserving_diversity(&mut output,vec![b'G';1200],16,0));
     assert_eq!(output,originals);
 }
+
+#[test] fn same_31mers_do_not_justify_losing_a_longer_path() {
+    let mut contigs=vec![vec![b'A';80],vec![b'A';120],vec![b'C';90]];
+    let before=contigs.clone();
+    assert!(!append_preserving_diversity(&mut contigs,b"ACGT".repeat(300),3,1));
+    assert_eq!(contigs,before);
+}
+#[test] fn rescue_can_replace_an_exact_path_it_contains() {
+    let mut contigs=vec![vec![b'C';90],vec![b'A';80]];
+    let mut rescue=vec![b'G';1000];
+    rescue.extend(vec![b'A';80]);
+    assert!(append_preserving_diversity(&mut contigs,rescue.clone(),2,1));
+    assert_eq!(contigs[1],rescue);
+}

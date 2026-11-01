@@ -110,16 +110,68 @@ def summarize(rows):
             "groups": result}
 
 
+
+def live_report(events, expected_samples):
+    """Read-only diagnostic of one running invocation; never formal qualification."""
+    if not events or len({e.get("invocation") for e in events}) != 1:
+        raise ValueError("Live records must have one nonempty invocation")
+    invocation = events[0].get("invocation")
+    if not isinstance(invocation, str) or not invocation:
+        raise ValueError("Missing invocation identity")
+    if any(e.get("status") not in ("started", "finished") for e in events):
+        raise ValueError("Unexpected live record status")
+    started = [e for e in events if e["status"] == "started"]
+    finished = [e for e in events if e["status"] == "finished"]
+    names = [e.get("sample") for e in started]
+    done = [e.get("sample") for e in finished]
+    if len(started) != expected_samples or len(set(names)) != expected_samples:
+        raise ValueError("Live invocation must start exactly the expected unique samples")
+    if any(not isinstance(n, str) or not n for n in names):
+        raise ValueError("Missing started sample identity")
+    if len(set(done)) != len(done) or not set(done).issubset(names):
+        raise ValueError("Duplicate or unknown finished sample")
+    valid = [e for e in finished if e.get("failed") is False]
+    failed = [e.get("sample") for e in finished if e.get("failed") is not False]
+    if valid:
+        for arm in ("iva", "ivanka"):
+            if {e[arm].get("timing_origin") for e in valid} != {
+                    "micall_in_container_monotonic_v1"}:
+                raise ValueError("Mixed or non-authentic internal timing origins")
+            image_ids = {e[arm].get("image_id") for e in valid}
+            if len(image_ids) != 1 or not next(iter(image_ids)):
+                raise ValueError("Missing or mixed image IDs in live diagnostic")
+        rows = cohort(valid, len(valid))
+        report = summarize(rows)
+        report["worst_runtime_regressions"] = sorted(
+            ({"sample": r["sample"], "runtime_delta_seconds": r["delta"],
+              "assembler_seconds": r["assembler_seconds"],
+              "remap_seconds": r["remap_seconds"]} for r in rows),
+            key=lambda r: r["runtime_delta_seconds"])[:10]
+    else:
+        report = {"formal_qualification": False, "groups": {},
+                  "worst_runtime_regressions": []}
+    report.update(partial_diagnostic=True, invocation=invocation,
+                  started=len(started), finished=len(finished),
+                  valid=len(valid), failed_samples=sorted(failed),
+                  remaining=expected_samples-len(finished),
+                  alignment_floor_failures=sum(
+                      e.get("best_contig_acceptance", {}).get("pass") is not True
+                      for e in valid))
+    return report
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jsonl", type=Path, required=True)
     parser.add_argument("--expected-samples", type=int, default=198)
+    parser.add_argument("--live", action="store_true",
+                        help="Analyze one in-progress invocation; never formal qualification")
     args = parser.parse_args()
     if args.expected_samples < 1:
         parser.error("--expected-samples must be positive")
     lines = [json.loads(s) for s in args.jsonl.read_text().splitlines() if s.strip()]
-    print(json.dumps(summarize(cohort(lines, args.expected_samples)),
-                     indent=2, sort_keys=True))
+    report = (live_report(lines, args.expected_samples) if args.live else
+              summarize(cohort(lines, args.expected_samples)))
+    print(json.dumps(report, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

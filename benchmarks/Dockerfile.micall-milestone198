@@ -1,5 +1,6 @@
 # Final Ivanka candidate: original frozen IVA control plus source-pinned mutable patches.
 # The IVA control itself is never rebuilt, modified, or retagged by this recipe.
+ARG IVA_CONTROL_IMAGE=localhost/ivanka-micall-iva:base
 FROM docker.io/library/rust:1.93-bookworm AS ivanka-builder
 WORKDIR /src
 COPY Cargo.toml Cargo.lock build.rs ./
@@ -7,7 +8,6 @@ COPY source_lints ./source_lints
 COPY src ./src
 RUN cargo build --release --locked
 
-ARG IVA_CONTROL_IMAGE=localhost/ivanka-micall-iva:base
 FROM ${IVA_CONTROL_IMAGE}
 ARG SOURCE_COMMIT
 ARG BOWTIE_THREADS=2

@@ -1,10 +1,13 @@
 """Tests for orientation-independent, exact k-mer retention auditing."""
 import random
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from contig_diversity import audit, canonical_kmers, read_fasta, read_record_support, read_supported_loss
+from contig_diversity import audit, canonical_kmers, canonical_linkages, read_fasta, read_record_support, read_supported_loss, read_linkage_loss
 
 
 class ContigDiversityTest(unittest.TestCase):
@@ -62,6 +65,48 @@ class ContigDiversityTest(unittest.TestCase):
                 read_record_support([a, b], {"ACGT"}, k=4)
             with self.assertRaises(ValueError):
                 read_record_support([a, a], {"ACGT"}, k=4, max_records=0)
+
+    def test_read_linkage_detects_phase_loss_in_spite_of_full_31mer_retention(self):
+        old = "A" * 60 + "C" * 60 + "A" * 60
+        new = "C" * 60 + "A" * 60 + "C" * 60
+        self.assertEqual(audit([old], [new], 31)["old_kmers_lost"], 0)
+        self.assertGreater(len(canonical_linkages(old, 31, 100) -
+                               canonical_linkages(new, 31, 100)), 0)
+        with tempfile.TemporaryDirectory() as temp:
+            a, b = Path(temp) / "a.fastq", Path(temp) / "b.fastq"
+            a.write_text("@pair/1\n" + old + "\n+\n" + "!" * len(old) + "\n")
+            b.write_text("@pair/2\n" + "T" * len(old) + "\n+\n" +
+                         "!" * len(old) + "\n")
+            report = read_linkage_loss([old], [new], [a, b], distances=[100], k=31)
+            self.assertEqual(report["sampled_read_records"], 2)
+            self.assertGreater(report["distances"]["100"]["lost_linkages_supported_by_at_least_1_record"], 0)
+
+    def test_linkage_reverse_complement_and_bad_distances(self):
+        seq = "ACGTACGTTGCAACCTGATCGTACGCTAGCTTGAGCTAGGCTACGAT"
+        rc = seq.translate(str.maketrans("ACGT", "TGCA"))[::-1]
+        self.assertEqual(canonical_linkages(seq, 7, 17),
+                         canonical_linkages(rc, 7, 17))
+        self.assertEqual(canonical_linkages("ACNNNNGT", 2, 5), set())
+        with self.assertRaises(ValueError):
+            canonical_linkages(seq, 31, 0)
+        with self.assertRaises(ValueError):
+            read_linkage_loss([seq], [rc], [], distances=[-1])
+
+    def test_cli_passes_custom_k_to_linkage_audit(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            old, new = folder / "old.fa", folder / "new.fa"
+            r1, r2 = folder / "r1.fq", folder / "r2.fq"
+            old.write_text(">old\nAAAACCCCAAAA\n")
+            new.write_text(">new\nCCCCAAAACCCC\n")
+            for path in (r1, r2):
+                path.write_text("@x\nAAAACCCCAAAA\n+\n!!!!!!!!!!!!\n")
+            result = subprocess.run(
+                [sys.executable, str(Path(__file__).with_name("contig_diversity.py")),
+                 str(old), str(new), "--k", "4", "--reads1", str(r1),
+                 "--reads2", str(r2), "--link-distances", "5"],
+                capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(result.stdout)["lost_read_linkages"]["k"], 4)
 
     def test_fasta_multiline_and_missing_header(self):
         with tempfile.TemporaryDirectory() as temp:

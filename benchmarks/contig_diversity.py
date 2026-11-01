@@ -72,6 +72,22 @@ def audit(before, after, k=31):
     }
 
 
+def _fastq_sequences(path, max_records):
+    path = Path(path)
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt") as stream:
+        for _ in range(max_records):
+            header = stream.readline()
+            if not header:
+                break
+            bases = stream.readline().strip().upper()
+            plus = stream.readline()
+            quality = stream.readline().strip()
+            if not header.startswith("@") or not plus.startswith("+") or len(bases) != len(quality):
+                raise ValueError(f"{path}: invalid/truncated FASTQ record")
+            yield bases
+
+
 def read_record_support(read_paths, target_kmers, k=31, max_records=10000):
     """Count exact canonical k-mers once per sampled FASTQ *record*, not molecule."""
     if k < 1 or max_records < 1:
@@ -79,21 +95,10 @@ def read_record_support(read_paths, target_kmers, k=31, max_records=10000):
     support = Counter()
     sampled = []
     for path in read_paths:
-        path = Path(path)
-        opener = gzip.open if path.suffix == ".gz" else open
         count = 0
-        with opener(path, "rt") as stream:
-            while count < max_records:
-                header = stream.readline()
-                if not header:
-                    break
-                bases = stream.readline().strip().upper()
-                plus = stream.readline()
-                quality = stream.readline().strip()
-                if not header.startswith("@") or not plus.startswith("+") or len(bases) != len(quality):
-                    raise ValueError(f"{path}: invalid/truncated FASTQ record")
-                support.update(canonical_kmers(bases, k) & target_kmers)
-                count += 1
+        for bases in _fastq_sequences(path, max_records):
+            support.update(canonical_kmers(bases, k) & target_kmers)
+            count += 1
         sampled.append(count)
     if len(sampled) != 2 or sampled[0] != sampled[1] or sampled[0] == 0:
         raise ValueError("Two nonempty FASTQ mates must have equal sampled record counts")
@@ -119,6 +124,76 @@ def read_supported_loss(before, after, read_paths, k=31, max_records=10000):
     }
 
 
+def canonical_linkages(sequence, k=31, distance=100):
+    """Exact ordered pairs of k-mer anchors, canonicalized across both strands.
+
+    The intervening bases are *not* compared: these are within-read linkage
+    observations, not proof of an entire haplotype or independent molecules.
+    """
+    if k < 1 or distance < 1:
+        raise ValueError("k and anchor distance must be positive")
+    sequence = sequence.upper()
+    result = set()
+    for i in range(max(0, len(sequence) - distance - k + 1)):
+        first = sequence[i:i + k]
+        second = sequence[i + distance:i + distance + k]
+        if any(base not in "ACGT" for base in first + second):
+            continue
+        reverse = (second.translate(_COMPLEMENT)[::-1],
+                   first.translate(_COMPLEMENT)[::-1])
+        result.add(min((first, second), reverse))
+    return result
+
+
+def read_linkage_loss(before, after, read_paths, k=31,
+                      distances=(100, 200), max_records=10000):
+    """Audit read-backed phase linkages absent from the candidate contigs.
+
+    A linkage joins two exact k-mer anchors at a fixed separation within one
+    FASTQ record. Neither marginal k-mer support nor read linkage proves a
+    full-length minority haplotype; no reference or aligner is involved.
+    """
+    if k < 1 or max_records < 1 or not distances or any(d < 1 for d in distances):
+        raise ValueError("k, max_records and every distance must be positive")
+    distances = sorted(set(distances))
+    lost = {}
+    for distance in distances:
+        old = set().union(*(canonical_linkages(s, k, distance) for s in before))
+        new = set().union(*(canonical_linkages(s, k, distance) for s in after))
+        lost[distance] = old - new
+    support = {distance: Counter() for distance in distances}
+    sampled = []
+    for path in read_paths:
+        count = 0
+        for bases in _fastq_sequences(path, max_records):
+            for distance in distances:
+                if lost[distance]:
+                    support[distance].update(
+                        canonical_linkages(bases, k, distance) & lost[distance])
+            count += 1
+        sampled.append(count)
+    if len(sampled) != 2 or sampled[0] != sampled[1] or sampled[0] == 0:
+        raise ValueError("Two nonempty FASTQ mates must have equal sampled record counts")
+    return {
+        "sampled_read_records": sum(sampled),
+        "k": k,
+        "distances": {
+            str(d): {
+                "lost_linkages": len(lost[d]),
+                "lost_linkages_supported_by_at_least_1_record":
+                    sum(support[d][x] >= 1 for x in lost[d]),
+                "lost_linkages_supported_by_at_least_3_records":
+                    sum(support[d][x] >= 3 for x in lost[d]),
+                "lost_linkages_supported_by_at_least_10_records":
+                    sum(support[d][x] >= 10 for x in lost[d]),
+                "max_supporting_read_records":
+                    max((support[d][x] for x in lost[d]), default=0),
+            } for d in distances
+        },
+        "warning": "Exact within-read anchor linkage is not full-haplotype or independent-molecule support",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("old_fasta", type=Path)
@@ -128,15 +203,23 @@ def main():
     parser.add_argument("--reads2", type=Path)
     parser.add_argument("--max-read-records", type=int, default=10000,
                         help="Sample at most this many FASTQ records from each mate")
+    parser.add_argument("--link-distances", type=int, nargs="+",
+                        help="Audit read-backed ordered 31-mer anchor pairs at these separations; requires both FASTQs")
     args = parser.parse_args()
     if (args.reads1 is None) != (args.reads2 is None):
         parser.error("--reads1 and --reads2 must be supplied together")
+    if args.link_distances and args.reads1 is None:
+        parser.error("--link-distances requires --reads1 and --reads2")
     before = read_fasta(args.old_fasta)
     after = read_fasta(args.new_fasta)
     report = audit(before, after, args.k)
     if args.reads1 is not None:
         report["lost_kmer_read_record_support"] = read_supported_loss(
             before, after, [args.reads1, args.reads2], args.k, args.max_read_records)
+    if args.link_distances:
+        report["lost_read_linkages"] = read_linkage_loss(
+            before, after, [args.reads1, args.reads2],
+            k=args.k, distances=args.link_distances, max_records=args.max_read_records)
     print(json.dumps(report, indent=2))
 
 

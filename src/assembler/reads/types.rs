@@ -10,5 +10,6 @@ pub(crate) struct Reads {
     pub(crate) seed_counts: HashMap<u64, u32>,
     pub(crate) max_read_len: usize,
     pub(crate) overlength_rejections: Cell<usize>,
+    pub(crate) overhang_seen: RefCell<super::overhang::seen::Seen>,
     pub(crate) overhang_cache: RefCell<HashMap<Vec<u8>,Rc<(Vec<Vec<u8>>,Vec<u32>)>>>,
 }

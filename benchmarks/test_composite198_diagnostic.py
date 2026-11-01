@@ -9,8 +9,10 @@ def record(sample, invocation, legacy=False):
     return dict(sample=sample, invocation=invocation, status="finished",
         failed=legacy, iva_baseline_reused=True, total_seconds=9,
         sample_time_limit_seconds=1800,
-        iva=dict(image_id="a", exit_code=0, seconds=10, metrics={}),
-        ivanka=dict(image_id="b", exit_code=0, seconds=8, metrics={}),
+        iva=dict(image_id="a", exit_code=0, seconds=10,
+                 timing_origin="micall_in_container_monotonic_v1", metrics={}),
+        ivanka=dict(image_id="b", exit_code=0, seconds=8,
+                    timing_origin="micall_in_container_monotonic_v1", metrics={}),
         provenance=dict(iva_image_id="a", fastq_sha256=["1"*64, "2"*64]),
         best_contig_acceptance=dict(
             method="best_final_max_contig_local_alignment_over_reference_panel",

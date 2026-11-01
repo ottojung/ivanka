@@ -253,12 +253,20 @@ export IVANKA_PODMAN_RESULTS=/workspace/ivanka-milestone198-results
 ```
 
 Per-sample Ivanka alignment must be at least **90%** of its IVA score;
-every sample must finish within 1,800 seconds. For each paired score delta
+every sample must finish within 1,800 seconds of total container time, including
+startup and teardown. For each paired score delta
 `p = ivanka_score - iva_score`, and paired runtime delta
 `q = iva_arm_seconds - ivanka_arm_seconds`, independently require
 `sum(sign(x) * abs(x)**r)/198 > 0` for each `r=0,1,2`. Exact ties
 contribute zero at all powers. The summary records all six signed-power
-metrics and explicitly fails for incomplete or unmatched controls. Do not
+metrics and explicitly fails for incomplete or unmatched controls. Runtime PSI
+uses monotonic MiCall process seconds measured **inside** each container; the
+outer Podman wall clock is retained separately as `container_wall_seconds`
+and remains subject to the full-container deadline. Cached IVA controls with
+legacy outer-container timings cannot be compared against this new metric:
+they must be independently remeasured with the same in-container timer, keeping
+the same immutable IVA image and FASTQ provenance. `--qualify-198 --cache-status`
+will reject stale timing evidence before any new full-cohort run. Do not
 interpret a zero, missing, or unverified PSI as success.
 
 #### Replaying a completed Ivanka-only diagnostic without new assemblies

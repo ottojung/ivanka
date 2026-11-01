@@ -32,7 +32,7 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
     report = {"milestone198_pass": False, "milestone198_expected": SAMPLE_COUNT,
               "milestone198_valid_pairs": 0, "milestone198_errors": [],
               "milestone198_min_alignment_ratio": SCORE_FLOOR,
-              "milestone198_time_measure": "MiCall arm wall seconds, both measured by the same runner",
+              "milestone198_time_measure": "MiCall command monotonic seconds measured inside each container",
               "score_psi": None, "time_psi": None}
     errors = report["milestone198_errors"]
     if len(selected) != SAMPLE_COUNT or len(set(selected)) != SAMPLE_COUNT:
@@ -68,6 +68,9 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
                     or final["reference_count"] != 33):
                 raise ValueError("Final MAX reference-panel evidence mismatch")
             pa, pk = final["iva_score"], final["ivanka_score"]
+            if (iva.get("timing_origin") != "micall_in_container_monotonic_v1"
+                    or ivanka.get("timing_origin") != "micall_in_container_monotonic_v1"):
+                raise ValueError("Legacy or incompatible runtime measurement")
             ta, tk = iva["seconds"], ivanka["seconds"]
             elapsed = record["total_seconds"]
             if not all(finite(v, positive=True) for v in (pa, ta, tk)):

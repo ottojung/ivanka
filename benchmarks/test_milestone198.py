@@ -45,9 +45,11 @@ class QualificationTests(unittest.TestCase):
             {"sample": name, "status": "finished", "failed": False,
              "iva_baseline_reused": True, "total_seconds": 100.0,
              "iva": {"exit_code": 0, "image_id": "iva-id", "seconds": 60.,
+                     "timing_origin": "micall_in_container_monotonic_v1",
                      "metrics": {"num_final_max_conseqs": 1}},
              "ivanka": {"exit_code": 0, "image_id": "ivanka-id",
-                        "seconds": 50., "metrics": {"num_final_max_conseqs": 1}},
+                        "seconds": 50., "timing_origin": "micall_in_container_monotonic_v1",
+                        "metrics": {"num_final_max_conseqs": 1}},
              "best_contig_acceptance": {
                  "method": "best_final_max_contig_local_alignment_over_reference_panel",
                  "reference_panel_sha256": milestone198.PANEL_SHA256,
@@ -109,6 +111,13 @@ class QualificationTests(unittest.TestCase):
         result = self.score(records)
         self.assertFalse(result["milestone198_pass"])
         self.assertEqual(result["score_psi"]["psi0"], -1)
+
+    def test_legacy_or_mixed_timing_is_not_qualified(self):
+        for arm in ("iva", "ivanka"):
+            records = deepcopy(self.records)
+            del records[0][arm]["timing_origin"]
+            self.assertFalse(self.score(records)["milestone198_pass"])
+            self.assertEqual(self.score(records)["milestone198_valid_pairs"],197)
 
     def test_runtime_sign_is_iva_minus_ivanka(self):
         records = deepcopy(self.records)

@@ -173,19 +173,27 @@ class BenchmarkTests(TestCase):
    fq.mkdir(parents=True)
    for end in (1,2):
     (fq/f"TEST_L001_R{end}_001.fastq.gz").write_bytes(b"placeholder")
+   def successful_internal_run(*args, **kwargs):
+    path=root/"out"/"invocation"/"TEST"/"ivanka"/"micall_internal_timing.json"
+    path.write_text('{"timing_origin":"micall_in_container_monotonic_v1","seconds":0.125,"exit_code":0}')
+    return Mock(returncode=0)
    with patch.object(m,"DATA",root),patch.object(m,"RESULTS",root/"out"), \
         patch.object(m,"image_id",return_value="sha256:img"), \
         patch.object(m,"score_outputs",return_value={"outputs":{}}), \
-        patch.object(m.subprocess,"run",return_value=Mock(returncode=0)) as runner:
+        patch.object(m.subprocess,"run",side_effect=successful_internal_run) as runner:
     result=m.run_arm({"sample":"TEST"},"ivanka","image:tag","ACGT",123,"invocation",all_projects=True)
    argv=runner.call_args.args[0]
-   self.assertEqual(argv[argv.index("--entrypoint")+1],"/usr/bin/timeout")
+   self.assertEqual(argv[argv.index("--entrypoint")+1],"python")
    self.assertEqual(argv[argv.index("--timeout")+1],"121")
    self.assertEqual(argv[argv.index("--stop-timeout")+1],"2")
-   self.assertIn("108s",argv)
+   self.assertNotIn("108s",argv)
    self.assertIn("micall",argv)
+   self.assertIn("/ivanka-timer.py",argv)
    self.assertIn("--all_projects",argv)
    self.assertEqual(result["exit_code"],0)
+   self.assertEqual(result["seconds"],0.125)
+   self.assertEqual(result["timing_origin"],"micall_in_container_monotonic_v1")
+   self.assertGreaterEqual(result["container_wall_seconds"],0)
 
  def test_depth_metrics_streamed_from_final_micall_report(self):
   with TemporaryDirectory() as d:

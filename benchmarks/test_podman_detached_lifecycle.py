@@ -2,6 +2,7 @@
 import io
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -182,6 +183,22 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual((result.returncode, result.stage), (124, "create"))
         self.assertIn("TimeoutExpired", self.stderr.getvalue())
         self.assertEqual(self.calls, [])
+
+    def test_emergency_cleanup_never_exceeds_sample_deadline(self):
+        # Simulate a CLI timeout after creation. The old implementation
+        # launched a fresh ten-second cleanup beyond the sample deadline.
+        def slow_start(argv, **kwargs):
+            if argv[1] == "start":
+                self.calls.append(list(argv))
+                time.sleep(0.03)
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=slow_start):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 0.02)
+        self.assertEqual((result.returncode, result.stage), (124, "start"))
+        self.assertEqual([call[1] for call in self.calls], ["create", "start"])
 
     def test_deadline_does_not_launch(self):
         result = self.run_case(remaining=0)

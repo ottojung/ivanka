@@ -154,6 +154,35 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(self.stdout.getvalue(), "micall.process_run(): Done.\n")
         self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
 
+    def test_metadata_has_stage_cap_but_micall_wait_keeps_full_budget(self):
+        observed = []
+        def recording(argv, **kwargs):
+            observed.append((argv[1], kwargs["timeout"]))
+            return self.fake(argv, **kwargs)
+        with patch.object(lifecycle.subprocess, "run", side_effect=recording):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual([stage for stage, _ in observed],
+                         ["create", "start", "wait", "logs", "rm"])
+        for stage, budget in observed:
+            if stage == "wait":
+                self.assertGreater(budget, lifecycle.METADATA_TIMEOUT_SECONDS)
+            else:
+                self.assertLessEqual(budget, lifecycle.METADATA_TIMEOUT_SECONDS)
+
+    def test_metadata_timeout_fails_closed_without_reexecuting(self):
+        def timed_out(argv, **kwargs):
+            if argv[1] == "create":
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+        with patch.object(lifecycle.subprocess, "run", side_effect=timed_out):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (124, "create"))
+        self.assertIn("TimeoutExpired", self.stderr.getvalue())
+        self.assertEqual(self.calls, [])
+
     def test_deadline_does_not_launch(self):
         result = self.run_case(remaining=0)
         self.assertEqual(result.returncode, 124)

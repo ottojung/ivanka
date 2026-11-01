@@ -16,6 +16,9 @@ from types import SimpleNamespace
 
 LIFECYCLE_LOCK = Path(os.environ.get(
     "IVANKA_PODMAN_LIFECYCLE_LOCK", "/workspace/ivanka-podman-lifecycle.lock"))
+# Metadata operations must not monopolize the shared lock for the entire
+# 1800-second sample budget. Waiting for MiCall retains the full remainder.
+METADATA_TIMEOUT_SECONDS = 120.0
 
 
 @contextmanager
@@ -48,18 +51,21 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
     stage = "create"
 
     def call(argv, *, output=None, lock=False):
-        budget = deadline - time.monotonic()
-        if budget <= 0:
-            raise TimeoutError("Whole-container deadline exceeded")
+        def budget_for_stage():
+            remaining_budget = deadline - time.monotonic()
+            if remaining_budget <= 0:
+                raise TimeoutError("Whole-container deadline exceeded")
+            return (remaining_budget if argv[1] == "wait" else
+                    min(remaining_budget, METADATA_TIMEOUT_SECONDS))
+
         if lock:
             with transaction_lock(deadline):
-                budget = deadline - time.monotonic()
-                if budget <= 0:
-                    raise TimeoutError("Whole-container deadline exceeded")
                 return subprocess.run(argv, stdout=output or subprocess.PIPE,
-                                      stderr=stderr, timeout=budget, check=False)
+                                      stderr=stderr, timeout=budget_for_stage(),
+                                      check=False)
         return subprocess.run(argv, stdout=output or subprocess.PIPE,
-                              stderr=stderr, timeout=budget, check=False)
+                              stderr=stderr, timeout=budget_for_stage(),
+                              check=False)
 
     def retry_read_or_remove(argv, *, lock=False, output=None):
         # Waiting, reading logs, and removing never restart MiCall.

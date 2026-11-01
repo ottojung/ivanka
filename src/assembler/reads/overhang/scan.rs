@@ -18,7 +18,8 @@ impl Reads {
         if contig.len()<K {return (Vec::new(),Vec::new());}
         let start=contig.len().saturating_sub(250);
         // Two orientations share one bit per original FASTQ read.
-        let mut used=vec![false;self.seqs.len().div_ceil(2)];
+        let read_count = self.seqs.len().div_ceil(2);
+        let mut used = vec![0u64; (read_count + 63) / 64];
         let mut ext=Vec::new();
         let mut ids=Vec::new();
         let mut previous = None;
@@ -33,7 +34,9 @@ impl Reads {
             if hits.len()>50000 {continue;}
             for hit in hits {
                 let original=hit.read/2;
-                if used[original as usize] {continue;}
+                let word = original as usize / 64;
+                let bit = 1u64 << (original as usize % 64);
+                if used[word] & bit != 0 {continue;}
                 let pos=hit.pos as usize;
                 // The contig may be shorter than the aligned read, especially
                 // during seeding. In that case the read starts *before* the
@@ -43,7 +46,7 @@ impl Reads {
                 let read=&self.seqs[hit.read as usize];
                 if overlap<K || read_start+overlap>=read.len() {continue;}
                 if read[read_start..read_start+overlap]!=contig[begin..] {continue;}
-                used[original as usize]=true;
+                used[word] |= bit;
                 ext.push(read[read_start+overlap..].to_vec());
                 ids.push(original);
             }

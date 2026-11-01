@@ -73,8 +73,9 @@ class CompletionEvidenceTests(unittest.TestCase):
         self.assertIsNone(authenticated_postrun_cleanup(127, self.root, 13))
 
     def test_invalid_timer_origin_exit_and_wall_are_not_recovered(self):
-        self.write_evidence(exit_code=1)
-        self.assertIsNone(authenticated_postrun_cleanup(127, self.root, 13))
+        for invalid_exit in (1, False, 0.0, None):
+            self.write_evidence(exit_code=invalid_exit)
+            self.assertIsNone(authenticated_postrun_cleanup(127, self.root, 13))
         self.write_evidence(origin="outer_podman_wall")
         self.assertIsNone(authenticated_postrun_cleanup(127, self.root, 13))
         self.write_evidence(seconds=14)
@@ -121,6 +122,8 @@ class CompletionEvidenceTests(unittest.TestCase):
 
     def test_clean_timer_uses_identical_validation(self):
         self.assertEqual(verified_internal_seconds(self.timing, 13), 12.25)
+        with self.assertRaises(ValueError):
+            verified_internal_seconds(self.timing, True)
         self.write_evidence(seconds=0)
         with self.assertRaises(ValueError):
             verified_internal_seconds(self.timing, 13)

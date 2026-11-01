@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use super::reads::{K, MAX_EXTENSION, MAX_CONTIG_LENGTH, encode, rc, Reads};
-use super::extension_helpers::{summarize, choose_extension as choose_with_limit, CycleTracker};
+use super::extension_helpers::{trace_extension_stop, choose_extension as choose_with_limit, CycleTracker,context_cycle_end};
 pub(super) use super::extension_helpers::record_extension_support;
 
 pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec<u8>,usize){
@@ -22,11 +22,7 @@ pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usi
             left_stalled |= left.is_empty();
         }
         if right.is_empty() && left.is_empty() {
-            if std::env::var_os("IVANKA_TRACE_EXTENSIONS").is_some() {
-                eprintln!("EXTENSION_STOP length={} right_reads={} right_bases={:?} left_reads={} left_bases={:?}",
-                          seq.len(),right_reads.len(),summarize(&right_reads),
-                          left_reads.len(),summarize(&left_reads));
-            }
+            trace_extension_stop(seq.len(),right_reads,left_reads);
             // With no extension, the same immutable reads and contig produce
             // the same result next iteration. A second probe is redundant.
             break;
@@ -46,6 +42,10 @@ pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usi
             record_extension_support(&left_reads,&left_ids,&left_rc,&mut supporting_reads);
             if next.len()>MAX_CONTIG_LENGTH {
                 reads.overlength_rejections.set(reads.overlength_rejections.get()+1);eprintln!("rejecting assembly path exceeding {} nt",MAX_CONTIG_LENGTH);
+                if let Some(cut)=context_cycle_end(&next,K,encode).filter(|&c|c<=MAX_CONTIG_LENGTH) {
+                    eprintln!("rescued overlength path at distinct repeated 512-nt context ({} nt)",cut);
+                    return (next[..cut].to_vec(),usize::from(!supporting_reads.is_empty()));
+                }
                 return (Vec::new(),0);
             }
             seq=next;

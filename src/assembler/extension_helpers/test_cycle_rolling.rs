@@ -15,3 +15,29 @@ use super::test_cycle::encode;
         prev = rolling;
     }
 }
+
+#[test] fn overlength_fallback_finds_cycle_masked_by_near_match() {
+    use super::cycle::{cycle_end,CYCLE_MATCH};
+    use super::cycle_state::context_cycle_end;
+    use super::test_cycle::encode;
+    let mut state=0x9e3779b97f4a7c15u64;
+    let mut random=|n| (0..n).map(|_|{
+        state^=state<<13;state^=state>>7;state^=state<<17;
+        b"ACGT"[(state&3) as usize]
+    }).collect::<Vec<u8>>();
+    let tract=random(CYCLE_MATCH);
+    let mut near=tract.clone();
+    near[CYCLE_MATCH-1]=if near[CYCLE_MATCH-1]==b'A' {b'C'} else {b'A'};
+    let mut seq=near;
+    seq.extend(random(2200-CYCLE_MATCH));
+    seq.extend(&tract);
+    seq.extend(random(2200-CYCLE_MATCH));
+    seq.extend(&tract);
+    assert_eq!(cycle_end(&seq,31,encode),None);
+    assert_eq!(context_cycle_end(&seq,31,encode),Some(seq.len()));
+}
+#[test] fn low_complexity_overlength_is_not_a_supported_cycle() {
+    use super::cycle_state::context_cycle_end;
+    use super::test_cycle::encode;
+    assert_eq!(context_cycle_end(&vec![b'A';25050],31,encode),None);
+}

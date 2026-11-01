@@ -724,13 +724,15 @@ def validate_milestone198_preflight(args, sample_count, manifest_hash, iva_image
     expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
     # Cache audit is read-only; it may inspect IVA without starting an IVA arm.
     cache_mode = args.cache_status and args.mode in ("iva", "ivanka")
+    # Ten workers is a throughput target, not an immutable scientific gate.
+    # Fewer concurrent Podman writers mitigate database-lock contention.
     if ((args.mode != "ivanka" and not cache_mode) or
         args.sample is not None or args.allow_missing_baseline or
-        not args.all_projects or args.parallel_arms or args.jobs != 10 or
+        not args.all_projects or args.parallel_arms or not (1 <= args.jobs <= 10) or
         sample_count != milestone198.SAMPLE_COUNT or
         manifest_hash != milestone198.MANIFEST_SHA256 or
         (expected and expected != milestone198.MANIFEST_SHA256)):
-        raise ValueError("198-sample milestone requires the pinned full cohort, IVA cache, all projects, and 10 workers; execution must be Ivanka-only")
+        raise ValueError("198-sample milestone requires the pinned full cohort, IVA cache, all projects, and 1..10 workers; execution must be Ivanka-only")
 
 
 def validate_milestone198_panel(reference_count, reference_sha256):

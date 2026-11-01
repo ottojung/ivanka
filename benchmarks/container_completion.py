@@ -57,11 +57,13 @@ def verified_internal_seconds(timing_file: Path, container_wall_seconds: float) 
     seconds = record["seconds"]
     if (
         record.get("timing_origin") != TIMING_ORIGIN
-        or record.get("exit_code") != 0
+        or type(record.get("exit_code")) is not int
+        or record["exit_code"] != 0
         or not isinstance(seconds, (float, int))
         or isinstance(seconds, bool)
         or not math.isfinite(seconds)
         or not isinstance(container_wall_seconds, (float, int))
+        or isinstance(container_wall_seconds, bool)
         or not math.isfinite(container_wall_seconds)
         or not 0 < seconds <= container_wall_seconds + 1
     ):

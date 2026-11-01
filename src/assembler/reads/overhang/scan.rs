@@ -16,7 +16,10 @@ impl Reads {
     // read mapper: a k-mer is only an inverted-index lookup; the full overlap must be exact.
     pub(crate) fn overhangs_with_ids(&self, contig:&[u8]) -> (Vec<Vec<u8>>,Vec<u32>) {
         if contig.len()<K {return (Vec::new(),Vec::new());}
-        let start=contig.len().saturating_sub(250);
+        // An extending read may overlap up to its own length minus one.
+        // A fixed 250-base search window silently misses valid anchors in
+        // longer reads, especially when the terminal sequence is ambiguous.
+        let start=contig.len().saturating_sub(self.max_read_len.saturating_sub(1));
         // Two orientations share one bit per original FASTQ read.
         let read_count = self.seqs.len().div_ceil(2);
         let mut used = vec![0u64; (read_count + 63) / 64];

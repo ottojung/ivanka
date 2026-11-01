@@ -4,7 +4,7 @@ mod cycle_state;
 mod support;
 mod trace;
 pub(crate) use choose::choose_extension;
-pub(crate) use cycle_state::CycleTracker;
+pub(crate) use cycle_state::{CycleTracker, cycle_cut_keeps_prior_path};
 pub(crate) use support::record_extension_support;
 pub(crate) use trace::summarize;
 #[cfg(test)] mod test_cycle;

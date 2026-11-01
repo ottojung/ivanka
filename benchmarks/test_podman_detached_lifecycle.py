@@ -135,7 +135,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(seen, 2)
-        self.assertEqual(self.stdout.getvalue(), "micall.process_run(): Done.\\n")
+        self.assertEqual(self.stdout.getvalue(), "micall.process_run(): Done.\n")
         self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
 
     def test_deadline_does_not_launch(self):

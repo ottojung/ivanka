@@ -480,6 +480,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     if all_projects:
         command.append("--all_projects")
     start = time.monotonic()
+    cleanup_error = None
     with (folder / "podman.stdout.log").open("w") as stdout, \
          (folder / "podman.stderr.log").open("w") as stderr:
         try:
@@ -487,11 +488,18 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                                timeout=timeout, check=False)
             exitcode = p.returncode
         except subprocess.TimeoutExpired:
-            # Killing the CLI process need not kill its Podman container.
-            subprocess.run(["podman", "rm", "--force", container_name],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                           timeout=30, check=False)
+            # The container may outlive its Podman CLI. Cleanup failure must
+            # never hide the original timeout or erase the failed arm record.
             exitcode = 124
+            try:
+                cleanup = subprocess.run(["podman", "rm", "--force", container_name],
+                                         stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL,
+                                         timeout=30, check=False)
+                if cleanup.returncode:
+                    cleanup_error = f"podman rm exited {cleanup.returncode}"
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                cleanup_error = f"{type(exc).__name__}: {exc}"
     container_wall_seconds = round(time.monotonic()-start, 2)
     internal_seconds = None
     timing_error = None
@@ -520,7 +528,11 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         result["seconds"] = internal_seconds
         result["timing_origin"] = "micall_in_container_monotonic_v1"
     if exitcode:
-        result["error"] = timing_error or (folder / "podman.stderr.log").read_text()[-1200:]
+        result["error"] = (timing_error or
+                           (f"Podman arm timed out after {timeout}s" if exitcode == 124
+                            else (folder / "podman.stderr.log").read_text()[-1200:]))
+    if cleanup_error:
+        result["cleanup_error"] = cleanup_error
     return result
 
 

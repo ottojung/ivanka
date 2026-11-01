@@ -20,6 +20,8 @@ from Bio import SeqIO
 from Bio.Align import PairwiseAligner
 from reference_catalog import load_micall_projects
 import milestone198
+from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
+                                  authenticated_postrun_cleanup, startup_database_lock)
 
 DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
 RESULTS = Path(os.environ.get("IVANKA_PODMAN_RESULTS", "/workspace/ivanka-podman-results"))
@@ -483,40 +485,70 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     cleanup_error = None
     with (folder / "podman.stdout.log").open("w") as stdout, \
          (folder / "podman.stderr.log").open("w") as stderr:
-        try:
-            p = subprocess.run(command, stdout=stdout, stderr=stderr,
-                               timeout=timeout, check=False)
-            exitcode = p.returncode
-        except subprocess.TimeoutExpired:
-            # The container may outlive its Podman CLI. Cleanup failure must
-            # never hide the original timeout or erase the failed arm record.
-            exitcode = 124
+        start_retries = 0
+        original_name = container_name
+        while True:
+            # The original sample wall clock includes *every* failed startup,
+            # backoff, and successful container. Never reset its deadline.
+            remaining = timeout - (time.monotonic() - start)
+            if remaining <= 1:
+                exitcode = 124
+                break
+            container_name = (original_name if start_retries == 0
+                              else f"{original_name}-dbretry{start_retries}")
+            command[command.index("--name") + 1] = container_name
+            command[command.index("--timeout") + 1] = str(max(1, int(remaining) - 2))
             try:
-                cleanup = subprocess.run(["podman", "rm", "--force", container_name],
-                                         stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.DEVNULL,
-                                         timeout=30, check=False)
-                if cleanup.returncode:
-                    cleanup_error = f"podman rm exited {cleanup.returncode}"
-            except (subprocess.TimeoutExpired, OSError) as exc:
-                cleanup_error = f"{type(exc).__name__}: {exc}"
+                p = subprocess.run(command, stdout=stdout, stderr=stderr,
+                                   timeout=remaining, check=False)
+                exitcode = p.returncode
+            except subprocess.TimeoutExpired:
+                # The container may outlive its Podman CLI. Cleanup failure
+                # cannot hide a real deadline violation.
+                exitcode = 124
+                try:
+                    cleanup = subprocess.run(
+                        ["podman", "rm", "--force", container_name],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        timeout=30, check=False)
+                    if cleanup.returncode:
+                        cleanup_error = f"podman rm exited {cleanup.returncode}"
+                except (subprocess.TimeoutExpired, OSError) as exc:
+                    cleanup_error = f"{type(exc).__name__}: {exc}"
+            stderr.flush()
+            # Podman 5.8 sometimes cannot begin its SQLite creation
+            # transaction amid concurrent container cleanup. Such a failure
+            # has executed ZERO MiCall steps; retry within the ORIGINAL cap,
+            # never for non-lock failures or a container that has run MiCall.
+            if (exitcode == 125
+                    and startup_database_lock(folder / "podman.stderr.log")
+                    and not timing_file.exists()
+                    and time.monotonic() - start + 3 < timeout):
+                start_retries += 1
+                stderr.write(f"Benchmark: retrying Podman startup after DB lock ({start_retries})\n")
+                stderr.flush()
+                time.sleep(min(3 + start_retries, 10))
+                continue
+            break
     container_wall_seconds = round(time.monotonic()-start, 2)
     internal_seconds = None
     timing_error = None
+    recovered_cleanup = False
     if exitcode == 0:
         try:
-            measured = json.loads(timing_file.read_text())
-            internal_seconds = measured["seconds"]
-            if (measured.get("timing_origin") != "micall_in_container_monotonic_v1"
-                    or measured.get("exit_code") != 0
-                    or not isinstance(internal_seconds, (float, int))
-                    or isinstance(internal_seconds, bool)
-                    or not math.isfinite(internal_seconds)
-                    or not 0 < internal_seconds <= container_wall_seconds + 1):
-                raise ValueError("Invalid in-container MiCall measurement")
+            internal_seconds = verified_internal_seconds(timing_file, container_wall_seconds)
         except (OSError, KeyError, ValueError, TypeError) as exc:
             exitcode = 1
             timing_error = f"Missing or invalid in-container timing evidence: {exc}"
+    elif exitcode == 127:
+        # Podman can report 127 when auto-removal fails on a locked DB AFTER
+        # MiCall has exited successfully. This case has to satisfy an exact
+        # post-run diagnostic and the independent in-container timer.
+        internal_seconds = authenticated_postrun_cleanup(
+            exitcode, folder, container_wall_seconds)
+        if internal_seconds is not None:
+            recovered_cleanup = True
+            exitcode = 0
     result = {
         "exit_code": exitcode,
         "container_wall_seconds": container_wall_seconds,
@@ -524,9 +556,15 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         "artifact_dir": str(folder.resolve()),
         "metrics": score_outputs(folder, reference),
     }
+    if start_retries:
+        result["podman_start_retries"] = start_retries
+    if recovered_cleanup:
+        # Preserve the real CLI error; never disguise it as a clean Podman exit.
+        result["podman_exit_code"] = 127
+        result["postrun_cleanup_error"] = "Podman auto-removal: database is locked"
     if internal_seconds is not None and not timing_error:
         result["seconds"] = internal_seconds
-        result["timing_origin"] = "micall_in_container_monotonic_v1"
+        result["timing_origin"] = TIMING_ORIGIN
     if exitcode:
         result["error"] = (timing_error or
                            (f"Podman arm timed out after {timeout}s" if exitcode == 124

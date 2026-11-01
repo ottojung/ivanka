@@ -103,6 +103,15 @@ def spanning_alleles(read, left, right, gap, quality=None, min_base_quality=0):
     return alleles
 
 
+def _has_spaced_flanks(seq, left, right, gap):
+    for strand in (seq, reverse_complement(seq)):
+        pos = strand.find(left)
+        while pos != -1:
+            if strand[pos + len(left) + gap:pos + len(left) + gap + len(right)] == right:
+                return True
+            pos = strand.find(left, pos + 1)
+    return False
+
 def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_base_quality=0):
     if not 0 <= min_base_quality <= 93:
         raise ValueError("min_base_quality must be between 0 and 93")
@@ -121,11 +130,21 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_b
             item = {"sample": sample, "region": region, "mask_start": start,
                     "mask_end": end, "mask_length": end - start,
                     "region_unique_flanks": region_unique_flanks,
+                    "other_region_bridges": 0, "globally_unique_flank_bridge": False,
                     "unique_seed_flank_bridge": False,
                     "exact_bridge_pairs": 0, "ambiguous_pairs": 0,
                     "low_quality_bridge_pairs": 0,
                     "observed_alleles": {}}
             if region_unique_flanks:
+                # A local allele cannot identify a region when another final
+                # region from this sample has the same exact anchored span.
+                other = sum(
+                    _has_spaced_flanks(other_seq, left, right, end - start)
+                    for (other_sample, other_region), other_seq in region_rows.items()
+                    if other_sample == sample and other_region != region
+                )
+                item["other_region_bridges"] = other
+                item["globally_unique_flank_bridge"] = other == 0
                 item["_left"], item["_right"] = left, right
                 if seed is not None:
                     hit = exact_flank_correspondence(sequence, seed, start, end, anchor)

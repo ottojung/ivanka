@@ -64,6 +64,28 @@ class ReadSupportTests(unittest.TestCase):
         self.assertFalse(report["region_unique_flanks"])
         self.assertEqual(report["exact_bridge_pairs"], 0)
 
+    def test_cross_region_bridge_is_not_region_specific(self):
+        other = "TTTT" + LEFT + ALT_ALLELE + RIGHT + "GGGG"
+        reports = audit_mask_read_support(
+            {("S", "R"): REGION, ("S", "R2"): other},
+            {("S", "R"): SEED}, [(SEED, SEED)])["mask_runs"]
+        report = next(x for x in reports if x["region"] == "R")
+        self.assertEqual(report["other_region_bridges"], 1)
+        self.assertFalse(report["globally_unique_flank_bridge"])
+        self.assertEqual(report["exact_bridge_pairs"], 1)
+
+    def test_reverse_complement_other_region(self):
+        other = reverse_complement(LEFT + ALT_ALLELE + RIGHT)
+        reports = audit_mask_read_support(
+            {("S", "R"): REGION, ("S", "R2"): other}, {}, [(SEED, "NNNN")])["mask_runs"]
+        self.assertEqual(reports[0]["other_region_bridges"], 1)
+
+    def test_unrelated_sample_and_gap_are_not_ambiguous(self):
+        reports = audit_mask_read_support(
+            {("S", "R"): REGION, ("S", "R2"): LEFT + "C" * 9 + RIGHT,
+             ("T", "R3"): SEED}, {}, [(SEED, SEED)])["mask_runs"]
+        self.assertTrue(next(x for x in reports if x["sample"] == "S")["globally_unique_flank_bridge"])
+
     def test_reverse_complement_allele_detection(self):
         read = reverse_complement(LEFT + ALT_ALLELE + RIGHT)
         self.assertEqual(spanning_alleles(read, LEFT, RIGHT, 8), {ALT_ALLELE})

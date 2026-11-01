@@ -9,3 +9,10 @@ pub(crate) fn summarize(overhangs:&[Vec<u8>]) -> [usize;4] {
     }
     counts
 }
+
+pub(crate) fn trace_extension_stop(len:usize,right:&[Vec<u8>],left:&[Vec<u8>]) {
+    if std::env::var_os("IVANKA_TRACE_EXTENSIONS").is_some() {
+        eprintln!("EXTENSION_STOP length={} right_reads={} right_bases={:?} left_reads={} left_bases={:?}",
+            len,right.len(),summarize(right),left.len(),summarize(left));
+    }
+}

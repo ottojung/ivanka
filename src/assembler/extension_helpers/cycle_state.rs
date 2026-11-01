@@ -30,3 +30,28 @@ impl CycleTracker {
         None
     }
 }
+
+// Exhaustive fallback for overlength paths only. A repeated 31-mer can have
+// different downstream contexts; the incremental fast path keeps its original
+// behavior and cost for ordinary contigs.
+pub(crate) fn context_cycle_end(seq:&[u8],k:usize,
+    encode:fn(&[u8])->Option<u64>)->Option<usize> {
+    if seq.len()<CYCLE_MIN_SPACING+CYCLE_MATCH {return None;}
+    let (mut contexts,mut previous)=(HashMap::<u64,Vec<usize>>::new(),None);
+    for i in 0..=seq.len()-CYCLE_MATCH {
+        let anchor=next_anchor(seq,i,k,previous,encode);
+        previous=anchor;
+        let Some(anchor)=anchor else {continue;};
+        let seen=contexts.entry(anchor).or_default();
+        let mut matched=false;
+        for &j in seen.iter() {
+            if seq[j..j+CYCLE_MATCH]==seq[i..i+CYCLE_MATCH] {
+                matched=true;
+                if repeats(seq,j,i,k,encode) {return Some(i+CYCLE_MATCH);}
+                break;
+            }
+        }
+        if !matched {seen.push(i);}
+    }
+    None
+}

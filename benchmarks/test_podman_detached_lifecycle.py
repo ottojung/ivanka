@@ -116,6 +116,34 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(counts, {"wait": 2, "rm": 2})
         self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
 
+    def test_transient_logs_failure_discards_partial_output(self):
+        seen = 0
+
+        def flaky(argv, **kwargs):
+            nonlocal seen
+            if argv[1] == "logs":
+                seen += 1
+                if seen == 1:
+                    self.calls.append(list(argv))
+                    kwargs["stdout"].write("partial failed log\\n")
+                    return subprocess.CompletedProcess(argv, 125, b"")
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=flaky):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(seen, 2)
+        self.assertEqual(self.stdout.getvalue(), "micall.process_run(): Done.\\n")
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+
+    def test_persistent_logs_failure_rejects_without_reexecution(self):
+        self.exit["logs"] = 125
+        result = self.run_case()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(sum(c[1] == "logs" for c in self.calls), 4)
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+
     def test_deadline_does_not_launch(self):
         result = self.run_case(remaining=0)
         self.assertEqual(result.returncode, 124)

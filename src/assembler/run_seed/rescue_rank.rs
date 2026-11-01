@@ -1,3 +1,4 @@
+use super::phase::{phased_windows,retains_phasing};
 use std::collections::HashSet;
 use super::{canonical_kmer,K};
 
@@ -12,12 +13,13 @@ pub(crate) fn append_preserving_diversity(contigs:&mut Vec<Vec<u8>>,
     };
     let sets=contigs.iter().map(|s|cover(s)).collect::<Vec<_>>();
     let rescue_set=cover(&rescue);
+    let (phased,rescue_phased)=(contigs.iter().map(|s|phased_windows(s)).collect::<Vec<_>>(),phased_windows(&rescue));
     let removable=(protected..contigs.len()).filter(|&i| {
         let mut others=rescue_set.clone();
         for (j,kmers) in sets.iter().enumerate() {
             if i!=j {others.extend(kmers.iter().copied());}
         }
-        sets[i].is_subset(&others)
+        sets[i].is_subset(&others) && retains_phasing(&phased,&rescue_phased,i)
     }).min_by_key(|&i|contigs[i].len());
     if let Some(i)=removable {
         contigs[i]=rescue;

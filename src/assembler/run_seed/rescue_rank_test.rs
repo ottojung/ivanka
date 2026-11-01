@@ -19,3 +19,16 @@ use super::rescue_rank::append_preserving_diversity;
     assert!(!append_preserving_diversity(&mut output,vec![b'G';1200],16,0));
     assert_eq!(output,originals);
 }
+
+#[test] fn phased_alternatives_with_identical_31mers_cannot_be_replaced() {
+    use std::collections::HashSet;
+    let a=[vec![b'A';60],vec![b'C';60],vec![b'A';60]].concat();
+    let b=[vec![b'C';60],vec![b'A';60],vec![b'C';60]].concat();
+    let kmers=|seq:&[u8]| -> HashSet<Vec<u8>> {
+        seq.windows(31).map(|w|w.to_vec()).collect()
+    };
+    assert_eq!(kmers(&a),kmers(&b));
+    let original=vec![a,b];let mut output=original.clone();
+    assert!(!append_preserving_diversity(&mut output,vec![b'G';1200],2,0));
+    assert_eq!(output,original);
+}

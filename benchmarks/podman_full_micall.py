@@ -6,6 +6,7 @@ All clinical input and results must remain outside this public repository.
 """
 import argparse
 import csv
+import fcntl
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
@@ -455,7 +456,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     project = row.get("micall_project_code", "").strip()
     container_name = f"ivanka-bench-{arm}-{invocation}-{hashlib.sha256(name.encode()).hexdigest()[:8]}"
     command = [
-        "podman", "run", "--rm", "--pull=never", "--name", container_name,
+        "podman", "run", "--pull=never", "--name", container_name,
         # Podman enforces a container lifetime even when the supervising
         # Python process receives SIGKILL.
         "--timeout", str(max(1,int(timeout)-2)), "--stop-timeout", "2",
@@ -488,21 +489,32 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                                timeout=timeout, check=False)
             exitcode = p.returncode
         except subprocess.TimeoutExpired:
-            # The container may outlive its Podman CLI. Cleanup failure must
-            # never hide the original timeout or erase the failed arm record.
+            # Preserve the original timeout even if teardown also fails.
             exitcode = 124
-            try:
-                cleanup = subprocess.run(["podman", "rm", "--force", container_name],
-                                         stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.DEVNULL,
-                                         timeout=30, check=False)
-                if cleanup.returncode:
-                    cleanup_error = f"podman rm exited {cleanup.returncode}"
-            except (subprocess.TimeoutExpired, OSError) as exc:
-                cleanup_error = f"{type(exc).__name__}: {exc}"
+    # Never let ten concurrent --rm auto-teardowns contend for Podman's
+    # SQLite container-state transaction. Serialize explicit cleanup, including
+    # successful runs. It is part of the measured whole-container wall time.
+    with (RESULTS / ".podman-cleanup.lock").open("a+") as cleanup_lock:
+        fcntl.flock(cleanup_lock, fcntl.LOCK_EX)
+        try:
+            cleanup = subprocess.run(["podman", "rm", "--force", container_name],
+                                     stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL,
+                                     timeout=30, check=False)
+            if cleanup.returncode:
+                cleanup_error = f"podman rm exited {cleanup.returncode}"
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            cleanup_error = f"{type(exc).__name__}: {exc}"
+        finally:
+            fcntl.flock(cleanup_lock, fcntl.LOCK_UN)
     container_wall_seconds = round(time.monotonic()-start, 2)
     internal_seconds = None
     timing_error = None
+    if exitcode == 0 and cleanup_error:
+        # A successful MiCall subprocess is not a successful full container
+        # execution if Podman cannot finish its teardown.
+        exitcode = 1
+        timing_error = f"Podman container teardown incomplete: {cleanup_error}"
     if exitcode == 0:
         try:
             measured = json.loads(timing_file.read_text())

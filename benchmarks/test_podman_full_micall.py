@@ -221,7 +221,7 @@ class BenchmarkTests(TestCase):
         patch.object(m,"score_outputs",return_value={"outputs":{}}), \
         patch.object(m.subprocess,"run",side_effect=successful_internal_run) as runner:
     result=m.run_arm({"sample":"TEST"},"ivanka","image:tag","ACGT",123,"invocation",all_projects=True)
-   argv=runner.call_args.args[0]
+   argv=runner.call_args_list[0].args[0]
    self.assertEqual(argv[argv.index("--entrypoint")+1],"python")
    self.assertEqual(argv[argv.index("--timeout")+1],"121")
    self.assertEqual(argv[argv.index("--stop-timeout")+1],"2")

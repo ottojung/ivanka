@@ -78,6 +78,23 @@ def authenticated_postrun_cleanup(raw_exit: int, folder: Path, wall_seconds: flo
     except (OSError, KeyError, ValueError, TypeError):
         return None
 
+
+def no_micall_output(folder: Path) -> bool:
+    """Do not retry a Podman startup if MiCall may already have executed.
+
+    A genuine prestart database lock leaves only the harness-created empty
+    stdout/stderr logs and bad_cycles.csv. Any other output is evidence
+    against assuming that retrying is side-effect-free.
+    """
+    expected = {"bad_cycles.csv", "podman.stdout.log", "podman.stderr.log"}
+    try:
+        if (folder / "podman.stdout.log").stat().st_size:
+            return False
+        return all(path.is_file() and path.name in expected
+                   for path in folder.iterdir())
+    except OSError:
+        return False
+
 _STARTUP_LOCK_ERRORS = frozenset((
     "Error: beginning transaction: database is locked",
     "Error: beginning container create transaction: database is locked",

@@ -21,7 +21,8 @@ from Bio.Align import PairwiseAligner
 from reference_catalog import load_micall_projects
 import milestone198
 from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
-                                  authenticated_postrun_cleanup, startup_database_lock)
+                                  authenticated_postrun_cleanup, startup_database_lock,
+                                  no_micall_output)
 
 DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
 RESULTS = Path(os.environ.get("IVANKA_PODMAN_RESULTS", "/workspace/ivanka-podman-results"))
@@ -522,6 +523,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
             # never for non-lock failures or a container that has run MiCall.
             if (exitcode in (125, 126)
                     and startup_database_lock(folder / "podman.stderr.log")
+                    and no_micall_output(folder)
                     and not timing_file.exists()
                     and time.monotonic() - start + 3 < timeout):
                 start_retries += 1

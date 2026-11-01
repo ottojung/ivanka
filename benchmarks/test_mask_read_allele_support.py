@@ -104,6 +104,62 @@ class ReadSupportTests(unittest.TestCase):
              ("T", "R3"): SEED}, {}, [(SEED, SEED)])["mask_runs"]
         self.assertTrue(next(x for x in reports if x["sample"] == "S")["globally_unique_flank_bridge"])
 
+    def test_duplicate_seed_region_prevents_region_attribution(self):
+        regions = {("S", "R"): REGION}
+        seeds = {("S", "R"): SEED, ("S", "R2"): "GG" + SEED + "TT"}
+        report = audit_mask_read_support(regions, seeds, [(SEED, "NNNN")])["mask_runs"][0]
+        self.assertTrue(report["globally_unique_flank_bridge"])
+        self.assertTrue(report["unique_seed_flank_bridge"])
+        self.assertEqual(report["other_seed_bridges"], 1)
+        self.assertFalse(report["globally_unique_seed_flank_bridge"])
+        self.assertFalse(report["region_attributable_bridge"])
+        self.assertEqual(report["seed_support_pairs"], 1)
+        self.assertEqual(report["region_attributable_seed_support_pairs"], 0)
+
+    def test_reverse_complement_other_seed_prevents_attribution(self):
+        seeds = {("S", "R"): SEED, ("S", "R2"): reverse_complement(SEED)}
+        report = audit_mask_read_support(
+            {("S", "R"): REGION}, seeds, [(SEED, "NNNN")])["mask_runs"][0]
+        self.assertEqual(report["other_seed_bridges"], 1)
+        self.assertFalse(report["region_attributable_bridge"])
+
+    def test_unrelated_seed_and_final_region_allow_attribution(self):
+        seeds = {("S", "R"): SEED, ("T", "R2"): SEED}
+        report = audit_mask_read_support(
+            {("S", "R"): REGION}, seeds,
+            [(SEED, "NNNN"), (LEFT + ALT_ALLELE + RIGHT, "NNNN")])["mask_runs"][0]
+        self.assertTrue(report["region_attributable_bridge"])
+        self.assertEqual(report["region_attributable_seed_support_pairs"], 1)
+        self.assertEqual(report["region_attributable_alternative_support_pairs"], 1)
+
+    def test_other_final_region_blocks_attribution_even_if_seed_unique(self):
+        regions = {("S", "R"): REGION, ("S", "R2"): "GG" + SEED + "TT"}
+        report = audit_mask_read_support(
+            regions, {("S", "R"): SEED}, [(SEED, "NNNN")],
+            report_region="R")["mask_runs"][0]
+        self.assertTrue(report["globally_unique_seed_flank_bridge"])
+        self.assertFalse(report["region_attributable_bridge"])
+        self.assertEqual(report["region_attributable_seed_support_pairs"], 0)
+
+    def test_region_filter_does_not_hide_other_seed_bridge(self):
+        result = audit_mask_read_support(
+            {("S", "R"): REGION},
+            {("S", "R"): SEED, ("S", "R2"): SEED},
+            [(SEED, "NNNN")], report_region="R")
+        self.assertEqual(len(result["mask_runs"]), 1)
+        report = result["mask_runs"][0]
+        self.assertEqual(report["other_seed_bridges"], 1)
+        self.assertFalse(report["region_attributable_bridge"])
+
+    def test_other_seed_different_gap_is_not_same_bridge(self):
+        result = audit_mask_read_support(
+            {("S", "R"): REGION},
+            {("S", "R"): SEED, ("S", "R2"): LEFT + "C" * 9 + RIGHT},
+            [(SEED, "NNNN")])
+        report = result["mask_runs"][0]
+        self.assertEqual(report["other_seed_bridges"], 0)
+        self.assertTrue(report["region_attributable_bridge"])
+
     def test_reverse_complement_allele_detection(self):
         read = reverse_complement(LEFT + ALT_ALLELE + RIGHT)
         self.assertEqual(spanning_alleles(read, LEFT, RIGHT, 8), {ALT_ALLELE})

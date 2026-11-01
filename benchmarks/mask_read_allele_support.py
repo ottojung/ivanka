@@ -142,6 +142,9 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_b
                     "region_unique_flanks": region_unique_flanks,
                     "other_region_bridges": 0, "globally_unique_flank_bridge": False,
                     "unique_seed_flank_bridge": False,
+                    "other_seed_bridges": 0,
+                    "globally_unique_seed_flank_bridge": False,
+                    "region_attributable_bridge": False,
                     "exact_bridge_pairs": 0, "ambiguous_pairs": 0,
                     "low_quality_bridge_pairs": 0,
                     "observed_alleles": {}}
@@ -162,9 +165,23 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_b
                         strand, pos = hit
                         oriented_seed = seed if strand == "+" else reverse_complement(seed)
                         allele = oriented_seed[pos + anchor:pos + anchor + end - start]
+                        # The seed hit is unique only within this region.
+                        # Other seed regions may carry the same exact bridge,
+                        # even when the final MAX rows appear unambiguous.
+                        other_seed = sum(
+                            _has_spaced_flanks(other_seq, left, right, end - start)
+                            for (other_sample, other_region), other_seq in seed_rows.items()
+                            if other_sample == sample and other_region != region
+                        )
+                        attributable = other == 0 and other_seed == 0
                         item.update(unique_seed_flank_bridge=True, seed_strand=strand,
                                     seed_allele=allele, seed_support_pairs=0,
-                                    alternative_support_pairs=0, alternative_alleles={})
+                                    alternative_support_pairs=0, alternative_alleles={},
+                                    other_seed_bridges=other_seed,
+                                    globally_unique_seed_flank_bridge=other_seed == 0,
+                                    region_attributable_bridge=attributable,
+                                    region_attributable_seed_support_pairs=0,
+                                    region_attributable_alternative_support_pairs=0)
             reports.append(item)
 
     pairs_seen = 0
@@ -199,8 +216,12 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_b
                 if item["unique_seed_flank_bridge"]:
                     if allele == item["seed_allele"]:
                         item["seed_support_pairs"] += 1
+                        if item["region_attributable_bridge"]:
+                            item["region_attributable_seed_support_pairs"] += 1
                     else:
                         item["alternative_support_pairs"] += 1
+                        if item["region_attributable_bridge"]:
+                            item["region_attributable_alternative_support_pairs"] += 1
                         alternatives = item["alternative_alleles"]
                         alternatives[allele] = alternatives.get(allele, 0) + 1
 
@@ -216,8 +237,10 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_b
         "processed_read_pairs": pairs_seen,
         "anchor": anchor,
         "min_base_quality": min_base_quality,
-        "interpretation": ("Counts require flanks unique within a final region and exact on one read; flanks may recur in other contigs; "
-                           "they do not prove a complete phased haplotype or independent molecules."),
+        "interpretation": ("Exact bridge counts are local read-pair evidence, not necessarily region-attributable. "
+                           "Region-attributable counts additionally require the exact spaced flank bridge to be unique "
+                           "across all final and seed regions of this sample, including reverse complements. "
+                           "They do not prove a complete phased haplotype or independent molecules."),
         "mask_runs": reports,
     }
 

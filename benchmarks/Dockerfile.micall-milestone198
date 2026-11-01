@@ -1,0 +1,27 @@
+# Final Ivanka candidate: original frozen IVA control plus source-pinned mutable patches.
+# The IVA control itself is never rebuilt, modified, or retagged by this recipe.
+ARG IVA_CONTROL_IMAGE=localhost/ivanka-micall-iva:base
+FROM docker.io/library/rust:1.93-bookworm AS ivanka-builder
+WORKDIR /src
+COPY Cargo.toml Cargo.lock build.rs ./
+COPY source_lints ./source_lints
+COPY src ./src
+RUN cargo build --release --locked
+
+FROM ${IVA_CONTROL_IMAGE}
+ARG SOURCE_COMMIT
+ARG BOWTIE_THREADS=2
+COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka
+COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_micall_for_ivanka.py
+COPY benchmarks/verify_ivanka_binding.py /tmp/verify_ivanka_binding.py
+COPY benchmarks/patch_remap_threads.py /tmp/patch_remap_threads.py
+COPY benchmarks/patch_micall_stitcher_kmer_veto.py /tmp/patch_micall_stitcher_kmer_veto.py
+RUN python /tmp/patch_micall_for_ivanka.py \
+    && python /tmp/verify_ivanka_binding.py \
+    && python /tmp/patch_remap_threads.py --threads "${BOWTIE_THREADS}" \
+    && python /tmp/patch_micall_stitcher_kmer_veto.py \
+    && rm /tmp/patch_micall_for_ivanka.py /tmp/verify_ivanka_binding.py \
+          /tmp/patch_remap_threads.py /tmp/patch_micall_stitcher_kmer_veto.py
+RUN python -c 'import importlib.util; from pathlib import Path; s=Path(importlib.util.find_spec("micall.utils.referenceless_contig_stitcher").origin).read_text(); assert "def _canonical_kmers_tuple(" in s; assert "def preserves_source_kmers(" in s'
+LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.ivanka.micall-overlay="ivanka-g2p-seeded;ordered-bowtie2-p2;rolling-canonical31-stitcher-veto"

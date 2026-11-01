@@ -22,7 +22,7 @@ from reference_catalog import load_micall_projects
 import milestone198
 from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
                                   authenticated_postrun_cleanup, startup_database_lock,
-                                  no_micall_output)
+                                  no_micall_output, podman_attempt_diagnostics)
 
 DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
 RESULTS = Path(os.environ.get("IVANKA_PODMAN_RESULTS", "/workspace/ivanka-podman-results"))
@@ -487,6 +487,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     with (folder / "podman.stdout.log").open("w") as stdout, \
          (folder / "podman.stderr.log").open("w") as stderr:
         start_retries = 0
+        podman_attempts = []
         original_name = container_name
         while True:
             # The original sample wall clock includes *every* failed startup,
@@ -499,6 +500,8 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                               else f"{original_name}-dbretry{start_retries}")
             command[command.index("--name") + 1] = container_name
             command[command.index("--timeout") + 1] = str(max(1, int(remaining) - 2))
+            stderr.flush()
+            attempt_stderr_offset = (folder / "podman.stderr.log").stat().st_size
             try:
                 p = subprocess.run(command, stdout=stdout, stderr=stderr,
                                    timeout=remaining, check=False)
@@ -517,6 +520,11 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                 except (subprocess.TimeoutExpired, OSError) as exc:
                     cleanup_error = f"{type(exc).__name__}: {exc}"
             stderr.flush()
+            podman_attempts.append({
+                "raw_exit_code": exitcode,
+                "_start": attempt_stderr_offset,
+                "_end": (folder / "podman.stderr.log").stat().st_size,
+            })
             # Podman 5.8 sometimes cannot begin its SQLite creation
             # transaction amid concurrent container cleanup. Such a failure
             # has executed ZERO MiCall steps; retry within the ORIGINAL cap,
@@ -533,6 +541,13 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                 continue
             break
     container_wall_seconds = round(time.monotonic()-start, 2)
+    # Analyze stderr AFTER measuring the whole-container wall clock.
+    # Diagnostics must not consume any of the frozen 1800-second allowance.
+    if exitcode or start_retries:
+        for attempt in podman_attempts:
+            attempt["stderr_diagnostics"] = podman_attempt_diagnostics(
+                folder / "podman.stderr.log",
+                attempt.pop("_start"), attempt.pop("_end"))
     internal_seconds = None
     timing_error = None
     recovered_cleanup = False
@@ -560,6 +575,8 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     }
     if start_retries:
         result["podman_start_retries"] = start_retries
+    if exitcode or start_retries:
+        result["podman_attempts"] = podman_attempts
     if recovered_cleanup:
         # Preserve the real CLI error; never disguise it as a clean Podman exit.
         result["podman_exit_code"] = 127

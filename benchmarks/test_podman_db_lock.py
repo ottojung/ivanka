@@ -50,8 +50,13 @@ class PodmanLockTests(TestCase):
         calls = []
         def run(command, *, stdout, stderr, timeout, check):
             calls.append(command[:])
-            returncode, stderr_text, timing = responses[len(calls) - 1]
+            response = responses[len(calls) - 1]
+            returncode, stderr_text, timing = response[:3]
             stderr.write(stderr_text)
+            if len(response) > 3:
+                stdout.write(response[3])
+            if len(response) > 4 and response[4]:
+                (self.folder / "conseq.csv").write_text("partial MiCall artifact")
             if timing:
                 (self.folder / "micall_internal_timing.json").write_text(
                     json.dumps({"exit_code": 0, "seconds": 0.02,
@@ -103,6 +108,23 @@ class PodmanLockTests(TestCase):
         self.assertEqual(result["podman_start_retries"], 2)
         self.assertEqual(result["seconds"], 0.02)
         self.assertLessEqual(float(calls[2][calls[2].index("--timeout") + 1]), 14)
+
+    def test_prestart_lock_with_micall_stdout_is_not_safe_to_retry(self):
+        result, calls = self.simulate([
+            (125, "Error: beginning transaction: database is locked\\n",
+             False, "MiCall may have started"),
+        ])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result["exit_code"], 125)
+        self.assertNotIn("podman_start_retries", result)
+
+    def test_prestart_save_lock_with_partial_artifact_is_not_retried(self):
+        result, calls = self.simulate([
+            (126, PRESTART_SAVE, False, "", True),
+        ])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result["exit_code"], 126)
+        self.assertNotIn("podman_start_retries", result)
 
     def test_generic_startup_error_never_retries(self):
         result, calls = self.simulate([

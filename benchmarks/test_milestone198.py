@@ -107,6 +107,16 @@ class QualificationTests(unittest.TestCase):
             item["best_contig_acceptance"]["ivanka_score"] = 205.
         self.assertTrue(self.score(records)["milestone198_pass"])
 
+    def test_exit_code_must_be_an_integer_zero_not_false_or_float(self):
+        for arm in ("iva", "ivanka"):
+            for invalid_exit in (False, 0.0, None):
+                with self.subTest(arm=arm, exit_code=invalid_exit):
+                    records = deepcopy(self.records)
+                    records[0][arm]["exit_code"] = invalid_exit
+                    report = self.score(records)
+                    self.assertFalse(report["milestone198_pass"])
+                    self.assertEqual(report["milestone198_valid_pairs"], 197)
+
     def test_unverified_control_or_runtime_fails_closed(self):
         for field, value in (("iva_baseline_reused", False),
                              ("total_seconds", float("nan"))):

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use super::reads::{K, MAX_EXTENSION, MAX_CONTIG_LENGTH, encode, rc, Reads};
-use super::extension_helpers::{summarize, choose_extension as choose_with_limit, CycleTracker};
+use super::extension_helpers::{summarize, choose_extension as choose_with_limit, CycleTracker, cycle_cut_keeps_prior_path};
 pub(super) use super::extension_helpers::record_extension_support;
 
 pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usize) -> (Vec<u8>,usize){
@@ -18,8 +18,7 @@ pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usi
         // Once a contig covers every possible read, extending the opposite
         // end cannot change the last read-length bases at a stalled end.
         if seq.len()>=reads.max_read_len {
-            right_stalled |= right.is_empty();
-            left_stalled |= left.is_empty();
+            right_stalled |= right.is_empty(); left_stalled |= left.is_empty();
         }
         if right.is_empty() && left.is_empty() {
             if std::env::var_os("IVANKA_TRACE_EXTENSIONS").is_some() {
@@ -33,13 +32,14 @@ pub(super) fn extend(mut seq:Vec<u8>, reads:&Reads, min_cov:usize, min_ratio:usi
         }
         if !left.is_empty() || !right.is_empty() {
             let mut next=Vec::with_capacity(left.len()+seq.len()+right.len());
-            next.extend_from_slice(&left);
-            next.extend_from_slice(&seq);
+            next.extend_from_slice(&left); next.extend_from_slice(&seq);
             next.extend_from_slice(&right);
             if let Some(cut) = cycles.check(&next,K,encode,!left.is_empty()) {
+                if !cycle_cut_keeps_prior_path(cut,left.len(),seq.len()) {
+                    eprintln!("cycle within existing contig; preserving prior phased path"); break;
+                }
                 eprintln!("extension stopped at repeated 512-nt tract ({} nt retained)", cut);
-                next.truncate(cut);
-                seq = next;
+                next.truncate(cut); seq = next;
                 break;
             }
             record_extension_support(&right_reads,&right_ids,&right,&mut supporting_reads);

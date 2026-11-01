@@ -1,4 +1,5 @@
-use super::ranking::canonical_kmer;
+use super::reads::rolling_canonical_kmers;
+#[cfg(test)] use super::ranking::canonical_kmer;
 use super::reads::K;
 use super::reads::{Reads, decode};
 use super::setup::balanced_seed_candidates;
@@ -59,3 +60,4 @@ pub(super) use rescue::rescue_short;
 pub(super) use rescue_rank::append_preserving_diversity;
 
 #[cfg(test)] mod rescue_rank_test;
+#[cfg(test)] mod rescue_rank_equiv_test;

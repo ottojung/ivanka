@@ -45,10 +45,11 @@ class QualificationTests(unittest.TestCase):
             {"sample": name, "status": "finished", "failed": False,
              "iva_baseline_reused": True, "total_seconds": 100.0,
              "iva": {"exit_code": 0, "image_id": "iva-id", "seconds": 60.,
+                     "container_wall_seconds": 70.,
                      "timing_origin": "micall_in_container_monotonic_v1",
                      "metrics": {"num_final_max_conseqs": 1}},
              "ivanka": {"exit_code": 0, "image_id": "ivanka-id",
-                        "seconds": 50., "timing_origin": "micall_in_container_monotonic_v1",
+                        "seconds": 50., "container_wall_seconds": 65., "timing_origin": "micall_in_container_monotonic_v1",
                         "metrics": {"num_final_max_conseqs": 1}},
              "best_contig_acceptance": {
                  "method": "best_final_max_contig_local_alignment_over_reference_panel",
@@ -72,6 +73,26 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(report["time_psi0"], 1)
         self.assertEqual(report["score_psi2"], 1)
 
+    def test_postprocessing_does_not_exhaust_container_cap(self):
+        records = deepcopy(self.records)
+        records[0]["total_seconds"] = 1826.0
+        records[0]["iva"]["container_wall_seconds"] = 629.88
+        records[0]["ivanka"]["container_wall_seconds"] = 1746.74
+        self.assertTrue(self.score(records)["milestone198_pass"])
+
+    def test_both_container_walls_and_timer_bounds_are_required(self):
+        for arm, field, value in (
+            ("iva", "container_wall_seconds", 1800.01),
+            ("ivanka", "container_wall_seconds", 1800.01),
+            ("iva", "container_wall_seconds", None),
+            ("ivanka", "container_wall_seconds", float("nan")),
+            ("ivanka", "seconds", 67.0),
+        ):
+            with self.subTest(arm=arm, field=field, value=value):
+                records = deepcopy(self.records)
+                records[0][arm][field] = value
+                self.assertFalse(self.score(records)["milestone198_pass"])
+
     def test_every_sample_must_reach_ninety_percent(self):
         for bad_score in (179.999, None, float("nan")):
             with self.subTest(bad_score=bad_score):
@@ -88,7 +109,6 @@ class QualificationTests(unittest.TestCase):
 
     def test_unverified_control_or_runtime_fails_closed(self):
         for field, value in (("iva_baseline_reused", False),
-                             ("total_seconds", 1801.0),
                              ("total_seconds", float("nan"))):
             records = deepcopy(self.records)
             records[0][field] = value
@@ -123,6 +143,7 @@ class QualificationTests(unittest.TestCase):
         records = deepcopy(self.records)
         for item in records:
             item["ivanka"]["seconds"] = 70.
+            item["ivanka"]["container_wall_seconds"] = 80.
         result = self.score(records)
         self.assertFalse(result["milestone198_pass"])
         self.assertEqual(result["time_psi"]["psi1"], -10)
@@ -162,7 +183,7 @@ cases = [
     (("ivanka", "image_id"), "wrong"),
     (("best_contig_acceptance", "reference_count"), 32),
     (("best_contig_acceptance", "pass"), False),
-    (("total_seconds",), 1801.0),
+    (("ivanka", "container_wall_seconds"), 1801.0),
     (("iva", "seconds"), 0.0),
 ]
 for path, value in cases:

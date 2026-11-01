@@ -3,6 +3,7 @@
 
 This is a diagnostic, not a biological minority-haplotype or MiCall score gate.
 Compare canonical k-mers so reverse-complemented contigs are not false losses.
+Optional --link-distances detects within-read ordered-anchor phase losses.
 """
 import argparse
 from collections import Counter
@@ -204,7 +205,7 @@ def main():
     parser.add_argument("--max-read-records", type=int, default=10000,
                         help="Sample at most this many FASTQ records from each mate")
     parser.add_argument("--link-distances", type=int, nargs="+",
-                        help="Audit read-backed ordered 31-mer anchor pairs at these separations; requires both FASTQs")
+                        help="Audit read-backed ordered k-mer anchor pairs at these separations; requires both FASTQs")
     args = parser.parse_args()
     if (args.reads1 is None) != (args.reads2 is None):
         parser.error("--reads1 and --reads2 must be supplied together")

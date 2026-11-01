@@ -90,6 +90,14 @@ def startup_database_lock(stderr_file: Path) -> bool:
         tail = stderr_file.read_text(errors="replace").rstrip().splitlines()
     except OSError:
         return False
-    return bool(tail and not any("micall.process_run(): Done." in line for line in tail)
+    # Logs from earlier failed starts are retained in the same file. Allow
+    # only previous recognized pre-start errors and our own retry markers;
+    # never treat arbitrary MiCall output as a pre-start-only failure.
+    retry_marker = re.compile(r"Benchmark: retrying Podman startup after DB lock \(\d+\)")
+    def prestart_line(line: str) -> bool:
+        return bool(line in _STARTUP_LOCK_ERRORS
+                    or _PRESTART_SAVE_LOCK.fullmatch(line)
+                    or retry_marker.fullmatch(line))
+    return bool(tail and all(prestart_line(line) for line in tail)
                 and (tail[-1] in _STARTUP_LOCK_ERRORS
-                     or (len(tail) == 1 and _PRESTART_SAVE_LOCK.fullmatch(tail[0]))))
+                     or _PRESTART_SAVE_LOCK.fullmatch(tail[-1])))

@@ -92,6 +92,18 @@ class PodmanLockTests(TestCase):
         self.assertEqual(result["seconds"], 0.02)
         self.assertLessEqual(float(calls[1][calls[1].index("--timeout") + 1]), 14)
 
+    def test_mixed_prestart_lock_retries_keep_one_deadline(self):
+        result, calls = self.simulate([
+            (125, "Error: beginning transaction: database is locked\n", False),
+            (126, PRESTART_SAVE, False),
+            (0, "2026-11-01[INFO]micall.process_run(): Done.\n", True),
+        ])
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(result["podman_start_retries"], 2)
+        self.assertEqual(result["seconds"], 0.02)
+        self.assertLessEqual(float(calls[2][calls[2].index("--timeout") + 1]), 14)
+
     def test_generic_startup_error_never_retries(self):
         result, calls = self.simulate([
             (125, "Error: missing executable\n", False),

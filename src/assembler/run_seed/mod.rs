@@ -1,8 +1,10 @@
 use super::ranking::canonical_kmer;
 use super::reads::K;
-use super::reads::{Reads, decode};
+use super::reads::{Reads, decode, rc};
 use super::setup::balanced_seed_candidates;
 use super::extension::extend;
+mod containment;
+pub(super) use containment::contained_path;
 use std::collections::HashSet;
 
 pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, contigs:&mut Vec<Vec<u8>>, supporting_counts:&mut Vec<usize>) {
@@ -19,8 +21,8 @@ pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, conti
         let (seq,support)=extend(seedseq,&reads,4,1);
         if !seq.is_empty() {
             eprintln!("candidate {} coverage {} produced {} nt",attempted,count,seq.len());
-            // Do not merge contigs, merely suppress exact contained duplicates.
-            if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {
+            // Suppress only exact contained duplicates (in either orientation), preserving phased variants.
+            if !contained_path(contigs,&seq) {
                 contigs.push(seq);
                 supporting_counts.push(support);
             }
@@ -41,7 +43,7 @@ pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, conti
         if attempted_seeds.contains(&seed) {continue;}
         let (seq,support)=extend(decode(seed),&reads,4,1);
         if seq.is_empty() {continue;}
-        if !contigs.iter().any(|c|c.windows(seq.len()).any(|w|w==seq)) {
+        if !contained_path(contigs,&seq) {
             contigs.push(seq);
             supporting_counts.push(support);
             rescued+=1;

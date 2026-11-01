@@ -6,7 +6,7 @@ use super::reads::{K, fasta_seeds, Reads};
 use super::extension::extend;
 use super::ranking::select_supported_contigs;
 use super::setup::{parse, balanced_seed_candidates};
-use super::run_seed::{assemble_candidates,rescue_short,append_preserving_diversity};
+use super::run_seed::{assemble_candidates,rescue_short,append_preserving_diversity,contained_path};
 
 pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
     let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
@@ -19,11 +19,12 @@ pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
         let supplied=fasta_seeds(seeds_file)?;
         eprintln!("received {} MiCall G2P seed contigs", supplied.len());
         let seed_quota=(max / 3).max(1);
-        for seed in supplied.into_iter().filter(|seq|seq.len()>=K).take(seed_quota) {
+        for seed in supplied.into_iter().filter(|seq|seq.len()>=K) {
+            if contigs.len()>=seed_quota {break;}
             let supplied_len=seed.len();
             let (extended,support)=extend(seed,&reads,6,2);
             if extended.len()>=supplied_len &&
-               !contigs.iter().any(|c|c.windows(extended.len()).any(|w|w==extended)) {
+               !contained_path(&contigs,&extended) {
                 contigs.push(extended);
                 supporting_counts.push(support);
             }

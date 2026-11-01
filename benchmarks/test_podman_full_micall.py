@@ -2,10 +2,30 @@ import importlib.util
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
+import subprocess
 
 spec=importlib.util.spec_from_file_location("podman_compare",Path(__file__).with_name("podman_full_micall.py"))
 m=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
+class PodmanImageInspectDeadlineTests(TestCase):
+ def test_image_id_and_layers_use_bounded_inspection(self):
+  with patch.object(m.subprocess, "check_output", return_value="abc") as run:
+   self.assertEqual(m.image_id("pinned"), "abc")
+   self.assertEqual(run.call_args.kwargs["timeout"], m.PODMAN_INSPECT_TIMEOUT)
+  with patch.object(m.subprocess, "check_output", return_value='["layer"]') as run:
+   self.assertEqual(m.image_layers("pinned"), ["layer"])
+   self.assertEqual(run.call_args.kwargs["timeout"], m.PODMAN_INSPECT_TIMEOUT)
+
+ def test_hung_image_inspection_fails_closed(self):
+  with patch.object(m.subprocess, "check_output",
+                    side_effect=subprocess.TimeoutExpired(["podman"], 60)):
+   with self.assertRaisesRegex(ValueError, "timed out before qualification"):
+    m.image_id("pinned")
+   with self.assertRaisesRegex(ValueError, "timed out before qualification"):
+    m.image_layers("pinned")
+
+
 class StrictCacheAuditTests(TestCase):
  def test_strict_iva_cache_audit_is_read_only_mode(self):
   from types import SimpleNamespace
@@ -242,7 +262,11 @@ class BenchmarkTests(TestCase):
     result=m.run_arm({"sample":"TEST"},"ivanka","image:tag","ACGT",123,"invocation",all_projects=True)
    argv=runner.call_args.args[0]
    self.assertEqual(argv[argv.index("--entrypoint")+1],"python")
-   self.assertEqual(argv[argv.index("--timeout")+1],"121")
+   # The remaining whole-container budget is sampled after setup and may
+   # lose one second when rounded down; never demand the stale exact value.
+   inner_timeout = int(argv[argv.index("--timeout")+1])
+   self.assertGreaterEqual(inner_timeout, 118)
+   self.assertLessEqual(inner_timeout, 121)
    self.assertEqual(argv[argv.index("--stop-timeout")+1],"2")
    self.assertNotIn("108s",argv)
    self.assertIn("micall",argv)

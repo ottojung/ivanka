@@ -104,14 +104,21 @@ def spanning_alleles(read, left, right, gap, quality=None, min_base_quality=0):
 
 
 def _count_spaced_flanks(seq, left, right, gap):
-    count = 0
-    for strand in (seq, reverse_complement(seq)):
+    """Count physical intervals, not strand observations of the same interval.
+
+    Reverse-complement symmetric flanks can match the *same* physical locus
+    on both strands. Distinct intervals, including overlapping ones, remain
+    distinct. This does not assert that an allele has a unique orientation.
+    """
+    span = len(left) + gap + len(right)
+    loci = set()
+    for reverse, strand in ((False, seq), (True, reverse_complement(seq))):
         pos = strand.find(left)
         while pos != -1:
-            if strand[pos + len(left) + gap:pos + len(left) + gap + len(right)] == right:
-                count += 1
+            if strand[pos + len(left) + gap:pos + span] == right:
+                loci.add(len(seq) - pos - span if reverse else pos)
             pos = strand.find(left, pos + 1)
-    return count
+    return len(loci)
 
 
 def _has_spaced_flanks(seq, left, right, gap):

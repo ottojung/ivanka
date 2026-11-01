@@ -1,15 +1,42 @@
 """Focused tests for conservative seed-versus-region masking diagnostics."""
 import csv
+import random
 from pathlib import Path
 import tempfile
 import unittest
 
 from consensus_mask_stage_audit import (
-    audit, exact_flank_correspondence, mask_runs, max_rows, reverse_complement,
+    audit, canonical_kmers, exact_flank_correspondence, kmer_stage_retention,
+    mask_runs, max_rows, reverse_complement,
 )
 
 
 class MaskStageTests(unittest.TestCase):
+    def test_canonical_kmers_are_reverse_complement_invariant(self):
+        sequence = "ACGTGCTATCGATGCAGGTCACATGTTACGATCGAGTCATG"
+        self.assertEqual(canonical_kmers(sequence, 7),
+                         canonical_kmers(reverse_complement(sequence), 7))
+        self.assertEqual(canonical_kmers("ACNGTA", 3),
+                         canonical_kmers("ACNGTA".lower(), 3))
+        self.assertEqual(canonical_kmers("ACNGTA", 3),
+                         canonical_kmers("GTA", 3))
+        with self.assertRaises(ValueError):
+            canonical_kmers(sequence, 0)
+
+    def test_masking_is_measured_as_sequence_loss_not_read_loss(self):
+        randomizer = random.Random(84)
+        seed = "".join(randomizer.choices("ACGT", k=500))
+        final = seed[:180] + "X" * 50 + seed[230:]
+        report = kmer_stage_retention(seed, final)
+        for k in ("31", "101", "251"):
+            self.assertGreater(report[k]["seed_unique"], 0)
+            self.assertGreater(report[k]["seed_absent_from_final"], 0)
+            self.assertEqual(report[k]["final_absent_from_seed"], 0)
+        region = audit({("S", "R"): final}, {("S", "R"): seed})["regions"][0]
+        self.assertEqual(region["canonical_kmer_stage_comparison"], report)
+        self.assertIsNone(audit({("S", "R"): final}, {})["regions"][0]
+                          ["canonical_kmer_stage_comparison"])
+
     def test_mask_runs(self):
         self.assertEqual(mask_runs("ACxxGXXXTa"), [(2, 4), (5, 8)])
 

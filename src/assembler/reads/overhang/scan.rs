@@ -1,5 +1,6 @@
 use super::{K,encode};
 use super::Reads;
+use super::select::record_best;
 // Scan successive query 31-mers by shifting their two-bit codes rather than
 // re-encoding 31 bases on every overlapping index lookup.
 pub(crate) fn rolling_query(seq: &[u8], q: usize, previous: Option<u64>) -> Option<u64> {
@@ -17,8 +18,8 @@ impl Reads {
     pub(crate) fn overhangs_with_ids(&self, contig:&[u8]) -> (Vec<Vec<u8>>,Vec<u32>) {
         if contig.len()<K {return (Vec::new(),Vec::new());}
         let start=contig.len().saturating_sub(250);
-        // Two orientations share one bit per original FASTQ read.
-        let mut used=vec![false;self.seqs.len().div_ceil(2)];
+        // Two orientations share one best-overlap record per original FASTQ read.
+        let mut used=vec![(0u32,0u32);self.seqs.len().div_ceil(2)];
         let mut ext=Vec::new();
         let mut ids=Vec::new();
         let mut previous = None;
@@ -33,7 +34,6 @@ impl Reads {
             if hits.len()>50000 {continue;}
             for hit in hits {
                 let original=hit.read/2;
-                if used[original as usize] {continue;}
                 let pos=hit.pos as usize;
                 // The contig may be shorter than the aligned read, especially
                 // during seeding. In that case the read starts *before* the
@@ -42,10 +42,9 @@ impl Reads {
                 let overlap=contig.len()-begin;
                 let read=&self.seqs[hit.read as usize];
                 if overlap<K || read_start+overlap>=read.len() {continue;}
+                if used[original as usize].1>=overlap as u32 {continue;}
                 if read[read_start..read_start+overlap]!=contig[begin..] {continue;}
-                used[original as usize]=true;
-                ext.push(read[read_start+overlap..].to_vec());
-                ids.push(original);
+                record_best(original,overlap,&read[read_start+overlap..],&mut used,&mut ext,&mut ids);
             }
         }
         (ext,ids)

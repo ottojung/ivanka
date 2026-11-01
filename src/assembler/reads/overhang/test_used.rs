@@ -32,3 +32,19 @@ fn terminal_index_dedup_preserves_repetitive_high_depth_overhangs() {
     assert_eq!(ids.len(),20_000);
     assert!(overhangs.iter().all(|suffix|suffix==&vec![b'A';12]));
 }
+
+
+#[test]
+fn repeated_anchor_prefers_longest_exact_read_overlap() {
+    let contig=b"ACGTTGCAA".repeat(5)[..40].to_vec();
+    let mut read=contig[3..9].to_vec();
+    read.extend_from_slice(&contig);
+    read.extend_from_slice(b"TT");
+    let seqs=vec![read.clone(),vec![b'N';read.len()]];
+    let reads=Reads{index:super::build_index(&seqs),seqs,
+        max_read_len:read.len(),seed_counts:Default::default(),
+        overhang_cache:Default::default(),overlength_rejections:Default::default()};
+    let (overhangs,ids)=reads.overhangs_with_ids(&contig);
+    assert_eq!(ids,vec![0]);
+    assert_eq!(overhangs,vec![b"TT".to_vec()]);
+}

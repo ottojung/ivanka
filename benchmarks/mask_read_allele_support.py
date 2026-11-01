@@ -103,22 +103,31 @@ def spanning_alleles(read, left, right, gap, quality=None, min_base_quality=0):
     return alleles
 
 
-def _has_spaced_flanks(seq, left, right, gap):
+def _count_spaced_flanks(seq, left, right, gap):
+    count = 0
     for strand in (seq, reverse_complement(seq)):
         pos = strand.find(left)
         while pos != -1:
             if strand[pos + len(left) + gap:pos + len(left) + gap + len(right)] == right:
-                return True
+                count += 1
             pos = strand.find(left, pos + 1)
-    return False
+    return count
 
-def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_base_quality=0):
+
+def _has_spaced_flanks(seq, left, right, gap):
+    return _count_spaced_flanks(seq, left, right, gap) > 0
+
+def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_base_quality=0, report_region=None):
     if not 0 <= min_base_quality <= 93:
         raise ValueError("min_base_quality must be between 0 and 93")
     if anchor < 1:
         raise ValueError("anchor must be positive")
+    # Keep every region in region_rows for cross-region attribution checks.
+    # report_region controls presentation only, never the ambiguity universe.
     reports = []
     for (sample, region), sequence in sorted(region_rows.items()):
+        if report_region is not None and region != report_region:
+            continue
         seed = seed_rows.get((sample, region))
         for start, end in mask_runs(sequence):
             left, right = sequence[start-anchor:start], sequence[end:end+anchor]
@@ -126,6 +135,7 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_b
                 len(left) == anchor and len(right) == anchor
                 and set(left + right).issubset(_BASES)
                 and sequence.count(left) == 1 and sequence.count(right) == 1
+                and _count_spaced_flanks(sequence, left, right, end - start) == 1
             )
             item = {"sample": sample, "region": region, "mask_start": start,
                     "mask_end": end, "mask_length": end - start,
@@ -226,14 +236,15 @@ def main():
                         help="minimum Phred+33 quality for every base in both flanks and allele")
     args = parser.parse_args()
     regions = {key: seq for key, seq in max_rows(args.conseq_csv, "region").items()
-               if key[0] == args.sample and (args.region is None or key[1] == args.region)}
-    if not regions:
+               if key[0] == args.sample}
+    if not regions or (args.region is not None
+                       and not any(key[1] == args.region for key in regions)):
         parser.error("no final MAX region rows match the requested sample/region")
     seeds = max_rows(args.conseq_all_csv, "seed", seed_only=True)
     result = audit_mask_read_support(
         regions, seeds,
         fastq_pairs(args.fastq_r1, args.fastq_r2, args.max_pairs, include_quality=True),
-        args.anchor, args.min_base_quality)
+        args.anchor, args.min_base_quality, report_region=args.region)
     print(json.dumps(result, indent=2))
 
 

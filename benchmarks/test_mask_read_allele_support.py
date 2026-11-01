@@ -74,6 +74,24 @@ class ReadSupportTests(unittest.TestCase):
         self.assertFalse(report["globally_unique_flank_bridge"])
         self.assertEqual(report["exact_bridge_pairs"], 1)
 
+    def test_region_filter_does_not_hide_cross_region_ambiguity(self):
+        other = "TTTT" + LEFT + ALT_ALLELE + RIGHT + "GGGG"
+        result = audit_mask_read_support(
+            {("S", "R"): REGION, ("S", "R2"): other},
+            {("S", "R"): SEED}, [(SEED, "NNNN")], report_region="R")
+        self.assertEqual(len(result["mask_runs"]), 1)
+        report = result["mask_runs"][0]
+        self.assertEqual(report["other_region_bridges"], 1)
+        self.assertFalse(report["globally_unique_flank_bridge"])
+
+    def test_reverse_complement_bridge_in_same_region_is_ambiguous(self):
+        region = REGION + "AAAA" + reverse_complement(LEFT + ALT_ALLELE + RIGHT)
+        report = run([(SEED, "NNNN")], region=region)
+        self.assertEqual(region.count(LEFT), 1)
+        self.assertEqual(region.count(RIGHT), 1)
+        self.assertFalse(report["region_unique_flanks"])
+        self.assertEqual(report["exact_bridge_pairs"], 0)
+
     def test_reverse_complement_other_region(self):
         other = reverse_complement(LEFT + ALT_ALLELE + RIGHT)
         reports = audit_mask_read_support(

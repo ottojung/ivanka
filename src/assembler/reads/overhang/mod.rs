@@ -9,3 +9,5 @@ mod cache;
 
 #[cfg(test)] mod test_used;
 #[cfg(test)] pub(super) use super::types::Hit;
+
+#[cfg(test)] mod test_long_read;

@@ -51,9 +51,8 @@ def preserves_source_kmers(source_sequences, stitched_sequence, k=31):
     """
     from micall.utils.exact_coverage import reverse_complement
 
-    sources = tuple(source_sequences)
     represented = _canonical_kmers_tuple(stitched_sequence, k)
-    for source in sources:
+    for source in source_sequences:
         if len(source) < k:
             if (source not in stitched_sequence
                     and reverse_complement(source) not in stitched_sequence):

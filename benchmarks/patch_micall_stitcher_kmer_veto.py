@@ -12,6 +12,38 @@ def patched_source(source):
     anchor = "\ndef try_combine_1(\n"
     helper = '''
 
+import functools
+
+
+@functools.lru_cache(maxsize=256)
+def _canonical_kmers_tuple(seq, k):
+    """Encode canonical ACGT windows with a rolling forward/reverse pair.
+
+    Numeric order is lexicographic order for fixed-length ACGT strings.
+    Invalid bases reset both rolling states, exactly excluding their windows.
+    """
+    if k == 0:
+        return frozenset((0,))
+    if k < 0:
+        raise ValueError("k must be nonnegative")
+    base = {"A": 0, "C": 1, "G": 2, "T": 3}
+    mask = (1 << (2 * k)) - 1
+    high = 2 * (k - 1)
+    forward = reverse = valid = 0
+    kmers = set()
+    for ch in seq:
+        value = base.get(ch)
+        if value is None:
+            forward = reverse = valid = 0
+            continue
+        forward = ((forward << 2) | value) & mask
+        reverse = (reverse >> 2) | ((3 - value) << high)
+        valid += 1
+        if valid >= k:
+            kmers.add(min(forward, reverse))
+    return frozenset(kmers)
+
+
 def preserves_source_kmers(source_sequences, stitched_sequence, k=31):
     """Return False when a merge collapses canonical source k-mers.
 
@@ -19,20 +51,13 @@ def preserves_source_kmers(source_sequences, stitched_sequence, k=31):
     """
     from micall.utils.exact_coverage import reverse_complement
 
-    def kmers(seq):
-        return {
-            min(seq[i:i + k], reverse_complement(seq[i:i + k]))
-            for i in range(max(0, len(seq) - k + 1))
-            if set(seq[i:i + k]) <= {"A", "C", "G", "T"}
-        }
-
-    represented = kmers(stitched_sequence)
+    represented = _canonical_kmers_tuple(stitched_sequence, k)
     for source in source_sequences:
         if len(source) < k:
             if (source not in stitched_sequence
                     and reverse_complement(source) not in stitched_sequence):
                 return False
-        elif not kmers(source).issubset(represented):
+        elif not _canonical_kmers_tuple(source, k).issubset(represented):
             return False
     return True
 

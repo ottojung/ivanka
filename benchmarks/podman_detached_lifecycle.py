@@ -38,10 +38,12 @@ def transaction_lock(deadline: float):
 
 def run_detached(command: list[str], stdout, stderr, remaining: float):
     """Return a subprocess-like result. No successful exit without wait+logs+rm."""
-    if command[:2] != ["podman", "run"] or "--name" not in command:
-        raise ValueError("Expected pinned podman run command")
+    # The benchmark emits --rm as the first Podman option.  Do not remove
+    # identical strings from the image's argv: that would alter MiCall inputs.
+    if command[:3] != ["podman", "run", "--rm"] or "--name" not in command:
+        raise ValueError("Expected pinned podman run --rm command")
     deadline = time.monotonic() + remaining
-    create = ["podman", "create"] + [x for x in command[2:] if x != "--rm"]
+    create = ["podman", "create", *command[3:]]
     cid = None
     stage = "create"
 

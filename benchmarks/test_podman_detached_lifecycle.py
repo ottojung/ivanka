@@ -31,7 +31,7 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.calls.append(list(argv))
         stage = argv[1]
         if stage == "create":
-            self.assertNotIn("--rm", argv)
+            self.assertNotIn("--rm", argv[:argv.index("a" * 64)])
             self.assertIn("a" * 64, argv)
         code = self.exit.get(stage, 0)
         if stage == "logs" and not code:
@@ -51,6 +51,22 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual([c[1] for c in self.calls],
                          ["create", "start", "wait", "logs", "rm"])
         self.assertIn("Done.", self.stdout.getvalue())
+
+    def test_image_argv_named_rm_is_not_stripped(self):
+        # Only the Podman auto-removal flag may be removed. An identically
+        # named MiCall argument is data and must survive the transformation.
+        self.command.extend(["--rm", "--project_code", "sample"])
+        result = self.run_case()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(self.calls[0][1], "create")
+        self.assertEqual(self.calls[0][-3:], ["--rm", "--project_code", "sample"])
+        self.assertEqual(self.calls[0].count("--rm"), 1)
+
+    def test_missing_pinned_auto_remove_flag_is_rejected(self):
+        self.command.remove("--rm")
+        with self.assertRaisesRegex(ValueError, "pinned podman run"):
+            self.run_case()
+        self.assertEqual(self.calls, [])
 
     def test_create_failure_does_not_start_or_remove(self):
         self.exit["create"] = 125

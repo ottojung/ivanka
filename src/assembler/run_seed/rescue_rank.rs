@@ -1,5 +1,5 @@
-use std::collections::HashSet;
-use super::{canonical_kmer,K};
+use std::collections::{HashMap,HashSet};
+use super::{rolling_canonical_kmers,K};
 
 // Add a rescue only if no protected seed or unique 31-mer is displaced.
 // An exact k-mer cover is conservative; it is not a haplotype guarantee.
@@ -8,16 +8,15 @@ pub(crate) fn append_preserving_diversity(contigs:&mut Vec<Vec<u8>>,
     if cap==0 || rescue.len()<K {return false;}
     if contigs.len()<cap {contigs.push(rescue);return true;}
     let cover=|seq:&[u8]| -> HashSet<u64> {
-        seq.windows(K).filter_map(canonical_kmer).collect()
+        rolling_canonical_kmers(seq).collect()
     };
     let sets=contigs.iter().map(|s|cover(s)).collect::<Vec<_>>();
     let rescue_set=cover(&rescue);
+    // Count distinct contig owners, not repeated occurrences within one path.
+    let mut owners=HashMap::<u64,usize>::new();
+    for kmers in &sets {for &k in kmers {*owners.entry(k).or_default()+=1;}}
     let removable=(protected..contigs.len()).filter(|&i| {
-        let mut others=rescue_set.clone();
-        for (j,kmers) in sets.iter().enumerate() {
-            if i!=j {others.extend(kmers.iter().copied());}
-        }
-        sets[i].is_subset(&others)
+        sets[i].iter().all(|k|rescue_set.contains(k)||owners[k]>1)
     }).min_by_key(|&i|contigs[i].len());
     if let Some(i)=removable {
         contigs[i]=rescue;
@@ -43,7 +42,7 @@ pub(crate) fn append_preserving_diversity(contigs:&mut Vec<Vec<u8>>,
 #[test] fn accepted_rescue_preserves_canonical_kmer_union() {
     let mut old=vec![vec![b'A';80],vec![b'A';100],vec![b'C';90]];
     let kmers=|v:&[Vec<u8>]| -> HashSet<u64> {
-        v.iter().flat_map(|s|s.windows(K).filter_map(canonical_kmer)).collect()
+        v.iter().flat_map(|s|rolling_canonical_kmers(s)).collect()
     };
     let before=kmers(&old);
     assert!(append_preserving_diversity(&mut old,vec![b'G';1200],3,1));

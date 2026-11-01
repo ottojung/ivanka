@@ -68,6 +68,40 @@ class ReadSupportTests(unittest.TestCase):
         read = reverse_complement(LEFT + ALT_ALLELE + RIGHT)
         self.assertEqual(spanning_alleles(read, LEFT, RIGHT, 8), {ALT_ALLELE})
 
+    def test_low_quality_allele_not_counted_as_support(self):
+        read = LEFT + ALT_ALLELE + RIGHT
+        quality = "I" * len(LEFT) + "I!" + "I" * (len(ALT_ALLELE) - 2 + len(RIGHT))
+        report = audit_mask_read_support(
+            {("S", "R"): REGION}, {("S", "R"): SEED},
+            [((read, quality), ("NNNN", "IIII"))], min_base_quality=20)["mask_runs"][0]
+        self.assertEqual(report["exact_bridge_pairs"], 0)
+        self.assertEqual(report["low_quality_bridge_pairs"], 1)
+        self.assertEqual(report["alternative_support_pairs"], 0)
+
+    def test_quality_filter_reverse_complement_and_flanks(self):
+        read = LEFT + SEED_ALLELE + RIGHT
+        self.assertEqual(spanning_alleles(
+            reverse_complement(read), LEFT, RIGHT, 8,
+            "I" * len(read), 20), {SEED_ALLELE})
+        quality = "!" + "I" * (len(read) - 1)
+        self.assertEqual(spanning_alleles(
+            reverse_complement(read), LEFT, RIGHT, 8,
+            quality[::-1], 20), set())
+
+    def test_quality_required_when_filtering(self):
+        with self.assertRaisesRegex(ValueError, "qualities required"):
+            spanning_alleles(SEED, LEFT, RIGHT, 8, min_base_quality=20)
+        with self.assertRaisesRegex(ValueError, "between 0 and 93"):
+            spanning_alleles(SEED, LEFT, RIGHT, 8, min_base_quality=94)
+
+    def test_fastq_includes_original_phred_qualities(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p1, p2 = Path(tmp) / "r1.fastq", Path(tmp) / "r2.fastq"
+            p1.write_text("@r/1\\nACGT\\n+\\nI!II\\n".replace("\\n", "\n"))
+            p2.write_text("@r/2\\nTGCA\\n+\\nIIII\\n".replace("\\n", "\n"))
+            self.assertEqual(list(fastq_pairs(p1, p2, include_quality=True)),
+                             [(("ACGT", "I!II"), ("TGCA", "IIII"))])
+
     def test_invalid_anchor(self):
         with self.assertRaises(ValueError):
             audit_mask_read_support({}, {}, [], anchor=0)

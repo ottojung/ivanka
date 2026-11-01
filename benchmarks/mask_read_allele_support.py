@@ -5,6 +5,10 @@ a single final region identify a masked local sequence context. A read spanning
 both flanks supports that local allele; if a seed has a unique exact bridge,
 its allele can also be compared. Neither proves a complete seed haplotype. Read pairs are counted once; they are not necessarily distinct
 original molecules.
+
+The CLI defaults to Q20 across every base of both exact anchors and the
+bridged allele.  Low-quality exact bridges are reported separately, never
+counted as high-confidence allele support.  This is not a haplotype proof.
 """
 import argparse
 from contextlib import ExitStack
@@ -37,10 +41,10 @@ def _record(handle):
     if len(seq) != len(quality.rstrip("\r\n")):
         raise ValueError("FASTQ sequence/quality length mismatch")
     name = header[1:].split()[0].removesuffix("/1").removesuffix("/2")
-    return name, seq
+    return name, seq, quality.rstrip("\r\n")
 
 
-def fastq_pairs(r1, r2, limit=5000):
+def fastq_pairs(r1, r2, limit=5000, include_quality=False):
     if limit < 1:
         raise ValueError("limit must be positive")
     with ExitStack() as stack:
@@ -54,15 +58,30 @@ def fastq_pairs(r1, r2, limit=5000):
                 raise ValueError("FASTQ mates have unequal record counts")
             if a[0] != b[0]:
                 raise ValueError("FASTQ mate identifiers differ")
-            yield a[1], b[1]
+            if include_quality:
+                yield (a[1], a[2]), (b[1], b[2])
+            else:
+                yield a[1], b[1]
 
 
-def spanning_alleles(read, left, right, gap):
-    """All ACGT alleles with both exact flanks on one read, either strand."""
+def spanning_alleles(read, left, right, gap, quality=None, min_base_quality=0):
+    """Exact bridged alleles, requiring every base in both flanks and gap to pass Q.
+
+    Quality is reversed with the read on the reverse-complement strand.  An
+    absent quality is not silently treated as high quality when Q > 0.
+    """
+    if not 0 <= min_base_quality <= 93:
+        raise ValueError("min_base_quality must be between 0 and 93")
+    if min_base_quality and quality is None:
+        raise ValueError("FASTQ qualities required for a positive quality threshold")
+    if quality is not None and len(quality) != len(read):
+        raise ValueError("read and quality lengths differ")
     alleles = set()
     if len(read) < len(left) + gap + len(right):
         return alleles
-    for oriented in (read, reverse_complement(read)):
+    for oriented, oriented_quality in ((read, quality),
+                                       (reverse_complement(read),
+                                        quality[::-1] if quality is not None else None)):
         start = 0
         while True:
             pos = oriented.find(left, start)
@@ -71,6 +90,12 @@ def spanning_alleles(read, left, right, gap):
             interior_start = pos + len(left)
             interior_end = interior_start + gap
             if oriented[interior_end:interior_end + len(right)] == right:
+                if min_base_quality and any(
+                    ord(char) - 33 < min_base_quality
+                    for char in oriented_quality[pos:interior_end + len(right)]
+                ):
+                    start = pos + 1
+                    continue
                 allele = oriented[interior_start:interior_end]
                 if set(allele).issubset(_BASES):
                     alleles.add(allele)
@@ -78,7 +103,9 @@ def spanning_alleles(read, left, right, gap):
     return alleles
 
 
-def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31):
+def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31, min_base_quality=0):
+    if not 0 <= min_base_quality <= 93:
+        raise ValueError("min_base_quality must be between 0 and 93")
     if anchor < 1:
         raise ValueError("anchor must be positive")
     reports = []
@@ -96,6 +123,7 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31):
                     "region_unique_flanks": region_unique_flanks,
                     "unique_seed_flank_bridge": False,
                     "exact_bridge_pairs": 0, "ambiguous_pairs": 0,
+                    "low_quality_bridge_pairs": 0,
                     "observed_alleles": {}}
             if region_unique_flanks:
                 item["_left"], item["_right"] = left, right
@@ -117,9 +145,21 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31):
             if not item["region_unique_flanks"]:
                 continue
             alleles = set()
+            raw_alleles = set()
             for read in reads:
+                if isinstance(read, tuple):
+                    sequence, quality = read
+                else:
+                    sequence, quality = read, None
                 alleles.update(spanning_alleles(
-                    read.upper(), item["_left"], item["_right"], item["mask_length"]))
+                    sequence.upper(), item["_left"], item["_right"],
+                    item["mask_length"], quality, min_base_quality))
+                if min_base_quality:
+                    raw_alleles.update(spanning_alleles(
+                        sequence.upper(), item["_left"], item["_right"],
+                        item["mask_length"]))
+            if min_base_quality and not alleles and raw_alleles:
+                item["low_quality_bridge_pairs"] += 1
             if len(alleles) > 1:
                 item["ambiguous_pairs"] += 1
             elif alleles:
@@ -146,6 +186,7 @@ def audit_mask_read_support(region_rows, seed_rows, read_pairs, anchor=31):
     return {
         "processed_read_pairs": pairs_seen,
         "anchor": anchor,
+        "min_base_quality": min_base_quality,
         "interpretation": ("Counts require flanks unique within a final region and exact on one read; flanks may recur in other contigs; "
                            "they do not prove a complete phased haplotype or independent molecules."),
         "mask_runs": reports,
@@ -162,6 +203,8 @@ def main():
     parser.add_argument("--region")
     parser.add_argument("--max-pairs", type=int, default=5000)
     parser.add_argument("--anchor", type=int, default=31)
+    parser.add_argument("--min-base-quality", type=int, default=20,
+                        help="minimum Phred+33 quality for every base in both flanks and allele")
     args = parser.parse_args()
     regions = {key: seq for key, seq in max_rows(args.conseq_csv, "region").items()
                if key[0] == args.sample and (args.region is None or key[1] == args.region)}
@@ -169,7 +212,9 @@ def main():
         parser.error("no final MAX region rows match the requested sample/region")
     seeds = max_rows(args.conseq_all_csv, "seed", seed_only=True)
     result = audit_mask_read_support(
-        regions, seeds, fastq_pairs(args.fastq_r1, args.fastq_r2, args.max_pairs), args.anchor)
+        regions, seeds,
+        fastq_pairs(args.fastq_r1, args.fastq_r2, args.max_pairs, include_quality=True),
+        args.anchor, args.min_base_quality)
     print(json.dumps(result, indent=2))
 
 

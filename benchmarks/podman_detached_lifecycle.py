@@ -130,10 +130,17 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
     finally:
         if cid is not None:
             # Best effort only. Cleanup does not turn a failed arm into success.
-            try:
-                with transaction_lock(time.monotonic() + 10):
-                    subprocess.run(["podman", "rm", "--force", cid],
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   timeout=10, check=False)
-            except (TimeoutError, OSError, subprocess.TimeoutExpired):
-                pass
+            # The original whole-container deadline also bounds emergency
+            # cleanup. A failed arm must never silently spend extra time
+            # outside its frozen sample allowance.
+            if time.monotonic() < deadline:
+                try:
+                    with transaction_lock(deadline):
+                        budget = deadline - time.monotonic()
+                        if budget > 0:
+                            subprocess.run(["podman", "rm", "--force", cid],
+                                           stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL,
+                                           timeout=min(10, budget), check=False)
+                except (TimeoutError, OSError, subprocess.TimeoutExpired):
+                    pass

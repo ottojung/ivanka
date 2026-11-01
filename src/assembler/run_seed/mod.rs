@@ -54,6 +54,7 @@ pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, conti
 }
 mod rescue;
 mod rescue_rank;
+mod rescue_path;
 pub(super) use rescue::rescue_short;
 
 pub(super) use rescue_rank::append_preserving_diversity;

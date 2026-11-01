@@ -91,7 +91,8 @@ class DetachedLifecycleTests(unittest.TestCase):
         result = self.run_case()
         self.assertEqual(result.returncode, 1)
         self.assertEqual([c[1] for c in self.calls],
-                         ["create", "start", "wait", "logs", "rm"])
+                         ["create", "start", "wait", "logs", "logs",
+                          "logs", "logs", "rm"])
 
     def test_removal_failure_never_qualifies(self):
         self.exit["rm"] = 125
@@ -135,13 +136,6 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(seen, 2)
         self.assertEqual(self.stdout.getvalue(), "micall.process_run(): Done.\\n")
-        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
-
-    def test_persistent_logs_failure_rejects_without_reexecution(self):
-        self.exit["logs"] = 125
-        result = self.run_case()
-        self.assertEqual(result.returncode, 1)
-        self.assertEqual(sum(c[1] == "logs" for c in self.calls), 4)
         self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
 
     def test_deadline_does_not_launch(self):

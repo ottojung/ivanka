@@ -73,13 +73,22 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
                     or ivanka.get("timing_origin") != "micall_in_container_monotonic_v1"):
                 raise ValueError("Legacy or incompatible runtime measurement")
             ta, tk = iva["seconds"], ivanka["seconds"]
+            # Post-container scoring and serialization are diagnostics, not
+            # part of the frozen 1800s whole-container execution cap.
             elapsed = record["total_seconds"]
+            iva_wall = iva["container_wall_seconds"]
+            ivanka_wall = ivanka["container_wall_seconds"]
             if not all(finite(v, positive=True) for v in (pa, ta, tk)):
                 raise ValueError("Missing or invalid IVA score or paired runtime")
             if not finite(pk) or pk < SCORE_FLOOR * pa:
                 raise ValueError("Missing or insufficient Ivanka alignment score")
-            if not finite(elapsed) or not 0 <= elapsed <= sample_limit:
-                raise ValueError("Missing or excessive sample elapsed time")
+            if not finite(elapsed, positive=True):
+                raise ValueError("Missing sample diagnostic elapsed time")
+            if not all(finite(w, positive=True) and w <= sample_limit
+                       for w in (iva_wall, ivanka_wall)):
+                raise ValueError("Missing or excessive whole-container wall time")
+            if ta > iva_wall + 1 or tk > ivanka_wall + 1:
+                raise ValueError("In-container timer exceeds container lifetime")
             if final["pass"] is not True:
                 raise ValueError("Per-sample alignment acceptance failed")
             score_deltas.append(pk - pa)

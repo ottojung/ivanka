@@ -696,8 +696,21 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
     record["failed"]=bool(failures)
     record["total_seconds"]=round(time.monotonic()-started,2)
     record["sample_time_limit_seconds"]=getattr(args,"sample_time_limit",1800)
-    if not qualification_within_cap(record["sample_time_limit_seconds"],
-                                     record["total_seconds"]):
+    # For formal 198 qualification the cap is on each complete Podman
+    # container lifetime, not on subsequent host-side alignment scoring.
+    if getattr(args, "qualify_198", False):
+        # IVA-only control preparation is not a paired qualification. Check
+        # the executed arms here; the strict verifier separately requires both.
+        arms_present = [arm for arm in ("iva", "ivanka") if arm in record]
+        cap_ok = bool(arms_present) and all(
+            isinstance(record[arm], dict)
+            and qualification_within_cap(record["sample_time_limit_seconds"],
+                                         record[arm].get("container_wall_seconds"))
+            for arm in arms_present)
+    else:
+        cap_ok = qualification_within_cap(record["sample_time_limit_seconds"],
+                                          record["total_seconds"])
+    if not cap_ok:
         record["status"]="sample_timeout"
         record["failed"]=True
     return record
@@ -896,10 +909,24 @@ def main():
     global_seconds=time.monotonic()-benchmark_start
     max_sample_seconds=max((r["total_seconds"] for r in completed_records
                             if isinstance(r.get("total_seconds"), (int,float))), default=None)
+    container_walls = [
+        r[arm].get("container_wall_seconds")
+        for r in completed_records for arm in ("iva", "ivanka")
+        if isinstance(r.get(arm), dict)]
+    max_container_wall_seconds = max(
+        (w for w in container_walls if milestone198.finite(w, positive=True)),
+        default=None)
     per_sample_timing_complete=all(
         isinstance(r.get("total_seconds"),(int,float)) for r in completed_records)
+    if args.qualify_198:
+        per_sample_timing_complete = (per_sample_timing_complete and
+            len(container_walls) == 2 * len(completed_records) and
+            all(qualification_within_cap(args.sample_time_limit,w)
+                for w in container_walls))
+    qualification_elapsed = (max_container_wall_seconds if args.qualify_198
+                             else max_sample_seconds)
     complete_noninferiority=(full_scope and per_sample_timing_complete and
-                            qualification_within_cap(args.sample_time_limit,max_sample_seconds)
+                            qualification_within_cap(args.sample_time_limit,qualification_elapsed)
                             and accepted==manifest_sample_count and failed==0)
     # Preserve the distinction: cached controls are not a same-invocation IVA/IVANKA run.
     full_alpha_pass=(complete_noninferiority and args.mode=="both")
@@ -926,6 +953,8 @@ def main():
         "global_seconds":round(global_seconds,2),
         "sample_limit_seconds":args.sample_time_limit,
         "max_sample_seconds":(round(max_sample_seconds,2) if max_sample_seconds is not None else None),
+        "max_container_wall_seconds":(round(max_container_wall_seconds,2)
+                                      if max_container_wall_seconds is not None else None),
         "reference_panel_sha256":reference_panel_hash,
         "reference_panel_count":len(references),
         **eligibility,

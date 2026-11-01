@@ -25,6 +25,25 @@ class StrictCacheAuditTests(TestCase):
    m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
        m.milestone198.MANIFEST_SHA256,m.milestone198.IVA_IMAGE_SHA256)
 
+ def test_formal_worker_count_is_resource_limit_not_scientific_gate(self):
+  from types import SimpleNamespace
+  args=SimpleNamespace(mode="ivanka",cache_status=False,sample=None,
+                       allow_missing_baseline=False,all_projects=True,
+                       parallel_arms=False,jobs=10)
+  for jobs in (1,4,10):
+   args.jobs=jobs
+   m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+       m.milestone198.MANIFEST_SHA256,m.milestone198.IVA_IMAGE_SHA256)
+  for jobs in (-1,0,11):
+   args.jobs=jobs
+   with self.assertRaisesRegex(ValueError,"pinned full cohort"):
+    m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+        m.milestone198.MANIFEST_SHA256,m.milestone198.IVA_IMAGE_SHA256)
+  args.jobs=4;args.sample=["one"]
+  with self.assertRaisesRegex(ValueError,"pinned full cohort"):
+   m.validate_milestone198_preflight(args,m.milestone198.SAMPLE_COUNT,
+       m.milestone198.MANIFEST_SHA256,m.milestone198.IVA_IMAGE_SHA256)
+
  def test_frozen_panel_requires_exact_digest_and_count(self):
   m.validate_milestone198_panel(33,m.milestone198.PANEL_SHA256)
   with self.assertRaisesRegex(ValueError,"frozen 33-reference panel"):

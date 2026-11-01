@@ -118,3 +118,32 @@ def startup_database_lock(stderr_file: Path) -> bool:
     return bool(tail and all(prestart_line(line) for line in tail)
                 and (tail[-1] in _STARTUP_LOCK_ERRORS
                      or _PRESTART_SAVE_LOCK.fullmatch(tail[-1])))
+
+
+
+def podman_attempt_diagnostics(stderr_file: Path, start_offset: int) -> list[str]:
+    """Extract Podman CLI errors for ONE attempt, never MiCall progress logs.
+
+    The combined stderr log contains earlier failed startups and later MiCall
+    progress; its final 1200 characters alone can hide the actual Podman error.
+    This is diagnostic only and never changes acceptance or retry decisions.
+    """
+    try:
+        with stderr_file.open("rb") as handle:
+            handle.seek(0, 2)
+            end = handle.tell()
+            if end - start_offset <= 65536:
+                handle.seek(start_offset)
+                data = handle.read()
+            else:
+                # Avoid loading large MiCall progress logs just to diagnose Podman.
+                handle.seek(start_offset)
+                beginning = handle.read(4096)
+                handle.seek(end - 16384)
+                data = beginning + b"\n" + handle.read()
+    except OSError:
+        return []
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    errors = [line.strip() for line in lines
+              if line.startswith("Error:") or " level=error msg=" in line]
+    return [line[:600] for line in errors[-3:]]

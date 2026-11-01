@@ -126,5 +126,33 @@ class CompletionEvidenceTests(unittest.TestCase):
             verified_internal_seconds(self.timing, 13)
 
 
+    def test_attempt_diagnostics_are_scoped_to_final_attempt(self):
+        from container_completion import podman_attempt_diagnostics
+        previous = "Error: beginning transaction: database is locked\n"
+        current = ("2026-11-01[INFO]micall.process_run(): Done.\n"
+                   'time="2026-11-01T16:05:40Z" level=error msg="save failed"\n')
+        self.stderr.write_text(previous + current)
+        self.assertEqual(
+            podman_attempt_diagnostics(self.stderr, len(previous.encode())),
+            ['time="2026-11-01T16:05:40Z" level=error msg="save failed"'])
+        self.assertEqual(
+            podman_attempt_diagnostics(self.stderr, 0),
+            ["Error: beginning transaction: database is locked",
+             'time="2026-11-01T16:05:40Z" level=error msg="save failed"'])
+
+    def test_attempt_diagnostics_bounded_large_micall_log(self):
+        from container_completion import podman_attempt_diagnostics
+        first = "Error: initial Podman error\n"
+        last = 'time="2026-11-01T16:05:40Z" level=error msg="cleanup"\n'
+        self.stderr.write_text(first + "progress\n" * 15000 + last)
+        self.assertEqual(podman_attempt_diagnostics(self.stderr, 0),
+                         [first.strip(), last.strip()])
+
+    def test_attempt_diagnostics_do_not_treat_micall_done_as_podman_error(self):
+        from container_completion import podman_attempt_diagnostics
+        self.stderr.write_text("2026-11-01[INFO]micall.process_run(): Done.\n")
+        self.assertEqual(podman_attempt_diagnostics(self.stderr, 0), [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -520,7 +520,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
             # transaction amid concurrent container cleanup. Such a failure
             # has executed ZERO MiCall steps; retry within the ORIGINAL cap,
             # never for non-lock failures or a container that has run MiCall.
-            if (exitcode == 125
+            if (exitcode in (125, 126)
                     and startup_database_lock(folder / "podman.stderr.log")
                     and not timing_file.exists()
                     and time.monotonic() - start + 3 < timeout):

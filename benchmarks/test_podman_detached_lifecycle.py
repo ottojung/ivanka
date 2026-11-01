@@ -36,7 +36,7 @@ class DetachedLifecycleTests(unittest.TestCase):
         code = self.exit.get(stage, 0)
         if stage == "logs" and not code:
             stdout.write("micall.process_run(): Done.\n")
-        data = ("b" * 64 if stage == "create" else
+        data = ("b" * 64 if stage == "create" and code == 0 else
                 "0\n" if stage == "wait" else "")
         return subprocess.CompletedProcess(argv, code, data.encode())
 
@@ -56,6 +56,19 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.exit["create"] = 125
         result = self.run_case()
         self.assertEqual(result.returncode, 125)
+        self.assertEqual([c[1] for c in self.calls], ["create"])
+
+    def test_partial_create_response_is_not_retried(self):
+        self.exit["create"] = 125
+        def partial(argv, **kwargs):
+            result = self.fake(argv, **kwargs)
+            if argv[1] == "create":
+                return subprocess.CompletedProcess(argv, 125, b"b" * 64)
+            return result
+        with patch.object(lifecycle.subprocess, "run", side_effect=partial):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual(result.returncode, 1)
         self.assertEqual([c[1] for c in self.calls], ["create"])
 
     def test_start_failure_is_not_retriable_create_failure(self):

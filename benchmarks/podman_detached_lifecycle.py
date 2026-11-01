@@ -73,9 +73,12 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
     try:
         created = call(create, lock=True)
         if created.returncode:
-            # No container was created; the existing exact prestart-lock
-            # classifier may safely retry, but never for ambiguous starts.
-            return SimpleNamespace(returncode=created.returncode, stage=stage)
+            # Only a completely empty create response may be retried by the
+            # existing exact prestart-lock classifier. A partial container ID
+            # makes startup provenance ambiguous: fail closed.
+            return SimpleNamespace(
+                returncode=created.returncode if not created.stdout.strip() else 1,
+                stage=stage)
         cid = created.stdout.decode().strip()
         if len(cid) != 64 or any(c not in "0123456789abcdef" for c in cid):
             raise ValueError("Podman create returned no immutable container ID")

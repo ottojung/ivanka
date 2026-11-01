@@ -40,6 +40,35 @@ def max_rows(path, key, seed_only=False):
         return found
 
 
+def canonical_kmers(sequence, k):
+    """Exact, orientation-independent ACGT k-mers; ambiguous windows are excluded."""
+    if k < 1:
+        raise ValueError("k must be positive")
+    sequence = sequence.upper()
+    result = set()
+    for i in range(len(sequence) - k + 1):
+        word = sequence[i:i + k]
+        if set(word).issubset(_BASES):
+            result.add(min(word, reverse_complement(word)))
+    return result
+
+
+def kmer_stage_retention(seed, final, lengths=(31, 101, 251)):
+    """Compare exact sequence content, NOT read support or aligned coordinates."""
+    result = {}
+    for k in lengths:
+        original = canonical_kmers(seed, k)
+        produced = canonical_kmers(final, k)
+        result[str(k)] = {
+            "seed_unique": len(original),
+            "final_unique": len(produced),
+            "shared": len(original & produced),
+            "seed_absent_from_final": len(original - produced),
+            "final_absent_from_seed": len(produced - original),
+        }
+    return result
+
+
 def mask_runs(sequence):
     return [(match.start(), match.end()) for match in re.finditer("X+", sequence.upper())]
 
@@ -96,11 +125,12 @@ def audit(region_rows, seed_rows, anchor=31):
             "matching_seed_max_row": seed is not None,
             "seed_length": len(seed) if seed is not None else None,
             "seed_masked_bases": sum(end-start for start, end in mask_runs(seed)) if seed is not None else None,
+            "canonical_kmer_stage_comparison": kmer_stage_retention(seed, sequence) if seed is not None else None,
             "uniquely_exact_flank_bridged_runs": len(bridged),
             "uniquely_exact_flank_bridged_bases": sum(item["length"] for item in bridged),
             "exact_flank_bridges": bridged,
         })
-    return {"coordinate_warning": "Seed and final consensus may have different coordinate systems; masks are not directly aligned. Exact flank bridges are not read support.",
+    return {"coordinate_warning": "Seed and final consensus may have different coordinate systems; masks and exact k-mer differences are not directly aligned and do not prove read support, haplotype loss, or a biological error. Exact flank bridges are not read support.",
             "anchor": anchor, "regions": output}
 
 

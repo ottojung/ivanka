@@ -50,7 +50,7 @@ class QualificationTests(unittest.TestCase):
         self.records = [
             {"sample": name, "status": "finished", "failed": False,
              "iva_baseline_reused": True, "total_seconds": 100.0,
-             "iva": {"exit_code": 0, "image_id": "iva-id", "seconds": 60.,
+             "iva": {"exit_code": 0, "image_id": milestone198.IVA_IMAGE_SHA256, "seconds": 60.,
                      "container_wall_seconds": 70.,
                      "timing_origin": "micall_in_container_monotonic_v1",
                      "metrics": {"num_final_max_conseqs": 1}},
@@ -68,7 +68,7 @@ class QualificationTests(unittest.TestCase):
         return milestone198.qualify(
             self.records if records is None else records,
             self.names if names is None else names,
-            "iva-id", "ivanka-id", 1800, milestone198.PANEL_SHA256)
+            milestone198.IVA_IMAGE_SHA256, "ivanka-id", 1800, milestone198.PANEL_SHA256)
 
     def test_full_positive_cohort_passes(self):
         report = self.score()
@@ -228,9 +228,20 @@ for path, value in cases:
             env=env, capture_output=True, text=True, timeout=30, check=False)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_immutable_iva_image_cannot_be_rebound_by_caller(self):
+        records = deepcopy(self.records)
+        for record in records:
+            record["iva"]["image_id"] = "alternate-iva-image"
+        report = milestone198.qualify(
+            records, self.names, "alternate-iva-image", "ivanka-id",
+            1800, milestone198.PANEL_SHA256)
+        self.assertFalse(report["milestone198_pass"])
+        self.assertIn("immutable_iva_image_mismatch",
+                      report["milestone198_errors"])
+
     def test_disallow_panel_or_image_mismatch(self):
         self.assertFalse(milestone198.qualify(
-            self.records, self.names, "iva-id", "ivanka-id", 1800, "wrong")["milestone198_pass"])
+            self.records, self.names, milestone198.IVA_IMAGE_SHA256, "ivanka-id", 1800, "wrong")["milestone198_pass"])
         records = deepcopy(self.records)
         records[0]["ivanka"]["image_id"] = "different"
         self.assertFalse(self.score(records)["milestone198_pass"])

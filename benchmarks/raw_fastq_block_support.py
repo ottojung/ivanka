@@ -62,7 +62,8 @@ def audit_original_pairs(read1, read2, alleles, minimum_quality=15):
     """
     if (minimum_quality < 0 or not alleles
             or any(not a or set(a) - BASES for a in alleles)
-            or len({min(a, reverse_complement(a)) for a in alleles})\n               != len(alleles)):
+            or len({min(a, reverse_complement(a)) for a in alleles})
+               != len(alleles)):
         raise ValueError("Invalid allele set or quality cutoff")
     counts = Counter()
     signatures = defaultdict(set)

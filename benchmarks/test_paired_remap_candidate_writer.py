@@ -63,6 +63,16 @@ class PairedRemapWriterTests(unittest.TestCase):
             copied[0] = dict(copied[0], **mutation)
             with self.assertRaises(ValueError): run(copies=copied)
 
+    def test_reject_nonexclusive_mate_bits_and_unpaired_flags(self):
+        for first, second in ((0xC1, 0x1), (0xC0, 0),
+                              (0x40, 0x80), (0x40, 0x81)):
+            copied = alternatives()
+            copied[0] = dict(copied[0], flag=str(first))
+            copied[1] = dict(copied[1], flag=str(second))
+            with self.subTest(flags=(first, second)):
+                with self.assertRaises(ValueError):
+                    run(copies=copied)
+
     def test_no_extra_molecule_identifiers(self):
         _, rows, _ = run()
         self.assertEqual({r["qname"] for r in rows}, {"same", "other"})

@@ -13,9 +13,9 @@ def _validate_pair(rows, qname, reference):
     flags = [int(r["flag"]) for r in rows]
     if any(r["qname"] != qname or r["rname"] != reference for r in rows):
         raise ValueError("Mixed qname/reference within an alternative pair")
-    if (sum(bool(f & 0x40) for f in flags) != 1
-            or sum(bool(f & 0x80) for f in flags) != 1
-            or any(f & (0x4 | 0x8 | 0x100 | 0x800) for f in flags)):
+    if (sorted(f & 0xC0 for f in flags) != [0x40, 0x80]
+            or any(not (f & 0x1) or f & (0x4 | 0x8 | 0x100 | 0x800)
+                   for f in flags)):
         raise ValueError("Missing, ambiguous, secondary or supplementary mate")
     for row, mate in ((rows[0], rows[1]), (rows[1], rows[0])):
         if row["pnext"] != mate["pos"] or row["rnext"] not in ("=", reference):

@@ -2,6 +2,8 @@
 
 No remap/consensus files are written. Shared qnames are NOT independent
 molecules; this measures read-pair compatibility, not haplotype assignment.
+Never append these alternative alignments to MiCall remap.csv: its
+matchmaker pairs by qname alone and its remap path ignores SAM MAPQ.
 """
 import re
 from collections import Counter, defaultdict
@@ -62,7 +64,12 @@ def _valid_pair(rows, references, maximum_span):
         if row["rnext"] not in ("=", source):
             return None
         start = int(row["pos"]) - 1
-        if start < 0:
+        if start < 0 or start + len(seq) > len(references[source]):
+            return None
+        # Template equivalence is insufficient if an observed mate carries
+        # a variant relative to the source: that variant may encode phase.
+        # Keep the original alignment; do not propagate it to other targets.
+        if seq != references[source][start:start + len(seq)]:
             return None
         starts.append(start)
         ends.append(start + len(seq))
@@ -81,7 +88,7 @@ def lift_pair(rows, references, destination, maximum_span=1000):
     """Return two SAM-shaped copies iff whole pair footprint maps uniquely.
 
     The entire reference template, including the unsequenced insert, must
-    be identical. Reverse-strand copies are reverse-complemented and have
+    be identical; both observed mates must also exactly match their source. Reverse-strand copies are reverse-complemented and have
     flags, mate positions, and template length recomputed.
     """
     valid = _valid_pair(rows, references, maximum_span)
@@ -262,7 +269,8 @@ def main():
         raise AssertionError("Candidate created a distinct pooled allele observation")
     print(json.dumps({
         "region": args.region, "mask_start": start, "mask_length": end-start,
-        "minimum_quality": 15, "original_sam_rows": len(rows),
+        "minimum_quality": 15, "observed_mates_must_match_source": True,
+        "original_sam_rows": len(rows),
         "hypothetical_copy_rows": len(copies), "statistics": stats,
         "per_reference_min_before": {
             n: v["minimum"] for n, v in baseline["per_reference"].items()},
@@ -273,7 +281,9 @@ def main():
         "qualification": "NOT RUN: diagnostic only; no MiCall files modified",
         "caveat": "A qname is a read-pair ID, not an independent molecule. "
                   "Copies across contigs are alternative compatible mappings, "
-                  "not independent observations or long-range phase evidence."
+                  "not independent observations or long-range phase evidence. "
+                  "MiCall matches mates by qname alone and ignores MAPQ; "
+                  "never append these hypothetical mappings to its remap CSV."
     }, indent=2))
 
 

@@ -77,11 +77,17 @@ class ExactPairRemapTests(unittest.TestCase):
                                                forward="".join(mutated)),
                                         "forward"))
 
-    def test_no_imputation_from_read_mismatch(self):
+    def test_no_transfer_of_observed_read_mismatch(self):
         reads = pair()
-        reads[0]["seq"] = "G" + reads[0]["seq"][1:]
-        copied = lift_pair(reads, self.refs, "forward")
-        self.assertEqual(copied[0]["seq"], reads[0]["seq"])
+        reads[0]["seq"] = ("G" if reads[0]["seq"][0] != "G" else "A") + reads[0]["seq"][1:]
+        original = [dict(r) for r in reads]
+        self.assertIsNone(lift_pair(reads, self.refs, "forward"))
+        self.assertEqual(reads, original)  # original variant is retained
+
+    def test_no_transfer_of_second_mate_variant(self):
+        reads = pair()
+        reads[1]["seq"] = ("G" if reads[1]["seq"][0] != "G" else "A") + reads[1]["seq"][1:]
+        self.assertIsNone(lift_pair(reads, self.refs, "reverse"))
 
     def test_single_read_not_transferred(self):
         self.assertIsNone(lift_pair(pair()[:1], self.refs, "forward"))
@@ -164,9 +170,7 @@ class ExactPairRemapTests(unittest.TestCase):
         b = dict(qname="test", flag="147", rname="src", pos="46",
                  mapq="1", cigar="55M", rnext="=", pnext="15",
                  tlen="-86", seq=source[45:100], qual="I"*55)
-        # A genuine observed alternative base is preserved, not imputed.
-        a["seq"] = a["seq"][:25] + (
-            "G" if a["seq"][25] != "G" else "A") + a["seq"][26:]
+        # Only exact observed mates may be lifted; no allele is invented.
         lifted = lift_pair([a, b], references, "reverse")
         self.assertIsNotNone(lifted)
         before = pooled_site_calls(masked, references, [a, b])

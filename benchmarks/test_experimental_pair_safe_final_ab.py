@@ -73,6 +73,14 @@ class FinalReplayTests(unittest.TestCase):
                 run(root,evidence,target,iva_dir=Path(tmp)/"iva")
             self.assertFalse(target.exists())
 
+    def test_missing_cached_iva_output_rejected_before_cpu_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root,evidence,target=self.setup_paths(tmp)
+            with self.assertRaisesRegex(ValueError,"cached IVA final MAX"):
+                run(root,evidence,target,projects_file=Path(tmp)/"projects.json",
+                    hxb2_file=Path(tmp)/"hxb2.fasta",iva_dir=Path(tmp)/"missing")
+            self.assertFalse(target.exists())
+
     def test_reject_unverified_pairing_before_running_aln2counts(self):
         with tempfile.TemporaryDirectory() as tmp:
             root,evidence,target=self.setup_paths(tmp,validated=False)

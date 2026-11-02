@@ -196,9 +196,9 @@ def main(argv=None):
         output = {
             "psi": {key: json_decimal(value, args.digits) for key, value in psi.items()},
             "psi_at_positive_infinity": infinity,
-            "zeros": "all real numbers" if identically_zero else [json_decimal(x, args.digits) for x in roots],
+            "zeros": "R" if identically_zero else [json_decimal(x, args.digits) for x in roots],
         }
-        print(json.dumps(output, ensure_ascii=True, allow_nan=False))
+        print(json.dumps(output, ensure_ascii=True, allow_nan=False, indent="\t"))
     else:
         def human(value):
             return str(value).replace("-", "−").replace("inf", "∞")

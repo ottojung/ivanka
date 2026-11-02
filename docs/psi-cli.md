@@ -41,10 +41,14 @@ The zero set includes only finite real roots, excluding infinite limits.
 When it is empty, human-readable output uses ∅ and JSON uses [].
 The positive-infinity limit is reported separately; JSON encodes it as
 the strings +inf, -inf, or 0, never a nonstandard numeric constant.
-If `Psi` is identically zero, `zeros` becomes `"all real numbers"`.
+If `Psi` is identically zero, `zeros` becomes `"R"`.
 
 `--digits` (default 10) sets reported significant figures; `--precision`
 (default 65) sets Decimal working precision. The root positions are numerical
 approximations, **not formally certified isolating intervals**. Extremely
 close roots or nearly tangential extrema may require increasing `--precision`.
 No non-standard Python packages are required.
+
+When PSI is identically zero, human output uses ℝ and ASCII JSON uses "R".
+
+JSON output is tab-indented for readability and is ASCII-only.

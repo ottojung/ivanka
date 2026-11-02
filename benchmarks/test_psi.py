@@ -70,6 +70,8 @@ class PsiTests(unittest.TestCase):
     def test_json_ascii_only_and_valid_infinities(self):
         result = subprocess.run([sys.executable, psi.__file__, '--json'], input='1 -3\n', text=True, capture_output=True, check=True)
         self.assertTrue(result.stdout.isascii())
+        self.assertIn('\n\t"psi": {', result.stdout)
+        self.assertIn('\n\t\t"0":', result.stdout)
         data = json.loads(result.stdout)
         self.assertEqual(data['psi']['0'], 0)
         self.assertEqual(data['psi_at_positive_infinity'], '-inf')
@@ -100,6 +102,12 @@ class PsiTests(unittest.TestCase):
             else:
                 self.assertIn("{ r : Ψ(r) = 0 } = ∅", result.stdout)
                 self.assertNotIn("−∞", result.stdout)
+
+    def test_all_real_zero_set_json_is_ascii(self):
+        result = subprocess.run([sys.executable, psi.__file__, "--json"],
+                                input="1 -1\n", text=True, capture_output=True, check=True)
+        self.assertTrue(result.stdout.isascii())
+        self.assertEqual(json.loads(result.stdout)["zeros"], "R")
 
     def test_invalid_input_nonzero_exit(self):
         r = subprocess.run([sys.executable, psi.__file__, '--json'], input='foo', text=True, capture_output=True)

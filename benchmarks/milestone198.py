@@ -10,8 +10,12 @@ SAMPLE_CAP_SECONDS = 1800
 
 
 def finite(value, *, positive=False):
-    return (isinstance(value, (int, float)) and not isinstance(value, bool)
-            and math.isfinite(value) and (value > 0 if positive else True))
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and (value > 0 if positive else True)
+    except OverflowError:
+        return False
 
 
 def psi(values):
@@ -20,9 +24,16 @@ def psi(values):
         raise ValueError("PSI requires 198 finite paired differences")
     gains = sum(value > 0 for value in values)
     losses = sum(value < 0 for value in values)
+    try:
+        linear = math.fsum(values) / SAMPLE_COUNT
+        quadratic = math.fsum(value * abs(value) for value in values) / SAMPLE_COUNT
+    except (OverflowError, ValueError) as exc:
+        raise ValueError("Signed-power PSI moment overflow") from exc
+    if not finite(linear) or not finite(quadratic):
+        raise ValueError("Signed-power PSI moments must be finite")
     return {"psi0": (gains - losses) / SAMPLE_COUNT,
-            "psi1": math.fsum(values) / SAMPLE_COUNT,
-            "psi2": math.fsum(value * abs(value) for value in values) / SAMPLE_COUNT,
+            "psi1": linear,
+            "psi2": quadratic,
             "gains": gains, "losses": losses,
             "ties": SAMPLE_COUNT - gains - losses}
 
@@ -99,8 +110,12 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
     report["milestone198_valid_pairs"] = len(score_deltas)
     if errors or len(score_deltas) != SAMPLE_COUNT:
         return report
-    report["score_psi"] = psi(score_deltas)
-    report["time_psi"] = psi(time_deltas)
+    try:
+        report["score_psi"] = psi(score_deltas)
+        report["time_psi"] = psi(time_deltas)
+    except ValueError:
+        errors.append("nonfinite_or_overflowing_signed_power_psi")
+        return report
     for prefix in ("score", "time"):
         report.update({f"{prefix}_{key}": report[f"{prefix}_psi"][key]
                        for key in ("psi0", "psi1", "psi2", "gains", "losses", "ties")})

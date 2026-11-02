@@ -3,6 +3,12 @@ use super::cycle::{next_anchor, repeats, CYCLE_MATCH, CYCLE_MIN_SPACING};
 
 // Reuse scanned anchors while a contig only grows on the right. Any
 // left prepend invalidates positions and requires an exact full rescan.
+// A repeat found wholly inside the already assembled path must never erase
+// that path's phased sequence when a new extension triggers a cycle scan.
+pub(crate) fn cycle_cut_keeps_prior_path(cut:usize,left:usize,prior:usize)->bool {
+    cut>=left.saturating_add(prior)
+}
+
 pub(crate) struct CycleTracker {
     first: HashMap<u64,usize>,
     scanned: usize,

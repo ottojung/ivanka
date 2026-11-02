@@ -47,6 +47,13 @@ class FinalReplayTests(unittest.TestCase):
                 (evidence/(arm+"-"+suffix)).write_text("header\n")
         return root,evidence,Path(tmp)/"new-output"
 
+    def test_incomplete_frozen_panel_inputs_rejected_before_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root,evidence,target=self.setup_paths(tmp)
+            with self.assertRaisesRegex(ValueError,"both frozen reference"):
+                run(root,evidence,target,projects_file=Path(tmp)/"projects.json")
+            self.assertFalse(target.exists())
+
     def test_reject_unverified_pairing_before_running_aln2counts(self):
         with tempfile.TemporaryDirectory() as tmp:
             root,evidence,target=self.setup_paths(tmp,validated=False)

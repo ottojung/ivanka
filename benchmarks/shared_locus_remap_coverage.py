@@ -92,12 +92,15 @@ def audit(masked, references, sam_rows, anchor=31, minimum_quality=15,
     allele, loci = group_loci(masked, references, anchor)
     matched = {ref: [set() for _ in allele] for ref in loci}
     conflicted = {ref: [set() for _ in allele] for ref in loci}
+    observed_bases = [{base: set() for base in "ACGTN"} for _ in allele]
     for row in sam_rows:
         name = row["rname"]
         if name not in loci:
             continue
         for i, nuc, qname, expected in sam_observations(row, loci[name], minimum_quality):
             (matched if nuc == expected else conflicted)[name][i].add(qname)
+            canonical = nuc if expected == allele[i] else nuc.translate(COMPLEMENT)
+            observed_bases[i][canonical if canonical in "ACGT" else "N"].add(qname)
     per_reference = {}
     for name in loci:
         counts = [len(matched[name][i]-conflicted[name][i]) for i in range(len(allele))]
@@ -110,6 +113,27 @@ def audit(masked, references, sam_rows, anchor=31, minimum_quality=15,
         bad = set().union(*(conflicted[name][i] for name in loci))
         pooled.append(len(good-bad))
         discordant.append(len(bad))
+    # Each pair contributes at most one unambiguous allele per canonical site.
+    # An observation on a reverse-oriented target is normalized above.
+    spectrum = []
+    for i, bases in enumerate(observed_bases):
+        pair_bases = defaultdict(set)
+        for base, names in bases.items():
+            for qname in names:
+                pair_bases[qname].add(base)
+        ambiguous = {qname for qname, calls in pair_bases.items()
+                     if len(calls) != 1 or "N" in calls}
+        counts = {base: len(bases[base] - ambiguous) for base in "ACGT"}
+        eligible = sum(counts.values())
+        spectrum.append({
+            "position": i,
+            "seed_allele": allele[i],
+            "read_pair_counts": counts,
+            "unambiguous_read_pairs": eligible,
+            "conflicting_or_non_acgt_read_pairs": len(ambiguous),
+            "seed_allele_fraction": (round(counts[allele[i]] / eligible, 4)
+                                     if eligible else None),
+        })
     return {
         "reference_names": sorted(loci), "masked_bases": len(allele),
         "shared_allele_sha256": hashlib.sha256(allele.encode()).hexdigest(),
@@ -120,8 +144,10 @@ def audit(masked, references, sam_rows, anchor=31, minimum_quality=15,
                                 "per_position": pooled,
                                 "positions_meeting_depth": sum(n>=required_depth for n in pooled)},
         "discordant_pair_ids_per_position": discordant,
+        "pooled_allele_spectrum": spectrum,
         "interpretation": ("Pooled qname counts are upper bounds on independent "
-            "molecules; this is a read-only diagnostic, not permission to fill "
+            "molecules. Allele-spectrum qnames are deduplicated per site, with "
+            "conflicting or non-ACGT calls excluded; this is a read-only diagnostic, not permission to fill "
             "masked bases or change MiCall coverage/PSI gates."),
     }
 

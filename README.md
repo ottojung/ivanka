@@ -257,9 +257,10 @@ every sample must finish within 1,800 seconds of total container time, including
 startup and teardown. For each paired score delta
 `p = ivanka_score - iva_score`, and paired runtime delta
 `q = iva_arm_seconds - ivanka_arm_seconds`, independently require
-`sum(sign(x) * abs(x)**r)/198 > 0` for each `r=0,1,2`. Exact ties
-contribute zero at all powers. The summary records all six signed-power
-metrics and explicitly fails for incomplete or unmatched controls. Runtime PSI
+`Psi(r) = sum(sign(x) * (1 + abs(x))**r)/198 > 0` for every `r >= 0`. Exact ties
+contribute zero at all powers. The summary retains values at r=0,1,2 as diagnostics, but the acceptance
+gate requires Psi(0)>0 and no real zero for r>=0, separately for alignment
+and runtime. It fails for incomplete or unmatched controls. Runtime PSI
 uses monotonic MiCall process seconds measured **inside** each container; the
 outer Podman wall clock is retained separately as `container_wall_seconds`
 and remains subject to the full-container deadline. Cached IVA controls with
@@ -317,7 +318,7 @@ The environment is inherited by the detached child. For example, on
 The launcher exits promptly; check `state/output.log`, `state/started_at`,
 `state/pid`, `state/finished_at`, and `state/exit_code` using separate Lubko
 commands. A missing `finished_at` is **never** proof of completion; exit code
-zero alone is **not** proof of the six positive PSI requirements. Do not launch
+zero alone is **not** proof of the all-axis PSI requirements. Do not launch
 a second overlapping cohort. Every cooperating launcher shares the default
 `/workspace/ivanka-milestone198-exclusive.lock` (override using
 `IVANKA_GLOBAL_LAUNCH_LOCK` for smoke tests). Launch collisions fail with

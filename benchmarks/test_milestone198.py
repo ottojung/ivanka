@@ -10,7 +10,7 @@ class SignedPowerTests(unittest.TestCase):
     def test_all_positive(self):
         result = milestone198.psi([2.0] * 198)
         self.assertEqual((result["psi0"], result["psi1"], result["psi2"]),
-                         (1, 2, 4))
+                         (1, 3, 9))
         self.assertEqual((result["gains"], result["losses"], result["ties"]),
                          (198, 0, 0))
 
@@ -31,6 +31,36 @@ class SignedPowerTests(unittest.TestCase):
         self.assertGreater(result["psi0"], 0)
         self.assertLess(result["psi1"], 0)
         self.assertLess(result["psi2"], 0)
+
+    def test_late_negative_root_fails_despite_positive_0_1_2(self):
+        values = [1] * 197 + [-3]
+        result = milestone198.psi(values)
+        self.assertTrue(all(result[k] > 0 for k in ("psi0", "psi1", "psi2")))
+        self.assertEqual(result["psi_at_positive_infinity"], "-inf")
+        self.assertFalse(result["positive_all_nonnegative"])
+
+    def test_two_late_roots_fail_even_if_first_three_powers_positive(self):
+        # 30*2**r - 11*4**r + 8**r has zeros at log2(5),log2(6).
+        values = [1] * 30 + [-3] * 11 + [7] + [0] * 156
+        result = milestone198.psi(values)
+        self.assertTrue(all(result[k] > 0 for k in ("psi0", "psi1", "psi2")))
+        self.assertFalse(result["positive_all_nonnegative"])
+        self.assertGreaterEqual(result["negative_witness_r"], 0)
+
+    def test_negative_roots_do_not_disqualify(self):
+        # 7*2**r - 24*4**r + 20*8**r has only negative roots.
+        values = [1] * 7 + [-3] * 24 + [7] * 20 + [0] * 147
+        result = milestone198.psi(values)
+        self.assertTrue(result["positive_all_nonnegative"])
+        self.assertEqual(result["zeros_nonnegative"], [])
+
+    def test_tangent_nonnegative_zero_fails(self):
+        # 2**r * (2**r - 3)**2 = 9*2**r - 6*4**r + 8**r.
+        values = [1] * 9 + [-3] * 6 + [7] + [0] * 182
+        result = milestone198.psi(values)
+        self.assertGreater(result["psi0"], 0)
+        self.assertFalse(result["positive_all_nonnegative"])
+        self.assertEqual(len(result["zeros_nonnegative"]), 1)
 
     def test_psis_zero_on_balanced_positive_and_negative_deltas(self):
         result = milestone198.psi([3] * 99 + [-3] * 99)
@@ -74,10 +104,20 @@ class QualificationTests(unittest.TestCase):
         report = self.score()
         self.assertTrue(report["milestone198_pass"])
         self.assertEqual(report["milestone198_valid_pairs"], 198)
-        self.assertEqual(report["score_psi"]["psi2"], 1.0)
-        self.assertEqual(report["time_psi"]["psi2"], 100.0)
+        self.assertEqual(report["score_psi"]["psi2"], 4.0)
+        self.assertEqual(report["time_psi"]["psi2"], 121.0)
         self.assertEqual(report["time_psi0"], 1)
-        self.assertEqual(report["score_psi2"], 1)
+        self.assertEqual(report["score_psi2"], 4)
+
+    def test_full_cohort_fails_when_positive_0_1_2_hide_late_root(self):
+        records = deepcopy(self.records)
+        records[-1]["best_contig_acceptance"]["ivanka_score"] = 197.
+        result = self.score(records)
+        self.assertTrue(all(result["score_psi"][k] > 0
+                            for k in ("psi0", "psi1", "psi2")))
+        self.assertFalse(result["milestone198_pass"])
+        self.assertIn("score_or_runtime_psi_not_positive_for_all_r_ge_zero",
+                      result["milestone198_errors"])
 
     def test_postprocessing_does_not_exhaust_container_cap(self):
         records = deepcopy(self.records)
@@ -110,7 +150,7 @@ class QualificationTests(unittest.TestCase):
         records = deepcopy(self.records)
         records[0]["best_contig_acceptance"]["ivanka_score"] = 180.
         for item in records[1:]:
-            item["best_contig_acceptance"]["ivanka_score"] = 205.
+            item["best_contig_acceptance"]["ivanka_score"] = 225.
         self.assertTrue(self.score(records)["milestone198_pass"])
 
     def test_exit_code_must_be_an_integer_zero_not_false_or_float(self):
@@ -147,7 +187,7 @@ class QualificationTests(unittest.TestCase):
             item["best_contig_acceptance"]["ivanka_score"] = 2e200
         report = self.score(records)
         self.assertFalse(report["milestone198_pass"])
-        self.assertIn("nonfinite_or_overflowing_signed_power_psi",
+        self.assertIn("nonfinite_or_unresolved_shifted_power_psi",
                       report["milestone198_errors"])
 
     def test_psi_failure_does_not_pass_even_when_per_sample_floor_holds(self):
@@ -172,7 +212,7 @@ class QualificationTests(unittest.TestCase):
             item["ivanka"]["container_wall_seconds"] = 80.
         result = self.score(records)
         self.assertFalse(result["milestone198_pass"])
-        self.assertEqual(result["time_psi"]["psi1"], -10)
+        self.assertEqual(result["time_psi"]["psi1"], -11)
 
     def test_panel_threshold_is_90_only_for_new_milestone(self):
         from unittest.mock import patch

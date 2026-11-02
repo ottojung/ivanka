@@ -93,10 +93,21 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
 
             try:
                 result = call(argv, lock=lock, output=output)
-            except (subprocess.TimeoutExpired, TimeoutError, OSError, ValueError):
+            except (subprocess.TimeoutExpired, TimeoutError, OSError, ValueError) as exc:
                 # A timed-out Podman CLI can already have written part of its
                 # logs. They must not survive as completion evidence.
                 discard_partial_output()
+                # An authentic S97 MiCall run completed, but its first rm CLI
+                # exceeded the 120s metadata cap with ample sample time left.
+                # Retry ONLY removal of the same immutable container ID.
+                # Never rerun MiCall, and never accept an unverified cleanup.
+                if (argv[1] == "rm"
+                        and isinstance(exc, (subprocess.TimeoutExpired, TimeoutError))
+                        and attempt < 3 and time.monotonic() + 0.2 < deadline):
+                    stderr.write("Benchmark: Podman rm timed out; retrying same container ID\n")
+                    stderr.flush()
+                    time.sleep(0.2)
+                    continue
                 raise
             if result.returncode == 0:
                 return result

@@ -177,6 +177,43 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(counts, {"wait": 2, "rm": 2})
         self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
 
+    def test_remove_timeout_retries_same_id_without_rerunning_micall(self):
+        # S97: MiCall completed and logs were authenticated; only rm timed out.
+        removals = []
+
+        def flaky(argv, **kwargs):
+            if argv[1] == "rm":
+                removals.append(list(argv))
+                if len(removals) == 1:
+                    self.calls.append(list(argv))
+                    raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=flaky):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (0, "complete"))
+        self.assertEqual(len(removals), 2)
+        self.assertEqual(removals[0], removals[1])
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+        self.assertEqual(sum(c[1] == "wait" for c in self.calls), 1)
+        self.assertEqual(sum(c[1] == "logs" for c in self.calls), 1)
+        self.assertIn("Done.", self.stdout.getvalue())
+
+    def test_persistent_remove_timeouts_fail_closed(self):
+        def stuck(argv, **kwargs):
+            if argv[1] == "rm":
+                self.calls.append(list(argv))
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=stuck):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (124, "remove"))
+        self.assertEqual(sum(c[1] == "rm" for c in self.calls), 5)
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+
     def test_transient_logs_failure_discards_partial_output(self):
         seen = 0
 

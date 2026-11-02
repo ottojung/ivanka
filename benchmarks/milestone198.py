@@ -47,6 +47,8 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
               "milestone198_time_measure": "MiCall command monotonic seconds measured inside each container",
               "score_psi": None, "time_psi": None}
     errors = report["milestone198_errors"]
+    if iva_image != IVA_IMAGE_SHA256:
+        errors.append("immutable_iva_image_mismatch")
     if len(selected) != SAMPLE_COUNT or len(set(selected)) != SAMPLE_COUNT:
         errors.append("cohort_not_exactly_198_unique")
     if len(records) != SAMPLE_COUNT:

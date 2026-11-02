@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 import statistics
 
+from psi_acceptance import summarize as summarize_shifted_psi
+
 STAMP = r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3})"
 ASSEMBLY = re.compile(r"Ivanka wrote \d+ contigs in ([0-9]+(?:\.[0-9]+)?)s")
 REMAP = re.compile(STAMP + r".*Running remap")
@@ -36,18 +38,16 @@ def parse_stages(log):
 
 
 def signed_psi(differences):
-    if not differences:
-        raise ValueError("Empty signed-power cohort")
-    n = len(differences)
-    if any(not math.isfinite(d) for d in differences):
-        raise ValueError("Nonfinite signed-power difference")
+    """Diagnostic shifted PSI; never establishes formal qualification."""
+    if not differences or any(not math.isfinite(d) for d in differences):
+        raise ValueError("Empty or nonfinite signed-power cohort")
+    result = summarize_shifted_psi(differences)
     return {
-        "faster": sum(d > 0 for d in differences),
-        "slower": sum(d < 0 for d in differences),
-        "ties": sum(d == 0 for d in differences),
-        "psi0": sum((d > 0) - (d < 0) for d in differences) / n,
-        "psi1": sum(differences) / n,
-        "psi2": sum(d * abs(d) for d in differences) / n,
+        "faster": result["gains"], "slower": result["losses"],
+        "ties": result["ties"],
+        **{key: result[key] for key in (
+            "psi0", "psi1", "psi2", "positive_all_nonnegative",
+            "zeros_nonnegative", "psi_at_positive_infinity")},
     }
 
 

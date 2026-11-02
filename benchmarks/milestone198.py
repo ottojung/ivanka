@@ -1,6 +1,8 @@
 """Strict 198-sample score and runtime qualification; no inferred controls."""
 import math
 
+from psi_acceptance import summarize as summarize_psi
+
 SAMPLE_COUNT = 198
 MANIFEST_SHA256 = "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192"
 PANEL_SHA256 = "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8"
@@ -19,23 +21,10 @@ def finite(value, *, positive=False):
 
 
 def psi(values):
-    """Signed powers, with ties contributing 0 even when exponent is zero."""
+    """Shifted-power PSI and strict positivity over every real r >= 0."""
     if len(values) != SAMPLE_COUNT or not all(finite(value) for value in values):
         raise ValueError("PSI requires 198 finite paired differences")
-    gains = sum(value > 0 for value in values)
-    losses = sum(value < 0 for value in values)
-    try:
-        linear = math.fsum(values) / SAMPLE_COUNT
-        quadratic = math.fsum(value * abs(value) for value in values) / SAMPLE_COUNT
-    except (OverflowError, ValueError) as exc:
-        raise ValueError("Signed-power PSI moment overflow") from exc
-    if not finite(linear) or not finite(quadratic):
-        raise ValueError("Signed-power PSI moments must be finite")
-    return {"psi0": (gains - losses) / SAMPLE_COUNT,
-            "psi1": linear,
-            "psi2": quadratic,
-            "gains": gains, "losses": losses,
-            "ties": SAMPLE_COUNT - gains - losses}
+    return summarize_psi(values)
 
 
 def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
@@ -116,15 +105,14 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
         report["score_psi"] = psi(score_deltas)
         report["time_psi"] = psi(time_deltas)
     except ValueError:
-        errors.append("nonfinite_or_overflowing_signed_power_psi")
+        errors.append("nonfinite_or_unresolved_shifted_power_psi")
         return report
     for prefix in ("score", "time"):
         report.update({f"{prefix}_{key}": report[f"{prefix}_psi"][key]
                        for key in ("psi0", "psi1", "psi2", "gains", "losses", "ties")})
     report["milestone198_pass"] = all(
-        report[category][key] > 0
-        for category in ("score_psi", "time_psi")
-        for key in ("psi0", "psi1", "psi2"))
+        report[category]["positive_all_nonnegative"]
+        for category in ("score_psi", "time_psi"))
     if not report["milestone198_pass"]:
-        errors.append("one_or_more_signed_power_psi_not_positive")
+        errors.append("score_or_runtime_psi_not_positive_for_all_r_ge_zero")
     return report

@@ -1042,7 +1042,7 @@ def main():
               flush=True)
     if args.qualify_198:
         print("MILESTONE_198_PASS" if summary["milestone198_pass"] else "MILESTONE_198_NOT_PASSED",
-              "198/198 required, score and runtime PSI(0,1,2) strictly positive",flush=True)
+              "198/198 required, score and runtime shifted-power PSI(r)>0 for all r>=0",flush=True)
         return 0 if summary["milestone198_pass"] else 1
     return 1 if failed or (args.qualify and not (full_alpha_pass or cached_iva_comparison_pass)) else 0
 

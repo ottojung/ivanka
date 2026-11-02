@@ -19,6 +19,10 @@ LIFECYCLE_LOCK = Path(os.environ.get(
 # Metadata operations must not monopolize the shared lock for the entire
 # 1800-second sample budget. Waiting for MiCall retains the full remainder.
 METADATA_TIMEOUT_SECONDS = 120.0
+# Authentic S85 timed out during Podman create at the metadata cap with
+# ~1660s still available under the unchanged 1800s whole-container deadline.
+# Give creation a bounded second window; other metadata stages stay at 120s.
+CREATE_TIMEOUT_SECONDS = 240.0
 
 
 @contextmanager
@@ -55,8 +59,11 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
             remaining_budget = deadline - time.monotonic()
             if remaining_budget <= 0:
                 raise TimeoutError("Whole-container deadline exceeded")
-            return (remaining_budget if argv[1] == "wait" else
-                    min(remaining_budget, METADATA_TIMEOUT_SECONDS))
+            if argv[1] == "wait":
+                return remaining_budget
+            stage_cap = (CREATE_TIMEOUT_SECONDS if argv[1] == "create"
+                         else METADATA_TIMEOUT_SECONDS)
+            return min(remaining_budget, stage_cap)
 
         if lock:
             with transaction_lock(deadline):

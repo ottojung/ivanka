@@ -30,6 +30,44 @@ class SharedLocusDepthTests(unittest.TestCase):
             "cigar": cigar,
         }
 
+    def test_pooled_allele_spectrum_excludes_conflicting_pairs(self):
+        alt = "A" if self.allele[4] != "A" else "C"
+        mutated = self.allele[:4] + alt + self.allele[5:]
+        rows = [
+            self.row("one", "seed"),
+            self.row("two", "seed"),
+            self.row("two", "minor", bases=mutated),
+            self.row("one", "conflict"),
+            self.row("two", "conflict", bases=mutated),
+            self.row("two", "unknown", bases=self.allele[:4] + "N" + self.allele[5:]),
+        ]
+        r = audit(self.masked, self.refs, rows)
+        site = r["pooled_allele_spectrum"][4]
+        self.assertEqual(site["read_pair_counts"][self.allele[4]], 1)
+        self.assertEqual(site["read_pair_counts"][alt], 1)
+        self.assertEqual(site["unambiguous_read_pairs"], 2)
+        self.assertEqual(site["conflicting_or_non_acgt_read_pairs"], 2)
+        self.assertEqual(site["seed_allele_fraction"], 0.5)
+        self.assertEqual(r["pooled_deduplicated"]["per_position"][4], 1)
+
+    def test_pooled_allele_spectrum_orients_reverse_target(self):
+        self.refs["two"] = reverse_complement(self.refs["two"])
+        _, loci = group_loci(self.masked, self.refs)
+        reverse_start = min(loci["two"])
+        rows = [self.row("one", "first"),
+                self.row("two", "second", bases=reverse_complement(self.allele),
+                         pos=reverse_start + 1)]
+        r = audit(self.masked, self.refs, rows)
+        self.assertEqual([site["unambiguous_read_pairs"]
+                          for site in r["pooled_allele_spectrum"]], [2] * 36)
+        self.assertTrue(all(site["seed_allele_fraction"] == 1
+                            for site in r["pooled_allele_spectrum"]))
+
+    def test_pooled_allele_spectrum_no_depth_is_unknown(self):
+        r = audit(self.masked, self.refs, [])
+        self.assertTrue(all(site["seed_allele_fraction"] is None
+                            for site in r["pooled_allele_spectrum"]))
+
     def test_distinct_pairs_pool_across_reference_without_duplication(self):
         reads = [
             self.row("one", "a"),

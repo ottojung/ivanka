@@ -386,3 +386,7 @@ alignment choices and downstream final-MAX outputs: require authentic paired
 MiCall quality/runtime checks and output validation before considering the
 experimental image for a scientific qualification run. This is not itself a
 qualifying image or a claim of speedup.
+
+### PSI calculator
+
+Use `printf "1 1 -2\n" | python3 benchmarks/psi.py` to calculate shifted-power PSI values and all real zero locations; add `--json` for ASCII-only machine-readable output. See [PSI CLI documentation](docs/psi-cli.md) for input syntax, numerical precision, and infinity conventions.

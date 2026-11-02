@@ -1,0 +1,38 @@
+# PSI command-line calculator
+
+Run from the Ivanka repository root:
+
+```sh
+printf '1 1 -2\n' | python3 benchmarks/psi.py
+printf '1, 1, -2\n' | python3 benchmarks/psi.py --json
+```
+
+Input is one or more finite signed numbers `p_i`, separated by whitespace or
+commas, with optional `#` comments. Zero differences contribute zero and are
+included in the denominator `n`. Blank input, NaN and infinities are rejected.
+
+This CLI implements **shifted signed powers**:
+
+```text
+Psi(r) = (sum(sign(p_i) * (1 + abs(p_i)) ** r)) / n
+```
+
+It prints `Psi(0)`, `Psi(1)`, `Psi(2)`, the extended-real limit at positive
+infinity, and **every finite real zero** of `Psi(r)` (including negative `r`).
+Zeros are isolated recursively: divide an exponential sum by its lowest
+exponential, differentiate to reduce its number of terms by one, and bisect
+on the resulting monotone intervals. Tangential zeros are detected at
+stationary points. Equal magnitudes are grouped exactly before taking logs.
+
+The displayed `-inf` in the zero set is **not a real root**: it denotes the
+universal asymptotic zero `lim_(r -> -inf) Psi(r) = 0`. In JSON it is the
+string `"-inf"`, and `"negative_infinity_is_limit_only": true` makes this
+convention explicit. Likewise, limits at positive infinity are strings
+`"+inf"`, `"-inf"`, or `"0"`, never nonstandard JSON numeric constants.
+If `Psi` is identically zero, `zeros` becomes `"all real numbers"`.
+
+`--digits` (default 10) sets reported significant figures; `--precision`
+(default 65) sets Decimal working precision. The root positions are numerical
+approximations, **not formally certified isolating intervals**. Extremely
+close roots or nearly tangential extrema may require increasing `--precision`.
+No non-standard Python packages are required.

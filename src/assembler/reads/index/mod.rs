@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 use super::dna::{K, INDEX_STEP, encode};
-use super::types::Hit;
+use super::types::{Hit,Reads};
+mod support;
+pub(crate) use support::read_backed_novel;
+#[cfg(test)] mod test_support;
+#[cfg(test)] mod test_ranking;
+#[cfg(test)] use super::dna::{rc,rolling_canonical_kmers};
 
 // Move an indexed 31-mer forward by one 12-base sampling step.
 fn rolling_index(seq:&[u8],pos:usize,prior:Option<u64>)->Option<u64> {

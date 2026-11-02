@@ -1,7 +1,7 @@
 use super::ranking_score::ranked_candidates;
 use std::collections::HashSet;
 use super::reads::rolling_canonical_kmers;
-use super::reads::{K, encode};
+use super::reads::{K, encode, Reads, read_backed_novel};
 
 // A first-pass ranking heuristic, not a calibrated confidence score:
 // independent extension-supporting FASTQ records (with multiplicity) times
@@ -15,7 +15,11 @@ pub(super) fn canonical_kmer(seq:&[u8])->Option<u64> {
     Some(f.min(r))
 }
 pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
-                            n:usize, protected:usize)->Vec<Vec<u8>> {
+                            n:usize, protected:usize)->Vec<Vec<u8>> {select_supported_contigs_impl(seqs,counts,n,protected,None)}
+pub(super) fn select_supported_contigs_with_reads(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
+                            n:usize, protected:usize, reads:&Reads)->Vec<Vec<u8>> {select_supported_contigs_impl(seqs,counts,n,protected,Some(reads))}
+fn select_supported_contigs_impl(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
+                            n:usize, protected:usize, reads:Option<&Reads>)->Vec<Vec<u8>> {
     let candidates=ranked_candidates(seqs,counts,n,protected);
     // Use read support to prioritize assemblies and k-mer novelty to avoid
     // passing hundreds of near-identical contigs into MiCall's stitcher.
@@ -42,7 +46,10 @@ pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
         // equal-length alternatives retain the normal haplotype-diversity rule.
         let longest=retained.iter().map(Vec::len).max().unwrap_or(0);
         let short_shadow=seq.len()*4<=longest*3 && shared*20>=valid*17;
-        if !is_seed && valid>0 && (shared*20>=valid*19 || short_shadow) {
+        let near_duplicate=valid>0 && (shared*20>=valid*19 || short_shadow);
+        let backed=near_duplicate && reads.is_some_and(|r|
+            read_backed_novel(&seq,&represented,r,canonical_kmer));
+        if !is_seed && near_duplicate && !backed {
             duplicates+=1;
             continue;
         }

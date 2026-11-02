@@ -8,5 +8,6 @@ mod fastq;
 pub(super) use dna::{K, MAX_EXTENSION, MAX_CONTIG_LENGTH, encode, decode, rc, rolling_canonical_kmers};
 pub(super) use input::fasta_seeds;
 pub(super) use types::Reads;
+pub(super) use index::read_backed_novel;
 #[cfg(test)] mod test_input;
 #[cfg(test)] mod test_overhang;

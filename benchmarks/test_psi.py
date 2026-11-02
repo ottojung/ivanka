@@ -78,6 +78,19 @@ class PsiTests(unittest.TestCase):
         self.assertTrue(data['negative_infinity_is_limit_only'])
         self.assertNotIn('NaN', result.stdout)
 
+    def test_human_output_uses_unicode_symbols(self):
+        result = subprocess.run([sys.executable, psi.__file__], input="1 1 -2\n",
+                                text=True, capture_output=True, check=True)
+        self.assertIn("Ψ(0) =", result.stdout)
+        self.assertIn("Ψ(+∞) = −∞", result.stdout)
+        self.assertIn("{ r : Ψ(r) = 0 } = { −∞, ", result.stdout)
+        self.assertNotIn("\\", result.stdout)
+
+    def test_human_identically_zero_uses_real_numbers_symbol(self):
+        result = subprocess.run([sys.executable, psi.__file__], input="1 -1\n",
+                                text=True, capture_output=True, check=True)
+        self.assertIn("{ r : Ψ(r) = 0 } = ℝ", result.stdout)
+
     def test_invalid_input_nonzero_exit(self):
         r = subprocess.run([sys.executable, psi.__file__, '--json'], input='foo', text=True, capture_output=True)
         self.assertNotEqual(r.returncode, 0)

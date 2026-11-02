@@ -7,6 +7,19 @@ printf '1 1 -2\n' | python3 benchmarks/psi.py
 printf '1, 1, -2\n' | python3 benchmarks/psi.py --json
 ```
 
+Human-readable output uses Unicode mathematical symbols (e.g. Ψ, ∞, −∞ and ℝ).
+For example:
+
+\`\`\`text
+Ψ(0) = 0.3333333333
+Ψ(1) = 0.3333333333
+Ψ(2) = −0.3333333333
+Ψ(+∞) = −∞
+{ r : Ψ(r) = 0 } = { −∞, 1.709511291 }
+\`\`\`
+
+The \`--json\` mode deliberately remains ASCII-only, using \`"-inf"\` and \`"+inf"\`.
+
 Input is one or more finite signed numbers `p_i`, separated by whitespace or
 commas, with optional `#` comments. Zero differences contribute zero and are
 included in the denominator `n`. Blank input, NaN and infinities are rejected.

@@ -201,12 +201,18 @@ def main(argv=None):
         }
         print(json.dumps(output, ensure_ascii=True, allow_nan=False))
     else:
+        def human(value):
+            return str(value).replace("-", "−").replace("inf", "∞")
+
         for power, val in psi.items():
-            print(f"\\Psi({power}) = {format_decimal(val, args.digits)}")
-        rendered_infinity = infinity.replace('inf', chr(92) + 'inf')
-        print(f'\\Psi(+\\inf) = {rendered_infinity}')
-        zeros = "all real numbers" if identically_zero else ", ".join(["-inf", *(format_decimal(x, args.digits) for x in roots)])
-        print("{ r : \\Psi(r) = 0 } = { " + zeros + " }")
+            print(f"Ψ({power}) = {human(format_decimal(val, args.digits))}")
+        print(f"Ψ(+∞) = {human(infinity)}")
+        label = "{ r : Ψ(r) = 0 } = "
+        if identically_zero:
+            print(label + "ℝ")
+        else:
+            zeros = ", ".join([human("-inf"), *(human(format_decimal(x, args.digits)) for x in roots)])
+            print(label + "{ " + zeros + " }")
     return 0
 
 

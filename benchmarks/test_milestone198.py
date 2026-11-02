@@ -20,6 +20,12 @@ class SignedPowerTests(unittest.TestCase):
                          [0, 0, 0])
         self.assertEqual(result["ties"], 198)
 
+    def test_overflowing_signed_square_is_not_a_positive_psi(self):
+        with self.assertRaises(ValueError):
+            milestone198.psi([1e200] * 198)
+        with self.assertRaises(ValueError):
+            milestone198.psi([10 ** 400] + [1] * 197)
+
     def test_each_power_is_independent(self):
         result = milestone198.psi([1] * 100 + [-10] * 98)
         self.assertGreater(result["psi0"], 0)
@@ -133,6 +139,16 @@ class QualificationTests(unittest.TestCase):
         records = deepcopy(self.records)
         records[-1]["sample"] = records[0]["sample"]
         self.assertFalse(self.score(records)["milestone198_pass"])
+
+    def test_overflowing_score_moment_fails_closed(self):
+        records = deepcopy(self.records)
+        for item in records:
+            item["best_contig_acceptance"]["iva_score"] = 1e200
+            item["best_contig_acceptance"]["ivanka_score"] = 2e200
+        report = self.score(records)
+        self.assertFalse(report["milestone198_pass"])
+        self.assertIn("nonfinite_or_overflowing_signed_power_psi",
+                      report["milestone198_errors"])
 
     def test_psi_failure_does_not_pass_even_when_per_sample_floor_holds(self):
         records = deepcopy(self.records)

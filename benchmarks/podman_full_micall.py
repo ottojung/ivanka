@@ -106,6 +106,16 @@ def verify_ivanka_image_binding(image):
         raise ValueError("Ivanka image failed executable-binding verification") from exc
 
 
+def verify_execution_image_binding(args, checked, images):
+    """A read-only IVA cache audit must never launch an Ivanka container.
+
+    Verify the executable binding for actual runs only, after cohort and
+    qualification argument validation. Image IDs remain pinned independently.
+    """
+    if "ivanka" in checked and not args.cache_status:
+        verify_ivanka_image_binding(images["ivanka"])
+
+
 def score_outputs(folder, reference):
     """Inspect the final MiCall products without materializing whole CSVs in RAM."""
     aligner = PairwiseAligner()
@@ -835,7 +845,6 @@ def main():
     images = pinned_run_images(images, checked, pinned_iva_id)
     if "ivanka" in checked:
         verify_identical_micall_base(images["iva"], images["ivanka"])
-        verify_ivanka_image_binding(images["ivanka"])
     with (DATA/"manifest.tsv").open(newline="") as manifest:
         rows=list(csv.DictReader(manifest,delimiter="\t"))
     manifest_sample_count=len(rows)
@@ -859,6 +868,9 @@ def main():
         eligibility = verify_iva_eligibility(manifest_hash, names)
     else:
         eligibility = {}
+    # Validate frozen cohort and flags before any potentially expensive
+    # Podman startup. Cache-status reads must not launch a container.
+    verify_execution_image_binding(args, checked, images)
     rows=[row for row in rows if args.sample is None or row["sample"] in args.sample]
     if not rows: raise ValueError("No samples selected")
     if args.import_iva_from:

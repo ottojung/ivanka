@@ -825,7 +825,7 @@ def validate_milestone198_panel(reference_count, reference_sha256):
         raise ValueError("198-sample panel differs from the frozen 33-reference panel")
 
 
-def main():
+def _run_main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="append",
                         help="Run only a selected sample ID (repeatable)")
@@ -1063,6 +1063,18 @@ def main():
               "198/198 required, score and runtime shifted-power PSI(r)>0 for all r>=0",flush=True)
         return 0 if summary["milestone198_pass"] else 1
     return 1 if failed or (args.qualify and not (full_alpha_pass or cached_iva_comparison_pass)) else 0
+
+def main():
+    # The selection for one strict invocation cannot leak into later tests.
+    previous = os.environ.get("IVANKA_PODMAN_LIFECYCLE")
+    try:
+        return _run_main()
+    finally:
+        if previous is None:
+            os.environ.pop("IVANKA_PODMAN_LIFECYCLE", None)
+        else:
+            os.environ["IVANKA_PODMAN_LIFECYCLE"] = previous
+
 
 if __name__=="__main__":
     raise SystemExit(main())

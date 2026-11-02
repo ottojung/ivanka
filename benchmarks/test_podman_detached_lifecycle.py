@@ -76,6 +76,34 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(result.returncode, 125)
         self.assertEqual([c[1] for c in self.calls], ["create"])
 
+    def test_failed_create_without_id_reclaims_owned_name(self):
+        # SQLite lock failures can occur after Podman commits a name but
+        # before it emits an immutable ID. Never retry or start MiCall.
+        name = "ivanka-bench-ivanka-1793586776-32030-69942039"
+        self.command[self.command.index("--name") + 1] = name
+        self.exit["create"] = 125
+        result = self.run_case()
+        self.assertEqual((result.returncode, result.stage), (125, "create"))
+        self.assertEqual([c[1] for c in self.calls], ["create", "rm"])
+        self.assertEqual(self.calls[-1], ["podman", "rm", "--force", name])
+
+    def test_failed_create_malformed_response_never_removes_by_name(self):
+        name = "ivanka-bench-ivanka-1793586776-32030-69942039"
+        self.command[self.command.index("--name") + 1] = name
+        self.exit["create"] = 125
+
+        def malformed(argv, **kwargs):
+            result = self.fake(argv, **kwargs)
+            if argv[1] == "create":
+                return subprocess.CompletedProcess(argv, 125, b"not-an-id")
+            return result
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=malformed):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (1, "create"))
+        self.assertEqual([c[1] for c in self.calls], ["create"])
+
     def test_partial_create_response_is_not_retried(self):
         self.exit["create"] = 125
         def partial(argv, **kwargs):

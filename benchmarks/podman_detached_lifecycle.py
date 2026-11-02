@@ -52,6 +52,7 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
     stage = "create"
     create_name = command[command.index("--name") + 1]
     timed_out_create = False
+    failed_create_without_id = False
 
     def call(argv, *, output=None, lock=False):
         def budget_for_stage():
@@ -106,6 +107,9 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
             response = created.stdout.decode(errors="replace").strip()
             if len(response) == 64 and all(c in "0123456789abcdef" for c in response):
                 cid = response
+            elif not response:
+                # Podman may commit the name, then fail before printing an ID.
+                failed_create_without_id = True
             return SimpleNamespace(
                 returncode=created.returncode if not response else 1,
                 stage=stage)
@@ -147,10 +151,10 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
             exc, (TimeoutError, subprocess.TimeoutExpired)) else 1, stage=stage)
     finally:
         cleanup_target = cid
-        # A timed-out create can leave a named but ID-less container behind.
+        # A timed-out or failed create can leave a named but ID-less container.
         # Only reclaim this invocation's uniquely generated benchmark name;
         # never remove an arbitrary caller-supplied container by name.
-        if cleanup_target is None and timed_out_create and re.fullmatch(
+        if cleanup_target is None and (timed_out_create or failed_create_without_id) and re.fullmatch(
                 r"ivanka-bench-(?:iva|ivanka)-[0-9]+-[0-9]+-[0-9a-f]{8}(?:-dbretry[0-9]+)?",
                 create_name):
             cleanup_target = create_name

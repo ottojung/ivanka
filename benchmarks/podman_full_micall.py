@@ -20,6 +20,7 @@ from Bio import SeqIO
 from Bio.Align import PairwiseAligner
 from reference_catalog import load_micall_projects
 import milestone198
+from podman_detached_lifecycle import run_detached
 from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
                                   authenticated_postrun_cleanup, startup_database_lock,
                                   no_micall_output, podman_attempt_diagnostics)
@@ -513,8 +514,10 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
             stderr.flush()
             attempt_stderr_offset = (folder / "podman.stderr.log").stat().st_size
             try:
-                p = subprocess.run(command, stdout=stdout, stderr=stderr,
-                                   timeout=remaining, check=False)
+                p = (run_detached(command, stdout, stderr, remaining)
+                     if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached"
+                     else subprocess.run(command, stdout=stdout, stderr=stderr,
+                                        timeout=remaining, check=False))
                 exitcode = p.returncode
             except subprocess.TimeoutExpired:
                 # The container may outlive its Podman CLI. Cleanup failure
@@ -583,6 +586,8 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         "artifact_dir": str(folder.resolve()),
         "metrics": score_outputs(folder, reference),
     }
+    if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
+        result["podman_lifecycle"] = "serialized_detached_v1"
     if start_retries:
         result["podman_start_retries"] = start_retries
     if exitcode or start_retries:

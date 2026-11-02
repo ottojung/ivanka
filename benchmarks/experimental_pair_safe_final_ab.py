@@ -116,13 +116,16 @@ def score_exact_panel(control_dir, experimental_dir, projects_file, hxb2_file):
     }
 
 
-def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None):
+def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None,
+        iva_dir=None):
     from experimental_pair_safe_replay import read_csv
     root, evidence, destination = map(Path,(saved_ivanka,evidence,destination))
     if destination.exists():
         raise ValueError("Final A/B directory must be new")
     if (projects_file is None) != (hxb2_file is None):
         raise ValueError("Specify both frozen reference inputs or neither")
+    if iva_dir is not None and projects_file is None:
+        raise ValueError("IVA comparison requires frozen panel provenance")
     prior = json.loads((evidence/"evidence.json").read_text())
     if (not prior["replayed_original_exactly"]
             or not prior["all_original_aligned_records_preserved"]
@@ -159,6 +162,19 @@ def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None)
         report["panel_score_delta"] = (
             report["panel_alignment"]["experimental"]["score"]
             - report["panel_alignment"]["control"]["score"])
+        if iva_dir is not None:
+            from reference_panel import panel_acceptance
+            from Bio import SeqIO
+            from reference_panel import build_reference_panel
+            with Path(projects_file).open() as stream:
+                catalog = json.load(stream)
+            with Path(hxb2_file).open() as stream:
+                hxb2 = next(SeqIO.parse(stream,"fasta")).seq
+            immutable_panel = build_reference_panel(catalog,hxb2)
+            if report["panel_alignment"]["reference_panel_sha256"] != FROZEN_PANEL_SHA256:
+                raise AssertionError("Changed frozen reference panel")
+            report["iva_candidate_comparison"] = panel_acceptance(
+                iva_dir,destination/"experimental",immutable_panel,min_ratio=0.90)
     (destination/"comparison.json").write_text(json.dumps(report,indent=2)+"\n")
     return report
 
@@ -170,11 +186,13 @@ def main():
     ap.add_argument("new_final_ab_directory",type=Path)
     ap.add_argument("--projects-json",type=Path)
     ap.add_argument("--hxb2-fasta",type=Path)
+    ap.add_argument("--iva-dir",type=Path)
     args=ap.parse_args()
     print(json.dumps(run(args.saved_ivanka_artifacts,
                          args.safe_remap_replay_directory,
                          args.new_final_ab_directory,
-                         args.projects_json,args.hxb2_fasta),indent=2))
+                         args.projects_json,args.hxb2_fasta,
+                         args.iva_dir),indent=2))
 
 
 if __name__=="__main__":

@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -73,6 +74,34 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.exit["create"] = 125
         result = self.run_case()
         self.assertEqual(result.returncode, 125)
+        self.assertEqual([c[1] for c in self.calls], ["create"])
+
+    def test_failed_create_without_id_reclaims_owned_name(self):
+        # SQLite lock failures can occur after Podman commits a name but
+        # before it emits an immutable ID. Never retry or start MiCall.
+        name = "ivanka-bench-ivanka-1793586776-32030-69942039"
+        self.command[self.command.index("--name") + 1] = name
+        self.exit["create"] = 125
+        result = self.run_case()
+        self.assertEqual((result.returncode, result.stage), (125, "create"))
+        self.assertEqual([c[1] for c in self.calls], ["create", "rm"])
+        self.assertEqual(self.calls[-1], ["podman", "rm", "--force", name])
+
+    def test_failed_create_malformed_response_never_removes_by_name(self):
+        name = "ivanka-bench-ivanka-1793586776-32030-69942039"
+        self.command[self.command.index("--name") + 1] = name
+        self.exit["create"] = 125
+
+        def malformed(argv, **kwargs):
+            result = self.fake(argv, **kwargs)
+            if argv[1] == "create":
+                return subprocess.CompletedProcess(argv, 125, b"not-an-id")
+            return result
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=malformed):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (1, "create"))
         self.assertEqual([c[1] for c in self.calls], ["create"])
 
     def test_partial_create_response_is_not_retried(self):
@@ -229,6 +258,60 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual((result.returncode, result.stage), (124, "create"))
         self.assertIn("TimeoutExpired", self.stderr.getvalue())
         self.assertEqual(self.calls, [])
+
+    def test_timed_out_create_reclaims_only_owned_container_name(self):
+        # A real timed-out Podman create may have committed its name without
+        # returning an ID. Never start MiCall; reclaim only our unique name.
+        name = "ivanka-bench-ivanka-1793586776-32030-69942039"
+        self.command[self.command.index("--name") + 1] = name
+
+        def timed_out(argv, **kwargs):
+            if argv[1] == "create":
+                self.calls.append(list(argv))
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=timed_out):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (124, "create"))
+        self.assertEqual([c[1] for c in self.calls], ["create", "rm"])
+        self.assertEqual(self.calls[-1], ["podman", "rm", "--force", name])
+
+    def test_timed_out_create_cleanup_keeps_original_deadline(self):
+        name = "ivanka-bench-iva-1793586776-32030-69942039"
+        self.command[self.command.index("--name") + 1] = name
+
+        def timed_out(argv, **kwargs):
+            self.calls.append(list(argv))
+            if argv[1] == "create":
+                time.sleep(0.04)
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=timed_out):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 0.01)
+        self.assertEqual((result.returncode, result.stage), (124, "create"))
+        self.assertEqual([c[1] for c in self.calls], ["create"])
+
+    def test_emergency_cleanup_lock_wait_is_bounded(self):
+        # A failed start used to wait up to the whole 1800-second deadline
+        # just to acquire the emergency cleanup flock.
+        self.exit["start"] = 125
+        lock_deadlines = []
+
+        @contextmanager
+        def recording_lock(deadline):
+            lock_deadlines.append(deadline)
+            yield
+
+        with patch.object(lifecycle, "transaction_lock", recording_lock):
+            result = self.run_case()
+        self.assertEqual((result.returncode, result.stage), (1, "start"))
+        self.assertEqual(len(lock_deadlines), 3)  # create, start, cleanup
+        self.assertLessEqual(lock_deadlines[-1] - time.monotonic(), 10.1)
+        self.assertEqual(self.calls[-1][1], "rm")
 
     def test_emergency_cleanup_never_exceeds_sample_deadline(self):
         # Simulate a CLI timeout after creation. The old implementation

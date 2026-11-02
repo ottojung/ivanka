@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import fcntl
 import os
+import re
 import subprocess
 import time
 from contextlib import contextmanager
@@ -49,6 +50,9 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
     create = ["podman", "create", *command[3:]]
     cid = None
     stage = "create"
+    create_name = command[command.index("--name") + 1]
+    timed_out_create = False
+    failed_create_without_id = False
 
     def call(argv, *, output=None, lock=False):
         def budget_for_stage():
@@ -103,6 +107,9 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
             response = created.stdout.decode(errors="replace").strip()
             if len(response) == 64 and all(c in "0123456789abcdef" for c in response):
                 cid = response
+            elif not response:
+                # Podman may commit the name, then fail before printing an ID.
+                failed_create_without_id = True
             return SimpleNamespace(
                 returncode=created.returncode if not response else 1,
                 stage=stage)
@@ -134,6 +141,8 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
         cid = None
         return SimpleNamespace(returncode=container_exit, stage="complete")
     except (subprocess.TimeoutExpired, TimeoutError, OSError, RuntimeError, ValueError) as exc:
+        if stage == "create" and isinstance(exc, subprocess.TimeoutExpired):
+            timed_out_create = True
         stderr.write(("Benchmark: detached Podman " + stage + " failure: " +
                       type(exc).__name__ + ": " + str(exc) + "\n"))
         stderr.flush()
@@ -141,19 +150,31 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
         return SimpleNamespace(returncode=124 if isinstance(
             exc, (TimeoutError, subprocess.TimeoutExpired)) else 1, stage=stage)
     finally:
-        if cid is not None:
+        cleanup_target = cid
+        # A timed-out or failed create can leave a named but ID-less container.
+        # Only reclaim this invocation's uniquely generated benchmark name;
+        # never remove an arbitrary caller-supplied container by name.
+        if cleanup_target is None and (timed_out_create or failed_create_without_id) and re.fullmatch(
+                r"ivanka-bench-(?:iva|ivanka)-[0-9]+-[0-9]+-[0-9a-f]{8}(?:-dbretry[0-9]+)?",
+                create_name):
+            cleanup_target = create_name
+        if cleanup_target is not None:
             # Best effort only. Cleanup does not turn a failed arm into success.
             # The original whole-container deadline also bounds emergency
             # cleanup. A failed arm must never silently spend extra time
             # outside its frozen sample allowance.
             if time.monotonic() < deadline:
+                # Bound lock acquisition AND removal together, not merely
+                # the subprocess: a contended flock must not consume the
+                # remaining 28 minutes of a failed sample.
+                cleanup_deadline = min(deadline, time.monotonic() + 10)
                 try:
-                    with transaction_lock(deadline):
-                        budget = deadline - time.monotonic()
+                    with transaction_lock(cleanup_deadline):
+                        budget = cleanup_deadline - time.monotonic()
                         if budget > 0:
-                            subprocess.run(["podman", "rm", "--force", cid],
+                            subprocess.run(["podman", "rm", "--force", cleanup_target],
                                            stdout=subprocess.DEVNULL,
                                            stderr=subprocess.DEVNULL,
-                                           timeout=min(10, budget), check=False)
+                                           timeout=budget, check=False)
                 except (TimeoutError, OSError, subprocess.TimeoutExpired):
                     pass

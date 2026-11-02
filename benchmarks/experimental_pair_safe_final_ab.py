@@ -84,7 +84,30 @@ def regenerate(scratch, evidence_dir, target_dir, arm):
                    concordance_seed_csv=outputs["concordance_seed_csv"])
 
 
-def run(saved_ivanka, evidence, destination):
+FROZEN_PANEL_SHA256 = "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8"
+
+
+def score_exact_panel(control_dir, experimental_dir, projects_file, hxb2_file):
+    from Bio import SeqIO
+    from reference_panel import build_reference_panel, best_panel_alignment, panel_sha256
+    from project_references import final_max_sequences
+
+    with Path(projects_file).open() as handle:
+        catalog = json.load(handle)
+    with Path(hxb2_file).open() as handle:
+        reference = next(SeqIO.parse(handle, "fasta")).seq
+    panel = build_reference_panel(catalog, reference)
+    if panel_sha256(panel) != FROZEN_PANEL_SHA256:
+        raise ValueError("Reference panel differs from immutable 33-reference control")
+    return {
+        "reference_count":len(panel),
+        "reference_panel_sha256":FROZEN_PANEL_SHA256,
+        "control":best_panel_alignment(final_max_sequences(control_dir), panel),
+        "experimental":best_panel_alignment(final_max_sequences(experimental_dir), panel),
+    }
+
+
+def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None):
     from experimental_pair_safe_replay import read_csv
     root, evidence, destination = map(Path,(saved_ivanka,evidence,destination))
     if destination.exists():
@@ -118,6 +141,15 @@ def run(saved_ivanka, evidence, destination):
                   for k in changes),
               "caveat":"Not qualified: redistributed reads are not independent molecules "
                        "or proved haplotypes, and no PSI or panel score is asserted."}
+    if (projects_file is None) != (hxb2_file is None):
+        raise ValueError("Specify both frozen reference inputs or neither")
+    if projects_file is not None:
+        report["panel_alignment"] = score_exact_panel(
+            destination/"control",destination/"experimental",
+            projects_file,hxb2_file)
+        report["panel_score_delta"] = (
+            report["panel_alignment"]["experimental"]["score"]
+            - report["panel_alignment"]["control"]["score"])
     (destination/"comparison.json").write_text(json.dumps(report,indent=2)+"\n")
     return report
 
@@ -127,10 +159,13 @@ def main():
     ap.add_argument("saved_ivanka_artifacts",type=Path)
     ap.add_argument("safe_remap_replay_directory",type=Path)
     ap.add_argument("new_final_ab_directory",type=Path)
+    ap.add_argument("--projects-json",type=Path)
+    ap.add_argument("--hxb2-fasta",type=Path)
     args=ap.parse_args()
     print(json.dumps(run(args.saved_ivanka_artifacts,
                          args.safe_remap_replay_directory,
-                         args.new_final_ab_directory),indent=2))
+                         args.new_final_ab_directory,
+                         args.projects_json,args.hxb2_fasta),indent=2))
 
 
 if __name__=="__main__":

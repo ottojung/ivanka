@@ -75,6 +75,29 @@ class PartialPhaseTests(unittest.TestCase):
         levels = audit_partial_links(masked, refs, rows, 8, 100)["markers"][0]["linkage_by_observed_edge_length"]
         self.assertEqual(levels["1"]["read_pair_ids"], 0)
 
+    def test_upstream_marker_requires_observed_prefix(self):
+        masked, refs = fixture()
+        for name, seq in list(refs.items()):
+            refs[name] = seq[:80] + ("A" if name in ("one", "three") else "G") + seq[81:]
+        # The existing downstream marker also remains; select upstream -20.
+        rows = pair("one", "x", refs["one"], start=80, mate_start=250)
+        rows[0]["seq"] = refs["one"][80:101]
+        rows[0]["qual"] = "I"*21
+        rows[0]["cigar"] = "21M"
+        result = audit_partial_links(masked, refs, rows, 8, 100)
+        upstream = next(m for m in result["markers"]
+                        if m["offset_from_block_start"] == -20)
+        levels = upstream["linkage_by_observed_edge_length"]
+        self.assertEqual(levels["1"]["read_pair_ids"], 1)
+        self.assertEqual(levels["3"]["read_pair_ids"], 0)
+
+    def test_conflicting_marker_calls_do_not_link(self):
+        masked, refs = fixture()
+        rows = pair("one", "x", refs["one"], start=80, mate_start=170)
+        rows[1]["seq"] = "G"*150
+        levels = audit_partial_links(masked, refs, rows, 8, 100)["markers"][0]["linkage_by_observed_edge_length"]
+        self.assertEqual(levels["1"]["read_pair_ids"], 0)
+
     def test_reverse_reference(self):
         masked, refs = fixture()
         comp = str.maketrans("ACGT","TGCA")

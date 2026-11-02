@@ -85,6 +85,20 @@ class StrictCacheAuditTests(TestCase):
 
 
 class BenchmarkTests(TestCase):
+ def test_cache_audit_never_launches_binding_container(self):
+  from types import SimpleNamespace
+  from unittest.mock import patch
+  images={"ivanka":"a"*64}
+  checked={"ivanka":"a"*64}
+  with patch.object(m,"verify_ivanka_image_binding") as verify:
+   m.verify_execution_image_binding(SimpleNamespace(cache_status=True),checked,images)
+   verify.assert_not_called()
+   m.verify_execution_image_binding(SimpleNamespace(cache_status=False),checked,images)
+   verify.assert_called_once_with("a"*64)
+  with patch.object(m,"verify_ivanka_image_binding") as verify:
+   m.verify_execution_image_binding(SimpleNamespace(cache_status=False),{},images)
+   verify.assert_not_called()
+
  def test_executed_images_are_pinned_by_id(self):
   configured={"iva":"test/iva:mutable","ivanka":"test/ivanka:mutable"}
   verified={"iva":"a"*64,"ivanka":"b"*64}

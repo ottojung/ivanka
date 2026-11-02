@@ -600,8 +600,13 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         "container_wall_seconds": container_wall_seconds,
         "image_id": recorded_image_id(image), "image": image,
         "artifact_dir": str(folder.resolve()),
-        "metrics": score_outputs(folder, reference),
     }
+    # A nonzero container exit is never scientifically qualified, even if
+    # partial MiCall outputs happen to exist. Attempting to score them can
+    # raise a secondary "Missing contigs" error and erase Podman's real
+    # startup/cleanup diagnostics from the per-sample result.
+    if exitcode == 0:
+        result["metrics"] = score_outputs(folder, reference)
     if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
         result["podman_lifecycle"] = "serialized_detached_v1"
     if start_retries:

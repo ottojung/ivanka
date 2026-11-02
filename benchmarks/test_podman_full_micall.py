@@ -257,6 +257,28 @@ class BenchmarkTests(TestCase):
   record["failed"]=False
   self.assertIsNone(m.failure_category(record))
 
+ def test_failed_podman_keeps_original_error_without_scoring(self):
+  from unittest.mock import patch,Mock
+  with TemporaryDirectory() as d:
+   root=Path(d)
+   fq=root/"samples"/"TEST"
+   fq.mkdir(parents=True)
+   for end in (1,2):
+    (fq/f"TEST_L001_R{end}_001.fastq.gz").write_bytes(b"placeholder")
+   def failure(*args, **kwargs):
+    kwargs["stderr"].write("Error: save transaction: database is locked\n")
+    return Mock(returncode=126)
+   with patch.object(m,"DATA",root),patch.object(m,"RESULTS",root/"out"), \
+        patch.object(m,"image_id",return_value="sha256:img"), \
+        patch.object(m,"score_outputs",side_effect=AssertionError("never score failed Podman")) as scorer, \
+        patch.object(m.subprocess,"run",side_effect=failure):
+    result=m.run_arm({"sample":"TEST"},"ivanka","image:tag","ACGT",12,"invocation")
+   self.assertEqual(result["exit_code"],126)
+   self.assertNotIn("metrics",result)
+   self.assertIn("database is locked",result["error"])
+   self.assertEqual(result["artifact_dir"],str((root/"out"/"invocation"/"TEST"/"ivanka").resolve()))
+   scorer.assert_not_called()
+
  def test_run_arm_enforces_timeout_inside_container(self):
   from unittest.mock import patch,Mock
   with TemporaryDirectory() as d:

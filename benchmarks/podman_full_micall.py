@@ -224,9 +224,9 @@ def qualification_within_cap(configured_limit, elapsed):
 
     A separate IVA-only control preparation is never an alpha qualification.
     """
-    return (isinstance(configured_limit, (int,float)) and
-            isinstance(elapsed, (int,float)) and
-            0 < configured_limit <= QUALIFICATION_MAX_SECONDS and
+    return (milestone198.finite(configured_limit, positive=True) and
+            milestone198.finite(elapsed) and
+            configured_limit <= QUALIFICATION_MAX_SECONDS and
             0 <= elapsed <= configured_limit)
 
 

@@ -345,6 +345,14 @@ class BenchmarkTests(TestCase):
   self.assertFalse(m.qualification_within_cap(0,100))
   self.assertFalse(m.qualification_within_cap(1800,-1))
 
+ def test_qualification_cap_rejects_non_numeric_and_nonfinite_values(self):
+  # JSON booleans are integers in Python, but cannot authenticate timings.
+  for invalid in (True,False,float("nan"),float("inf"),float("-inf"),"1"):
+   self.assertFalse(m.qualification_within_cap(invalid,1))
+   self.assertFalse(m.qualification_within_cap(1800,invalid))
+  self.assertTrue(m.qualification_within_cap(1800,0))
+  self.assertTrue(m.qualification_within_cap(1800,1800))
+
  def test_project_aware_comparison_uses_full_consensus_not_hxb2(self):
   with TemporaryDirectory() as d:
    root=Path(d)

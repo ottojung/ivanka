@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -265,6 +266,24 @@ class DetachedLifecycleTests(unittest.TestCase):
                 self.command, self.stdout, self.stderr, 0.01)
         self.assertEqual((result.returncode, result.stage), (124, "create"))
         self.assertEqual([c[1] for c in self.calls], ["create"])
+
+    def test_emergency_cleanup_lock_wait_is_bounded(self):
+        # A failed start used to wait up to the whole 1800-second deadline
+        # just to acquire the emergency cleanup flock.
+        self.exit["start"] = 125
+        lock_deadlines = []
+
+        @contextmanager
+        def recording_lock(deadline):
+            lock_deadlines.append(deadline)
+            yield
+
+        with patch.object(lifecycle, "transaction_lock", recording_lock):
+            result = self.run_case()
+        self.assertEqual((result.returncode, result.stage), (1, "start"))
+        self.assertEqual(len(lock_deadlines), 3)  # create, start, cleanup
+        self.assertLessEqual(lock_deadlines[-1] - time.monotonic(), 10.1)
+        self.assertEqual(self.calls[-1][1], "rm")
 
     def test_emergency_cleanup_never_exceeds_sample_deadline(self):
         # Simulate a CLI timeout after creation. The old implementation

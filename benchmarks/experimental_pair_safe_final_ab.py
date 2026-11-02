@@ -32,9 +32,18 @@ def row_multiset(path):
 
 
 def max_rows(path):
-    return {r["region"]:r["sequence"] for r in rows(path)
-            if r.get("q-cutoff") == "15"
-            and r.get("consensus-percent-cutoff") == "MAX"}
+    result = {}
+    for record in rows(path):
+        if (record.get("q-cutoff") != "15"
+                or record.get("consensus-percent-cutoff") != "MAX"):
+            continue
+        name = record["region"]
+        if name in result:
+            raise ValueError(f"Repeated final MAX region: {name}")
+        result[name] = record["sequence"]
+    if not result:
+        raise ValueError("No authentic q15 final MAX rows")
+    return result
 
 
 def regenerate(scratch, evidence_dir, target_dir, arm):

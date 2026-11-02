@@ -7,6 +7,7 @@ All clinical input and results must remain outside this public repository.
 import argparse
 import csv
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from bounded_cohort import execute_bounded
 import hashlib
 import json
 import math
@@ -916,27 +917,33 @@ def main():
     completed_records=[]
     benchmark_start=time.monotonic()
     with path.open("a",buffering=1) as out:
-        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-            futures={}
-            for row in rows:
-                out.write(json.dumps({"sample":row["sample"],
-                                      "invocation":invocation,"status":"started"})+"\n")
-                task=executor.submit(evaluate_sample,row,args,images,checked,
-                                     pinned_iva_id,hxb2_hash,hxb2,projects,invocation,reference_panel=references)
-                futures[task]=row["sample"]
-            for task in as_completed(futures):
-                name=futures[task]
-                try:
-                    record=task.result()
-                except Exception as exc:
-                    record={"sample":name,"invocation":invocation,"status":"error",
-                            "error":f"{type(exc).__name__}: {exc}","failed":True}
-                out.write(json.dumps(record,sort_keys=True)+"\n")
-                completed_records.append(record)
-                if record["failed"]:
-                    failed+=1
-                print(name,record["status"],"fail" if record["failed"] else "ok",
-                      record.get("best_contig_acceptance",{}),flush=True)
+        def on_start(row):
+            out.write(json.dumps({"sample":row["sample"],
+                                  "invocation":invocation,"status":"started"})+"\n")
+
+        def worker(row):
+            return evaluate_sample(row,args,images,checked,pinned_iva_id,
+                                   hxb2_hash,hxb2,projects,invocation,
+                                   reference_panel=references)
+
+        def on_error(name,exc):
+            return {"sample":name,"invocation":invocation,"status":"error",
+                    "error":f"{type(exc).__name__}: {exc}","failed":True}
+
+        def on_finish(record):
+            out.write(json.dumps(record,sort_keys=True)+"\n")
+            print(record["sample"],record["status"],
+                  "fail" if record["failed"] else "ok",
+                  record.get("best_contig_acceptance",{}),flush=True)
+
+        completed_records,stopped_early=execute_bounded(
+            rows,args.jobs,worker,on_start,on_finish,on_error,
+            stop_on_failure=args.qualify_198)
+    failed=sum(r.get("failed") is not False for r in completed_records)
+    if stopped_early:
+        print("STRICT_198_STOPPED_AFTER_IRREVERSIBLE_SAMPLE_FAILURE",
+              f"{len(completed_records)}/{len(rows)} completed",
+              flush=True)
     accepted=sum(r.get("best_contig_acceptance",{}).get("pass") is True
                  for r in completed_records)
     finished_names=[r.get("sample") for r in completed_records]
@@ -1002,6 +1009,7 @@ def main():
         "selected_samples":len(rows),"finished_samples":len(completed_records),
         "accepted_samples":accepted,
         "failed_samples":[r["sample"] for r in completed_records if r["failed"]],
+        "stopped_early_after_irreversible_failure":stopped_early,
         "failure_categories":reason_counts,
         "global_seconds":round(global_seconds,2),
         "sample_limit_seconds":args.sample_time_limit,

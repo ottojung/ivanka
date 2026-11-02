@@ -73,9 +73,8 @@ class PsiTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data['psi']['0'], 0)
         self.assertEqual(data['psi_at_positive_infinity'], '-inf')
-        self.assertEqual(data['zeros'][0], '-inf')
-        self.assertEqual(len(data['zeros']), 2)
-        self.assertTrue(data['negative_infinity_is_limit_only'])
+        self.assertEqual(data['zeros'], [0])
+        self.assertNotIn('negative_infinity_is_limit_only', data)
         self.assertNotIn('NaN', result.stdout)
 
     def test_human_output_uses_unicode_symbols(self):
@@ -83,13 +82,24 @@ class PsiTests(unittest.TestCase):
                                 text=True, capture_output=True, check=True)
         self.assertIn("Ψ(0) =", result.stdout)
         self.assertIn("Ψ(+∞) = −∞", result.stdout)
-        self.assertIn("{ r : Ψ(r) = 0 } = { −∞, ", result.stdout)
+        self.assertIn("{ r : Ψ(r) = 0 } = { 1.709511291 }", result.stdout)
         self.assertNotIn("\\", result.stdout)
 
     def test_human_identically_zero_uses_real_numbers_symbol(self):
         result = subprocess.run([sys.executable, psi.__file__], input="1 -1\n",
                                 text=True, capture_output=True, check=True)
         self.assertIn("{ r : Ψ(r) = 0 } = ℝ", result.stdout)
+
+    def test_empty_zero_set_uses_empty_set_symbol(self):
+        for args in ([], ["--json"]):
+            result = subprocess.run([sys.executable, psi.__file__, *args],
+                                    input="1 2 3\n", text=True, capture_output=True, check=True)
+            if args:
+                self.assertEqual(json.loads(result.stdout)["zeros"], [])
+                self.assertTrue(result.stdout.isascii())
+            else:
+                self.assertIn("{ r : Ψ(r) = 0 } = ∅", result.stdout)
+                self.assertNotIn("−∞", result.stdout)
 
     def test_invalid_input_nonzero_exit(self):
         r = subprocess.run([sys.executable, psi.__file__, '--json'], input='foo', text=True, capture_output=True)

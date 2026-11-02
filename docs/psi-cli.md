@@ -15,7 +15,7 @@ For example:
 Ψ(1) = 0.3333333333
 Ψ(2) = −0.3333333333
 Ψ(+∞) = −∞
-{ r : Ψ(r) = 0 } = { −∞, 1.709511291 }
+{ r : Ψ(r) = 0 } = { 1.709511291 }
 \`\`\`
 
 The \`--json\` mode deliberately remains ASCII-only, using \`"-inf"\` and \`"+inf"\`.
@@ -37,11 +37,10 @@ exponential, differentiate to reduce its number of terms by one, and bisect
 on the resulting monotone intervals. Tangential zeros are detected at
 stationary points. Equal magnitudes are grouped exactly before taking logs.
 
-The displayed `-inf` in the zero set is **not a real root**: it denotes the
-universal asymptotic zero `lim_(r -> -inf) Psi(r) = 0`. In JSON it is the
-string `"-inf"`, and `"negative_infinity_is_limit_only": true` makes this
-convention explicit. Likewise, limits at positive infinity are strings
-`"+inf"`, `"-inf"`, or `"0"`, never nonstandard JSON numeric constants.
+The zero set includes only finite real roots, excluding infinite limits.
+When it is empty, human-readable output uses ∅ and JSON uses [].
+The positive-infinity limit is reported separately; JSON encodes it as
+the strings +inf, -inf, or 0, never a nonstandard numeric constant.
 If `Psi` is identically zero, `zeros` becomes `"all real numbers"`.
 
 `--digits` (default 10) sets reported significant figures; `--precision`

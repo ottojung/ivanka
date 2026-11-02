@@ -196,8 +196,7 @@ def main(argv=None):
         output = {
             "psi": {key: json_decimal(value, args.digits) for key, value in psi.items()},
             "psi_at_positive_infinity": infinity,
-            "zeros": "all real numbers" if identically_zero else ["-inf", *(json_decimal(x, args.digits) for x in roots)],
-            "negative_infinity_is_limit_only": True,
+            "zeros": "all real numbers" if identically_zero else [json_decimal(x, args.digits) for x in roots],
         }
         print(json.dumps(output, ensure_ascii=True, allow_nan=False))
     else:
@@ -210,8 +209,10 @@ def main(argv=None):
         label = "{ r : Ψ(r) = 0 } = "
         if identically_zero:
             print(label + "ℝ")
+        elif not roots:
+            print(label + "∅")
         else:
-            zeros = ", ".join([human("-inf"), *(human(format_decimal(x, args.digits)) for x in roots)])
+            zeros = ", ".join(human(format_decimal(x, args.digits)) for x in roots)
             print(label + "{ " + zeros + " }")
     return 0
 

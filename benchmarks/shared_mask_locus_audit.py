@@ -24,9 +24,10 @@ def read_fasta(path):
             if line.startswith(">"):
                 if name is not None:
                     entries.append((name, "".join(bases)))
-                name, bases = line[1:].split()[0], []
-                if not name:
+                header = line[1:].split()
+                if not header:
                     raise ValueError("Empty FASTA header")
+                name, bases = header[0], []
             elif name is None:
                 raise ValueError("FASTA sequence before header")
             else:
@@ -104,7 +105,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("final_conseq_csv", type=Path)
     parser.add_argument("raw_contigs_fasta", type=Path)
-    parser.add_argument("--sample")
+    parser.add_argument("--sample", required=True)
     parser.add_argument("--region")
     parser.add_argument("--min-contig-length", type=int, default=0)
     parser.add_argument("--anchor", type=int, default=31)

@@ -160,13 +160,17 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
             # cleanup. A failed arm must never silently spend extra time
             # outside its frozen sample allowance.
             if time.monotonic() < deadline:
+                # Bound lock acquisition AND removal together, not merely
+                # the subprocess: a contended flock must not consume the
+                # remaining 28 minutes of a failed sample.
+                cleanup_deadline = min(deadline, time.monotonic() + 10)
                 try:
-                    with transaction_lock(deadline):
-                        budget = deadline - time.monotonic()
+                    with transaction_lock(cleanup_deadline):
+                        budget = cleanup_deadline - time.monotonic()
                         if budget > 0:
                             subprocess.run(["podman", "rm", "--force", cleanup_target],
                                            stdout=subprocess.DEVNULL,
                                            stderr=subprocess.DEVNULL,
-                                           timeout=min(10, budget), check=False)
+                                           timeout=budget, check=False)
                 except (TimeoutError, OSError, subprocess.TimeoutExpired):
                     pass

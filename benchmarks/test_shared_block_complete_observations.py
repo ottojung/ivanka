@@ -31,6 +31,10 @@ class CompleteBlockEvidenceTests(unittest.TestCase):
         self.assertEqual(block["complete_read_pair_ids"], 2)
         self.assertEqual(block["shared_allele_complete_read_pair_ids"], 1)
         self.assertEqual(block["alternative_complete_read_pair_ids"], 1)
+        self.assertEqual(
+            [(r["sequence"], r["read_pair_ids"]) for r in
+             block["observed_complete_local_sequences"]],
+            [("ACG", 1), ("ATG", 1)])
         self.assertIsNone(block["distinct_pair_sequence_evidence"])
 
     def test_identical_pair_sequences_count_once(self):
@@ -40,6 +44,8 @@ class CompleteBlockEvidenceTests(unittest.TestCase):
         self.assertEqual(block["shared_allele_complete_read_pair_ids"], 2)
         self.assertEqual(distinct["shared_allele_distinct_pair_sequences"], 1)
         self.assertEqual(distinct["complete_distinct_pair_sequences"], 1)
+        self.assertEqual(block["observed_complete_local_sequences"][0]
+                         ["distinct_pair_sequences"], 1)
 
     def test_same_signature_discordant_full_alleles_excluded(self):
         signatures = {"a": ("R1", "R2"), "b": ("R1", "R2")}
@@ -48,6 +54,9 @@ class CompleteBlockEvidenceTests(unittest.TestCase):
         self.assertEqual(block["complete_read_pair_ids"], 2)
         self.assertEqual(distinct["complete_distinct_pair_sequences"], 0)
         self.assertEqual(distinct["ambiguous_or_partial_pair_sequences"], 1)
+        self.assertEqual(
+            sum(r["distinct_pair_sequences"] for r in
+                block["observed_complete_local_sequences"]), 0)
 
     def test_partial_mapping_invalidates_duplicate_full_signature(self):
         signatures = {"a": ("R1", "R2"), "b": ("R1", "R2")}

@@ -178,15 +178,16 @@ def pooled_site_calls(masked, references, rows, minimum_quality=15):
 
 
 def verified_source_references(stitched_rows, remap_rows, selected):
-    """Fail closed unless remap references exactly equal stitched inputs.
+    """Resolve MiCall's REMAPPED names by exact sequence, never row number.
 
-    MiCall's remap_conseq may be a changed consensus on other datasets.
-    Only identical source/observed references can justify lifting coordinates.
+    MiCall can drop/reorder stitched inputs before naming remap references,
+    so 13-HCV-1a may originate from stitched row 2, not row 13. To avoid
+    inventing a connection, demand a UNIQUE full-length exact source sequence
+    and a consistent reference/partial label. Changed consensuses fail closed.
     """
-    stitched = {}
-    for index, row in enumerate(stitched_rows, 1):
-        name = f"{index}-{row['ref']}"
-        stitched[name] = row["contig"].upper()
+    by_sequence = defaultdict(list)
+    for row in stitched_rows:
+        by_sequence[row["contig"].upper()].append(row["ref"])
     remap = {}
     for row in remap_rows:
         name = row["region"]
@@ -195,13 +196,22 @@ def verified_source_references(stitched_rows, remap_rows, selected):
         remap[name] = row["sequence"].upper()
     verified = {}
     for name in selected:
-        if name not in stitched or name not in remap:
-            raise ValueError(f"Missing original or remap reference {name}")
-        if stitched[name] != remap[name]:
-            raise ValueError(f"Remap reference differs from stitched source: {name}")
-        if set(stitched[name]) - set("ACGT"):
-            raise ValueError(f"Ambiguous reference {name}")
-        verified[name] = stitched[name]
+        if name not in remap:
+            raise ValueError(f"Missing remap reference {name}")
+        sequence = remap[name]
+        if not sequence or set(sequence) - set("ACGT"):
+            raise ValueError(f"Ambiguous remap reference {name}")
+        matches = by_sequence.get(sequence, ())
+        if len(matches) != 1:
+            raise ValueError(f"No unique exact stitched source for {name}")
+        number, separator, suffix = name.partition("-")
+        source_ref = matches[0]
+        if not separator or not number.isdigit() or suffix not in (
+                source_ref, source_ref + "-partial"):
+            raise ValueError(f"Reference label does not match source {name}")
+        verified[name] = sequence
+    if len(set(verified.values())) != len(verified):
+        raise ValueError("Multiple remap references share one source sequence")
     return verified
 
 

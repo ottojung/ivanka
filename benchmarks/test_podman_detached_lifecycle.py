@@ -230,6 +230,42 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertIn("TimeoutExpired", self.stderr.getvalue())
         self.assertEqual(self.calls, [])
 
+    def test_timed_out_create_reclaims_only_owned_container_name(self):
+        # A real timed-out Podman create may have committed its name without
+        # returning an ID. Never start MiCall; reclaim only our unique name.
+        name = "ivanka-bench-ivanka-1793586776-32030-69942039"
+        self.command[self.command.index("--name") + 1] = name
+
+        def timed_out(argv, **kwargs):
+            if argv[1] == "create":
+                self.calls.append(list(argv))
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=timed_out):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (124, "create"))
+        self.assertEqual([c[1] for c in self.calls], ["create", "rm"])
+        self.assertEqual(self.calls[-1], ["podman", "rm", "--force", name])
+
+    def test_timed_out_create_cleanup_keeps_original_deadline(self):
+        name = "ivanka-bench-iva-1793586776-32030-69942039"
+        self.command[self.command.index("--name") + 1] = name
+
+        def timed_out(argv, **kwargs):
+            self.calls.append(list(argv))
+            if argv[1] == "create":
+                time.sleep(0.04)
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=timed_out):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 0.01)
+        self.assertEqual((result.returncode, result.stage), (124, "create"))
+        self.assertEqual([c[1] for c in self.calls], ["create"])
+
     def test_emergency_cleanup_never_exceeds_sample_deadline(self):
         # Simulate a CLI timeout after creation. The old implementation
         # launched a fresh ten-second cleanup beyond the sample deadline.

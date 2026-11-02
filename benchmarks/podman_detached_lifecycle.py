@@ -73,13 +73,23 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
         # retrying so one container's output is never duplicated.
         for attempt in range(4):
             offset = output.tell() if output is not None else None
-            result = call(argv, lock=lock, output=output)
+
+            def discard_partial_output():
+                if offset is not None:
+                    output.seek(offset)
+                    output.truncate()
+                    output.flush()
+
+            try:
+                result = call(argv, lock=lock, output=output)
+            except (subprocess.TimeoutExpired, TimeoutError, OSError, ValueError):
+                # A timed-out Podman CLI can already have written part of its
+                # logs. They must not survive as completion evidence.
+                discard_partial_output()
+                raise
             if result.returncode == 0:
                 return result
-            if offset is not None:
-                output.seek(offset)
-                output.truncate()
-                output.flush()
+            discard_partial_output()
             if attempt < 3 and time.monotonic() + 0.2 < deadline:
                 time.sleep(0.2)
         return result

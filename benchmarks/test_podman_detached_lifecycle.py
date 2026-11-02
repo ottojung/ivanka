@@ -169,6 +169,38 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(self.stdout.getvalue(), "micall.process_run(): Done.\n")
         self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
 
+    def test_logs_timeout_discards_partial_output_and_fails_closed(self):
+        def interrupted(argv, **kwargs):
+            if argv[1] == "logs":
+                self.calls.append(list(argv))
+                kwargs["stdout"].write("partial unauthenticated log\n")
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (124, "logs"))
+        self.assertEqual(self.stdout.getvalue(), "")
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+        self.assertEqual(sum(c[1] == "logs" for c in self.calls), 1)
+        self.assertEqual(self.calls[-1][1], "rm")
+
+    def test_logs_io_error_discards_partial_output(self):
+        def interrupted(argv, **kwargs):
+            if argv[1] == "logs":
+                self.calls.append(list(argv))
+                kwargs["stdout"].write("partial unauthenticated log\n")
+                raise OSError("lost Podman log stream")
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (1, "logs"))
+        self.assertEqual(self.stdout.getvalue(), "")
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+
     def test_metadata_has_stage_cap_but_micall_wait_keeps_full_budget(self):
         observed = []
         def recording(argv, **kwargs):

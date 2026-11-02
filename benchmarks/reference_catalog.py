@@ -25,7 +25,7 @@ def load_micall_projects(iva_image):
                    '--timeout', '598', '--stop-timeout', '2',
                    '--label', 'org.ottojung.ivanka.benchmark.role=reference-catalog',
                    '--entrypoint', 'python3', iva_image, '-c', script]
-        with tempfile.TemporaryFile(mode='w+t', newline='') as stdout, tempfile.TemporaryFile(
+        with tempfile.TemporaryFile(mode='w+b') as stdout, tempfile.TemporaryFile(
                 mode='w+t', newline='') as stderr:
             result = run_detached(command, stdout, stderr, remaining=600)
             if result.returncode:
@@ -34,7 +34,7 @@ def load_micall_projects(iva_image):
                     f'IVA catalog extraction failed at Podman {result.stage}: '
                     f'{stderr.read()[-400:]}')
             stdout.seek(0)
-            content = stdout.read().encode('utf-8')
+            content = stdout.read()
     else:
         name = f'ivanka-reference-catalog-{os.getpid()}-{uuid.uuid4().hex[:12]}'
         command = ['podman', 'run', '--rm', '--pull=never', '--name', name,

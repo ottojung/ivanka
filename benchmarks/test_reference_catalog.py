@@ -16,7 +16,7 @@ class ProjectCatalogTests(TestCase):
         raw = json.dumps({'projects': {}, 'regions': {}}, sort_keys=True).encode()
         def complete(command, stdout, stderr, remaining):
             self.assertEqual(remaining, 600)
-            stdout.write(raw.decode('utf-8'))
+            stdout.write(raw)
             self.assertIn('--pull=never', command)
             self.assertIn('immutable-iva-image', command)
             name = command[command.index('--name') + 1]

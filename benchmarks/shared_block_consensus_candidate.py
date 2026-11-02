@@ -9,6 +9,52 @@ COMPLEMENT = str.maketrans("ACGT", "TGCA")
 BASES = frozenset("ACGT")
 
 
+def _complete_block_evidence(by_site, shared_allele, pair_signatures):
+    """Count directly observed complete local alleles, never inferred inserts.
+
+    A pair must have an unambiguous observed base at *every* block site.
+    This does not require the 31bp external flanks or prove long-range phase.
+    Reused paired-sequence signatures with partial or contradictory evidence
+    cannot contribute to distinct full-block support.
+    """
+    observed = defaultdict(dict)
+    for site, pairs in enumerate(by_site):
+        for qname, bases in pairs.items():
+            observed[qname][site] = next(iter(bases)) if len(bases) == 1 else None
+    complete = {}
+    for qname, sites in observed.items():
+        if len(sites) == len(shared_allele) and all(
+                sites.get(i) is not None for i in range(len(shared_allele))):
+            complete[qname] = "".join(sites[i] for i in range(len(shared_allele)))
+    signatures = None
+    if pair_signatures is not None:
+        grouped = defaultdict(set)
+        for qname in observed:
+            if qname not in pair_signatures:
+                raise ValueError("Missing paired-read sequence provenance")
+            grouped[pair_signatures[qname]].add(complete.get(qname))
+        signatures = {
+            "complete_distinct_pair_sequences": sum(
+                len(values) == 1 and None not in values
+                for values in grouped.values()),
+            "shared_allele_distinct_pair_sequences": sum(
+                values == {shared_allele} for values in grouped.values()),
+            "ambiguous_or_partial_pair_sequences": sum(
+                len(values) != 1 or None in values
+                for values in grouped.values()),
+        }
+    return {
+        "complete_read_pair_ids": len(complete),
+        "shared_allele_complete_read_pair_ids": sum(
+            allele == shared_allele for allele in complete.values()),
+        "alternative_complete_read_pair_ids": sum(
+            allele != shared_allele for allele in complete.values()),
+        "distinct_pair_sequence_evidence": signatures,
+        "interpretation": "Observed every block base on one read pair; not "
+                          "31bp-flank bridging or long-range haplotype phase.",
+    }
+
+
 def canonical_base(base, reference_base, shared_base):
     """Normalize a SAM base from a forward or reverse exact shared locus."""
     if base not in BASES or shared_base not in BASES:
@@ -85,12 +131,14 @@ def candidate_from_calls(shared_allele, calls, required_depth=100,
                           "allele_qnames": counts,
                           "read_major_base": winner if counts[winner] * 2 > depth else None,
                           "eligible": accepted})
+    complete_block = _complete_block_evidence(by_site, shared_allele, pair_signatures)
     eligible = all(p["eligible"] for p in positions)
     return {"eligible": eligible,
             "sequence_diversity_guard_applied": pair_signatures is not None,
             "read_derived_candidate": "".join(
                 p["read_major_base"] for p in positions) if eligible else None,
             "positions": positions,
+            "complete_block_observations": complete_block,
             "interpretation": "Pooled local evidence, not per-haplotype depth; "
                               "never write candidate to MiCall consensus."}
 

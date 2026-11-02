@@ -126,6 +126,10 @@ def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None,
         raise ValueError("Specify both frozen reference inputs or neither")
     if iva_dir is not None and projects_file is None:
         raise ValueError("IVA comparison requires frozen panel provenance")
+    if iva_dir is not None and not any(
+            p.is_file() for p in (Path(iva_dir)/"conseq.csv",
+                                  Path(iva_dir)/"scratch/conseq.csv")):
+        raise ValueError("Authentic cached IVA final MAX output is missing")
     prior = json.loads((evidence/"evidence.json").read_text())
     if (not prior["replayed_original_exactly"]
             or not prior["all_original_aligned_records_preserved"]

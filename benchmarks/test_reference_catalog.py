@@ -11,6 +11,34 @@ from reference_catalog import load_micall_projects
 
 
 class ProjectCatalogTests(TestCase):
+    def test_detached_source_extraction_preserves_exact_catalog_bytes(self):
+        from types import SimpleNamespace
+        raw = json.dumps({'projects': {}, 'regions': {}}, sort_keys=True).encode()
+        def complete(command, stdout, stderr, remaining):
+            self.assertEqual(remaining, 600)
+            stdout.write(raw.decode('utf-8'))
+            self.assertIn('--pull=never', command)
+            self.assertIn('immutable-iva-image', command)
+            name = command[command.index('--name') + 1]
+            self.assertRegex(name, r'^ivanka-bench-iva-[0-9]+-[0-9]+-[0-9a-f]{8}$')
+            return SimpleNamespace(returncode=0, stage='complete')
+        with patch.dict(os.environ, {'IVANKA_PODMAN_LIFECYCLE': 'detached'}, clear=True), \
+             patch('reference_catalog.run_detached', side_effect=complete) as run, \
+             patch('reference_catalog.subprocess.check_output') as legacy:
+            catalog, checksum = load_micall_projects('immutable-iva-image')
+        self.assertEqual(catalog, {'projects': {}, 'regions': {}})
+        self.assertEqual(checksum, __import__('hashlib').sha256(raw).hexdigest())
+        legacy.assert_not_called()
+        run.assert_called_once()
+
+    def test_detached_catalog_fails_closed_for_uncertain_cleanup(self):
+        from types import SimpleNamespace
+        with patch.dict(os.environ, {'IVANKA_PODMAN_LIFECYCLE': 'detached'}, clear=True), \
+             patch('reference_catalog.run_detached', return_value=SimpleNamespace(
+                 returncode=1, stage='remove')):
+            with self.assertRaisesRegex(RuntimeError, 'at Podman remove'):
+                load_micall_projects('immutable-iva-image')
+
     def test_reads_iva_image_only(self):
         data = json.dumps({'projects': {}, 'regions': {}}).encode()
         with patch('reference_catalog.subprocess.check_output', return_value=data) as call, \

@@ -98,11 +98,10 @@ def audit_remap(masked, references, sam_rows, minimum_quality=15,
     allele, loci = group_loci(masked, references)
     groups = defaultdict(list)
     for row in sam_rows:
-        if row["rname"] in loci:
-            groups[row["qname"]].append(row)
+        groups[row["qname"]].append(row)
     calls = []
     for rows in groups.values():
-        if not _strict_pair(rows):
+        if not _strict_pair(rows) or rows[0]["rname"] not in loci:
             continue
         for row in rows:
             for site, base, qname, expected in sam_observations(

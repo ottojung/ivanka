@@ -6,6 +6,11 @@ import unittest
 from exact_pair_remap_equivalence import reverse_complement
 from experimental_pair_safe_writer import serialize_pairs
 
+try:
+    from micall.core.sam2aln import matchmaker as micall_matchmaker
+except ImportError:
+    micall_matchmaker = None
+
 
 def row(name, ref, flag, pos, mate, seq="ACTG", qual="IHGF", mapq="30"):
     return {"qname":name, "flag":str(flag), "rname":ref,
@@ -99,6 +104,15 @@ class PairSafeWriterTests(unittest.TestCase):
         a,b=original()
         _,rows,_=render([a,b],[])
         self.assertEqual(rows,[a,b])
+
+    @unittest.skipIf(micall_matchmaker is None, "MiCall not installed")
+    def test_actual_micall_matchmaker_keeps_pair_references(self):
+        a,b = original("r")
+        c,d = original("s","C")
+        _,_,text = render([a,c,b,d],lifted("r"))
+        pairs = list(micall_matchmaker(io.StringIO(text)))
+        self.assertEqual([(a["rname"],b["rname"]) for a,b in pairs],
+                         [("A","A"),("B","B"),("C","C")])
 
     def test_qname_pairing_emulates_micall_matchmaker(self):
         a,b=original("r")

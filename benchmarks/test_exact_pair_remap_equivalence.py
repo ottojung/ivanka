@@ -2,7 +2,7 @@
 import unittest
 from exact_pair_remap_equivalence import (
     compatible_copies, lift_pair, reverse_complement, unique_placement,
-    verified_source_references,
+    verified_source_references, pooled_site_calls,
 )
 
 TEMPLATE = "ACGTACCTGCAATGACCTGA"
@@ -144,6 +144,35 @@ class ExactPairRemapTests(unittest.TestCase):
         reads = pair()
         reads[0]["qual"] = "I"
         self.assertIsNone(lift_pair(reads, self.refs, "forward"))
+
+    def test_reverse_lift_preserves_canonical_allele_observations(self):
+        import random
+        from types import SimpleNamespace
+        rng = random.Random(20261102)
+        left = "".join(rng.choices("ACGT", k=31))
+        allele = "".join(rng.choices("ACGT", k=36))
+        right = "".join(rng.choices("ACGT", k=31))
+        source = "GGGG" + left + allele + right + "TTTT"
+        references = {"src": source, "reverse": reverse_complement(source)}
+        start = 4 + 31
+        masked = SimpleNamespace(sequence=source[:start] + "x"*36
+                                 + source[start+36:], start=start,
+                                 end=start+36)
+        a = dict(qname="test", flag="99", rname="src", pos="15",
+                 mapq="1", cigar="55M", rnext="=", pnext="46",
+                 tlen="86", seq=source[14:69], qual="I"*55)
+        b = dict(qname="test", flag="147", rname="src", pos="46",
+                 mapq="1", cigar="55M", rnext="=", pnext="15",
+                 tlen="-86", seq=source[45:100], qual="I"*55)
+        # A genuine observed alternative base is preserved, not imputed.
+        a["seq"] = a["seq"][:25] + (
+            "G" if a["seq"][25] != "G" else "A") + a["seq"][26:]
+        lifted = lift_pair([a, b], references, "reverse")
+        self.assertIsNotNone(lifted)
+        before = pooled_site_calls(masked, references, [a, b])
+        after = pooled_site_calls(masked, references, [a, b]+lifted)
+        self.assertTrue(before)
+        self.assertEqual(before, after)
 
     def test_source_consensus_identity_verified(self):
         stitched = [{"ref": "HCV-1a", "contig": SOURCE},

@@ -86,6 +86,20 @@ class DetachedLifecycleTests(unittest.TestCase):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual(result.returncode, 1)
+        self.assertEqual([c[1] for c in self.calls], ["create", "rm"])
+        self.assertNotIn("start", [c[1] for c in self.calls])
+
+    def test_failed_create_with_unparseable_output_never_removes(self):
+        self.exit["create"] = 125
+        def malformed(argv, **kwargs):
+            result = self.fake(argv, **kwargs)
+            if argv[1] == "create":
+                return subprocess.CompletedProcess(argv, 125, b"not-a-container-id")
+            return result
+        with patch.object(lifecycle.subprocess, "run", side_effect=malformed):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual(result.returncode, 1)
         self.assertEqual([c[1] for c in self.calls], ["create"])
 
     def test_start_failure_is_not_retriable_create_failure(self):

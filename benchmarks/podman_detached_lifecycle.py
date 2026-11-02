@@ -87,11 +87,14 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
     try:
         created = call(create, lock=True)
         if created.returncode:
-            # Only a completely empty create response may be retried by the
-            # existing exact prestart-lock classifier. A partial container ID
-            # makes startup provenance ambiguous: fail closed.
+            # A failed create with a complete ID may have left a container.
+            # Never retry startup, but best-effort cleanup that exact ID.
+            # Other nonempty output remains ambiguous and fails closed.
+            response = created.stdout.decode(errors="replace").strip()
+            if len(response) == 64 and all(c in "0123456789abcdef" for c in response):
+                cid = response
             return SimpleNamespace(
-                returncode=created.returncode if not created.stdout.strip() else 1,
+                returncode=created.returncode if not response else 1,
                 stage=stage)
         cid = created.stdout.decode().strip()
         if len(cid) != 64 or any(c not in "0123456789abcdef" for c in cid):

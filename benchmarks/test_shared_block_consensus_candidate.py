@@ -6,6 +6,7 @@ import sys
 
 from shared_block_consensus_candidate import (
     candidate_from_calls, canonical_base, audit_remap, _strict_pair,
+    _pair_signature,
 )
 
 
@@ -89,9 +90,9 @@ class SharedBlockCandidateTests(unittest.TestCase):
 
     def pair(self, name="q", rname="one"):
         return [dict(rname=rname, qname=name, flag="99", pos="1",
-                     pnext="8", rnext="=", base="A"),
+                     pnext="8", rnext="=", base="A", seq="AAC", qual="III"),
                 dict(rname=rname, qname=name, flag="147", pos="8",
-                     pnext="1", rnext="=", base="A")]
+                     pnext="1", rnext="=", base="A", seq="GGT", qual="III")]
 
     def test_sam_wrapper_filters_secondary_and_duplicate(self):
         fake = SimpleNamespace(
@@ -143,6 +144,44 @@ class SharedBlockCandidateTests(unittest.TestCase):
         for row in rows:
             row["tlen"] = "100"
         self.assertTrue(_strict_pair(rows))
+
+
+    def test_identical_pair_sequences_cannot_inflate_depth(self):
+        calls = [(0, f"q{i}", "A") for i in range(100)]
+        signatures = {f"q{i}": ("ACG", "TGC") for i in range(100)}
+        r = candidate_from_calls("A", calls, pair_signatures=signatures)
+        self.assertFalse(r["eligible"])
+        self.assertEqual(r["positions"][0]["depth_qnames"], 100)
+        self.assertEqual(r["positions"][0]["shared_base_distinct_pair_sequences"], 1)
+
+    def test_100_distinct_pair_sequences_can_qualify(self):
+        calls = [(0, f"q{i}", "A") for i in range(100)]
+        signatures = {f"q{i}": ("A" * (i + 1), "TG") for i in range(100)}
+        r = candidate_from_calls("A", calls, pair_signatures=signatures)
+        self.assertTrue(r["eligible"])
+        self.assertTrue(r["sequence_diversity_guard_applied"])
+        self.assertEqual(r["positions"][0]["shared_base_distinct_pair_sequences"], 100)
+
+    def test_same_sequence_with_conflicting_alleles_is_excluded(self):
+        calls = [(0, f"q{i}", "A") for i in range(101)]
+        calls.append((0, "g", "G"))
+        signatures = {f"q{i}": ("A" * (i + 1), "T") for i in range(101)}
+        signatures["g"] = signatures["q0"]
+        r = candidate_from_calls("A", calls, pair_signatures=signatures)
+        self.assertTrue(r["eligible"])
+        self.assertEqual(r["positions"][0]["shared_base_distinct_pair_sequences"], 100)
+        self.assertEqual(r["positions"][0]["conflicting_pair_sequences"], 1)
+
+    def test_missing_sequence_provenance_rejected(self):
+        with self.assertRaises(ValueError):
+            candidate_from_calls("A", [(0, "q", "A")], 1, {})
+
+    def test_pair_signature_normalizes_reverse_orientation(self):
+        rows = self.pair()
+        self.assertEqual(_pair_signature(rows), ("AAC", "ACC"))
+        rows[1]["seq"] = "ACC"
+        rows[1]["flag"] = "131"  # reverse bit cleared: invalid pair, same raw signature
+        self.assertEqual(_pair_signature(rows), ("AAC", "ACC"))
 
 
 if __name__ == "__main__":

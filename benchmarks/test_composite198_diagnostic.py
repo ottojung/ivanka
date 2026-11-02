@@ -3,17 +3,20 @@ import hashlib, json, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
 import composite198_diagnostic as audit
+from milestone198 import IVA_IMAGE_SHA256
 
 
 def record(sample, invocation, legacy=False):
     return dict(sample=sample, invocation=invocation, status="finished",
         failed=legacy, iva_baseline_reused=True, total_seconds=9,
         sample_time_limit_seconds=1800,
-        iva=dict(image_id="a", exit_code=0, seconds=10,
+        iva=dict(image_id=IVA_IMAGE_SHA256, exit_code=0, seconds=10,
+                 container_wall_seconds=11,
                  timing_origin="micall_in_container_monotonic_v1", metrics={}),
         ivanka=dict(image_id="b", exit_code=0, seconds=8,
+                    container_wall_seconds=9,
                     timing_origin="micall_in_container_monotonic_v1", metrics={}),
-        provenance=dict(iva_image_id="a", fastq_sha256=["1"*64, "2"*64]),
+        provenance=dict(iva_image_id=IVA_IMAGE_SHA256, fastq_sha256=["1"*64, "2"*64]),
         best_contig_acceptance=dict(
             method="best_final_max_contig_local_alignment_over_reference_panel",
             reference_panel_sha256=audit.PANEL_SHA256, reference_count=33,

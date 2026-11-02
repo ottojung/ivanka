@@ -3,7 +3,7 @@ import re
 import unittest
 from unittest.mock import patch
 
-import bench
+import invocation_id as bench
 
 
 class InvocationIdTests(unittest.TestCase):

@@ -16,9 +16,9 @@ import subprocess
 import sys
 import tempfile
 import time
-import uuid
 
 from acceptance import accept_sample, reference_fidelity, STRUCTURAL_ROLES
+from invocation_id import new_invocation_id
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
@@ -155,10 +155,6 @@ def stitch_and_score(seqs, read_index, read_length, reference, out_dir, arm):
         "stitched_longest":max((len(s) for s in result),default=0),
         "hxb2_score":max(scores,default=None),"per_contig_scores":scores,
     }
-
-def new_invocation_id():
-    """Uniquely identify even simultaneous invocations in PID-reused containers."""
-    return f"{int(time.time())}-{os.getpid()}-{uuid.uuid4().hex}"
 
 
 def run():

@@ -214,9 +214,25 @@ class DetachedLifecycleTests(unittest.TestCase):
                          ["create", "start", "wait", "logs", "rm"])
         for stage, budget in observed:
             if stage == "wait":
+                self.assertGreater(budget, lifecycle.CREATE_TIMEOUT_SECONDS)
+            elif stage == "create":
                 self.assertGreater(budget, lifecycle.METADATA_TIMEOUT_SECONDS)
+                self.assertLessEqual(budget, lifecycle.CREATE_TIMEOUT_SECONDS)
             else:
                 self.assertLessEqual(budget, lifecycle.METADATA_TIMEOUT_SECONDS)
+
+    def test_create_timeout_still_obeys_remaining_whole_container_budget(self):
+        observed = []
+        def recording(argv, **kwargs):
+            observed.append((argv[1], kwargs["timeout"]))
+            return self.fake(argv, **kwargs)
+        with patch.object(lifecycle.subprocess, "run", side_effect=recording):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 60)
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(observed)
+        self.assertLessEqual(observed[0][1], 60)
+        self.assertGreater(observed[0][1], 0)
 
     def test_metadata_timeout_fails_closed_without_reexecuting(self):
         def timed_out(argv, **kwargs):

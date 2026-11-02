@@ -65,7 +65,7 @@ class LifecycleConcurrencyTests(unittest.TestCase):
             except Exception as exc:
                 errors.append(exc)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=fake):
+        with patch.object(lifecycle, "_run_command", side_effect=fake):
             threads = [threading.Thread(target=worker, args=(i,)) for i in range(2)]
             for thread in threads:
                 thread.start()

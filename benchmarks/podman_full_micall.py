@@ -15,6 +15,7 @@ import os
 import shutil
 from pathlib import Path
 import subprocess
+import tempfile
 import time
 
 from Bio import SeqIO
@@ -97,6 +98,25 @@ def verify_identical_micall_base(iva_image, ivanka_image):
 def verify_ivanka_image_binding(image):
     """One container startup verifies AST binding, cache key, both reads and binary."""
     verifier = Path(__file__).with_name("verify_ivanka_binding.py").read_text()
+    if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
+        # Use the same serialized lifecycle for the image verifier and
+        # MiCall itself. Plain podman run --rm can deadlock on SQLite
+        # before any benchmark sample starts.
+        name = (f"ivanka-bench-ivanka-{time.time_ns()}-{os.getpid()}-"
+                f"{hashlib.sha256(image.encode()).hexdigest()[:8]}")
+        command = ["podman", "run", "--rm", "--pull=never", "--name", name,
+                   "--timeout", "178", "--stop-timeout", "2",
+                   "--entrypoint", "python", image, "-c", verifier]
+        with tempfile.TemporaryFile(mode="w+t") as stdout, tempfile.TemporaryFile(
+                mode="w+t") as stderr:
+            result = run_detached(command, stdout, stderr, remaining=180)
+            if result.returncode != 0:
+                stderr.seek(0)
+                details = stderr.read()[-500:]
+                raise ValueError(
+                    f"Ivanka image failed executable-binding verification "
+                    f"at Podman {result.stage}: {details}")
+        return
     try:
         subprocess.run(["podman", "run", "--rm", "--pull=never", "--entrypoint",
                         "python", image, "-c", verifier],

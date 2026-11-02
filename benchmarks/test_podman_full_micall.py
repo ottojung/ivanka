@@ -167,6 +167,35 @@ class BenchmarkTests(TestCase):
     m.save_iva_baseline("S1",prov,arm | {"image_id":"sha256:WRONG"})
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
     m.load_iva_baseline("S2",prov)
+ def test_strict_binding_preflight_uses_authenticated_detached_lifecycle(self):
+  import os
+  from types import SimpleNamespace
+  with patch.dict(os.environ, {"IVANKA_PODMAN_LIFECYCLE":"detached"}):
+   with patch.object(m,"run_detached",return_value=SimpleNamespace(
+       returncode=0,stage="complete")) as detached, patch.object(
+       m.subprocess,"run") as legacy:
+    m.verify_ivanka_image_binding("a"*64)
+  legacy.assert_not_called()
+  command, stdout, stderr = detached.call_args.args
+  self.assertEqual(command[:3],["podman","run","--rm"])
+  name = command[command.index("--name")+1]
+  self.assertRegex(name,r"^ivanka-bench-ivanka-[0-9]+-[0-9]+-[0-9a-f]{8}$")
+  self.assertEqual(command[command.index("--timeout")+1],"178")
+  self.assertEqual(command[command.index("--entrypoint")+1],"python")
+  self.assertIn("run_subprocess",command[-1])
+  self.assertEqual(detached.call_args.kwargs["remaining"],180)
+
+ def test_detached_binding_rejects_unverified_create_wait_or_cleanup(self):
+  import os
+  from types import SimpleNamespace
+  for stage in ("create","start","wait","logs","remove"):
+   with self.subTest(stage=stage), patch.dict(
+           os.environ, {"IVANKA_PODMAN_LIFECYCLE":"detached"}):
+    with patch.object(m,"run_detached",return_value=SimpleNamespace(
+            returncode=1,stage=stage)):
+     with self.assertRaisesRegex(ValueError,"at Podman "+stage):
+      m.verify_ivanka_image_binding("a"*64)
+
  def test_wrong_assembler_binding_fails_closed(self):
   from unittest.mock import patch
   from subprocess import CalledProcessError

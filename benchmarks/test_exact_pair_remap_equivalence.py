@@ -187,6 +187,28 @@ class ExactPairRemapTests(unittest.TestCase):
             stitched, remap, ["1-HCV-1a", "2-HCV-1a"]),
             {"1-HCV-1a": SOURCE, "2-HCV-1a": FORWARD})
 
+    def test_renumbered_micall_sources_match_by_exact_sequence(self):
+        stitched = [{"ref":"HCV-1a","contig":FORWARD},
+                    {"ref":"HCV-1a","contig":SOURCE},
+                    {"ref":"unknown","contig":"GCGCGC"}]
+        remap = [{"region":"13-HCV-1a","sequence":SOURCE},
+                 {"region":"1-unknown-partial","sequence":"GCGCGC"}]
+        self.assertEqual(verified_source_references(
+            stitched,remap,["13-HCV-1a","1-unknown-partial"]),
+            {"13-HCV-1a":SOURCE,"1-unknown-partial":"GCGCGC"})
+
+    def test_duplicate_identical_stitched_source_fails_closed(self):
+        stitched = [{"ref":"HCV-1a","contig":SOURCE}]*2
+        remap = [{"region":"13-HCV-1a","sequence":SOURCE}]
+        with self.assertRaisesRegex(ValueError,"No unique exact stitched"):
+            verified_source_references(stitched,remap,["13-HCV-1a"])
+
+    def test_wrong_reference_label_rejected_despite_equal_sequence(self):
+        stitched = [{"ref":"HCV-1a","contig":SOURCE}]
+        remap = [{"region":"13-HIV1-B","sequence":SOURCE}]
+        with self.assertRaisesRegex(ValueError,"label does not match"):
+            verified_source_references(stitched,remap,["13-HIV1-B"])
+
     def test_changed_remap_consensus_fails_closed(self):
         stitched = [{"ref": "HCV-1a", "contig": SOURCE}]
         remap = [{"region": "1-HCV-1a", "sequence": SOURCE[:-1]+"A"}]

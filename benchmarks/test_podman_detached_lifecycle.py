@@ -1,5 +1,8 @@
 """CPU-only tests for short-locked, fail-closed Podman lifecycle."""
 import io
+import hashlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import subprocess
 import tempfile
 import time
@@ -46,6 +49,58 @@ class DetachedLifecycleTests(unittest.TestCase):
         with patch.object(lifecycle.subprocess, "run", side_effect=self.fake):
             return lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, remaining)
+
+    def test_eight_concurrent_runs_serialize_only_metadata(self):
+        # Simulates SQLite failing whenever two create/start/rm transactions
+        # overlap, while proving independent container execution overlaps.
+        counters = {"metadata": 0, "max_metadata": 0,
+                    "wait": 0, "max_wait": 0}
+        guard = threading.Lock()
+        wait_barrier = threading.Barrier(8)
+
+        def fake(argv, *, stdout, stderr, timeout, check):
+            stage = argv[1]
+            name = "metadata" if stage in ("create", "start", "rm") else (
+                "wait" if stage == "wait" else None)
+            if name:
+                with guard:
+                    counters[name] += 1
+                    counters["max_" + name] = max(
+                        counters["max_" + name], counters[name])
+            try:
+                if name == "wait":
+                    # Eight different MiCall executions must be able to
+                    # reach wait simultaneously without holding the DB lock.
+                    wait_barrier.wait(timeout=8)
+                time.sleep(0.008 if name == "metadata" else
+                           0.035 if name == "wait" else 0.001)
+            finally:
+                if name:
+                    with guard:
+                        counters[name] -= 1
+            if stage == "create":
+                requested = argv[argv.index("--name") + 1]
+                data = hashlib.sha256(requested.encode()).hexdigest().encode()
+            elif stage == "wait":
+                data = b"0\n"
+            else:
+                data = b""
+            if stage == "logs":
+                stdout.write("micall.process_run(): Done.\n")
+            return subprocess.CompletedProcess(argv, 0, data)
+
+        def one(index):
+            cmd = list(self.command)
+            cmd[cmd.index("--name") + 1] = f"test-case-{index}"
+            return lifecycle.run_detached(cmd, io.StringIO(), io.StringIO(), 10)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=fake):
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                results = list(pool.map(one, range(8)))
+        self.assertTrue(all(r.returncode == 0 and r.stage == "complete"
+                            for r in results))
+        self.assertEqual(counters["max_metadata"], 1)
+        self.assertGreater(counters["max_wait"], 1)
 
     def test_success_requires_all_five_steps(self):
         result = self.run_case()
@@ -298,7 +353,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 seen += 1
                 if seen == 1:
                     self.calls.append(list(argv))
-                    kwargs["stdout"].write("partial failed log\\n")
+                    kwargs["stdout"].write("partial failed log\n")
                     return subprocess.CompletedProcess(argv, 125, b"")
             return self.fake(argv, **kwargs)
 

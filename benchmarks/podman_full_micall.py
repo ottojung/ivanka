@@ -629,6 +629,23 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     return result
 
 
+
+def configure_podman_lifecycle(qualify_198, environ):
+    """Prefer authenticated create/start/wait/logs/rm for strict cohorts.
+
+    Podman run --rm at high concurrency can exit 127 *after* MiCall Done due
+    to SQLite save-state contention. Keep nonqualification runs unchanged,
+    and retain an explicit run override for controlled comparisons.
+    """
+    mode = environ.get("IVANKA_PODMAN_LIFECYCLE")
+    if mode is None:
+        mode = "detached" if qualify_198 else "run"
+    if mode not in ("run", "detached"):
+        raise ValueError("IVANKA_PODMAN_LIFECYCLE must be run or detached")
+    environ["IVANKA_PODMAN_LIFECYCLE"] = mode
+    return mode
+
+
 def alignment_score_floor(args):
     """Diagnostic 90% is opt-in; alpha keeps 95%, formal 198 always uses 90%."""
     return (milestone198.SCORE_FLOOR
@@ -838,6 +855,7 @@ def main():
                         help="Show verified/missing IVA baselines without running analyses")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
+    configure_podman_lifecycle(args.qualify_198, os.environ)
     if args.jobs<1 or not 1<=args.sample_time_limit<=1800 or args.timeout_per_arm<1:
         parser.error("jobs and arm timeout must be positive; sample limit must be 1..1800 seconds")
     images={"iva":IVA_IMAGE,"ivanka":IVANKA_IMAGE}

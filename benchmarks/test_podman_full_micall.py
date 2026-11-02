@@ -279,6 +279,17 @@ class BenchmarkTests(TestCase):
    self.assertEqual(result["artifact_dir"],str((root/"out"/"invocation"/"TEST"/"ivanka").resolve()))
    scorer.assert_not_called()
 
+ def test_strict_198_uses_serialized_detached_lifecycle_by_default(self):
+  e={}
+  self.assertEqual(m.configure_podman_lifecycle(True,e),"detached")
+  self.assertEqual(e["IVANKA_PODMAN_LIFECYCLE"],"detached")
+  self.assertEqual(m.configure_podman_lifecycle(False,{}),"run")
+  override={"IVANKA_PODMAN_LIFECYCLE":"run"}
+  self.assertEqual(m.configure_podman_lifecycle(True,override),"run")
+  self.assertEqual(override["IVANKA_PODMAN_LIFECYCLE"],"run")
+  with self.assertRaisesRegex(ValueError,"must be run or detached"):
+   m.configure_podman_lifecycle(True,{"IVANKA_PODMAN_LIFECYCLE":"unsafe"})
+
  def test_run_arm_enforces_timeout_inside_container(self):
   from unittest.mock import patch,Mock
   with TemporaryDirectory() as d:

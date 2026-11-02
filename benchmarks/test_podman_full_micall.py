@@ -279,6 +279,25 @@ class BenchmarkTests(TestCase):
    self.assertEqual(result["artifact_dir"],str((root/"out"/"invocation"/"TEST"/"ivanka").resolve()))
    scorer.assert_not_called()
 
+ def test_main_restores_lifecycle_environment_on_return_and_exception(self):
+  from unittest.mock import patch
+  import os
+  def successful():
+   os.environ["IVANKA_PODMAN_LIFECYCLE"]="detached"
+   return 17
+  with patch.dict(os.environ, {}, clear=True):
+   with patch.object(m,"_run_main",side_effect=successful):
+    self.assertEqual(m.main(),17)
+   self.assertNotIn("IVANKA_PODMAN_LIFECYCLE",os.environ)
+  def failing():
+   os.environ["IVANKA_PODMAN_LIFECYCLE"]="detached"
+   raise ValueError("failure")
+  with patch.dict(os.environ,{"IVANKA_PODMAN_LIFECYCLE":"run"},clear=True):
+   with patch.object(m,"_run_main",side_effect=failing):
+    with self.assertRaisesRegex(ValueError,"failure"):
+     m.main()
+   self.assertEqual(os.environ["IVANKA_PODMAN_LIFECYCLE"],"run")
+
  def test_strict_198_uses_serialized_detached_lifecycle_by_default(self):
   e={}
   self.assertEqual(m.configure_podman_lifecycle(True,e),"detached")

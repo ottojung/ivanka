@@ -177,6 +177,118 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(counts, {"wait": 2, "rm": 2})
         self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
 
+    def test_remove_timeout_retries_same_id_without_rerunning_micall(self):
+        # S97: MiCall completed and logs were authenticated; only rm timed out.
+        removals = []
+
+        def flaky(argv, **kwargs):
+            if argv[1] == "rm":
+                removals.append(list(argv))
+                if len(removals) == 1:
+                    self.calls.append(list(argv))
+                    raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            if argv[1] == "container":
+                return subprocess.CompletedProcess(argv, 0, b"")
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=flaky):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (0, "complete"))
+        self.assertEqual(len(removals), 2)
+        self.assertEqual(removals[0], removals[1])
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+        self.assertEqual(sum(c[1] == "wait" for c in self.calls), 1)
+        self.assertEqual(sum(c[1] == "logs" for c in self.calls), 1)
+        self.assertIn("Done.", self.stdout.getvalue())
+
+    def test_remove_timeout_then_verified_absence_qualifies(self):
+        # Podman may finish deleting the ID before its rm CLI times out.
+        observed = []
+
+        def interrupted(argv, **kwargs):
+            observed.append(list(argv))
+            if argv[1] == "rm":
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            if argv[1] == "container":
+                return subprocess.CompletedProcess(argv, 1, b"")
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (0, "complete"))
+        self.assertEqual(sum(c[1] == "rm" for c in observed), 1)
+        self.assertEqual(sum(c[1] == "container" for c in observed), 1)
+        self.assertEqual(sum(c[1] == "start" for c in observed), 1)
+        self.assertIn("Done.", self.stdout.getvalue())
+
+    def test_remove_timeout_then_missing_on_retry_requires_absence(self):
+        seen = 0
+        observed = []
+
+        def interrupted(argv, **kwargs):
+            nonlocal seen
+            observed.append(list(argv))
+            if argv[1] == "rm":
+                seen += 1
+                if seen == 1:
+                    raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+                return subprocess.CompletedProcess(argv, 125, b"")
+            if argv[1] == "container":
+                return subprocess.CompletedProcess(
+                    argv, 0 if seen == 1 else 1, b"")
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (0, "complete"))
+        self.assertEqual(sum(c[1] == "rm" for c in observed), 2)
+        self.assertEqual(sum(c[1] == "container" for c in observed), 2)
+        self.assertEqual(sum(c[1] == "start" for c in observed), 1)
+
+    def test_remove_timeout_unverifiable_absence_fails_closed(self):
+        observed = []
+
+        def interrupted(argv, **kwargs):
+            observed.append(list(argv))
+            if argv[1] == "rm":
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            if argv[1] == "container":
+                return subprocess.CompletedProcess(argv, 125, b"")
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (124, "remove"))
+        self.assertEqual(sum(c[1] == "start" for c in observed), 1)
+        self.assertEqual(sum(c[1] == "rm" for c in observed), 5)
+        self.assertEqual(sum(c[1] == "container" for c in observed), 4)
+
+    def test_plain_remove_failure_cannot_be_laundered_by_absence(self):
+        self.exit["rm"] = 125
+        result = self.run_case()
+        self.assertEqual((result.returncode, result.stage), (1, "remove"))
+        self.assertNotIn("container", [c[1] for c in self.calls])
+
+    def test_persistent_remove_timeouts_fail_closed(self):
+        def stuck(argv, **kwargs):
+            if argv[1] == "rm":
+                self.calls.append(list(argv))
+                raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+            if argv[1] == "container":
+                return subprocess.CompletedProcess(argv, 0, b"")
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle.subprocess, "run", side_effect=stuck):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (124, "remove"))
+        self.assertEqual(sum(c[1] == "rm" for c in self.calls), 5)
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+
     def test_transient_logs_failure_discards_partial_output(self):
         seen = 0
 

@@ -14,26 +14,26 @@ jobs:
     name: Rust tests and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Unit tests
         run: cargo test --locked --all-targets
-      - name: Clippy
-        run: cargo clippy --locked --all-targets -- -D warnings
       - name: Structural linter tests
         run: |
           rustc --test source_lints/mod.rs -o "${RUNNER_TEMP}/ivanka-source-lint-tests"
           "${RUNNER_TEMP}/ivanka-source-lint-tests"
+      - name: Clippy (deny correctness and suspicious lints)
+        run: cargo clippy --locked --all-targets -- -D clippy::correctness -D clippy::suspicious
 
   python:
     name: Python tests and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: pip

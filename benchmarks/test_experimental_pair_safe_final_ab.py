@@ -19,6 +19,18 @@ class FinalReplayTests(unittest.TestCase):
                          "B,15,MAX,GGGG\n")
             self.assertEqual(max_rows(p), {"A":"XXXX","B":"GGGG"})
 
+    def test_missing_or_duplicate_max_consensus_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)/"conseq.csv"
+            p.write_text("region,q-cutoff,consensus-percent-cutoff,sequence\n"
+                         "S,15,MAX,AAAA\nS,15,MAX,CCCC\n")
+            with self.assertRaisesRegex(ValueError,"Repeated final MAX"):
+                max_rows(p)
+            p.write_text("region,q-cutoff,consensus-percent-cutoff,sequence\n"
+                         "S,15,0.25,AAAA\n")
+            with self.assertRaisesRegex(ValueError,"No authentic"):
+                max_rows(p)
+
     def test_csv_multiset_preserves_multiplicity_not_row_order(self):
         with tempfile.TemporaryDirectory() as tmp:
             p,q=Path(tmp)/"a.csv",Path(tmp)/"b.csv"

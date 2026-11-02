@@ -112,6 +112,8 @@ def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None)
     root, evidence, destination = map(Path,(saved_ivanka,evidence,destination))
     if destination.exists():
         raise ValueError("Final A/B directory must be new")
+    if (projects_file is None) != (hxb2_file is None):
+        raise ValueError("Specify both frozen reference inputs or neither")
     prior = json.loads((evidence/"evidence.json").read_text())
     if (not prior["replayed_original_exactly"]
             or not prior["all_original_aligned_records_preserved"]
@@ -141,8 +143,6 @@ def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None)
                   for k in changes),
               "caveat":"Not qualified: redistributed reads are not independent molecules "
                        "or proved haplotypes, and no PSI or panel score is asserted."}
-    if (projects_file is None) != (hxb2_file is None):
-        raise ValueError("Specify both frozen reference inputs or neither")
     if projects_file is not None:
         report["panel_alignment"] = score_exact_panel(
             destination/"control",destination/"experimental",

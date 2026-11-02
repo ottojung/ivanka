@@ -24,4 +24,4 @@ RUN python /tmp/patch_micall_for_ivanka.py \
           /tmp/patch_remap_threads.py /tmp/patch_micall_stitcher_kmer_veto.py
 RUN python -c 'import importlib.util; from pathlib import Path; s=Path(importlib.util.find_spec("micall.utils.referenceless_contig_stitcher").origin).read_text(); assert "def _canonical_kmers_tuple(" in s; assert "def preserves_source_kmers(" in s'
 LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
-LABEL org.ottojung.ivanka.micall-overlay="ivanka-g2p-seeded;ordered-bowtie2-p2;rolling-canonical31-stitcher-veto"
+LABEL org.ottojung.ivanka.micall-overlay="ivanka-g2p-seeded;ordered-bowtie2-p${BOWTIE_THREADS};rolling-canonical31-stitcher-veto"

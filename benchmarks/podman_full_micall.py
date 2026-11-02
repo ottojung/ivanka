@@ -520,18 +520,23 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                                         timeout=remaining, check=False))
                 exitcode = p.returncode
             except subprocess.TimeoutExpired:
-                # The container may outlive its Podman CLI. Cleanup failure
-                # cannot hide a real deadline violation.
+                # The container may outlive its Podman CLI. Never let
+                # emergency cleanup exceed the ORIGINAL whole-container
+                # deadline, even when the supervising CLI timed out.
                 exitcode = 124
-                try:
-                    cleanup = subprocess.run(
-                        ["podman", "rm", "--force", container_name],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        timeout=30, check=False)
-                    if cleanup.returncode:
-                        cleanup_error = f"podman rm exited {cleanup.returncode}"
-                except (subprocess.TimeoutExpired, OSError) as exc:
-                    cleanup_error = f"{type(exc).__name__}: {exc}"
+                cleanup_budget = timeout - (time.monotonic() - start)
+                if cleanup_budget <= 0:
+                    cleanup_error = "Podman cleanup skipped: sample deadline exhausted"
+                else:
+                    try:
+                        cleanup = subprocess.run(
+                            ["podman", "rm", "--force", container_name],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            timeout=min(30, cleanup_budget), check=False)
+                        if cleanup.returncode:
+                            cleanup_error = f"podman rm exited {cleanup.returncode}"
+                    except (subprocess.TimeoutExpired, OSError) as exc:
+                        cleanup_error = f"{type(exc).__name__}: {exc}"
             stderr.flush()
             podman_attempts.append({
                 "raw_exit_code": exitcode,

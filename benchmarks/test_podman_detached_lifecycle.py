@@ -14,6 +14,39 @@ from unittest.mock import patch
 import podman_detached_lifecycle as lifecycle
 
 
+class OwnedPodmanSubprocessTests(unittest.TestCase):
+    def test_successful_group_is_captured(self):
+        with patch.object(lifecycle.subprocess, "Popen") as popen:
+            instance = popen.return_value
+            instance.returncode = 0
+            instance.communicate.return_value = (b"result", None)
+            result = lifecycle._run_command(
+                ["podman", "create"], stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, timeout=20)
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, b"result")
+
+    def test_timeout_kills_only_owned_session_group(self):
+        import signal
+        with patch.object(lifecycle.subprocess, "Popen") as popen, \
+             patch.object(lifecycle.os, "killpg") as terminate:
+            instance = popen.return_value
+            instance.pid = 987654
+            instance.communicate.side_effect = [
+                subprocess.TimeoutExpired(["podman", "create"], 2),
+                (b"", None)]
+            with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                lifecycle._run_command(
+                    ["podman", "create", "-c", "PRIVATE-VERIFIER-SOURCE"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL, timeout=2)
+        self.assertEqual(caught.exception.cmd, ["podman", "create"])
+        self.assertNotIn("PRIVATE-VERIFIER-SOURCE", str(caught.exception))
+        terminate.assert_called_once_with(987654, signal.SIGKILL)
+        self.assertEqual(instance.communicate.call_count, 2)
+
+
 class DetachedLifecycleTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -46,7 +79,7 @@ class DetachedLifecycleTests(unittest.TestCase):
         return subprocess.CompletedProcess(argv, code, data.encode())
 
     def run_case(self, remaining=1800):
-        with patch.object(lifecycle.subprocess, "run", side_effect=self.fake):
+        with patch.object(lifecycle, "_run_command", side_effect=self.fake):
             return lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, remaining)
 
@@ -94,7 +127,7 @@ class DetachedLifecycleTests(unittest.TestCase):
             cmd[cmd.index("--name") + 1] = f"test-case-{index}"
             return lifecycle.run_detached(cmd, io.StringIO(), io.StringIO(), 10)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=fake):
+        with patch.object(lifecycle, "_run_command", side_effect=fake):
             with ThreadPoolExecutor(max_workers=8) as pool:
                 results = list(pool.map(one, range(8)))
         self.assertTrue(all(r.returncode == 0 and r.stage == "complete"
@@ -153,7 +186,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 return subprocess.CompletedProcess(argv, 125, b"not-an-id")
             return result
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=malformed):
+        with patch.object(lifecycle, "_run_command", side_effect=malformed):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (1, "create"))
@@ -166,7 +199,7 @@ class DetachedLifecycleTests(unittest.TestCase):
             if argv[1] == "create":
                 return subprocess.CompletedProcess(argv, 125, b"b" * 64)
             return result
-        with patch.object(lifecycle.subprocess, "run", side_effect=partial):
+        with patch.object(lifecycle, "_run_command", side_effect=partial):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual(result.returncode, 1)
@@ -180,7 +213,7 @@ class DetachedLifecycleTests(unittest.TestCase):
             if argv[1] == "create":
                 return subprocess.CompletedProcess(argv, 125, b"not-a-container-id")
             return result
-        with patch.object(lifecycle.subprocess, "run", side_effect=malformed):
+        with patch.object(lifecycle, "_run_command", side_effect=malformed):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual(result.returncode, 1)
@@ -225,7 +258,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 if counts[stage] == 1:
                     return subprocess.CompletedProcess(argv, 125, b"")
             return self.fake(argv, **kwargs)
-        with patch.object(lifecycle.subprocess, "run", side_effect=flaky):
+        with patch.object(lifecycle, "_run_command", side_effect=flaky):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual(result.returncode, 0)
@@ -246,7 +279,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 return subprocess.CompletedProcess(argv, 0, b"")
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=flaky):
+        with patch.object(lifecycle, "_run_command", side_effect=flaky):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (0, "complete"))
@@ -269,7 +302,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 return subprocess.CompletedProcess(argv, 1, b"")
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+        with patch.object(lifecycle, "_run_command", side_effect=interrupted):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (0, "complete"))
@@ -295,7 +328,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                     argv, 0 if seen == 1 else 1, b"")
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+        with patch.object(lifecycle, "_run_command", side_effect=interrupted):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (0, "complete"))
@@ -314,7 +347,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 return subprocess.CompletedProcess(argv, 125, b"")
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+        with patch.object(lifecycle, "_run_command", side_effect=interrupted):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (124, "remove"))
@@ -337,7 +370,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 return subprocess.CompletedProcess(argv, 0, b"")
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=stuck):
+        with patch.object(lifecycle, "_run_command", side_effect=stuck):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (124, "remove"))
@@ -357,7 +390,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                     return subprocess.CompletedProcess(argv, 125, b"")
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=flaky):
+        with patch.object(lifecycle, "_run_command", side_effect=flaky):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual(result.returncode, 0)
@@ -373,7 +406,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+        with patch.object(lifecycle, "_run_command", side_effect=interrupted):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (124, "logs"))
@@ -390,7 +423,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 raise OSError("lost Podman log stream")
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=interrupted):
+        with patch.object(lifecycle, "_run_command", side_effect=interrupted):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (1, "logs"))
@@ -402,7 +435,7 @@ class DetachedLifecycleTests(unittest.TestCase):
         def recording(argv, **kwargs):
             observed.append((argv[1], kwargs["timeout"]))
             return self.fake(argv, **kwargs)
-        with patch.object(lifecycle.subprocess, "run", side_effect=recording):
+        with patch.object(lifecycle, "_run_command", side_effect=recording):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual(result.returncode, 0)
@@ -422,7 +455,7 @@ class DetachedLifecycleTests(unittest.TestCase):
         def recording(argv, **kwargs):
             observed.append((argv[1], kwargs["timeout"]))
             return self.fake(argv, **kwargs)
-        with patch.object(lifecycle.subprocess, "run", side_effect=recording):
+        with patch.object(lifecycle, "_run_command", side_effect=recording):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 60)
         self.assertEqual(result.returncode, 0)
@@ -435,7 +468,7 @@ class DetachedLifecycleTests(unittest.TestCase):
             if argv[1] == "create":
                 raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
             return self.fake(argv, **kwargs)
-        with patch.object(lifecycle.subprocess, "run", side_effect=timed_out):
+        with patch.object(lifecycle, "_run_command", side_effect=timed_out):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (124, "create"))
@@ -454,7 +487,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=timed_out):
+        with patch.object(lifecycle, "_run_command", side_effect=timed_out):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual((result.returncode, result.stage), (124, "create"))
@@ -472,7 +505,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=timed_out):
+        with patch.object(lifecycle, "_run_command", side_effect=timed_out):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 0.01)
         self.assertEqual((result.returncode, result.stage), (124, "create"))
@@ -506,7 +539,7 @@ class DetachedLifecycleTests(unittest.TestCase):
                 raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
             return self.fake(argv, **kwargs)
 
-        with patch.object(lifecycle.subprocess, "run", side_effect=slow_start):
+        with patch.object(lifecycle, "_run_command", side_effect=slow_start):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 0.1)
         self.assertEqual((result.returncode, result.stage), (124, "start"))
@@ -523,7 +556,7 @@ class DetachedLifecycleTests(unittest.TestCase):
             if argv[1] == "wait":
                 return subprocess.CompletedProcess(argv, 0, b"42\n")
             return result
-        with patch.object(lifecycle.subprocess, "run", side_effect=fake):
+        with patch.object(lifecycle, "_run_command", side_effect=fake):
             result = lifecycle.run_detached(
                 self.command, self.stdout, self.stderr, 1800)
         self.assertEqual(result.returncode, 42)

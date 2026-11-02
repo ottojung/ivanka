@@ -109,6 +109,16 @@ class SharedBlockCandidateTests(unittest.TestCase):
             r = audit_remap(None, {"one": "A"}, rows, required_depth=1)
         self.assertEqual(r["positions"][0]["depth_qnames"], 1)
 
+    def test_unselected_extra_mapping_invalidates_pair(self):
+        fake = SimpleNamespace(
+            group_loci=lambda masked, refs: ("A", {"one": {5: (0, "A")}}),
+            sam_observations=lambda row, coords, minimum_quality:
+                [(0, "A", row["qname"], "A")])
+        rows = self.pair() + [dict(self.pair()[0], rname="outside")]
+        with patch.dict(sys.modules, {"shared_locus_remap_coverage": fake}):
+            r = audit_remap(None, {"one": "A"}, rows, required_depth=1)
+        self.assertFalse(r["eligible"])
+
     def test_sam_wrapper_detects_reverse_locus(self):
         fake = SimpleNamespace(
             group_loci=lambda masked, refs: ("A", {"one": {5: (0, "T")}}),

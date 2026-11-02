@@ -80,6 +80,18 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
 
     def retry_read_or_remove(argv, *, lock=False, output=None):
         # Waiting, reading logs, and removing never restart MiCall.
+        # A timed-out rm can actually finish before its CLI reports back.
+        # Only an exact-ID Podman absence check can establish that cleanup
+        # succeeded; a nonzero rm alone must never count as success.
+        remove_timed_out = False
+
+        def confirmed_removed():
+            try:
+                probe = call(["podman", "container", "exists", cid], lock=True)
+            except (subprocess.TimeoutExpired, TimeoutError, OSError, ValueError):
+                return False
+            # Podman container exists: 0=present, 1=absent, 125=error.
+            return probe.returncode == 1
         # Failed logs may have emitted a partial prefix: discard it before
         # retrying so one container's output is never duplicated.
         for attempt in range(4):
@@ -101,17 +113,22 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
                 # exceeded the 120s metadata cap with ample sample time left.
                 # Retry ONLY removal of the same immutable container ID.
                 # Never rerun MiCall, and never accept an unverified cleanup.
-                if (argv[1] == "rm"
-                        and isinstance(exc, (subprocess.TimeoutExpired, TimeoutError))
-                        and attempt < 3 and time.monotonic() + 0.2 < deadline):
-                    stderr.write("Benchmark: Podman rm timed out; retrying same container ID\n")
-                    stderr.flush()
-                    time.sleep(0.2)
-                    continue
+                if argv[1] == "rm" and isinstance(
+                        exc, (subprocess.TimeoutExpired, TimeoutError)):
+                    remove_timed_out = True
+                    if confirmed_removed():
+                        return subprocess.CompletedProcess(argv, 0)
+                    if attempt < 3 and time.monotonic() + 0.2 < deadline:
+                        stderr.write("Benchmark: Podman rm timed out; retrying same container ID\n")
+                        stderr.flush()
+                        time.sleep(0.2)
+                        continue
                 raise
             if result.returncode == 0:
                 return result
             discard_partial_output()
+            if argv[1] == "rm" and remove_timed_out and confirmed_removed():
+                return subprocess.CompletedProcess(argv, 0)
             if attempt < 3 and time.monotonic() + 0.2 < deadline:
                 time.sleep(0.2)
         return result

@@ -152,7 +152,9 @@ def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None,
                   "bases_changed":sum(a!=b for a,b in zip(old[k],proposed[k]))
                         + abs(len(old[k])-len(proposed[k]))}
                for k in sorted(old) if old[k] != proposed[k]}
+    from experimental_phase_marker_retention import audit_phase_markers
     report = {"baseline_final_MAX_reproduced_exactly":True,
+              "phase_marker_retention":audit_phase_markers(old, proposed),
               "regions_changed":changes,
               "candidate_has_more_calls":any(
                   old[k].lower().count("x") > proposed[k].lower().count("x")

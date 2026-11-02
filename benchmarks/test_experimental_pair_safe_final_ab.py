@@ -115,6 +115,7 @@ class FinalReplayTests(unittest.TestCase):
             self.assertTrue(result["baseline_final_MAX_reproduced_exactly"])
             self.assertEqual(result["regions_changed"]["S"]["bases_changed"],4)
             self.assertTrue(result["candidate_has_more_calls"])
+            self.assertIn("251", result["phase_marker_retention"]["sizes"])
             self.assertEqual((root/"scratch/conseq.csv").read_text().splitlines()[-1],
                              "S,15,MAX,XXXX")
             self.assertTrue((target/"comparison.json").exists())

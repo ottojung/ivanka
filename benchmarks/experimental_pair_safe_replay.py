@@ -55,10 +55,13 @@ def replay(root, destination, selected, maximum_span=1000):
     for mode, remap in (("control", source), ("experimental", alternate_csv)):
         aligned_path = destination / (mode + "-aligned.csv")
         failed_path = destination / (mode + "-failed.csv")
-        with remap.open() as input_csv, aligned_path.open("w") as aligned, (
-                failed_path.open("w")) as failed, (
-                destination / (mode + "-clipping.csv")).open("w") as clipping:
-            sam2aln(input_csv, aligned, failed_csv=failed, clipping_csv=clipping)
+        with (remap.open() as input_csv,
+              aligned_path.open("w") as aligned,
+              failed_path.open("w") as failed,
+              (destination / (mode + "-clipping.csv")).open("w") as clipping,
+              (destination / (mode + "-conseq-ins.csv")).open("w") as inserts):
+            sam2aln(input_csv, aligned, insert_csv=inserts,
+                    failed_csv=failed, clipping_csv=clipping)
         summaries[mode] = {
             "aligned_rows": len(read_csv(aligned_path)),
             "failures": dict(Counter(row["cause"] for row in read_csv(failed_path))),
@@ -69,6 +72,16 @@ def replay(root, destination, selected, maximum_span=1000):
     experimental_aligned = aligned_multiset(destination / "experimental-aligned.csv")
     if control_aligned != original_aligned:
         raise AssertionError("MiCall control replay differs from saved original")
+    for generated, saved in (
+        ("control-conseq-ins.csv", "conseq_ins.csv"),
+        ("control-clipping.csv", "clipping.csv"),
+    ):
+        if read_csv(destination / generated) != read_csv(scratch / saved):
+            raise AssertionError(f"MiCall control replay differs in {saved}")
+    for output_name in ("conseq-ins.csv", "clipping.csv"):
+        if read_csv(destination / ("control-" + output_name)) != read_csv(
+                destination / ("experimental-" + output_name)):
+            raise AssertionError(f"Alternate mappings changed {output_name}")
     if not no_original_alignments_lost(control_aligned, experimental_aligned):
         raise AssertionError("Alternative mappings erased original aligned reads")
     if summaries["control"]["failures"] != summaries["experimental"]["failures"]:

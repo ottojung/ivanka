@@ -27,12 +27,16 @@ def _complete_block_evidence(by_site, shared_allele, pair_signatures):
                 sites.get(i) is not None for i in range(len(shared_allele))):
             complete[qname] = "".join(sites[i] for i in range(len(shared_allele)))
     signatures = None
+    distinct_allele_counts = defaultdict(int)
     if pair_signatures is not None:
         grouped = defaultdict(set)
         for qname in observed:
             if qname not in pair_signatures:
                 raise ValueError("Missing paired-read sequence provenance")
             grouped[pair_signatures[qname]].add(complete.get(qname))
+        for values in grouped.values():
+            if len(values) == 1 and None not in values:
+                distinct_allele_counts[next(iter(values))] += 1
         signatures = {
             "complete_distinct_pair_sequences": sum(
                 len(values) == 1 and None not in values
@@ -43,7 +47,18 @@ def _complete_block_evidence(by_site, shared_allele, pair_signatures):
                 len(values) != 1 or None in values
                 for values in grouped.values()),
         }
+    allele_counts = defaultdict(int)
+    for allele in complete.values():
+        allele_counts[allele] += 1
+    spectrum = [
+        {"sequence": allele, "read_pair_ids": n,
+         "distinct_pair_sequences": (distinct_allele_counts[allele]
+                                     if pair_signatures is not None else None)}
+        for allele, n in sorted(allele_counts.items(),
+                               key=lambda item: (-item[1], item[0]))
+    ]
     return {
+        "observed_complete_local_sequences": spectrum,
         "complete_read_pair_ids": len(complete),
         "shared_allele_complete_read_pair_ids": sum(
             allele == shared_allele for allele in complete.values()),

@@ -87,7 +87,9 @@ class RawFastqBlockTests(unittest.TestCase):
         self.write([record("p", "TTACGTACGG")],
                    [record("p", "CCCCCCCCCC")])
         for alleles, q in (((), 15), (("NNN",), 15),
-                           (("ACGTAC", "ACGTAC"), 15),\n                           (("AACGTT", "AACGTT"), 15),\n                           (("AACG", "CGTT"), 15), (("ACGTAC",), -1)):
+                           (("ACGTAC", "ACGTAC"), 15),
+                           (("AACGTT", "AACGTT"), 15),
+                           (("AACG", "CGTT"), 15), (("ACGTAC",), -1)):
             with self.assertRaises(ValueError):
                 self.audit(alleles, q)
 

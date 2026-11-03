@@ -59,6 +59,16 @@ def checked_pair(rows, qname, reference, original=None):
                 raise ValueError("Alternative changes the observed CIGAR")
             if read["mapq"] != "0":
                 raise ValueError("Alternative must mark MAPQ=0")
+    if original is not None:
+        # MiCall's saved primary SAM can use a different TLEN convention.
+        # Enforce this geometry only on our newly manufactured alternatives.
+        start_a, start_b = int(a["pos"]), int(b["pos"])
+        outer_end = max(start_a + len(a["seq"]), start_b + len(b["seq"]))
+        template_span = outer_end - min(start_a, start_b)
+        signed_span = template_span if start_a <= start_b else -template_span
+        if (int(a["tlen"]) != signed_span
+                or int(b["tlen"]) != -signed_span):
+            raise ValueError("Alternative mate template length is inconsistent")
     return a, b
 
 

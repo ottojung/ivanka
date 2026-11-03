@@ -196,6 +196,19 @@ class BenchmarkTests(TestCase):
      with self.assertRaisesRegex(ValueError,"at Podman "+stage):
       m.verify_ivanka_image_binding("a"*64)
 
+ def test_detached_binding_error_prefers_actual_podman_diagnostic(self):
+  import os
+  from types import SimpleNamespace
+  def failed(command, stdout, stderr, remaining):
+   stderr.write("Error: beginning container save transaction: database is locked\\n")
+   stderr.write("large Python verifier command\\n" * 60)
+   return SimpleNamespace(returncode=1, stage="create")
+  with patch.dict(os.environ, {"IVANKA_PODMAN_LIFECYCLE":"detached"}):
+   with patch.object(m,"run_detached",side_effect=failed):
+    with self.assertRaisesRegex(ValueError,"database is locked") as exc:
+     m.verify_ivanka_image_binding("a"*64)
+  self.assertNotIn("large Python verifier command",str(exc.exception))
+
  def test_wrong_assembler_binding_fails_closed(self):
   from unittest.mock import patch
   from subprocess import CalledProcessError

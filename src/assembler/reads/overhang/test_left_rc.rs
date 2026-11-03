@@ -24,7 +24,7 @@ fn bounded_left_reverse_complement_matches_full_contig() {
         let max_read_len=reads_seq.iter().map(Vec::len).max().unwrap();
         let reads=Reads{index:build_index(&reads_seq),seqs:reads_seq,
             max_read_len,seed_counts:Default::default(),
-            overhang_cache:Default::default(),overlength_rejections:Default::default()};
+            overhang_cache:Default::default(),overlength_rejections:Default::default(),seen:Default::default()};
         let short=rc(&contig[..contig.len().min(reads.max_read_len)]);
         assert_eq!(reads.overhangs_with_ids(&full),
                    reads.overhangs_with_ids(&short),"len={len}");

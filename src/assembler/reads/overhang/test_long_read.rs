@@ -13,7 +13,7 @@ fn long_read_extends_across_ambiguous_suffix_without_losing_its_anchor() {
     let seqs=vec![read.clone(),rc(&read)];
     let reads=Reads{index:build_index(&seqs),seqs,
         max_read_len:read.len(),seed_counts:HashMap::new(),
-        overhang_cache:Default::default(),overlength_rejections:Default::default()};
+        overhang_cache:Default::default(),overlength_rejections:Default::default(),seen:Default::default()};
     assert!(contig[contig.len()-250..].windows(K).all(|w|encode(w).is_none()));
     assert_eq!(reads.overhangs_with_ids(&contig),
                (vec![extension.to_vec()],vec![0]));

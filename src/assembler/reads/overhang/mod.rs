@@ -11,3 +11,7 @@ mod cache;
 #[cfg(test)] pub(super) use super::types::Hit;
 
 #[cfg(test)] mod test_long_read;
+
+mod seen;
+pub(super) use seen::Seen;
+#[cfg(test)] mod test_seen;

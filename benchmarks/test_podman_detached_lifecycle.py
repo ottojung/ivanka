@@ -135,6 +135,34 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(counters["max_metadata"], 1)
         self.assertGreater(counters["max_wait"], 1)
 
+    def test_real_subprocess_lifecycle_with_file_backed_logs(self):
+        # Exercise real Popen/communicate and owned sessions, not mocks.
+        # A temporary executable simulates Podman's CLI without containers.
+        import os
+        command = Path(self.tmp.name) / "podman"
+        command.write_text(
+            "#!/bin/sh\n"
+            "case \"$1\" in\n"
+            "  create) printf '%064d\\n' 0;;\n"
+            "  start) exit 0;;\n"
+            "  wait) printf '0\\n';;\n"
+            "  logs) printf 'micall.process_run(): Done.\\n';;\n"
+            "  rm) exit 0;;\n"
+            "  *) exit 125;;\n"
+            "esac\n")
+        command.chmod(0o755)
+        with patch.dict(os.environ, {"PATH": self.tmp.name + os.pathsep +
+                                      os.environ.get("PATH", "")}):
+            with tempfile.TemporaryFile(mode="w+t") as output, \\
+                 tempfile.TemporaryFile(mode="w+t") as errors:
+                result = lifecycle.run_detached(self.command, output,
+                                                errors, remaining=10)
+                output.seek(0)
+                errors.seek(0)
+                self.assertEqual((result.returncode, result.stage),
+                                 (0, "complete"), errors.read())
+                self.assertIn("micall.process_run(): Done.", output.read())
+
     def test_success_requires_all_five_steps(self):
         result = self.run_case()
         self.assertEqual((result.returncode, result.stage), (0, "complete"))

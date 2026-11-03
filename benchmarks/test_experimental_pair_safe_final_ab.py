@@ -1,5 +1,6 @@
 """Synthetic fail-closed tests for MiCall final consensus replay plumbing."""
 import csv
+import hashlib
 import json
 import tempfile
 import types
@@ -7,7 +8,71 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from experimental_pair_safe_final_ab import max_rows, row_multiset, run
+from experimental_pair_safe_final_ab import max_rows, row_multiset, run, verified_cached_iva, consensus_change_evidence
+
+
+class ConsensusChangeEvidenceTests(unittest.TestCase):
+    def test_recovered_masks_do_not_hide_changed_called_alleles(self):
+        result = consensus_change_evidence("ACxxTG", "ATCCxG")
+        self.assertEqual(result["masked_bases_recovered"], 2)
+        self.assertEqual(result["existing_called_bases_changed_or_lost"], 2)
+        self.assertEqual(result["original_masked"], 2)
+        self.assertEqual(result["candidate_masked"], 1)
+        self.assertFalse(result["length_changed"])
+
+    def test_prefix_extension_does_not_fake_allele_substitutions(self):
+        result = consensus_change_evidence("ACGTXXX", "TTACGTAAA")
+        self.assertTrue(result["length_changed"])
+        self.assertEqual(result["existing_called_bases_changed_or_lost"], 0)
+        self.assertEqual(result["masked_bases_recovered"], 3)
+        self.assertEqual(result["comparison_method"],
+                         "one_optimal_global_alignment_diagnostic_only")
+
+
+class CachedIVAValidationTests(unittest.TestCase):
+    def make_control(self, tmp):
+        folder = Path(tmp) / "S98"
+        folder.mkdir()
+        data = b"region,q-cutoff,consensus-percent-cutoff,sequence\nHCV-1a,15,MAX,ACGT\n"
+        (folder / "conseq.csv").write_bytes(data)
+        digest = hashlib.sha256(data).hexdigest()
+        (folder / "baseline.json").write_text(json.dumps({
+            "iva": {"exit_code": 0, "image_id": "pinned-iva",
+                    "artifact_dir": str(folder),
+                    "metrics": {"outputs": {"conseq.csv": {"exists": True, "sha256": digest}}}},
+            "provenance": {"all_projects": True, "iva_image_id": "pinned-iva",
+                           "fastq_sha256": {"r1": "one", "r2": "two"},
+                           "hxb2_sha256": "hxb2", "micall_project_code": "project"}
+        }))
+        return folder
+
+    def test_valid_verified_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = self.make_control(tmp)
+            result = verified_cached_iva(folder, "S98")
+            self.assertEqual(result["image_id"], "pinned-iva")
+            self.assertEqual(result["sample"], "S98")
+
+    def test_wrong_sample_and_tampered_output_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = self.make_control(tmp)
+            with self.assertRaisesRegex(ValueError, "sample identity"):
+                verified_cached_iva(folder, "S87")
+            (folder / "conseq.csv").write_text("changed")
+            with self.assertRaisesRegex(ValueError, "checksum"):
+                verified_cached_iva(folder, "S98")
+
+    def test_missing_metadata_and_wrong_image_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = self.make_control(tmp)
+            doc = json.loads((folder / "baseline.json").read_text())
+            doc["provenance"]["iva_image_id"] = "other"
+            (folder / "baseline.json").write_text(json.dumps(doc))
+            with self.assertRaisesRegex(ValueError, "provenance/checksum"):
+                verified_cached_iva(folder, "S98")
+            (folder / "baseline.json").unlink()
+            with self.assertRaisesRegex(ValueError, "complete cached IVA"):
+                verified_cached_iva(folder, "S98")
 
 
 class FinalReplayTests(unittest.TestCase):

@@ -6,6 +6,7 @@ original final MiCall consensus exactly. It is not a full 198 qualification.
 """
 import argparse
 import csv
+import hashlib
 import json
 from collections import Counter
 from contextlib import ExitStack
@@ -116,6 +117,73 @@ def score_exact_panel(control_dir, experimental_dir, projects_file, hxb2_file):
     }
 
 
+
+
+def consensus_change_evidence(original, candidate):
+    """Diagnostic changes under ONE optimal global alignment (not phase proof)."""
+    from Bio.Align import PairwiseAligner
+    aligner = PairwiseAligner()
+    aligner.mode = "global"
+    aligner.match_score = 2
+    aligner.mismatch_score = -1
+    aligner.open_gap_score = -8
+    aligner.extend_gap_score = -1
+    indices = aligner.align(original.upper(), candidate.upper())[0].indices
+    observed = frozenset("ACGT")
+    aligned = []
+    for i, j in zip(*indices):
+        a = original[i].upper() if i >= 0 else None
+        b = candidate[j].upper() if j >= 0 else None
+        aligned.append((a, b))
+    return {
+        "original_masked": original.lower().count("x"),
+        "candidate_masked": candidate.lower().count("x"),
+        "bases_changed": sum(a != b for a, b in aligned),
+        "masked_bases_recovered": sum(a == "X" and b in observed
+                                      for a, b in aligned),
+        "existing_called_bases_changed_or_lost":
+            sum(a in observed and b != a for a, b in aligned),
+        "newly_masked_called_bases":
+            sum(a in observed and b == "X" for a, b in aligned),
+        "length_changed": len(original) != len(candidate),
+        "comparison_method": "one_optimal_global_alignment_diagnostic_only",
+    }
+
+
+
+def verified_cached_iva(iva_dir, expected_sample):
+    """Check the immutable cached control before any expensive MiCall replay.
+
+    This guards artifact identity, not full-cohort scientific qualification.
+    """
+    iva_dir = Path(iva_dir)
+    if iva_dir.name != expected_sample:
+        raise ValueError("Cached IVA sample identity differs from Ivanka input")
+    metadata_file = iva_dir / "baseline.json"
+    consensus_file = iva_dir / "conseq.csv"
+    if not metadata_file.is_file() or not consensus_file.is_file():
+        raise ValueError("IVA comparison requires a complete cached IVA control")
+    try:
+        baseline = json.loads(metadata_file.read_text())
+        control, source = baseline["iva"], baseline["provenance"]
+        evidence = control["metrics"]["outputs"]["conseq.csv"]
+        image = control["image_id"]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Malformed cached IVA control provenance") from exc
+    digest = hashlib.sha256(consensus_file.read_bytes()).hexdigest()
+    if (control.get("exit_code") != 0
+            or source.get("all_projects") is not True
+            or not source.get("fastq_sha256")
+            or not source.get("hxb2_sha256")
+            or not source.get("micall_project_code")
+            or image != source.get("iva_image_id")
+            or control.get("artifact_dir") != str(iva_dir.resolve())
+            or evidence.get("exists") is not True
+            or digest != evidence.get("sha256")):
+        raise ValueError("Cached IVA control provenance/checksum mismatch")
+    max_rows(consensus_file)
+    return {"sha256": digest, "image_id": image, "sample": expected_sample}
+
 def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None,
         iva_dir=None):
     from experimental_pair_safe_replay import read_csv
@@ -130,6 +198,8 @@ def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None,
             p.is_file() for p in (Path(iva_dir)/"conseq.csv",
                                   Path(iva_dir)/"scratch/conseq.csv")):
         raise ValueError("Authentic cached IVA final MAX output is missing")
+    cached_iva = (verified_cached_iva(iva_dir, root.parent.name)
+                  if iva_dir is not None else None)
     prior = json.loads((evidence/"evidence.json").read_text())
     if (not prior["replayed_original_exactly"]
             or not prior["all_original_aligned_records_preserved"]
@@ -147,18 +217,22 @@ def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None,
                      for arm in ("control","experimental"))
     if set(old) != set(proposed):
         raise AssertionError("Candidate changed region identity")
-    changes = {k:{"original_masked":old[k].lower().count("x"),
-                  "candidate_masked":proposed[k].lower().count("x"),
-                  "bases_changed":sum(a!=b for a,b in zip(old[k],proposed[k]))
-                        + abs(len(old[k])-len(proposed[k]))}
+    changes = {k:consensus_change_evidence(old[k], proposed[k])
                for k in sorted(old) if old[k] != proposed[k]}
     report = {"baseline_final_MAX_reproduced_exactly":True,
               "regions_changed":changes,
               "candidate_has_more_calls":any(
-                  old[k].lower().count("x") > proposed[k].lower().count("x")
-                  for k in changes),
+                  item["original_masked"] > item["candidate_masked"]
+                  for item in changes.values()),
+              "candidate_recovers_masked_bases":any(
+                  item["masked_bases_recovered"] > 0 for item in changes.values()),
+              "no_called_base_loss_in_diagnostic_alignment":all(
+                  not item["existing_called_bases_changed_or_lost"]
+                  for item in changes.values()),
               "caveat":"Not qualified: redistributed reads are not independent molecules "
-                       "or proved haplotypes, and no PSI or panel score is asserted."}
+                       "or proved haplotypes; an optimal consensus alignment does not "
+                       "prove phase preservation; diagnostic panel scores do not qualify "
+                       "this pipeline and no PSI is established."}
     if projects_file is not None:
         report["panel_alignment"] = score_exact_panel(
             destination/"control",destination/"experimental",
@@ -179,6 +253,7 @@ def run(saved_ivanka, evidence, destination, projects_file=None, hxb2_file=None,
                 raise AssertionError("Changed frozen reference panel")
             report["iva_candidate_comparison"] = panel_acceptance(
                 iva_dir,destination/"experimental",immutable_panel,min_ratio=0.90)
+            report["cached_iva_provenance"] = cached_iva
     (destination/"comparison.json").write_text(json.dumps(report,indent=2)+"\n")
     return report
 
@@ -190,7 +265,8 @@ def main():
     ap.add_argument("new_final_ab_directory",type=Path)
     ap.add_argument("--projects-json",type=Path)
     ap.add_argument("--hxb2-fasta",type=Path)
-    ap.add_argument("--iva-dir",type=Path)
+    ap.add_argument("--iva-dir",type=Path,
+                    help="Verified cached IVA sample directory containing conseq.csv and baseline.json")
     args=ap.parse_args()
     print(json.dumps(run(args.saved_ivanka_artifacts,
                          args.safe_remap_replay_directory,

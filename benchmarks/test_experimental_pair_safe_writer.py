@@ -31,6 +31,7 @@ def lifted(name="r", ref="B", reverse=False):
         flipped=reverse
         return dict(source,flag=str(flag),rname=ref,pos=str(pos),
                     pnext=str(mate),rnext="=",mapq="0",
+                    tlen="14" if source is first else "-14",
                     seq=reverse_complement(source["seq"]) if flipped else source["seq"],
                     qual=source["qual"][::-1] if flipped else source["qual"])
     return [copy(first,flags[0],101,111),copy(second,flags[1],111,101)]
@@ -54,6 +55,26 @@ class PairSafeWriterTests(unittest.TestCase):
                          ["r","s","r","r","r","s"])
         self.assertEqual([r for r in rows if r["rname"]!="B"],[a,c,b,d])
         self.assertEqual(stats["new_read_pair_ids"],0)
+
+    def test_molecule_multiplicity_is_reported_without_inventing_support(self):
+        single, _, _ = render(original(), lifted())
+        self.assertEqual(single["original_read_pair_ids"], 1)
+        self.assertEqual(single["read_pair_ids_with_extra_placements"], 1)
+        self.assertEqual(single["read_pair_ids_with_multiple_extra_placements"], 0)
+        self.assertEqual(single["max_reference_placements_per_read_pair"], 2)
+        self.assertEqual(single["extra_placements_beyond_one_per_augmented_read_pair"], 0)
+        duplicate, _, _ = render(
+            original(), lifted(ref="B") + lifted(ref="C") + lifted(ref="D"))
+        self.assertEqual(duplicate["new_read_pair_ids"], 0)
+        self.assertEqual(duplicate["alternative_pairs"], 3)
+        self.assertEqual(duplicate["read_pair_ids_with_extra_placements"], 1)
+        self.assertEqual(duplicate["read_pair_ids_with_multiple_extra_placements"], 1)
+        self.assertEqual(duplicate["max_reference_placements_per_read_pair"], 4)
+        self.assertEqual(duplicate["extra_placements_beyond_one_per_augmented_read_pair"], 2)
+        no_extra, _, _ = render(original(), [])
+        self.assertEqual(no_extra["original_read_pair_ids"], 1)
+        self.assertEqual(no_extra["read_pair_ids_with_extra_placements"], 0)
+        self.assertEqual(no_extra["max_reference_placements_per_read_pair"], 1)
 
     def test_reverse_complement_preserves_original_mates_and_qualities(self):
         stats,rows,_=render(original(),lifted(reverse=True))
@@ -90,6 +111,27 @@ class PairSafeWriterTests(unittest.TestCase):
             copied[0]=dict(copied[0],**mutation)
             with self.assertRaises(ValueError):
                 render(original(),copied)
+
+    def test_reject_inconsistent_alternative_template_lengths(self):
+        for lengths in (("999", "-999"), ("14", "14"), ("-14", "14"),
+                        ("14", "0"), ("0", "-14")):
+            copied = lifted()
+            copied[0] = dict(copied[0], tlen=lengths[0])
+            copied[1] = dict(copied[1], tlen=lengths[1])
+            output = io.StringIO()
+            with self.assertRaisesRegex(ValueError, "template length"):
+                serialize_pairs(original(), copied, output)
+            self.assertEqual(output.getvalue(), "")
+
+    def test_candidate_template_length_with_same_or_reversed_starts(self):
+        same = lifted()
+        same[0].update(pos="101", pnext="101", tlen="4")
+        same[1].update(pos="101", pnext="101", tlen="-4")
+        self.assertEqual(render(original(), same)[0]["alternative_pairs"], 1)
+        reversed_starts = lifted()
+        reversed_starts[0].update(pos="111", pnext="101", tlen="-14")
+        reversed_starts[1].update(pos="101", pnext="111", tlen="14")
+        self.assertEqual(render(original(), reversed_starts)[0]["alternative_pairs"], 1)
 
     def test_reject_alternative_to_source_or_unknown_name(self):
         for copied in (lifted(ref="A"),lifted(name="unknown")):

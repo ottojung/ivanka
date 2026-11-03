@@ -879,7 +879,7 @@ def _run_main():
     parser.add_argument("--import-iva-from", action="append", default=[],
                         help="Import verified IVA controls from prior result directories (never run IVA)")
     parser.add_argument("--resume-from", action="append", default=[],
-                        help="Reuse authenticated successful samples from prior strict results.jsonl; failures must rerun")
+                        help="DIAGNOSTIC ONLY: reuse prior successful samples; cannot qualify as one 198-sample invocation")
     parser.add_argument("--cache-status", action="store_true",
                         help="Show verified/missing IVA baselines without running analyses")
     parser.add_argument("--probe",action="store_true")
@@ -1109,6 +1109,8 @@ def _run_main():
         summary.update(milestone198.qualify(
             completed_records,names,pinned_iva_id,checked["ivanka"],
             args.sample_time_limit,reference_panel_hash))
+        from strict_single_invocation import enforce_single_invocation
+        enforce_single_invocation(summary, len(reused))
     (RESULTS/f"summary-{invocation}.json").write_text(
         json.dumps(summary,indent=2,sort_keys=True))
     if not args.qualify_198:

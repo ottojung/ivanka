@@ -31,6 +31,7 @@ def lifted(name="r", ref="B", reverse=False):
         flipped=reverse
         return dict(source,flag=str(flag),rname=ref,pos=str(pos),
                     pnext=str(mate),rnext="=",mapq="0",
+                    tlen="14" if source is first else "-14",
                     seq=reverse_complement(source["seq"]) if flipped else source["seq"],
                     qual=source["qual"][::-1] if flipped else source["qual"])
     return [copy(first,flags[0],101,111),copy(second,flags[1],111,101)]
@@ -90,6 +91,27 @@ class PairSafeWriterTests(unittest.TestCase):
             copied[0]=dict(copied[0],**mutation)
             with self.assertRaises(ValueError):
                 render(original(),copied)
+
+    def test_reject_inconsistent_alternative_template_lengths(self):
+        for lengths in (("999", "-999"), ("14", "14"), ("-14", "14"),
+                        ("14", "0"), ("0", "-14")):
+            copied = lifted()
+            copied[0] = dict(copied[0], tlen=lengths[0])
+            copied[1] = dict(copied[1], tlen=lengths[1])
+            output = io.StringIO()
+            with self.assertRaisesRegex(ValueError, "template length"):
+                serialize_pairs(original(), copied, output)
+            self.assertEqual(output.getvalue(), "")
+
+    def test_candidate_template_length_with_same_or_reversed_starts(self):
+        same = lifted()
+        same[0].update(pos="101", pnext="101", tlen="4")
+        same[1].update(pos="101", pnext="101", tlen="-4")
+        self.assertEqual(render(original(), same)[0]["alternative_pairs"], 1)
+        reversed_starts = lifted()
+        reversed_starts[0].update(pos="111", pnext="101", tlen="-14")
+        reversed_starts[1].update(pos="101", pnext="111", tlen="14")
+        self.assertEqual(render(original(), reversed_starts)[0]["alternative_pairs"], 1)
 
     def test_reject_alternative_to_source_or_unknown_name(self):
         for copied in (lifted(ref="A"),lifted(name="unknown")):

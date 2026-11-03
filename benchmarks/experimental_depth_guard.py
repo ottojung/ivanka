@@ -62,6 +62,7 @@ def observed_positions(row, reference, min_q=15):
     """Compatibility helper: Q15 positions irrespective of observed allele."""
     return set(observed_alleles(row, reference, min_q))
 
+
 def initial_depth(rows, references, min_q=15):
     """Q15 source-REFERENCE allele depth, deduped by qname and position.
 
@@ -87,6 +88,7 @@ def initial_depth(rows, references, min_q=15):
         for key, per_pair in calls.items()
     })
 
+
 def protected_move(pair, source, depth, references, minimum=100, min_q=15):
     """Protect source-allele Q15 depth, never merely total aligned depth."""
     reference = references[source]
@@ -100,6 +102,9 @@ def protected_move(pair, source, depth, references, minimum=100, min_q=15):
             if site in alleles and alleles[site] != base:
                 return False
             alleles[site] = base
+    # No qualifying source observations means no evidence to reallocate.
+    if not alleles:
+        return False
     # Already-undercovered source positions must never be depleted further.
     if any(depth[(source, site)] <= minimum for site in alleles):
         return False

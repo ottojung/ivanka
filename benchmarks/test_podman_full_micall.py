@@ -167,6 +167,36 @@ class BenchmarkTests(TestCase):
     m.save_iva_baseline("S1",prov,arm | {"image_id":"sha256:WRONG"})
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
     m.load_iva_baseline("S2",prov)
+ def test_readonly_iva_cache_is_relocatable_without_metadata_edits(self):
+  import json
+  import shutil
+  with TemporaryDirectory() as d:
+   source=Path(d)/"source"
+   dest=Path(d)/"readonly-moved"
+   control=Path(d)/"original-iva-results"
+   control.mkdir()
+   src=control/"conseq.csv"
+   src.write_text("consensus-percent-cutoff,sequence\nMAX,ACGT\n")
+   prov={"iva_image_id":"abc","hxb2_sha256":"def",
+         "fastq_sha256":["r1","r2"],"micall_project_code":"MidHCV"}
+   arm={"exit_code":0,"image_id":"abc","artifact_dir":str(control),
+        "seconds":123.4,"timing_origin":"micall_in_container_monotonic_v1",
+        "metrics":{"num_final_max_conseqs":1,"outputs":{
+            "conseq.csv":{"sha256":m.sha(src)}}}}
+   with patch.object(m,"IVA_BASELINE_CACHE",source):
+    m.save_iva_baseline("S48",prov,arm)
+   shutil.move(str(source),str(dest))
+   original=(dest/"S48"/"baseline.json").read_bytes()
+   with patch.object(m,"IVA_BASELINE_CACHE",dest):
+    read=m.load_iva_baseline("S48",prov)
+    self.assertEqual(read["artifact_dir"],str(dest/"S48"))
+    self.assertEqual(read["seconds"],123.4)
+    self.assertEqual(read["image_id"],"abc")
+    self.assertEqual((dest/"S48"/"baseline.json").read_bytes(),original)
+    (dest/"S48"/"conseq.csv").write_text("tampered")
+    with self.assertRaisesRegex(ValueError,"final MAX artifact"):
+     m.load_iva_baseline("S48",prov)
+
  def test_strict_binding_preflight_uses_authenticated_detached_lifecycle(self):
   import os
   from types import SimpleNamespace

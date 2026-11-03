@@ -370,11 +370,14 @@ def load_iva_baseline(sample, expected_provenance):
         raise ValueError("Cached IVA arm image ID differs from verified control provenance")
     if arm["exit_code"] != 0 or arm["metrics"]["num_final_max_conseqs"] <= 0:
         raise ValueError("The stored IVA baseline is not a completed scored MiCall run")
-    output = Path(arm.get("artifact_dir", "")) / "conseq.csv"
+    # The verified cache copy, not the original absolute invocation path,
+    # is authoritative. This permits relocation of the complete cache onto
+    # read-only storage without changing its stored provenance or checksums.
+    output = path.parent / "conseq.csv"
     expected = arm["metrics"].get("outputs", {}).get("conseq.csv", {}).get("sha256")
     if not expected or not output.is_file() or sha(output) != expected:
         raise ValueError("Cached IVA final MAX artifact missing or changed")
-    return arm
+    return {**arm, "artifact_dir": str(path.parent)}
 
 
 def save_iva_baseline(sample, provenance, arm):

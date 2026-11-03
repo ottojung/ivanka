@@ -56,6 +56,26 @@ class PairSafeWriterTests(unittest.TestCase):
         self.assertEqual([r for r in rows if r["rname"]!="B"],[a,c,b,d])
         self.assertEqual(stats["new_read_pair_ids"],0)
 
+    def test_molecule_multiplicity_is_reported_without_inventing_support(self):
+        single, _, _ = render(original(), lifted())
+        self.assertEqual(single["original_read_pair_ids"], 1)
+        self.assertEqual(single["read_pair_ids_with_extra_placements"], 1)
+        self.assertEqual(single["read_pair_ids_with_multiple_extra_placements"], 0)
+        self.assertEqual(single["max_reference_placements_per_read_pair"], 2)
+        self.assertEqual(single["extra_placements_beyond_one_per_augmented_read_pair"], 0)
+        duplicate, _, _ = render(
+            original(), lifted(ref="B") + lifted(ref="C") + lifted(ref="D"))
+        self.assertEqual(duplicate["new_read_pair_ids"], 0)
+        self.assertEqual(duplicate["alternative_pairs"], 3)
+        self.assertEqual(duplicate["read_pair_ids_with_extra_placements"], 1)
+        self.assertEqual(duplicate["read_pair_ids_with_multiple_extra_placements"], 1)
+        self.assertEqual(duplicate["max_reference_placements_per_read_pair"], 4)
+        self.assertEqual(duplicate["extra_placements_beyond_one_per_augmented_read_pair"], 2)
+        no_extra, _, _ = render(original(), [])
+        self.assertEqual(no_extra["original_read_pair_ids"], 1)
+        self.assertEqual(no_extra["read_pair_ids_with_extra_placements"], 0)
+        self.assertEqual(no_extra["max_reference_placements_per_read_pair"], 1)
+
     def test_reverse_complement_preserves_original_mates_and_qualities(self):
         stats,rows,_=render(original(),lifted(reverse=True))
         self.assertEqual(stats["alternative_pairs"],1)

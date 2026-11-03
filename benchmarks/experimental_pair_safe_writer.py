@@ -92,6 +92,10 @@ def serialize_pairs(original_rows, alternative_rows, output):
     targets = defaultdict(list)
     for row in alternatives:
         targets[(row["qname"], row["rname"])].append(row)
+    # Alternate alignments are placements of the SAME original molecules.
+    # Explicitly expose how many read pairs are replicated across references;
+    # this is a diagnostic, not new read support or phase evidence.
+    placements = Counter(name for name, _ in targets)
     append_after = defaultdict(list)
     for (name, target), pair in sorted(targets.items()):
         source_pair = original_by_name.get(name, ())
@@ -111,6 +115,14 @@ def serialize_pairs(original_rows, alternative_rows, output):
         if occurrences[row["qname"]] == 0:
             writer.writerows(append_after.get(row["qname"], ()))
     return {"original_rows":len(originals),
+            "original_read_pair_ids":len(original_by_name),
             "alternative_pairs":len(targets),
             "added_mapping_rows":len(alternatives),
-            "new_read_pair_ids":0}
+            "new_read_pair_ids":0,
+            "read_pair_ids_with_extra_placements":len(placements),
+            "read_pair_ids_with_multiple_extra_placements":
+                sum(count > 1 for count in placements.values()),
+            "max_reference_placements_per_read_pair":
+                max((1 + count for count in placements.values()), default=1),
+            "extra_placements_beyond_one_per_augmented_read_pair":
+                sum(count - 1 for count in placements.values())}

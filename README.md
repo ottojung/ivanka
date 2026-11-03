@@ -325,7 +325,17 @@ a second overlapping cohort. Every cooperating launcher shares the default
 exit 75; attempts to reuse a previous state directory fail with exit 74.
 Direct invocations that bypass the launcher are not governed by its lock.
 
-### Authenticated recovery of interrupted 198-sample qualifications
+### Diagnostic-only recovery of interrupted 198-sample analyses
+
+**Important:** This reuses scientifically authenticated historical samples
+for exploratory comparisons and to locate remaining algorithmic problems.
+It is NOT an accepted final 198-sample qualification: that requires **one
+complete physical invocation** with 198 internally comparable results.
+Even if all 198 recovered records pass the per-sample 90% floor and both
+shifted all-r PSI tests, \`milestone198_pass\` remains \`false\` whenever any
+external previous sample is reused. The runner reports
+\`reused_records_not_single_invocation\`, preserves diagnostic PSI values,
+and exits nonzero. To qualify, use a fresh run without \`--resume-from\`.
 
 Use `--resume-from` only for an interrupted strict 198-sample run, with a
 **new results directory** and the same frozen 198 manifest, pinned IVA image,

@@ -97,7 +97,7 @@ class LifecycleConcurrencyTests(unittest.TestCase):
             self.assertTrue(entered.wait(5))
             cmd = ["podman", "run", "--rm", "--name", "locked",
                    "a" * 64, "micall"]
-            with patch.object(lifecycle.subprocess, "run") as run:
+            with patch.object(lifecycle, "_run_command") as run:
                 result = lifecycle.run_detached(
                     cmd, io.StringIO(), io.StringIO(), 0.05)
             self.assertEqual(result.returncode, 124)

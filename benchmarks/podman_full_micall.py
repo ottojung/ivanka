@@ -885,6 +885,11 @@ def _run_main():
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
     configure_podman_lifecycle(args.qualify_198, os.environ)
+    from podman_store_guard import verify_expected_store
+    store_proof = (verify_expected_store(
+        os.environ.get("IVANKA_EXPECTED_PODMAN_DRIVER"),
+        os.environ.get("IVANKA_EXPECTED_PODMAN_GRAPHROOT"))
+        if args.qualify_198 else None)
     if args.jobs<1 or not 1<=args.sample_time_limit<=1800 or args.timeout_per_arm<1:
         parser.error("jobs and arm timeout must be positive; sample limit must be 1..1800 seconds")
     images={"iva":IVA_IMAGE,"ivanka":IVANKA_IMAGE}
@@ -958,6 +963,7 @@ def _run_main():
         validate_milestone198_panel(len(references),reference_panel_hash)
     if args.probe:
         print(json.dumps({"images":checked,"sample_count":len(rows),
+                          "podman_store_provenance": store_proof,
                           "hxb2_sha256":sha(DATA/"hxb2.fasta"),
                           "project_reference_catalog_sha256":catalog_hash,
                           "reference_panel_sha256":reference_panel_hash,
@@ -1082,6 +1088,7 @@ def _run_main():
         "project_reference_catalog_sha256":catalog_hash,
         "qualification_requested":args.qualify or args.qualify_198,
         "qualification198_requested":args.qualify_198,
+        "podman_store_provenance": store_proof,
         "resumed_completed_samples":len(reused),
         "authenticated_resume_sources":reuse_sources,
         "all_projects":getattr(args,"all_projects",False),

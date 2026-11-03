@@ -325,6 +325,15 @@ a second overlapping cohort. Every cooperating launcher shares the default
 exit 75; attempts to reuse a previous state directory fail with exit 74.
 Direct invocations that bypass the launcher are not governed by its lock.
 
+For a strict physical benchmark on a dedicated Podman store, set
+`IVANKA_EXPECTED_PODMAN_DRIVER=btrfs` and
+`IVANKA_EXPECTED_PODMAN_GRAPHROOT=/absolute/verified/store`.
+The runner checks Podman's **actual** storage driver and graph root before
+image startup, refuses mismatches or ambiguous evidence, and records the
+verified identity in its summary. These optional variables are an operational
+guard against accidentally qualifying a default VFS store; they do not change
+the scientific scoring criteria or permit pooling separate invocations.
+
 ### Diagnostic-only recovery of interrupted 198-sample analyses
 
 **Important:** This reuses scientifically authenticated historical samples

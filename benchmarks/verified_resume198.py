@@ -72,7 +72,7 @@ def authenticate(record, root, row, expected, cached_iva, image, panel, sha,
 
 
 def load_verified(files, rows, expected_provenance, load_baseline, image,
-                  panel, sha, output_names):
+                  panel, sha, output_names, on_progress=None):
     """Return (sample -> verified result, source digests) without cherry-picking.
 
     Multiple completed successes for a sample are ambiguous and rejected.
@@ -111,6 +111,8 @@ def load_verified(files, rows, expected_provenance, load_baseline, image,
             successes[name] = authenticate(
                 record, source.parent, by_name[name], expected, cached,
                 image, panel, sha, output_names)
+            if on_progress is not None:
+                on_progress(len(successes))
         if sha(source) != before:
             raise ValueError("Source JSONL changed during authenticated import")
     for name in failed_names:

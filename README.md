@@ -55,6 +55,12 @@ The role mapping is private because it contains sample names. Store it in
 
 ## Full MiCall IVA/Ivanka A/B benchmark
 
+The benchmark shell entrypoints use `python3` by default, or the interpreter
+selected by `IVANKA_BENCH_PYTHON=/path/to/venv/bin/python`. That interpreter
+must have the packages in `benchmarks/requirements.txt` installed. This
+avoids depending on the original host's absolute MiCall checkout location.
+
+
 The Podman harness substitutes Ivanka at the IVA assembler boundary in a pinned
 MiCall container. The default assembler-only A/B leaves the other MiCall steps (G2P,
 referenceless stitching, remapping and final consensus) unchanged. However,

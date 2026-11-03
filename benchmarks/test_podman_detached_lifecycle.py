@@ -153,7 +153,7 @@ class DetachedLifecycleTests(unittest.TestCase):
         command.chmod(0o755)
         with patch.dict(os.environ, {"PATH": self.tmp.name + os.pathsep +
                                       os.environ.get("PATH", "")}):
-            with tempfile.TemporaryFile(mode="w+t") as output, \\
+            with tempfile.TemporaryFile(mode="w+t") as output, \
                  tempfile.TemporaryFile(mode="w+t") as errors:
                 result = lifecycle.run_detached(self.command, output,
                                                 errors, remaining=10)

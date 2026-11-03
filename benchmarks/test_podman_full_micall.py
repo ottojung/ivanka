@@ -167,6 +167,48 @@ class BenchmarkTests(TestCase):
     m.save_iva_baseline("S1",prov,arm | {"image_id":"sha256:WRONG"})
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
     m.load_iva_baseline("S2",prov)
+ def test_strict_binding_preflight_uses_authenticated_detached_lifecycle(self):
+  import os
+  from types import SimpleNamespace
+  with patch.dict(os.environ, {"IVANKA_PODMAN_LIFECYCLE":"detached"}):
+   with patch.object(m,"run_detached",return_value=SimpleNamespace(
+       returncode=0,stage="complete")) as detached, patch.object(
+       m.subprocess,"run") as legacy:
+    m.verify_ivanka_image_binding("a"*64)
+  legacy.assert_not_called()
+  command, stdout, stderr = detached.call_args.args
+  self.assertEqual(command[:3],["podman","run","--rm"])
+  name = command[command.index("--name")+1]
+  self.assertRegex(name,r"^ivanka-bench-ivanka-[0-9]+-[0-9]+-[0-9a-f]{8}$")
+  self.assertEqual(command[command.index("--timeout")+1],"178")
+  self.assertEqual(command[command.index("--entrypoint")+1],"python")
+  self.assertIn("run_subprocess",command[-1])
+  self.assertEqual(detached.call_args.kwargs["remaining"],180)
+
+ def test_detached_binding_rejects_unverified_create_wait_or_cleanup(self):
+  import os
+  from types import SimpleNamespace
+  for stage in ("create","start","wait","logs","remove"):
+   with self.subTest(stage=stage), patch.dict(
+           os.environ, {"IVANKA_PODMAN_LIFECYCLE":"detached"}):
+    with patch.object(m,"run_detached",return_value=SimpleNamespace(
+            returncode=1,stage=stage)):
+     with self.assertRaisesRegex(ValueError,"at Podman "+stage):
+      m.verify_ivanka_image_binding("a"*64)
+
+ def test_detached_binding_error_prefers_actual_podman_diagnostic(self):
+  import os
+  from types import SimpleNamespace
+  def failed(command, stdout, stderr, remaining):
+   stderr.write("Error: beginning container save transaction: database is locked\n")
+   stderr.write("large Python verifier command\n" * 60)
+   return SimpleNamespace(returncode=1, stage="create")
+  with patch.dict(os.environ, {"IVANKA_PODMAN_LIFECYCLE":"detached"}):
+   with patch.object(m,"run_detached",side_effect=failed):
+    with self.assertRaisesRegex(ValueError,"database is locked") as exc:
+     m.verify_ivanka_image_binding("a"*64)
+  self.assertNotIn("large Python verifier command",str(exc.exception))
+
  def test_wrong_assembler_binding_fails_closed(self):
   from unittest.mock import patch
   from subprocess import CalledProcessError
@@ -278,6 +320,36 @@ class BenchmarkTests(TestCase):
    self.assertIn("database is locked",result["error"])
    self.assertEqual(result["artifact_dir"],str((root/"out"/"invocation"/"TEST"/"ivanka").resolve()))
    scorer.assert_not_called()
+
+ def test_main_restores_lifecycle_environment_on_return_and_exception(self):
+  from unittest.mock import patch
+  import os
+  def successful():
+   os.environ["IVANKA_PODMAN_LIFECYCLE"]="detached"
+   return 17
+  with patch.dict(os.environ, {}, clear=True):
+   with patch.object(m,"_run_main",side_effect=successful):
+    self.assertEqual(m.main(),17)
+   self.assertNotIn("IVANKA_PODMAN_LIFECYCLE",os.environ)
+  def failing():
+   os.environ["IVANKA_PODMAN_LIFECYCLE"]="detached"
+   raise ValueError("failure")
+  with patch.dict(os.environ,{"IVANKA_PODMAN_LIFECYCLE":"run"},clear=True):
+   with patch.object(m,"_run_main",side_effect=failing):
+    with self.assertRaisesRegex(ValueError,"failure"):
+     m.main()
+   self.assertEqual(os.environ["IVANKA_PODMAN_LIFECYCLE"],"run")
+
+ def test_strict_198_uses_serialized_detached_lifecycle_by_default(self):
+  e={}
+  self.assertEqual(m.configure_podman_lifecycle(True,e),"detached")
+  self.assertEqual(e["IVANKA_PODMAN_LIFECYCLE"],"detached")
+  self.assertEqual(m.configure_podman_lifecycle(False,{}),"run")
+  override={"IVANKA_PODMAN_LIFECYCLE":"run"}
+  self.assertEqual(m.configure_podman_lifecycle(True,override),"run")
+  self.assertEqual(override["IVANKA_PODMAN_LIFECYCLE"],"run")
+  with self.assertRaisesRegex(ValueError,"must be run or detached"):
+   m.configure_podman_lifecycle(True,{"IVANKA_PODMAN_LIFECYCLE":"unsafe"})
 
  def test_run_arm_enforces_timeout_inside_container(self):
   from unittest.mock import patch,Mock

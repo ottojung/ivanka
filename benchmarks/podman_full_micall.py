@@ -15,6 +15,7 @@ import os
 import shutil
 from pathlib import Path
 import subprocess
+import tempfile
 import time
 
 from Bio import SeqIO
@@ -97,6 +98,32 @@ def verify_identical_micall_base(iva_image, ivanka_image):
 def verify_ivanka_image_binding(image):
     """One container startup verifies AST binding, cache key, both reads and binary."""
     verifier = Path(__file__).with_name("verify_ivanka_binding.py").read_text()
+    if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
+        # Use the same serialized lifecycle for the image verifier and
+        # MiCall itself. Plain podman run --rm can deadlock on SQLite
+        # before any benchmark sample starts.
+        name = (f"ivanka-bench-ivanka-{time.time_ns()}-{os.getpid()}-"
+                f"{hashlib.sha256(image.encode()).hexdigest()[:8]}")
+        command = ["podman", "run", "--rm", "--pull=never", "--name", name,
+                   "--timeout", "178", "--stop-timeout", "2",
+                   "--entrypoint", "python", image, "-c", verifier]
+        with tempfile.TemporaryFile(mode="w+t") as stdout, tempfile.TemporaryFile(
+                mode="w+t") as stderr:
+            result = run_detached(command, stdout, stderr, remaining=180)
+            if result.returncode != 0:
+                stderr.seek(0)
+                lines = [line.strip() for line in stderr.read().splitlines()
+                         if line.strip()]
+                # Podman create can echo the full multi-line Python verifier.
+                # Prefer an actual Podman error, not the script's final lines.
+                error = next((line for line in lines if line.startswith(
+                    ("Error:", "error:", "FATA", "Fatal:"))),
+                    lines[0] if lines else "<no Podman stderr>")
+                details = error[:500]
+                raise ValueError(
+                    f"Ivanka image failed executable-binding verification "
+                    f"at Podman {result.stage}: {details}")
+        return
     try:
         subprocess.run(["podman", "run", "--rm", "--pull=never", "--entrypoint",
                         "python", image, "-c", verifier],
@@ -629,6 +656,23 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     return result
 
 
+
+def configure_podman_lifecycle(qualify_198, environ):
+    """Prefer authenticated create/start/wait/logs/rm for strict cohorts.
+
+    Podman run --rm at high concurrency can exit 127 *after* MiCall Done due
+    to SQLite save-state contention. Keep nonqualification runs unchanged,
+    and retain an explicit run override for controlled comparisons.
+    """
+    mode = environ.get("IVANKA_PODMAN_LIFECYCLE")
+    if mode is None:
+        mode = "detached" if qualify_198 else "run"
+    if mode not in ("run", "detached"):
+        raise ValueError("IVANKA_PODMAN_LIFECYCLE must be run or detached")
+    environ["IVANKA_PODMAN_LIFECYCLE"] = mode
+    return mode
+
+
 def alignment_score_floor(args):
     """Diagnostic 90% is opt-in; alpha keeps 95%, formal 198 always uses 90%."""
     return (milestone198.SCORE_FLOOR
@@ -808,7 +852,7 @@ def validate_milestone198_panel(reference_count, reference_sha256):
         raise ValueError("198-sample panel differs from the frozen 33-reference panel")
 
 
-def main():
+def _run_main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", action="append",
                         help="Run only a selected sample ID (repeatable)")
@@ -838,6 +882,7 @@ def main():
                         help="Show verified/missing IVA baselines without running analyses")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
+    configure_podman_lifecycle(args.qualify_198, os.environ)
     if args.jobs<1 or not 1<=args.sample_time_limit<=1800 or args.timeout_per_arm<1:
         parser.error("jobs and arm timeout must be positive; sample limit must be 1..1800 seconds")
     images={"iva":IVA_IMAGE,"ivanka":IVANKA_IMAGE}
@@ -1045,6 +1090,18 @@ def main():
               "198/198 required, score and runtime shifted-power PSI(r)>0 for all r>=0",flush=True)
         return 0 if summary["milestone198_pass"] else 1
     return 1 if failed or (args.qualify and not (full_alpha_pass or cached_iva_comparison_pass)) else 0
+
+def main():
+    # The selection for one strict invocation cannot leak into later tests.
+    previous = os.environ.get("IVANKA_PODMAN_LIFECYCLE")
+    try:
+        return _run_main()
+    finally:
+        if previous is None:
+            os.environ.pop("IVANKA_PODMAN_LIFECYCLE", None)
+        else:
+            os.environ["IVANKA_PODMAN_LIFECYCLE"] = previous
+
 
 if __name__=="__main__":
     raise SystemExit(main())

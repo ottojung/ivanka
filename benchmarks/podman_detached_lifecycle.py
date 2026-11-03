@@ -9,6 +9,7 @@ from __future__ import annotations
 import fcntl
 import os
 import re
+import signal
 import subprocess
 import time
 from contextlib import contextmanager
@@ -25,6 +26,34 @@ METADATA_TIMEOUT_SECONDS = 120.0
 # Give creation a bounded second window; other metadata stages stay at 120s.
 CREATE_TIMEOUT_SECONDS = 240.0
 
+
+
+def _run_command(argv, *, stdout, stderr, timeout, check=False):
+    """Kill the entire owned Podman CLI group after a stage timeout.
+
+    Podman forks a helper that may outlive subprocess.run()'s direct-child
+    kill. The new session contains only this stage's processes, never the
+    running benchmark worker or another container's Podman transaction.
+    """
+    if check:
+        raise ValueError("Podman lifecycle stage must inspect exit status")
+    child = subprocess.Popen(
+        argv, stdout=stdout, stderr=stderr, start_new_session=True)
+    try:
+        output, _ = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            child.communicate(timeout=3)
+        except subprocess.TimeoutExpired:
+            pass
+        # Podman command arguments can contain an entire Python verifier
+        # script. Never print that script just to report a timed-out stage.
+        raise subprocess.TimeoutExpired(argv[:2], timeout)
+    return subprocess.CompletedProcess(argv, child.returncode, output)
 
 @contextmanager
 def transaction_lock(deadline: float):
@@ -71,10 +100,10 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
 
         if lock:
             with transaction_lock(deadline):
-                return subprocess.run(argv, stdout=output or subprocess.PIPE,
+                return _run_command(argv, stdout=output or subprocess.PIPE,
                                       stderr=stderr, timeout=budget_for_stage(),
                                       check=False)
-        return subprocess.run(argv, stdout=output or subprocess.PIPE,
+        return _run_command(argv, stdout=output or subprocess.PIPE,
                               stderr=stderr, timeout=budget_for_stage(),
                               check=False)
 
@@ -207,7 +236,7 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
                     with transaction_lock(cleanup_deadline):
                         budget = cleanup_deadline - time.monotonic()
                         if budget > 0:
-                            subprocess.run(["podman", "rm", "--force", cleanup_target],
+                            _run_command(["podman", "rm", "--force", cleanup_target],
                                            stdout=subprocess.DEVNULL,
                                            stderr=subprocess.DEVNULL,
                                            timeout=budget, check=False)

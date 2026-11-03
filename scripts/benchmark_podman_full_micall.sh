@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
-# No whole-set wall-clock cap: each sample has its own 20-minute deadline.
-exec /workspace/qai-repo/repos/MiCall/.venv/bin/python benchmarks/podman_full_micall.py "$@"
+# Use an explicitly selected environment (or python3 with benchmark requirements).
+# There is no whole-cohort deadline; each sample has its own bounded budget.
+exec "${IVANKA_BENCH_PYTHON:-python3}" benchmarks/podman_full_micall.py "$@"

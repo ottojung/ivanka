@@ -1,6 +1,7 @@
 """Conservative Q15 paired-read depth guard for experimental reallocations.
 
-Counts only the source-reference allele, once per qname and position.\nConflicting overlapping mates and nonreference bases do not inflate its depth.
+Counts only the source-reference allele, once per qname and position.
+Conflicting overlapping mates and nonreference bases do not inflate its depth.
 This is a SAM-derived proxy, NOT MiCall's full consensus calculation. The
 authentic MiCall replay must still check final calls and phase markers.
 """

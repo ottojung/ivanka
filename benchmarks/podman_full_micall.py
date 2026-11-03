@@ -112,7 +112,14 @@ def verify_ivanka_image_binding(image):
             result = run_detached(command, stdout, stderr, remaining=180)
             if result.returncode != 0:
                 stderr.seek(0)
-                details = stderr.read()[-500:]
+                lines = [line.strip() for line in stderr.read().splitlines()
+                         if line.strip()]
+                # Podman create can echo the full multi-line Python verifier.
+                # Prefer an actual Podman error, not the script's final lines.
+                error = next((line for line in lines if line.startswith(
+                    ("Error:", "error:", "FATA", "Fatal:"))),
+                    lines[0] if lines else "<no Podman stderr>")
+                details = error[:500]
                 raise ValueError(
                     f"Ivanka image failed executable-binding verification "
                     f"at Podman {result.stage}: {details}")

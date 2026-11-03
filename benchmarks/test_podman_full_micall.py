@@ -200,8 +200,8 @@ class BenchmarkTests(TestCase):
   import os
   from types import SimpleNamespace
   def failed(command, stdout, stderr, remaining):
-   stderr.write("Error: beginning container save transaction: database is locked\\n")
-   stderr.write("large Python verifier command\\n" * 60)
+   stderr.write("Error: beginning container save transaction: database is locked\n")
+   stderr.write("large Python verifier command\n" * 60)
    return SimpleNamespace(returncode=1, stage="create")
   with patch.dict(os.environ, {"IVANKA_PODMAN_LIFECYCLE":"detached"}):
    with patch.object(m,"run_detached",side_effect=failed):

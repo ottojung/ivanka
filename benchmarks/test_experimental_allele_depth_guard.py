@@ -46,6 +46,12 @@ class AlleleAwareDepthTests(unittest.TestCase):
         low = dict(pair()[0], qual="!"*13)
         self.assertEqual(observed_alleles(low, SOURCE), {})
 
+    def test_no_q15_source_observation_is_not_reallocatable(self):
+        low = [dict(row, qual="!"*len(row["seq"])) for row in pair("low")]
+        depth = Counter({("src", site): 150 for site in range(len(SOURCE))})
+        self.assertFalse(protected_move(low, "src", depth, REFS, 100))
+        self.assertEqual(depth[("src", 4)], 150)
+
     def test_reverse_orientation_uses_sam_reference_oriented_bases(self):
         from exact_pair_remap_equivalence import reverse_complement
         row = dict(pair()[0], seq=reverse_complement(pair()[0]["seq"]),

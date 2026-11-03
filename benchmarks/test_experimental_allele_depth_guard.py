@@ -53,7 +53,7 @@ class AlleleAwareDepthTests(unittest.TestCase):
         # SAM SEQ must already be oriented to the reference; mismatches
         # cannot be mistaken for reference-allele coverage.
         depth = initial_depth([row], REFS)
-        self.assertLess(depth[("src", 4)], 1)
+        self.assertEqual(depth[("src", 5)], 0)
 
 
 if __name__ == "__main__":

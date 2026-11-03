@@ -970,7 +970,9 @@ def _run_main():
         reused, reuse_sources = load_verified(
             args.resume_from, rows,
             lambda row: baseline_provenance(row, pinned_iva_id, hxb2_hash, True),
-            load_iva_baseline, checked["ivanka"], references, sha, OUTPUT_NAMES)
+            load_iva_baseline, checked["ivanka"], references, sha, OUTPUT_NAMES,
+            on_progress=lambda n: print("RESUME_VERIFIED_PROGRESS", n,
+                                        flush=True) if n % 10 == 0 else None)
         print("AUTHENTICATED_COMPLETED_SAMPLES_REUSED",
               len(reused), "remaining", len(rows)-len(reused), flush=True)
     RESULTS.mkdir(parents=True,exist_ok=True)

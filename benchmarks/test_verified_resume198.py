@@ -72,6 +72,28 @@ class VerifiedResumeTests(unittest.TestCase):
         self.assertEqual(result[self.sample], self.record)
         self.assertEqual(digests[0]["sha256"], self.hash_file(self.source))
 
+    def test_progress_emitted_only_after_successful_authentication(self):
+        seen = []
+        with patch.object(resume, "panel_acceptance", return_value=self.scored):
+            resume.load_verified(
+                [self.source], [{"sample": self.sample}],
+                lambda row: self.provenance,
+                lambda sample, provenance: self.cached_iva,
+                "candidate", None, self.hash_file,
+                ("conseq.csv", "other.csv"), on_progress=seen.append)
+        self.assertEqual(seen, [1])
+        self.conseq.write_text("changed")
+        seen.clear()
+        with patch.object(resume, "panel_acceptance", return_value=self.scored):
+            with self.assertRaisesRegex(ValueError, "artifact missing or changed"):
+                resume.load_verified(
+                    [self.source], [{"sample": self.sample}],
+                    lambda row: self.provenance,
+                    lambda sample, provenance: self.cached_iva,
+                    "candidate", None, self.hash_file,
+                    ("conseq.csv", "other.csv"), on_progress=seen.append)
+        self.assertEqual(seen, [])
+
     def test_missing_completed_result_is_not_reused(self):
         self.write_records({"sample":self.sample,"status":"started"})
         result, _ = self.load()

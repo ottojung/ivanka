@@ -878,6 +878,8 @@ def _run_main():
                         help="Symmetrically enable MiCall --all_projects for IVA and Ivanka; recorded in baseline provenance")
     parser.add_argument("--import-iva-from", action="append", default=[],
                         help="Import verified IVA controls from prior result directories (never run IVA)")
+    parser.add_argument("--resume-from", action="append", default=[],
+                        help="Reuse authenticated successful samples from prior strict results.jsonl; failures must rerun")
     parser.add_argument("--cache-status", action="store_true",
                         help="Show verified/missing IVA baselines without running analyses")
     parser.add_argument("--probe",action="store_true")
@@ -907,6 +909,8 @@ def _run_main():
         raise ValueError("18-sample alpha qualification retains its 95% floor")
     if args.qualify and args.qualify_198:
         parser.error("--qualify and --qualify-198 are mutually exclusive")
+    if args.resume_from and not args.qualify_198:
+        parser.error("--resume-from only applies to strict --qualify-198")
     if args.qualify_198:
         validate_milestone198_preflight(args, manifest_sample_count, manifest_hash,
                                        pinned_iva_id)
@@ -959,14 +963,35 @@ def _run_main():
                           "reference_panel_sha256":reference_panel_hash,
                           "reference_panel_count":len(references)},indent=2))
         return 0
+    hxb2_hash=sha(DATA/"hxb2.fasta")
+    reused, reuse_sources = {}, []
+    if args.resume_from:
+        from verified_resume198 import load_verified
+        reused, reuse_sources = load_verified(
+            args.resume_from, rows,
+            lambda row: baseline_provenance(row, pinned_iva_id, hxb2_hash, True),
+            load_iva_baseline, checked["ivanka"], references, sha, OUTPUT_NAMES)
+        print("AUTHENTICATED_COMPLETED_SAMPLES_REUSED",
+              len(reused), "remaining", len(rows)-len(reused), flush=True)
     RESULTS.mkdir(parents=True,exist_ok=True)
     invocation=str(int(time.time()))+"-"+str(os.getpid())
-    hxb2_hash=sha(DATA/"hxb2.fasta")
     path=RESULTS/"results.jsonl"
+    if args.resume_from and path.exists():
+        raise ValueError("Resume requires a fresh results directory")
+    pending_rows=[row for row in rows if row["sample"] not in reused]
     failed=0
-    completed_records=[]
+    completed_records=list(reused.values())
     benchmark_start=time.monotonic()
     with path.open("a",buffering=1) as out:
+        # Keep the original successful record and artifact root in its source.
+        # Copying its JSON here would falsely rebind its old artifact path to
+        # this new run on a subsequent recovery. Import the original source
+        # explicitly again when resuming more than once.
+        for record in completed_records:
+            out.write(json.dumps({"sample":record["sample"],
+                                  "status":"reused_verified",
+                                  "original_invocation":record["invocation"],
+                                  "invocation":invocation}, sort_keys=True)+"\n")
         def on_start(row):
             out.write(json.dumps({"sample":row["sample"],
                                   "invocation":invocation,"status":"started"})+"\n")
@@ -986,9 +1011,10 @@ def _run_main():
                   "fail" if record["failed"] else "ok",
                   record.get("best_contig_acceptance",{}),flush=True)
 
-        completed_records,stopped_early=execute_bounded(
-            rows,args.jobs,worker,on_start,on_finish,on_error,
+        fresh,stopped_early=execute_bounded(
+            pending_rows,args.jobs,worker,on_start,on_finish,on_error,
             stop_on_failure=args.qualify_198)
+        completed_records.extend(fresh)
     failed=sum(r.get("failed") is not False for r in completed_records)
     if stopped_early:
         print("STRICT_198_STOPPED_AFTER_IRREVERSIBLE_SAMPLE_FAILURE",
@@ -1054,6 +1080,8 @@ def _run_main():
         "project_reference_catalog_sha256":catalog_hash,
         "qualification_requested":args.qualify or args.qualify_198,
         "qualification198_requested":args.qualify_198,
+        "resumed_completed_samples":len(reused),
+        "authenticated_resume_sources":reuse_sources,
         "all_projects":getattr(args,"all_projects",False),
         "manifest_sample_count":manifest_sample_count,
         "selected_samples":len(rows),"finished_samples":len(completed_records),

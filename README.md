@@ -290,8 +290,8 @@ python benchmarks/replay_milestone198.py \
 
 The replay verifies the manifest, run identity, original Ivanka executable
 image, FASTQ/provenance hashes, final output hashes, all 33 references and
-authentic IVA baseline hashes, and applies the same 198-sample/90%/six-PSI
-acceptance. It writes a **separate** summary and restored records; the
+authentic IVA baseline hashes, and applies the same 198-sample, 90%-floor,
+and shifted PSI(r)>0 for every real r>=0 (alignment and runtime) acceptance. It writes a **separate** summary and restored records; the
 original diagnostic artifacts are not edited. A missing baseline is a
 failed comparison, not an invented or skipped sample.
 
@@ -324,6 +324,38 @@ a second overlapping cohort. Every cooperating launcher shares the default
 `IVANKA_GLOBAL_LAUNCH_LOCK` for smoke tests). Launch collisions fail with
 exit 75; attempts to reuse a previous state directory fail with exit 74.
 Direct invocations that bypass the launcher are not governed by its lock.
+
+### Authenticated recovery of interrupted 198-sample qualifications
+
+Use `--resume-from` only for an interrupted strict 198-sample run, with a
+**new results directory** and the same frozen 198 manifest, pinned IVA image,
+pinned Ivanka image and 33-reference panel. The runner checks every proposed
+completed sample against current FASTQ and HXB2 hashes, the original
+authenticated IVA cache, the Ivanka image digest, **all MiCall output SHA-256
+witnesses**, the original in-container timer file and a freshly recomputed
+90% final-MAX reference-panel score. Ambiguous duplicate successes are
+rejected; previous failed attempts and incomplete starts are **rerun**.
+A partially written final JSONL line never counts as completed evidence.
+
+Example, after confirming the exclusive lock is free and the old worker has
+stopped (use a new destination on every attempt):
+
+```sh
+export IVANKA_PODMAN_RESULTS=/workspace/ivanka-resumed-NEW
+./scripts/launch_detached_locked.sh /workspace/ivanka-resumed-state-NEW \
+  ./scripts/benchmark_podman_full_micall.sh --mode ivanka --qualify-198 \
+  --all-projects --jobs 2 --sample-time-limit 1800 \
+  --resume-from /workspace/ivanka-previous-results/results.jsonl
+```
+
+Recovery records remain anchored to their **original** invocation's files;
+the new JSONL contains `reused_verified` markers rather than counterfeit
+copies of old records. For a *second* recovery, supply **all original**
+`results.jsonl` sources again, as repeated `--resume-from` options.
+A missing, changed, unauthenticated, duplicated or unsupported completed
+record cannot be cherry-picked into acceptance. Reusing samples never skips
+the 198 distinct-sample requirement, the 1800-second container cap, either
+shifted PSI all-nonnegative-axis test, or the unchanged 90% floor.
 
 ### Diagnostic-only runtime decomposition
 

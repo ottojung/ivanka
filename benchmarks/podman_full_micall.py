@@ -20,9 +20,6 @@ from Bio import SeqIO
 from Bio.Align import PairwiseAligner
 from reference_catalog import load_micall_projects
 import milestone198
-from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
-                                  authenticated_postrun_cleanup, startup_database_lock,
-                                  no_micall_output)
 
 DATA = Path(os.environ.get("IVANKA_DATA", "/workspace/denovo-example-io-1"))
 RESULTS = Path(os.environ.get("IVANKA_PODMAN_RESULTS", "/workspace/ivanka-podman-results"))
@@ -486,71 +483,40 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     cleanup_error = None
     with (folder / "podman.stdout.log").open("w") as stdout, \
          (folder / "podman.stderr.log").open("w") as stderr:
-        start_retries = 0
-        original_name = container_name
-        while True:
-            # The original sample wall clock includes *every* failed startup,
-            # backoff, and successful container. Never reset its deadline.
-            remaining = timeout - (time.monotonic() - start)
-            if remaining <= 1:
-                exitcode = 124
-                break
-            container_name = (original_name if start_retries == 0
-                              else f"{original_name}-dbretry{start_retries}")
-            command[command.index("--name") + 1] = container_name
-            command[command.index("--timeout") + 1] = str(max(1, int(remaining) - 2))
+        try:
+            p = subprocess.run(command, stdout=stdout, stderr=stderr,
+                               timeout=timeout, check=False)
+            exitcode = p.returncode
+        except subprocess.TimeoutExpired:
+            # The container may outlive its Podman CLI. Cleanup failure must
+            # never hide the original timeout or erase the failed arm record.
+            exitcode = 124
             try:
-                p = subprocess.run(command, stdout=stdout, stderr=stderr,
-                                   timeout=remaining, check=False)
-                exitcode = p.returncode
-            except subprocess.TimeoutExpired:
-                # The container may outlive its Podman CLI. Cleanup failure
-                # cannot hide a real deadline violation.
-                exitcode = 124
-                try:
-                    cleanup = subprocess.run(
-                        ["podman", "rm", "--force", container_name],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        timeout=30, check=False)
-                    if cleanup.returncode:
-                        cleanup_error = f"podman rm exited {cleanup.returncode}"
-                except (subprocess.TimeoutExpired, OSError) as exc:
-                    cleanup_error = f"{type(exc).__name__}: {exc}"
-            stderr.flush()
-            # Podman 5.8 sometimes cannot begin its SQLite creation
-            # transaction amid concurrent container cleanup. Such a failure
-            # has executed ZERO MiCall steps; retry within the ORIGINAL cap,
-            # never for non-lock failures or a container that has run MiCall.
-            if (exitcode in (125, 126)
-                    and startup_database_lock(folder / "podman.stderr.log")
-                    and no_micall_output(folder)
-                    and not timing_file.exists()
-                    and time.monotonic() - start + 3 < timeout):
-                start_retries += 1
-                stderr.write(f"Benchmark: retrying Podman startup after DB lock ({start_retries})\n")
-                stderr.flush()
-                time.sleep(min(3 + start_retries, 10))
-                continue
-            break
+                cleanup = subprocess.run(["podman", "rm", "--force", container_name],
+                                         stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL,
+                                         timeout=30, check=False)
+                if cleanup.returncode:
+                    cleanup_error = f"podman rm exited {cleanup.returncode}"
+            except (subprocess.TimeoutExpired, OSError) as exc:
+                cleanup_error = f"{type(exc).__name__}: {exc}"
     container_wall_seconds = round(time.monotonic()-start, 2)
     internal_seconds = None
     timing_error = None
-    recovered_cleanup = False
     if exitcode == 0:
         try:
-            internal_seconds = verified_internal_seconds(timing_file, container_wall_seconds)
+            measured = json.loads(timing_file.read_text())
+            internal_seconds = measured["seconds"]
+            if (measured.get("timing_origin") != "micall_in_container_monotonic_v1"
+                    or measured.get("exit_code") != 0
+                    or not isinstance(internal_seconds, (float, int))
+                    or isinstance(internal_seconds, bool)
+                    or not math.isfinite(internal_seconds)
+                    or not 0 < internal_seconds <= container_wall_seconds + 1):
+                raise ValueError("Invalid in-container MiCall measurement")
         except (OSError, KeyError, ValueError, TypeError) as exc:
             exitcode = 1
             timing_error = f"Missing or invalid in-container timing evidence: {exc}"
-    elif exitcode == 127:
-        # Podman can report 127 when auto-removal fails on a locked DB AFTER
-        # MiCall has exited successfully. This case has to satisfy an exact
-        # post-run diagnostic and the independent in-container timer.
-        internal_seconds = authenticated_postrun_cleanup(
-            exitcode, folder, container_wall_seconds)
-        if internal_seconds is not None:
-            recovered_cleanup = True
-            exitcode = 0
     result = {
         "exit_code": exitcode,
         "container_wall_seconds": container_wall_seconds,
@@ -558,15 +524,9 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         "artifact_dir": str(folder.resolve()),
         "metrics": score_outputs(folder, reference),
     }
-    if start_retries:
-        result["podman_start_retries"] = start_retries
-    if recovered_cleanup:
-        # Preserve the real CLI error; never disguise it as a clean Podman exit.
-        result["podman_exit_code"] = 127
-        result["postrun_cleanup_error"] = "Podman auto-removal: database is locked"
     if internal_seconds is not None and not timing_error:
         result["seconds"] = internal_seconds
-        result["timing_origin"] = TIMING_ORIGIN
+        result["timing_origin"] = "micall_in_container_monotonic_v1"
     if exitcode:
         result["error"] = (timing_error or
                            (f"Podman arm timed out after {timeout}s" if exitcode == 124
@@ -698,21 +658,8 @@ def evaluate_sample(row, args, images, checked, pinned_iva_id,
     record["failed"]=bool(failures)
     record["total_seconds"]=round(time.monotonic()-started,2)
     record["sample_time_limit_seconds"]=getattr(args,"sample_time_limit",1800)
-    # For formal 198 qualification the cap is on each complete Podman
-    # container lifetime, not on subsequent host-side alignment scoring.
-    if getattr(args, "qualify_198", False):
-        # IVA-only control preparation is not a paired qualification. Check
-        # the executed arms here; the strict verifier separately requires both.
-        arms_present = [arm for arm in ("iva", "ivanka") if arm in record]
-        cap_ok = bool(arms_present) and all(
-            isinstance(record[arm], dict)
-            and qualification_within_cap(record["sample_time_limit_seconds"],
-                                         record[arm].get("container_wall_seconds"))
-            for arm in arms_present)
-    else:
-        cap_ok = qualification_within_cap(record["sample_time_limit_seconds"],
-                                          record["total_seconds"])
-    if not cap_ok:
+    if not qualification_within_cap(record["sample_time_limit_seconds"],
+                                     record["total_seconds"]):
         record["status"]="sample_timeout"
         record["failed"]=True
     return record
@@ -739,15 +686,13 @@ def validate_milestone198_preflight(args, sample_count, manifest_hash, iva_image
     expected=os.environ.get("IVANKA_EXPECTED_MANIFEST_SHA256", "")
     # Cache audit is read-only; it may inspect IVA without starting an IVA arm.
     cache_mode = args.cache_status and args.mode in ("iva", "ivanka")
-    # Ten workers is a throughput target, not an immutable scientific gate.
-    # Fewer concurrent Podman writers mitigate database-lock contention.
     if ((args.mode != "ivanka" and not cache_mode) or
         args.sample is not None or args.allow_missing_baseline or
-        not args.all_projects or args.parallel_arms or not (1 <= args.jobs <= 10) or
+        not args.all_projects or args.parallel_arms or args.jobs != 10 or
         sample_count != milestone198.SAMPLE_COUNT or
         manifest_hash != milestone198.MANIFEST_SHA256 or
         (expected and expected != milestone198.MANIFEST_SHA256)):
-        raise ValueError("198-sample milestone requires the pinned full cohort, IVA cache, all projects, and 1..10 workers; execution must be Ivanka-only")
+        raise ValueError("198-sample milestone requires the pinned full cohort, IVA cache, all projects, and 10 workers; execution must be Ivanka-only")
 
 
 def validate_milestone198_panel(reference_count, reference_sha256):
@@ -913,24 +858,10 @@ def main():
     global_seconds=time.monotonic()-benchmark_start
     max_sample_seconds=max((r["total_seconds"] for r in completed_records
                             if isinstance(r.get("total_seconds"), (int,float))), default=None)
-    container_walls = [
-        r[arm].get("container_wall_seconds")
-        for r in completed_records for arm in ("iva", "ivanka")
-        if isinstance(r.get(arm), dict)]
-    max_container_wall_seconds = max(
-        (w for w in container_walls if milestone198.finite(w, positive=True)),
-        default=None)
     per_sample_timing_complete=all(
         isinstance(r.get("total_seconds"),(int,float)) for r in completed_records)
-    if args.qualify_198:
-        per_sample_timing_complete = (per_sample_timing_complete and
-            len(container_walls) == 2 * len(completed_records) and
-            all(qualification_within_cap(args.sample_time_limit,w)
-                for w in container_walls))
-    qualification_elapsed = (max_container_wall_seconds if args.qualify_198
-                             else max_sample_seconds)
     complete_noninferiority=(full_scope and per_sample_timing_complete and
-                            qualification_within_cap(args.sample_time_limit,qualification_elapsed)
+                            qualification_within_cap(args.sample_time_limit,max_sample_seconds)
                             and accepted==manifest_sample_count and failed==0)
     # Preserve the distinction: cached controls are not a same-invocation IVA/IVANKA run.
     full_alpha_pass=(complete_noninferiority and args.mode=="both")
@@ -957,8 +888,6 @@ def main():
         "global_seconds":round(global_seconds,2),
         "sample_limit_seconds":args.sample_time_limit,
         "max_sample_seconds":(round(max_sample_seconds,2) if max_sample_seconds is not None else None),
-        "max_container_wall_seconds":(round(max_container_wall_seconds,2)
-                                      if max_container_wall_seconds is not None else None),
         "reference_panel_sha256":reference_panel_hash,
         "reference_panel_count":len(references),
         **eligibility,

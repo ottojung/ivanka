@@ -43,6 +43,21 @@ def authenticate(record, root, row, expected, cached_iva, image, panel, sha,
     folder = (root / invocation / name / "ivanka").resolve()
     if Path(arm.get("artifact_dir", "")).resolve() != folder or not folder.is_dir():
         raise ValueError("Source artifact directory is not in its own invocation")
+    # A successful timer and an exit-code field are not sufficient if the
+    # retained MiCall execution log has been truncated or replaced.
+    # Require the authentic MiCall completion marker in the original log,
+    # without reading the entire potentially large stderr into memory.
+    log = folder / "podman.stderr.log"
+    try:
+        with log.open("rb") as stream:
+            stream.seek(0, 2)
+            size = stream.tell()
+            stream.seek(max(0, size - 4096))
+            completed = b"micall.process_run(): Done." in stream.read()
+    except OSError as exc:
+        raise ValueError("Missing original MiCall completion log") from exc
+    if not completed:
+        raise ValueError("Missing authentic MiCall Done completion witness")
     timing = verified_internal_seconds(
         folder / "micall_internal_timing.json", arm["container_wall_seconds"])
     if abs(timing - arm["seconds"]) > 1e-9:

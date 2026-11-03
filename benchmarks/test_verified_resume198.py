@@ -20,6 +20,8 @@ class VerifiedResumeTests(unittest.TestCase):
         self.folder.mkdir(parents=True)
         self.conseq = self.folder / "conseq.csv"
         self.conseq.write_text("region,sequence\nR,ACTG\n")
+        (self.folder / "podman.stderr.log").write_text(
+            "micall.process_run(): Done.\n")
         self.timing = self.folder / "micall_internal_timing.json"
         self.timing.write_text(json.dumps({
             "seconds": 12.3, "exit_code": 0,
@@ -113,6 +115,15 @@ class VerifiedResumeTests(unittest.TestCase):
     def test_modified_consensus_is_rejected(self):
         self.conseq.write_text("region,sequence\nR,GGGG\n")
         with self.assertRaisesRegex(ValueError,"artifact missing or changed"):
+            self.load()
+
+    def test_missing_or_truncated_original_micall_completion_is_rejected(self):
+        log = self.folder / "podman.stderr.log"
+        log.unlink()
+        with self.assertRaisesRegex(ValueError, "completion log"):
+            self.load()
+        log.write_text("MiCall started but no successful completion\\n")
+        with self.assertRaisesRegex(ValueError, "completion witness"):
             self.load()
 
     def test_modified_runtime_is_rejected(self):

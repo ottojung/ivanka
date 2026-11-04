@@ -2,6 +2,32 @@
 
 The referenceless MiCall **contig stitcher is part of Ivanka's mutable optimization surface**. Candidate solutions may change stitching itself—not just the standalone Rust assembler—including overlap selection, joins, path scoring, redundancy handling and post-stitch output selection. MiCall's Python implementation is eligible for improvement.
 
+## Scope disclosure for the current 198-sample candidate
+
+The November 3 candidate in PR #137 **also changes MiCall beyond the assembler
+and referenceless stitcher**. It installs a fail-closed opt-in patch at the
+remapping-to-`sam2aln` boundary, projecting an original paired-read observation
+to an isolated reciprocal near-identical HCV contig hypothesis only when both
+mate-mapped reference intervals have exactly identical sequence. The patched
+candidate image is derived from the pinned MiCall baseline; the IVA control
+image is untouched.
+
+This is a comparison of **two end-to-end pipelines**, not an assembler-only
+ablation and not evidence that Ivanka's native assembler by itself exceeds IVA.
+In particular, the S48/S98 improvement occurs **after stitching**; their
+assembled and stitched contig artifacts did not change relative to the prior
+candidate. Each projected QNAME is a correlated observation of the same
+original FASTQ pair, not a new independent molecule. The implementation does
+not lower MiCall's consensus depth threshold or infer reference alleles from
+unverified assembly.
+
+The external 198-sample cohort, sample-level floor, 1,800-second wall budget,
+pinned reference panel, frozen authentic IVA baseline, and both all-real-r PSI
+acceptance conditions are **identical** to the original qualification. If a
+scientific claim requires the narrower assembler/stitcher-only optimization
+surface, this remapper-enhanced candidate must be evaluated separately and
+must not be reported as passing that narrower experiment.
+
 ## Exploratory approaches
 
 Filtering contigs **after stitching**, perhaps by the number of reads supporting each resulting path, is one possible experiment. It is **not** a prescribed design: selecting only high-support, long or few contigs may discard legitimate minority haplotypes. Alternatives that prevent incorrect joins or compact redundant contigs while retaining supported sequence diversity are equally welcome.

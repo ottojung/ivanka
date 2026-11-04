@@ -57,7 +57,9 @@ mod rescue;
 mod rescue_rank;
 pub(super) use rescue::rescue_short;
 
-pub(super) use rescue_rank::append_preserving_diversity;
+
 
 #[cfg(test)] mod rescue_rank_test;
 #[cfg(test)] mod rescue_rank_equiv_test;
+mod phase_guard;
+pub(super) use self::{phase_guard::split_unsupported_contigs,rescue_rank::append_preserving_diversity};

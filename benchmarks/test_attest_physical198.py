@@ -94,7 +94,7 @@ class Physical198AttestationTests(unittest.TestCase):
             with patch.object(audit, "sha", return_value=audit.MANIFEST_SHA256):
                 with self.assertRaisesRegex(ValueError, "Frozen cohort"):
                     audit.verify(base, state, manifest, base / "cache", "run")
-            manifest.write_text("sample\\n" + "".join("S" + str(i) + "\\n" for i in range(198)))
+            manifest.write_text("sample\n" + "".join("S" + str(i) + "\n" for i in range(198)))
             with patch.object(audit, "sha", return_value=audit.MANIFEST_SHA256):
                 with self.assertRaisesRegex(ValueError, "Physical runner did not finish"):
                     audit.verify(base, state, manifest, base / "cache", "run")

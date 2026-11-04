@@ -79,6 +79,7 @@ def evaluate(summary):
         "accepted_samples": summary.get("accepted_samples"),
         "finished_samples": summary.get("finished_samples"),
         "max_sample_seconds": wall,
+        "time_label": "max_container_wall_seconds",
         "full_alpha_pass": False,
         "milestone198_pass": not reasons,
         "reasons": reasons,

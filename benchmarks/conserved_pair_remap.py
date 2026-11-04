@@ -54,12 +54,13 @@ def mapped_window(row, expected_ref, reference_length):
     if row["rname"] != expected_ref or row["rnext"] not in ("=", expected_ref):
         return None
     cigar = row["cigar"]
+    # Only terminal soft clips are SAM-valid for a single contiguous M block.
+    # Reject internal clips, repeated clips and zero-length operations rather
+    # than projecting a malformed mapping into another haplotype.
+    if not re.fullmatch(r"(?:[1-9]\d*S)?[1-9]\d*M(?:[1-9]\d*S)?", cigar):
+        return None
     ops = re.findall(r"(\d+)([MS])", cigar)
-    if not ops or "".join(n + op for n, op in ops) != cigar:
-        return None
     matches = [int(n) for n, op in ops if op == "M"]
-    if len(matches) != 1 or matches[0] < 1:
-        return None
     if sum(int(n) for n, _ in ops) != len(row["seq"]):
         return None
     if len(row["qual"]) != len(row["seq"]):

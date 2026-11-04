@@ -1,6 +1,11 @@
 """Proof guards for redacted, original-pair shared-local observations."""
+import csv
+import hashlib
 import json
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from shared_unphased_evidence import build_shared_evidence
@@ -93,8 +98,6 @@ class SharedUnphasedEvidenceTests(unittest.TestCase):
         self.assertEqual(result["nodes"], [])
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class SharedUnphasedEvidenceSidecarTests(unittest.TestCase):
@@ -104,6 +107,7 @@ class SharedUnphasedEvidenceSidecarTests(unittest.TestCase):
         from shared_unphased_evidence import build_shared_evidence
         result = build_shared_evidence(masked, refs, rows, 8, 100)
         self.assertEqual(result["schema_version"], "ivanka.shared_unphased_evidence.v1")
+        self.assertEqual(result["selected_reference_names"], list(refs))
         self.assertEqual(result["artifact_type"], "shared_unphased_evidence_sidecar")
         self.assertFalse(result["full_length_haplotype_phase_inferred"])
         self.assertFalse(result["phase_inferred"])
@@ -111,7 +115,7 @@ class SharedUnphasedEvidenceSidecarTests(unittest.TestCase):
         self.assertFalse(result["independent_molecules_inferred"])
         self.assertFalse(result["insert_bases_imputed"])
         self.assertTrue(result["original_read_pair_qnames_counted_once"])
-        self.assertTrue(result["molecules_not_doubled"])
+        self.assertNotIn("molecules_not_doubled", result)
 
     def test_pair_counted_once_not_multiplied(self):
         masked, refs = fixture()
@@ -121,3 +125,44 @@ class SharedUnphasedEvidenceSidecarTests(unittest.TestCase):
         block = [n for n in result["nodes"] if n["feature_kind"] == "block"][0]
         self.assertEqual(block["original_read_pair_ids"], 2)
         self.assertEqual(block["distinct_consistent_pair_sequence_signatures"], 1)
+
+class SidecarCliTests(unittest.TestCase):
+    def test_original_csv_cli_creates_hash_attested_redacted_json(self):
+        masked, refs = fixture()
+        rows = pair("one", "private-synthetic-read", refs["one"])
+        from shared_unphased_evidence import main
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            final, seeds, sam, output = (root / n for n in
+                ("conseq.csv", "remap_conseq.csv", "remap.csv", "sidecar.json"))
+            for path, fields, values in (
+                (final, ("region","q-cutoff","consensus-percent-cutoff","sequence"),
+                 [{"region":"one","q-cutoff":"15",
+                   "consensus-percent-cutoff":"MAX","sequence":masked.sequence}]),
+                (seeds, ("region","sequence"),
+                 [{"region":name,"sequence":seq} for name,seq in refs.items()]),
+                (sam, tuple(rows[0]), rows)):
+                with path.open("w",newline="") as f:
+                    writer=csv.DictWriter(f,fieldnames=fields)
+                    writer.writeheader();writer.writerows(values)
+            args=["sidecar",str(final),str(seeds),str(sam),"--region","one"]
+            for name in refs:
+                args.extend(["--reference",name])
+            args += ["--mask-start","100","--mask-end","103",
+                     "--anchor","8","--radius","100","--output",str(output)]
+            with patch.object(sys,"argv",args):
+                main()
+            report=json.loads(output.read_text())
+            self.assertEqual(report["selected_reference_names"],list(refs))
+            self.assertEqual(report["mask_end"]-report["mask_start"],3)
+            self.assertEqual(report["phase_status"],"unidentified")
+            self.assertFalse(report["raw_qnames_included"])
+            self.assertNotIn("private-synthetic-read",output.read_text())
+            for name,path in (("final_conseq_csv",final),
+                              ("remap_conseq_csv",seeds),
+                              ("remap_sam_csv",sam)):
+                self.assertEqual(report["input_provenance"][name]["sha256"],
+                                 hashlib.sha256(path.read_bytes()).hexdigest())
+
+if __name__ == "__main__":
+    unittest.main()

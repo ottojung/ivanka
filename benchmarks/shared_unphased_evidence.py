@@ -118,6 +118,7 @@ def build_shared_evidence(masked, references, sam_rows, anchor=31,
         "shared_block_length": len(allele),
         "shared_block_sha256": hashlib.sha256(allele.encode()).hexdigest(),
         "reference_count": len(references),
+        "selected_reference_names": list(references),
         "marker_count": len(markers),
         "strict_original_read_pair_ids_evaluated": len(observations),
         "original_read_pair_qnames_counted_once": True,
@@ -128,7 +129,6 @@ def build_shared_evidence(masked, references, sam_rows, anchor=31,
         "full_length_haplotype_phase_inferred": False,
         "phase_status": "unidentified",
         "phase_inferred": False,
-        "molecules_not_doubled": True,
         "interpretation": (
             "Only directly observed original-read-pair local alleles are "
             "reported. Each original qname pair counted once; sequence-signature "

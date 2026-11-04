@@ -154,6 +154,43 @@ class ConservativeRemapTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing SAM"):
             project_remap(self.src, self.refs, self.out)
 
+    def test_independent_projection_audit_rejects_invented_bases_and_depth(self):
+        from hypothesis_projection_audit import audit_projection
+        make_csv(self.src, FIELDS, [row(flag=99), row(flag=147, pos=300)])
+        _, generated = project_remap(self.src, self.refs, self.out)
+        self.assertEqual(generated["projected_pairs"], 1)
+        result = audit_projection(self.src, self.out, self.refs)
+        self.assertEqual(result["extra_conditional_pairs"], 1)
+        self.assertEqual(result["cross_target_duplicate_pairs"], 0)
+        with self.out.open(newline="") as handle:
+            records = list(DictReader(handle))
+        records[-1]["seq"] = "C" * 100
+        make_csv(self.out, FIELDS, records)
+        with self.assertRaisesRegex(ValueError, "modified"):
+            audit_projection(self.src, self.out, self.refs)
+        records[-1]["seq"] = "A" * 100
+        make_csv(self.out, FIELDS, records + records[2:])
+        with self.assertRaisesRegex(ValueError, "duplicated"):
+            audit_projection(self.src, self.out, self.refs)
+
+    def test_independent_audit_rejects_unsafe_reference_and_changed_original(self):
+        from hypothesis_projection_audit import audit_projection
+        original = [row(flag=99), row(flag=147, pos=300)]
+        make_csv(self.src, FIELDS, original)
+        project_remap(self.src, self.refs, self.out)
+        with self.out.open(newline="") as handle:
+            records = list(DictReader(handle))
+        records[0]["seq"] = "C" * 100
+        make_csv(self.out, FIELDS, records)
+        with self.assertRaisesRegex(ValueError, "removed or modified"):
+            audit_projection(self.src, self.out, self.refs)
+        project_remap(self.src, self.refs, self.out)
+        extra = "A" * 700 + "C" + "A" * 499
+        make_csv(self.refs, ["region", "sequence"],
+                 self.ref_rows + [{"region": "3-HCV-1a", "sequence": extra}])
+        with self.assertRaisesRegex(ValueError, "isolated reciprocal"):
+            audit_projection(self.src, self.out, self.refs)
+
 
 if __name__ == "__main__":
     unittest.main()

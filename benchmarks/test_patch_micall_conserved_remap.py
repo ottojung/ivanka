@@ -58,6 +58,46 @@ class RemapOverlayTests(unittest.TestCase):
         )
         compile(patched_source(source), "<test>", "exec")
 
+    def test_actual_micall_string_path_at_patched_boundary(self):
+        """MiCall with_prefix() returns str; the overlay must accept it."""
+        import sys
+        import tempfile
+        import types
+        from pathlib import Path
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            remap = Path(directory) / "remap.csv"
+            reference = Path(directory) / "remap_conseq.csv"
+            remap.write_text("unchanged\n")
+            reference.write_text("region,sequence\n")
+            fake = types.ModuleType("micall.core.ivanka_conserved_remap")
+            fake.project_remap = lambda original, refs, output: (
+                original, {"reassigned_pairs": 0})
+            micall = types.ModuleType("micall")
+            micall.__path__ = []
+            core = types.ModuleType("micall.core")
+            core.__path__ = []
+            source = (
+                "class Sample:\n"
+                + f"    remap_csv = {str(remap)!r}\n"
+                + f"    remap_conseq_csv = {str(reference)!r}\n"
+                + "    def stage(self):\n"
+                + "        def with_prefix(value): return value\n"
+                + "        logger = type('Logger', (), {'info': lambda *args: None})()\n"
+                + LOG_MARKER + "\n"
+                + "        " + INPUT_MARKER + ":\n"
+                + "            return remap_csv.read()\n"
+            )
+            namespace = {}
+            with patch.dict(sys.modules, {
+                "micall": micall,
+                "micall.core": core,
+                "micall.core.ivanka_conserved_remap": fake,
+            }):
+                exec(patched_source(source), namespace)
+                self.assertEqual(namespace["Sample"]().stage(), "unchanged\n")
+
 
 if __name__ == "__main__":
     unittest.main()

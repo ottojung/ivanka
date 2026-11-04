@@ -230,6 +230,23 @@ rustc --test source_lints/mod.rs -o /tmp/ivanka-source-lint-tests
 
 ### Full 198-sample milestone qualification
 
+After a completed run, inspect the **198-sample** runner's strict verdict
+(not the older 18-sample two-arm alpha verdict) with:
+
+```sh
+python3 benchmarks/summarize.py --results /path/to/results \\
+  --invocation EXACT_INVOCATION_ID
+```
+
+The command exits nonzero unless the saved runner summary certifies **198/198**,
+zero failures/resumed samples, both all-real-r shifted PSI checks, pinned
+manifest/reference-panel/IVA image provenance, and the 1,800-second per-container
+budget. It displays the maximum whole-container wall time rather than the
+historical alpha sample duration. This is a **summary consistency check**, not
+independent authentication of the original FASTQs, in-container execution or
+output hashes; keep the original physical invocation and its artifacts.
+
+
 The full-cohort benchmark is **separate** from the historical 18-sample,
 95%-of-IVA alpha gate. It requires the exact private cohort manifest SHA-256
 `4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192`,

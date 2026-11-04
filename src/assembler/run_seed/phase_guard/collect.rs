@@ -26,6 +26,7 @@ pub(super) fn observations_cached(seq: &[u8], reads: &[Vec<u8>], cache: &PrepCac
     out
 }
 
+#[cfg(test)]
 pub(super) fn observations(seq: &[u8], reads: &[Vec<u8>], qualities: &[Vec<u8>], a: usize) -> Vec<HashMap<usize, u8>> {
     let cache = make_prep(reads, qualities, a);
     observations_cached(seq, reads, &cache, a)

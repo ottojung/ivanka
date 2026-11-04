@@ -1,8 +1,7 @@
 use std::collections::{HashMap,hash_map::Entry};
 pub(super) const INVALID: u64=u64::MAX;
-#[derive(Clone)]
-pub(super) struct ReadPrep{pub kmers:Vec<u64>,pub lowq:Vec<usize>}
-use super::quality_filter::low_quality_prefix;
+pub(super) struct ReadPrep{pub kmers:Vec<u64>,pub good_windows:Vec<u8>}
+use super::quality_filter::valid_windows;
 pub(super) fn kmer_codes(seq: &[u8], a: usize) -> Vec<u64> {
     if a==0||a>31{return Vec::new();}
     let mask=(1u64<<(2*a))-1;let (mut code,mut valid)=(0u64,0usize);
@@ -15,7 +14,7 @@ pub(super) fn kmer_codes(seq: &[u8], a: usize) -> Vec<u64> {
 }
 pub(super) fn build_prep(reads:&[Vec<u8>],qualities:&[Vec<u8>],a:usize)->Vec<ReadPrep>{
     if qualities.len()!=reads.len(){return Vec::new();}
-    (0..reads.len()).map(|i|ReadPrep{kmers:kmer_codes(&reads[i],a),lowq:low_quality_prefix(&qualities[i])}).collect()
+    (0..reads.len()).map(|i|ReadPrep{kmers:kmer_codes(&reads[i],a),good_windows:valid_windows(&qualities[i],2*a+1)}).collect()
 }
 pub(super) fn unique_flanks(seq: &[u8], a: usize) -> HashMap<u128,Option<usize>> {
     let mut index=HashMap::new();

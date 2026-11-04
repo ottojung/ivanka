@@ -1,13 +1,13 @@
 use std::collections::HashMap;
-use super::index::{kmer_codes,INVALID,ReadPrep};
-use super::quality_filter::valid_window;
+use super::index::{INVALID,ReadPrep};
 struct Placement{start:isize,end:isize,calls:HashMap<usize,u8>}
 fn locate_cached(read:&[u8],prep:&ReadPrep,index:&HashMap<u128,Option<usize>>,a:usize)->Option<Placement>{
-    if read.len()<2*a+1||read.len()!=prep.lowq.len().saturating_sub(1){return None;}
-    let (kmers,low)=(&prep.kmers,&prep.lowq);let mut start=None;let mut calls=HashMap::new();
+    if read.len()<2*a+1||prep.good_windows.len()!=read.len()-2*a{return None;}
+    if prep.kmers.len()!=read.len()-a+1{return None;}
+    let kmers=&prep.kmers;let mut start=None;let mut calls=HashMap::new();
     let limit=read.len().saturating_sub(2*a+1);
     for i in 0..=limit{
-        if !valid_window(low,i,i+2*a+1){continue;}
+        if prep.good_windows[i]==0{continue;}
         if i+a+1>=kmers.len(){continue;}
         let (left,right)=(kmers[i],kmers[i+a+1]);if left==INVALID||right==INVALID{continue;}
         let key=((left as u128)<<(2*a))|right as u128;
@@ -36,10 +36,4 @@ pub(super) fn original_pair_calls_cached_borrowed(pair_reads:&[&Vec<u8>],pair_pr
     let mut calls=a_place.calls.clone();
     for (&pos,&base) in &b_place.calls{calls.entry(pos).and_modify(|existing|{if *existing!=base{*existing=b'N';}}).or_insert(base);}
     calls.retain(|_,base|*base!=b'N');calls
-}
-pub(super) fn original_pair_calls_cached(pair_reads:&[Vec<u8>],pair_prep:&[ReadPrep],index:&HashMap<u128,Option<usize>>,a:usize)->HashMap<usize,u8>{
-    if pair_reads.len()!=4||pair_prep.len()!=4{return HashMap::new();}
-    let reads_ref=[&pair_reads[0],&pair_reads[1],&pair_reads[2],&pair_reads[3]];
-    let prep_ref=[&pair_prep[0],&pair_prep[1],&pair_prep[2],&pair_prep[3]];
-    original_pair_calls_cached_borrowed(&reads_ref,&prep_ref,index,a)
 }

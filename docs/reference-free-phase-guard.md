@@ -222,3 +222,26 @@ real and **cannot** be billed to the standard 198 runtime benchmark
 since audit is disabled by default. Do not infer whole-sample or
 final-MiCall phase safety from these prefixes. Frozen 198 data and
 all original IVA controls remain unchanged.
+
+## Pinned MiCall N-seed contract (source-verified)
+
+The real pinned Ivanka/MiCall container image
+bb22d7e58e795d06062b5e36644aeac03bd6a0137022395a801ec55da55a5d0d
+contains micall/core/remap.py with SHA256
+8dd8fdf10d6ef2d74453bb03093a56080efcefab67d405fd2ca3387d49ace67b.
+A direct controlled invocation of counts_to_conseqs with an 81-base seed
+whose index 40 is N yields:
+
+| Read coverage at index 40 | Output consensus |
+| --- | --- |
+| None | N |
+| 12 reads carrying A | A |
+| 12 reads carrying G and 4 carrying A | G |
+
+The machine-readable, read-free reproduction is saved privately at
+/workspace/ivanka-lab/phase-guard-q15-20261104/pinned-micall-n-seed-observation.json.
+This is a narrowly scoped **actual-code** observation, not a full-MiCall
+end-to-end validation. It proves that retaining N in the assembler FASTA
+alone is not a persistent phase-uncertainty guarantee under MiCall remapping.
+Future shared/unphased evidence therefore needs a *separate preserved
+annotation or consumer contract*, never only a base substitution.

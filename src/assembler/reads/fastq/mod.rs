@@ -1,8 +1,12 @@
+mod id;
+pub(super) use id::mate_headers;
+#[cfg(test)] mod pair_tests;
+#[cfg(test)] use super::types::Reads;
 use std::io::{self, BufRead};
 
 pub(crate) struct FastqSeqReader<R: BufRead> {
     reader: R,
-    header: String,
+    pub(super) header: String,
     bases: String,
     plus: String,
     quality: String,

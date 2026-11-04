@@ -4,7 +4,8 @@ This independent, opt-in **read-only audit** connects an already completed
 MiCall remap.csv to its original paired R1/R2 FASTQ files. It verifies
 that all remap QNAMEs really occur in both paired FASTQs and that
 **every remap nucleotide sequence and Phred quality string** appears
-as a contiguous substring of one corresponding original mate,
+as a contiguous substring of the matching original mate
+(**SAM first-in-pair must match original R1; second-in-pair must match R2**),
 possibly reverse-complemented (with qualities reversed).
 
 A successful attestation means the particular remap rows carry

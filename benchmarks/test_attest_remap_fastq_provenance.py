@@ -67,6 +67,16 @@ class RemapFastqProvenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not from original FASTQ"):
             attest(self.sam, self.r1, self.r2)
 
+    def test_identical_sequences_but_swapped_mate_qualities_rejected(self):
+        with self.sam.open() as stream:
+            rows = list(csv.DictReader(stream))
+        rows[0]["qual"], rows[1]["qual"] = rows[1]["qual"], rows[0]["qual"]
+        self.csv(rows)
+        # Both sequence+quality pairs occur in *some* FASTQ mate, but the
+        # observed qualities are not from the mate named by SAM first/second.
+        with self.assertRaisesRegex(ValueError, "not from original FASTQ mate"):
+            attest(self.sam, self.r1, self.r2)
+
     def test_first_and_second_sam_flags_required(self):
         with self.sam.open() as f: rows=list(csv.DictReader(f))
         rows[1]["flag"] = "99"

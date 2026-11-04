@@ -97,9 +97,10 @@ def attest(remap_csv, fastq_r1, fastq_r2):
         if flags != {0x40, 0x80}:
             raise ValueError("Remap lacks one original R1 and one R2 record")
         for row in rows:
+            source = one if int(row["flag"]) & 0x40 else two
             if not exact_original_fragment(row["seq"].upper(), row["qual"],
-                                           ((one[1], one[2]), (two[1], two[2]))):
-                raise ValueError("Remap sequence or quality not from original FASTQ")
+                                           ((source[1], source[2]),)):
+                raise ValueError("Remap sequence or quality not from original FASTQ mate")
         matched_pairs += 1
         identical_remap_mate_sequences += rows[0]["seq"] == rows[1]["seq"]
         identical_remap_mate_qualities += rows[0]["qual"] == rows[1]["qual"]

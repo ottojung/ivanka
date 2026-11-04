@@ -76,7 +76,7 @@ def mapped_window(row, expected_ref, reference_length):
 
 
 def compatible_targets(mates, refs, groups):
-    if len(mates) != 2:
+    if len(mates) != 2 or not mates[0]["qname"] or mates[0]["qname"] != mates[1]["qname"]:
         return []
     source = mates[0]["rname"]
     if source not in groups or any(r["rname"] != source for r in mates):

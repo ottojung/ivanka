@@ -88,6 +88,14 @@ class ConservativeRemapTests(unittest.TestCase):
             self.assertEqual(compatible_targets([valid[0], bad], refs, groups), [])
         self.assertEqual(compatible_targets([valid[0], row(flag=83)], refs, groups), [])
 
+    def test_pair_identity_must_be_genuine(self):
+        refs = load_references(self.refs)
+        groups = compatible_groups(refs)
+        for names in (("first", "second"), ("", "")):
+            mates = [row(name=names[0], flag=99),
+                     row(name=names[1], flag=147, pos=300)]
+            self.assertEqual(compatible_targets(mates, refs, groups), [])
+
     def test_malformed_soft_clips_cannot_be_projected(self):
         refs = load_references(self.refs)
         groups = compatible_groups(refs)

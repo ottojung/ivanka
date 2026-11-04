@@ -17,6 +17,8 @@ import tempfile
 
 _DNA = frozenset("ACGT")
 _FLAGS = ({83, 163}, {99, 147})
+_SOURCE_Q15_RESERVE = 110
+_TARGET_Q15_GUIDE = 120
 _HCV_REGION = re.compile(r"^\d+-(HCV-\d+[a-z])$")
 
 
@@ -114,7 +116,7 @@ def _valid_base_sites(mates, reference_length, minimum_quality=15):
 def project_remap(remap_path, reference_path, output_path):
     """Allocate existing molecules once, never create synthetic read identities.
 
-    The source retains at least 160 estimated Q15 pair-covered observations at
+    The source retains at least 110 estimated Q15 pair-covered observations at
     each transferred base. Move only to a compatible hypothesis with low
     estimated depth; this is not a MiCall consensus-depth calculation.
     """
@@ -165,10 +167,10 @@ def project_remap(remap_path, reference_path, output_path):
     moved = Counter()
     for name, mates, source, sites in pairs:
         options = compatible_targets(mates, refs, groups)
-        if not options or any(depth[source][pos] <= 160 for pos in sites):
+        if not options or any(depth[source][pos] <= _SOURCE_Q15_RESERVE for pos in sites):
             continue
         ranked = sorted(
-            ((sum(max(0, 140 - depth[target][pos]) for pos in sites), target)
+            ((sum(max(0, _TARGET_Q15_GUIDE - depth[target][pos]) for pos in sites), target)
              for target in options),
             key=lambda value: (-value[0], value[1]),
         )

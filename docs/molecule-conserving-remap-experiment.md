@@ -19,9 +19,9 @@ clips or conflicting paired high-quality base calls are not used as transfer
 evidence.
 
 Before transferring a pair, a conservative Q15 merged-position estimate
-must show **more than 160** observations at every source position it covers.
-The recipient must have a deficit relative to a target of 140 observations.
-The source is never intentionally depleted below this reserve. The estimate
+must show **more than 110** observations at every source position it covers.
+The recipient must have a deficit relative to a target of 120 observations.
+The source is never intentionally depleted below this reserve, a 10-observation buffer above the MiCall coverage threshold of 100 (not an exact merged-depth guarantee). The estimate
 is *not* MiCall's merged consensus depth and does not certify coverage.
 One molecule is still not proof of any full-length biological haplotype.
 

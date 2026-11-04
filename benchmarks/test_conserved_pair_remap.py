@@ -61,18 +61,18 @@ class ConserveMoleculesTests(unittest.TestCase):
         original_bytes = self.src.read_bytes()
         output, stats, after = self.report()
         self.assertEqual(output, self.dst)
-        self.assertEqual(stats["reassigned_pairs"], 40)
+        self.assertEqual(stats["reassigned_pairs"], 90)
         self.assertEqual(stats["output_read_records_added"], 0)
         self.assertEqual(len(after), len(before))
         self.assertEqual(self.src.read_bytes(), original_bytes)
         self.assertEqual(Counter(r["qname"] for r in after),
                          Counter(r["qname"] for r in before))
-        self.assertEqual(sum(r["rname"] == "2-HCV-1a" for r in after), 80)
+        self.assertEqual(sum(r["rname"] == "2-HCV-1a" for r in after), 180)
         self.assertEqual(len({r["qname"] for r in after}), 200)
         self.assertFalse(any("|ivanka_hypothesis=" in r["qname"] for r in after))
 
     def test_insufficient_source_depth_remains_unchanged(self):
-        records = self.pairs(160)
+        records = self.pairs(110)
         dump(self.src, FIELDS, records)
         output, stats, after = self.report()
         self.assertEqual(output, self.src)
@@ -118,7 +118,7 @@ class ConserveMoleculesTests(unittest.TestCase):
               {"region": "3-HCV-1a", "sequence": extra}])
         dump(self.src, FIELDS, self.pairs(200))
         _, stats, after = self.report()
-        self.assertEqual(stats["reassigned_pairs"], 40)
+        self.assertEqual(stats["reassigned_pairs"], 90)
         self.assertEqual(len(after), 400)
         self.assertEqual(len(set(r["qname"] for r in after)), 200)
 

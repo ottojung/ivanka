@@ -276,6 +276,17 @@ evidence and original file contents, but does not independently prove
 container execution or recompute alignments from nucleotide sequences.**
 Retain the original physical results and image IDs for reproducibility.
 
+If a historical runner's recorded PSI numbers use a superseded evaluation
+convention, the default attestation **rejects** the mismatch. Reassess the same
+unaltered sample records under the current PSI rule with
+`--prior-attestation /path/to/previously-verified-attestation.json`.
+That prior read-only attestation must pin the exact original summary and result
+SHA-256 digests, 198 records, both recorded PSI fields, image IDs and panel.
+The command still independently checks all cached and candidate artifact hashes
+and requires the **current** PSI to pass every real exponent. Its output is
+labelled a reassessment, **not a new physical benchmark**. No original record,
+summary, or prior attestation is modified.
+
 The full-cohort benchmark is **separate** from the historical 18-sample,
 95%-of-IVA alpha gate. It requires the exact private cohort manifest SHA-256
 `4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192`,

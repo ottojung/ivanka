@@ -73,7 +73,28 @@ def verify_pair(record, root, cache, invocation, image):
     checked_artifact(cache_dir, iva["metrics"]["outputs"]["conseq.csv"]["sha256"])
 
 
-def verify(root, state, manifest, cache, invocation):
+
+def validate_prior_attestation(path, root, summary_path, summary, invocation, image):
+    """Pin immutable historical records before reassessing their current PSI."""
+    previous = json.loads(Path(path).read_text())
+    expected = {
+        "attestation": "read_only_artifact_integrity_and_recorded_psi",
+        "pass": True, "invocation": invocation,
+        "verified_samples": SAMPLE_COUNT,
+        "original_iva_image_id": IVA_IMAGE_SHA256,
+        "candidate_image_id": image,
+        "manifest_sha256": MANIFEST_SHA256,
+        "reference_panel_sha256": PANEL_SHA256,
+        "results_sha256": sha(root / "results.jsonl"),
+        "summary_sha256": sha(summary_path),
+        "score_psi": summary.get("score_psi"),
+        "time_psi": summary.get("time_psi"),
+    }
+    if any(previous.get(key) != value for key, value in expected.items()):
+        raise ValueError("Prior attestation does not pin the recorded run")
+
+
+def verify(root, state, manifest, cache, invocation, prior_attestation=None):
     if sha(manifest) != MANIFEST_SHA256:
         raise ValueError("Frozen manifest checksum mismatch")
     with manifest.open(newline="") as f:
@@ -96,11 +117,24 @@ def verify(root, state, manifest, cache, invocation):
     independent = qualify(rows, names, IVA_IMAGE_SHA256, image,
                           summary["sample_limit_seconds"], PANEL_SHA256)
     if (not independent["milestone198_pass"]
-            or any(summary.get(key) != independent[key]
-                   for key in ("score_psi", "time_psi", "milestone198_valid_pairs"))):
+            or summary.get("milestone198_valid_pairs")
+            != independent["milestone198_valid_pairs"]):
         raise ValueError("Recomputed paired acceptance disagrees with runner")
+    recorded_psi_matches = all(summary.get(key) == independent[key]
+                               for key in ("score_psi", "time_psi"))
+    if prior_attestation is not None:
+        validate_prior_attestation(prior_attestation, root, summary_path,
+                                   summary, invocation, image)
+    if not recorded_psi_matches and prior_attestation is None:
+        raise ValueError("Current PSI differs from the original runner; "
+                         "supply a verified prior attestation for reassessment")
     return {
-        "attestation": "read_only_artifact_integrity_and_recorded_psi",
+        "attestation": ("read_only_artifact_integrity_and_recorded_psi"
+                        if recorded_psi_matches else
+                        "read_only_artifact_integrity_and_current_psi_reassessment"),
+        "recorded_psi_matches_current": recorded_psi_matches,
+        "prior_attestation_sha256": (sha(prior_attestation)
+                                     if prior_attestation is not None else None),
         "invocation": invocation, "verified_samples": len(rows),
         "original_iva_image_id": IVA_IMAGE_SHA256,
         "candidate_image_id": image,
@@ -121,10 +155,13 @@ def main():
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--iva-cache", required=True, type=Path)
     parser.add_argument("--invocation", required=True)
+    parser.add_argument("--prior-attestation", type=Path,
+                        help="Pin an earlier successful artifact attestation "
+                             "when recomputing PSI under the current definition")
     args = parser.parse_args()
     try:
-        report = verify(args.results_dir, args.state_dir,
-                        args.manifest, args.iva_cache, args.invocation)
+        report = verify(args.results_dir, args.state_dir, args.manifest,
+                        args.iva_cache, args.invocation, args.prior_attestation)
     except (KeyError, IndexError, OSError, TypeError, ValueError) as exc:
         print(json.dumps({"pass": False, "error": str(exc)}))
         return 1

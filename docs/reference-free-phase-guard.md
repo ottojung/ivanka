@@ -9,6 +9,14 @@ To audit without changing output, set
 candidate contradictions to stderr and never edits, suppresses, or splits
 contigs.
 
+A third experimental option, IVANKA_EXPERIMENTAL_PHASE_MASK=1, retains
+the contig's length but writes an ambiguous N at one contradictory
+variant site. It chooses the position with fewer directly observed pair
+calls (right-hand position on a tie) and makes no haplotype phase claim.
+This may be more suitable for a future explicit ambiguity-aware
+representation than splitting, but its handling by downstream MiCall
+has **not** been established.
+
 To opt into the more invasive split experiment explicitly:
 
 ```sh
@@ -144,3 +152,21 @@ The experiments remain reproducible under
 Nine sequence signatures are close to this prototype's fixed threshold of
 eight. This threshold is **not** a probability of correctness and cannot be
 extrapolated to real samples, PCR families or higher error rates.
+
+## Experimental ambiguity-mask A/B (not production)
+
+On the original linked synthetic fixture, masking the weaker-evidence
+variant site produced a **1,192-base contig with one N** instead of a
+false, fully specified A,A allele pair or two separate fragments.
+The known-truth evaluator reported unresolved two-site phase, not
+a proven correct long haplotype. The noisy 1%-substitution linked fixture
+similarly retained a **1,380-base** contig with one N and an unresolved
+two-site phase. Both unlinked fixtures remained byte-identical
+(no masked sites). Both authentic S48/S98 first-3,000-pair controls
+remained byte-identical to ordinary Ivanka (four-contig cap).
+
+This is not evidence that MiCall will preserve an N-bearing contig
+without remap/reference bias. It should not be used to improve
+benchmark alignment by deliberately hiding negative evidence.
+The ambiguous site must remain explicitly marked as unresolved
+throughout any future downstream processing and acceptance reporting.

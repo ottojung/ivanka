@@ -6,7 +6,7 @@ use super::reads::{K, fasta_seeds, Reads};
 use super::extension::extend;
 use super::ranking::select_supported_contigs;
 use super::setup::{parse, balanced_seed_candidates};
-use super::run_seed::{assemble_candidates,rescue_short,append_preserving_diversity,split_unsupported_contigs,audit_unsupported_contigs};
+use super::run_seed::{assemble_candidates,rescue_short,append_preserving_diversity,split_unsupported_contigs,audit_unsupported_contigs,mask_unsupported_contigs};
 
 pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
     let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
@@ -40,9 +40,9 @@ pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
         // otherwise withhold the rescue to avoid losing distinct evidence.
         append_preserving_diversity(&mut contigs,rescue,max,protected_seed_count);
     }
-    if std::env::var("IVANKA_EXPERIMENTAL_PHASE_SPLIT").as_deref()==Ok("1") {
-        contigs=split_unsupported_contigs(contigs,&reads.seqs,max);
-    } else if std::env::var("IVANKA_EXPERIMENTAL_PHASE_AUDIT").as_deref()==Ok("1") {audit_unsupported_contigs(&contigs,&reads.seqs);}
+    if std::env::var("IVANKA_EXPERIMENTAL_PHASE_SPLIT").as_deref()==Ok("1") {contigs=split_unsupported_contigs(contigs,&reads.seqs,max);}
+    else if std::env::var("IVANKA_EXPERIMENTAL_PHASE_MASK").as_deref()==Ok("1") {contigs=mask_unsupported_contigs(contigs,&reads.seqs);}
+    else if std::env::var("IVANKA_EXPERIMENTAL_PHASE_AUDIT").as_deref()==Ok("1") {audit_unsupported_contigs(&contigs,&reads.seqs);}
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">ivanka_{} len={}",i+1,c.len())?;

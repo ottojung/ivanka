@@ -96,6 +96,22 @@ class ConservativeRemapTests(unittest.TestCase):
                      row(name=names[1], flag=147, pos=300)]
             self.assertEqual(compatible_targets(mates, refs, groups), [])
 
+    def test_populated_mate_coordinates_must_agree(self):
+        refs = load_references(self.refs)
+        groups = compatible_groups(refs)
+        first, second = row(flag=99), row(flag=147, pos=300)
+        first["pnext"], second["pnext"] = "300", "100"
+        self.assertEqual(compatible_targets([first, second], refs, groups),
+                         ["2-HCV-1a"])
+        for invalid in ("299", "-1", "*", "bad"):
+            changed = dict(first, pnext=invalid)
+            self.assertEqual(compatible_targets([changed, second], refs, groups),
+                             [], invalid)
+        # Zero means absent mate-coordinate metadata, not a contradiction.
+        self.assertEqual(compatible_targets(
+            [dict(first, pnext="0"), second], refs, groups),
+            ["2-HCV-1a"])
+
     def test_malformed_soft_clips_cannot_be_projected(self):
         refs = load_references(self.refs)
         groups = compatible_groups(refs)

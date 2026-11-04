@@ -87,6 +87,16 @@ def compatible_targets(mates, refs, groups):
         return []
     if flags not in _FLAGS:
         return []
+    # A populated SAM PNEXT must point to the actual mate, not a third
+    # alignment with the same QNAME. MiCall remaps can leave PNEXT at zero.
+    try:
+        positions = [int(row["pos"]) for row in mates]
+        mate_positions = [int(row["pnext"]) for row in mates]
+    except (ValueError, TypeError, KeyError):
+        return []
+    if any(p < 0 or (p and p != positions[1 - i])
+           for i, p in enumerate(mate_positions)):
+        return []
     windows = [mapped_window(row, source, len(refs[source])) for row in mates]
     if any(window is None for window in windows):
         return []

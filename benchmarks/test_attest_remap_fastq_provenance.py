@@ -105,7 +105,11 @@ class RemapFastqProvenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "two remap records"):
             attest(self.sam, self.r1, self.r2)
 
-    def test_wrong_fastq_mate_metadata_rejected(self):
+    def test_single_fastq_cannot_claim_both_mates(self):
+        with self.assertRaisesRegex(ValueError, "distinct original FASTQ"):
+            attest(self.sam, self.r1, self.r1)
+
+
         self.r2.write_text("@original/1\nTTAACCGGTTAACC\n+\nJJJJJJJJJJJJJJ\n")
         with self.assertRaisesRegex(ValueError, "Wrong FASTQ mate"):
             attest(self.sam, self.r1, self.r2)

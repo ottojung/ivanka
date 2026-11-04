@@ -24,7 +24,7 @@ def digest(path):
     return h.hexdigest()
 
 
-def verify(sidecar_path, artifact_dir):
+def verify(sidecar_path, artifact_dir, original_r1=None, original_r2=None):
     """Recompute producer evidence from hash-pinned original MiCall inputs."""
     sidecar_path = Path(sidecar_path)
     root = Path(artifact_dir).resolve(strict=True)
@@ -84,7 +84,20 @@ def verify(sidecar_path, artifact_dir):
         raise EvidenceContractError("Cannot independently reproduce sidecar") from exc
     if verified != report:
         raise EvidenceContractError("Sidecar disagrees with original read-pair evidence")
-    return {
+    if (original_r1 is None) != (original_r2 is None):
+        raise EvidenceContractError("Both original FASTQ mates are required")
+    raw = None
+    if original_r1 is not None:
+        from attest_remap_fastq_provenance import attest
+        try:
+            raw = attest(expected["remap_sam_csv"], original_r1, original_r2)
+        except (ValueError, OSError, KeyError) as exc:
+            raise EvidenceContractError("Original FASTQ mate provenance failed") from exc
+        if raw["source_sha256"]["original_remap_csv"] != report["input_provenance"]["remap_sam_csv"]["sha256"]:
+            raise EvidenceContractError("FASTQ authenticity does not match remap source")
+        if raw["strict_proper_pair_ids_in_remap"] < report["strict_original_read_pair_ids_evaluated"]:
+            raise EvidenceContractError("More evidence pairs than authentic strict remap pairs")
+    result = {
         "schema_version": "ivanka.unphased_sidecar_verification.v1",
         "verification": "passed_source_sha256_and_exact_recomputation",
         "sidecar_sha256": digest(sidecar_path),
@@ -102,6 +115,19 @@ def verify(sidecar_path, artifact_dir):
         "modifies_micall_consensus": False,
         "affects_198_acceptance": False,
     }
+    if raw is not None:
+        result.update({
+            "schema_version": "ivanka.unphased_sidecar_verification_raw_fastq.v1",
+            "verification": "passed_source_sha256_exact_recomputation_and_per_mate_raw_fastq",
+            "original_fastq_provenance": "sequence_and_phred_authenticated_per_original_mate",
+            "raw_original_read_pairs_scanned": raw["raw_pair_ids_scanned"],
+            "original_remap_pair_ids_authenticated": raw["remap_pair_ids_verified"],
+            "raw_fastq_sha256": {
+                "r1": raw["source_sha256"]["original_fastq_r1"],
+                "r2": raw["source_sha256"]["original_fastq_r2"],
+            },
+        })
+    return result
 
 
 def main():
@@ -109,9 +135,12 @@ def main():
     parser.add_argument("sidecar_json", type=Path)
     parser.add_argument("--artifact-dir", type=Path, required=True)
     parser.add_argument("--status-output", type=Path)
+    parser.add_argument("--original-fastq-r1", type=Path)
+    parser.add_argument("--original-fastq-r2", type=Path)
     args = parser.parse_args()
     try:
-        result = verify(args.sidecar_json, args.artifact_dir)
+        result = verify(args.sidecar_json, args.artifact_dir,
+                        args.original_fastq_r1, args.original_fastq_r2)
         if args.status_output:
             dest = args.status_output.resolve()
             source_root = args.artifact_dir.resolve()

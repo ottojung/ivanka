@@ -72,8 +72,9 @@ def verify(root, state, manifest, cache, invocation):
         names = [r["sample"] for r in csv.DictReader(f, delimiter="\t")]
     if len(names) != SAMPLE_COUNT or len(set(names)) != SAMPLE_COUNT:
         raise ValueError("Frozen cohort must have 198 distinct samples")
-    if ((state / "exit_code").read_text().strip() != "0"
-            or not (state / "finished_at").is_file()):
+    if (not (state / "exit_code").is_file()
+            or not (state / "finished_at").is_file()
+            or (state / "exit_code").read_text().strip() != "0"):
         raise ValueError("Physical runner did not finish successfully")
     summary_path = root / ("summary-" + invocation + ".json")
     summary = json.loads(summary_path.read_text())

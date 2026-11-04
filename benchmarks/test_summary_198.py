@@ -73,6 +73,8 @@ class Summary198Tests(unittest.TestCase):
             {"milestone198_min_alignment_ratio": 0.8},
             {"sample_limit_seconds": 1801},
             {"max_container_wall_seconds": 1801},
+            {"max_container_wall_seconds": 10**1000},
+            {"score_psi": dict(GOOD_PSI, psi0=10**1000)},
             {"milestone198_pass": False},
             {"score_psi": dict(GOOD_PSI, positive_all_nonnegative=False)},
             {"score_psi": dict(GOOD_PSI, psi0=0)},

@@ -10,6 +10,8 @@ from pathlib import Path
 import re
 import sys
 
+from summary_198 import evaluate as evaluate_198
+
 MAX_SAMPLE_SECONDS = 1200
 REQUIRED_SAMPLES = 18
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -19,6 +21,8 @@ def evaluate(summary):
     reasons = []
     if not isinstance(summary, dict):
         return {"invocation": None, "pass": False, "reasons": ["invalid summary object"]}
+    if summary.get("qualification198_requested") is True:
+        return evaluate_198(summary)
     invocation = summary.get("invocation")
     if not isinstance(invocation, str) or not invocation:
         reasons.append("missing invocation ID")
@@ -115,8 +119,8 @@ def main(argv=None):
     else:
         for report in reports:
             print(f'{"PASS" if report["pass"] else "NOT PASS"} {report["invocation"]}: '
-                  f'{report["accepted_samples"]}/{REQUIRED_SAMPLES} accepted, '
-                  f'slowest_sample={report["max_sample_seconds"]}')
+                  f'{report["accepted_samples"]}/{report.get("required_samples", REQUIRED_SAMPLES)} accepted, '
+                  f'{report.get("time_label", "slowest_sample")}={report["max_sample_seconds"]}')
             for reason in report["reasons"]:
                 print("  -", reason)
     return 0 if not args.invocation or reports[0]["pass"] else 1

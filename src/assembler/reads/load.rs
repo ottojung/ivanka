@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io;
 use super::dna::{K, rc};
 use super::input::read_open;
-use super::fastq::FastqSeqReader;
+use super::fastq::{FastqSeqReader, mate_headers};
 use super::types::Reads;
 use super::index::build_index;
 
@@ -36,6 +36,7 @@ impl Reads {
                 if mismatch {return Err(io::Error::new(io::ErrorKind::InvalidData,"unequal mate counts"));}
                 break;
             };
+            if !mate_headers(&r1.header,&r2.header) {return Err(io::Error::new(io::ErrorKind::InvalidData,"FASTQ read-pair IDs or mate designators disagree"));}
             for read in [a,b] {
                 if pairs < 50000 {count_sampled_seed_kmers(&read,&mut seed_counts);}
                 let reverse=rc(&read);seqs.push(read);seqs.push(reverse);

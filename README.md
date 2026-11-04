@@ -12,6 +12,13 @@ This is early experimental code. It is **not** validated for clinical use.
     target/release/ivanka --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta
     # Optional: --max-contigs 12 --max-pairs N
 
+Input FASTQ files must contain paired records in matching order. Ivanka now
+checks each original read identifier as it reads the pair and rejects a
+mismatch instead of silently joining unrelated reads. CASAVA mate metadata
+(`1:N:0:...` / `2:N:0:...`), legacy `/1` / `/2` headers, and matching
+plain IDs are accepted. This validates read-pair provenance without mapping
+or altering sequence or quality data.
+
 ## Private benchmark
 
 The real-data input is kept outside Git at

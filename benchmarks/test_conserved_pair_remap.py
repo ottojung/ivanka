@@ -88,40 +88,45 @@ class ConservativeRemapTests(unittest.TestCase):
             self.assertEqual(compatible_targets([valid[0], bad], refs, groups), [])
         self.assertEqual(compatible_targets([valid[0], row(flag=83)], refs, groups), [])
 
-    def test_multiple_alternatives_fail_closed(self):
+    def test_multiple_alternatives_not_independent_molecules(self):
         refs = {}
         for i, pos in enumerate((100, 250, 400, 550, 700), start=1):
             seq = list("A" * 1200)
             seq[pos] = "C"
             refs[f"{i}-HCV-1a"] = "".join(seq)
-        self.assertEqual(compatible_groups(refs), {})
+        self.assertEqual(len(compatible_groups(refs)["1-HCV-1a"]), 4)
         make_csv(self.refs, ["region", "sequence"],
                  [{"region": k, "sequence": v} for k, v in refs.items()])
         make_csv(self.src, FIELDS, [row(pos=750), row(flag=147, pos=900)])
-        used, stats = project_remap(self.src, self.refs, self.out)
-        self.assertEqual(used, self.src)
-        self.assertEqual(stats["projected_pairs"], 0)
-        self.assertFalse(self.out.exists())
+        _, stats = project_remap(self.src, self.refs, self.out)
+        self.assertEqual(stats["projected_pairs"], 4)
+        # The same original pair supports four hypotheses, once each.
+        # It is not four independent source molecules.
+        make_csv(self.src, FIELDS, [row(pos=100), row(flag=147, pos=900)])
+        _, rejected = project_remap(self.src, self.refs, self.out)
+        self.assertEqual(rejected["projected_pairs"], 0)
 
-    def test_isolated_reciprocal_pairs_remain_eligible(self):
-        refs = {
-            "1-HCV-1a": "A" * 1200,
-            "2-HCV-1a": "A" * 600 + "C" + "A" * 599,
-            "3-HCV-1a": "C" * 1200,
-            "4-HCV-1a": "C" * 600 + "A" + "C" * 599,
-        }
-        self.assertEqual(compatible_groups(refs), {
-            "1-HCV-1a": ["2-HCV-1a"], "2-HCV-1a": ["1-HCV-1a"],
-            "3-HCV-1a": ["4-HCV-1a"], "4-HCV-1a": ["3-HCV-1a"],
-        })
-
-    def test_nonreciprocal_nearest_neighbor_chain_is_rejected(self):
-        base = "A" * 1200
-        near = "C" * 8 + "A" * 1192
-        far = "C" * 16 + "A" * 1184
-        refs = {"1-HCV-1a": base, "2-HCV-1a": near, "3-HCV-1a": far}
-        # An ambiguous center must not lend evidence to either end.
-        self.assertEqual(compatible_groups(refs), {})
+    def test_projection_preserves_unique_pair_observation_per_reference(self):
+        other = self.seq1[:800] + "C" + self.seq1[801:]
+        make_csv(self.refs, ["region", "sequence"],
+                 self.ref_rows + [{"region": "3-HCV-1a", "sequence": other}])
+        original = [row(name="unique1", flag=99), row(name="unique1", flag=147, pos=300),
+                    row(name="unique2", flag=99, pos=900),
+                    row(name="unique2", flag=147, pos=1050)]
+        make_csv(self.src, FIELDS, original)
+        _, stats = project_remap(self.src, self.refs, self.out)
+        self.assertGreaterEqual(stats["projected_pairs"], 2)
+        from collections import Counter
+        with self.out.open() as stream:
+            result = list(DictReader(stream))
+        per_reference = Counter(
+            (item["rname"], item["qname"].split("|ivanka_hypothesis=", 1)[0])
+            for item in result
+        )
+        self.assertTrue(all(count == 2 for count in per_reference.values()))
+        # One original molecule appears across alternative hypotheses, but
+        # never twice within the same reference's conditional consensus.
+        self.assertGreater(sum(name == "unique1" for _, name in per_reference), 1)
 
     def test_duplicate_names_do_not_create_synthetic_independence(self):
         records = [row(flag=99), row(flag=147, pos=300),

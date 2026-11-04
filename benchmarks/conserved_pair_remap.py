@@ -1,10 +1,8 @@
 """Opt-in, reference-consistent HCV read-pair sharing between contig hypotheses.
 
-The same original read pair may support one reciprocal alternative only
+The same original read pair may support multiple *alternative contigs* only
 when both mates align to exactly identical reference sequence on each.
-One observation contributes once per hypothesis, never independent molecules.
-Multi-haplotype groups are explicitly excluded because they can change already
-called minor alleles (observed in genuine MidHCV S11).
+It contributes once per target, never independent molecules across targets.
 This is NOT a global abundance estimate or a full haplotype proof.
 
 Production MiCall must remain unchanged unless an explicitly experimental
@@ -36,17 +34,22 @@ def load_references(path):
 
 
 def compatible_groups(refs):
-    """Only isolated reciprocal pairs; multi-hypothesis sharing can alter alleles."""
-    neighbors = {}
+    """Group same-length, nearly identical, unambiguous HCV alternatives."""
+    groups = {}
     for name, source in refs.items():
         suffix = _HCV_REGION.fullmatch(name).group(1)
-        neighbors[name] = sorted(target for target, other in refs.items()
-            if target != name and len(source) == len(other) and len(source) >= 1000
-            and _HCV_REGION.fullmatch(target).group(1) == suffix
-            and 0 < sum(a != b for a, b in zip(source, other))
-            <= min(20, len(source) // 100))
-    return {name: targets for name, targets in neighbors.items()
-            if len(targets) == 1 and neighbors[targets[0]] == [name]}
+        options = []
+        for target, other in refs.items():
+            if (target == name or len(source) != len(other) or len(source) < 1000
+                    or _HCV_REGION.fullmatch(target).group(1) != suffix):
+                continue
+            differences = sum(a != b for a, b in zip(source, other))
+            if 0 < differences <= min(20, len(source) // 100):
+                options.append(target)
+        # Skip enormous ambiguity groups rather than exploding runtime.
+        if 1 <= len(options) <= 4:
+            groups[name] = sorted(options)
+    return groups
 
 
 def mapped_window(row, expected_ref, reference_length):

@@ -1,4 +1,4 @@
-# Ivanka (alpha development)
+# Ivanka (experimental development)
 
 Ivanka is a standalone **Rust** implementation of IVA-style abundant-k-mer
 seeding and iterative bidirectional extension. It deliberately does **not**
@@ -19,20 +19,42 @@ mismatch instead of silently joining unrelated reads. CASAVA mate metadata
 plain IDs are accepted. This validates read-pair provenance without mapping
 or altering sequence or quality data.
 
-## Private benchmark
+## Current 198-sample qualification (authoritative)
+
+The current full-MiCall milestone evaluates 198 frozen genuine samples, not the older
+18-sample alpha or HXB2-only prototype. Both arms use the same **33-reference**
+panel; every sample requires a final MAX Ivanka score at least **90%** of its
+verified IVA control and a **1,800-second per-sample wall-clock cap**. Reuse
+immutable IVA controls, with up to 10 Ivanka sample workers.
+
+For alignment use `p_i = Ivanka_score_i - IVA_score_i`. For in-container
+runtime use `q_i = IVA_seconds_i - Ivanka_seconds_i`. Separately require
+`Psi(r) = sum(sign(x_i)*abs(x_i)**r)/198 > 0` for **every real r >= 0**;
+exact ties contribute zero. Tests only at r=0,1,2 do not establish this.
+The per-sample 90% and runtime requirements remain separate hard gates.
+
+The frozen 198 run passed numerical qualification and subsequent independent
+hash attestation under the current Psi convention. **That is not a proof of
+independent physical molecules or valid full-length HCV haplotype phase.**
+The candidate's optional remapping can project one original pair onto several
+compatible contig hypotheses: those projections are correlated and must never
+be counted as new molecules. Scientific release validation remains open.
+
+## Historical HXB2-only benchmark (not current qualification)
 
 The real-data input is kept outside Git at
-\`/workspace/denovo-example-io-1/\`. The benchmark runs the **same**
-post-assembly processing for both real-IVA and Ivanka: remove raw contigs shorter
-than 600 bp, invoke modern MiCall referenceless stitching **with a read index
-and minimum depth 1**, then score the resulting contigs against the pinned HXB2
-sequence using MiCall's global PairwiseAligner settings.
+`/workspace/denovo-example-io-1/`. The **legacy** `scripts/benchmark.sh` /
+`benchmarks/bench.py` pipeline removes contigs below 600 bp and scores only
+against HXB2. That workflow is retained as historical evidence, **not** the
+current full-MiCall 198-sample acceptance pipeline. The Rust assembler and
+current full-MiCall benchmark impose **no minimum contig length**.
 
     ./scripts/benchmark.sh --mode baseline
     ./scripts/benchmark.sh --mode ivanka
 
-Use \`--only SAMPLE_ID\` to debug one sample. The total invocation, including
-preprocessing and evaluation, is limited to 20 minutes. Status records are
+Use `--only SAMPLE_ID` to debug a legacy sample. The historical shell script
+has a **40-minute global timeout**, not the current 1,800-second per-sample
+MiCall budget. Status records are
 written incrementally to ignored \`benchmark-results/results.jsonl\`. Private
 prepared inputs, IVA baselines and a private roles.json are outside Git under
 \`/workspace/ivanka-benchmark-cache/\`.
@@ -44,7 +66,7 @@ based on HXB2 scores alone. Neither original human reads nor sample identifiers
 are committed to this public repository.
 
 
-## Acceptance gate
+## Historical HXB2 acceptance gate (not current full-198)
 
 The harness returns nonzero if no assembled contig achieves the fixed HXB2
 alignment threshold, or if a sample errors or times out. The score is the
@@ -99,11 +121,11 @@ final consensus score alone: check loss of read-supported sequence diversity,
 distinct canonical k-mers, alternative paths and potential chimeras. The
 baseline IVA image and frozen controls remain unchanged; build a traceable
 candidate image and measure whole-pipeline remapping, alignment and runtime
-under the original six PSI requirements.
+under the current all-real-exponent score and runtime Psi requirements.
 
 See [Mutable pipeline scope and acceptance safeguards](docs/mutable-pipeline-scope.md).
 
-### Current reference-panel acceptance
+### Reference-panel scoring (current 198 and historical 18-sample protocols)
 
 The runner reads immutable HXB2 FASTA and the nucleotide references in the
 **actual IVA MiCall image** (`projects.json`). It constructs a deterministic
@@ -117,8 +139,9 @@ every final MiCall `MAX` consensus contig from Ivanka are locally aligned to
 **each reference in the common panel**, considering both orientations.
 Scores are +1 match, -1 mismatch, -2 gap opening and -1 gap extension.
 The best score from *any* contig/reference pair is selected separately for
-IVA and Ivanka; the winning reference may differ. **Ivanka passes only when its
-best score is at least 95% of IVA's best positive score.** Missing final
+IVA and Ivanka; the winning reference may differ. **The current 198-sample
+milestone requires at least 90% of IVA's best positive score; the older
+18-sample alpha required 95%.** Missing final
 MAX consensus or missing reference provenance fails closed. The panel is
 independent of either assembler's output.
 
@@ -304,8 +327,9 @@ alignment score, full MiCall arm execution duration, and original output
 checksum; both arms must use identical scoring and timing definitions.
 **Historical Kive run_time and stats_subset alignment_score are genuine
 observations but are not interchangeable with these pinned-image arm
-measurements.** The full 198 milestone fails closed until the missing archived
-IVA outputs are imported with valid image, FASTQ, panel and output provenance.
+measurements.** The full 198 milestone fails closed if any IVA cached control
+is missing or invalid. The authentic original cache was restored and hash-
+attested in November 2026 with preserved image, FASTQ, panel and provenance.
 It never invents IVA scores, and does not rerun IVA when supplied a cache.
 
 Run from a host with the frozen, access-controlled private dataset and

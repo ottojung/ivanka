@@ -21,10 +21,13 @@ _BASES = frozenset("ACGT")
 _SUFFIX = "|ivanka_hypothesis="
 
 
-def proposals(final_rows, reference_rows, sam_rows, required_depth=100):
+def proposals(final_rows, reference_rows, sam_rows, required_depth=100,
+              minimum_allele_fraction=0.95):
     """Return (hypothetical final rows, evidence), without altering inputs."""
     if required_depth < 1:
         raise ValueError("Positive per-position evidence depth required")
+    if not 0 < minimum_allele_fraction <= 1:
+        raise ValueError("Minimum allele fraction must be in (0, 1]")
     refs = {}
     for row in reference_rows:
         name, seq = row["region"], row["sequence"].upper()
@@ -68,7 +71,12 @@ def proposals(final_rows, reference_rows, sam_rows, required_depth=100):
                     "distinct_pair_sequence_evidence"]
                 full_support = (complete or {}).get(
                     "shared_allele_distinct_pair_sequences", 0)
+                minimum_fraction = min(
+                    (item["shared_base_qnames"] / item["depth_qnames"]
+                     if item["depth_qnames"] else 0)
+                    for item in support["positions"])
                 if (not support["eligible"] or full_support < 1
+                        or minimum_fraction < minimum_allele_fraction
                         or not allele or len(allele) != end-start
                         or set(allele) - _BASES):
                     continue
@@ -81,6 +89,7 @@ def proposals(final_rows, reference_rows, sam_rows, required_depth=100):
                         item["shared_base_distinct_pair_sequences"]
                         for item in support["positions"]),
                     "complete_local_allele_distinct_pair_sequences": full_support,
+                    "minimum_shared_allele_fraction": minimum_fraction,
                     "original_qnames_only": True,
                     "provenance": "observed_shared_local_sequence_not_haplotype_phase",
                 })
@@ -104,6 +113,7 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--required-depth", type=int, default=100)
+    parser.add_argument("--minimum-allele-fraction", type=float, default=0.95)
     args = parser.parse_args()
     sources = (args.final_conseq_csv, args.remap_conseq_csv,
                args.original_remap_csv)
@@ -119,8 +129,9 @@ def main():
         reference_rows = list(csv.DictReader(handle))
     with sources[2].open(newline="") as handle:
         sam_rows = list(csv.DictReader(handle))
-    updated, evidence = proposals(original, reference_rows, sam_rows,
-                                  args.required_depth)
+    updated, evidence = proposals(
+        original, reference_rows, sam_rows, args.required_depth,
+        args.minimum_allele_fraction)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x", newline="") as handle:
         writer = csv.DictWriter(handle, fields, lineterminator="\n")
@@ -131,6 +142,7 @@ def main():
         "independent_molecules_claimed": False,
         "haplotype_phase_proven": False,
         "per_position_depth": args.required_depth,
+        "minimum_allele_fraction": args.minimum_allele_fraction,
         "source_sha256": {str(p): _hash(p) for p in sources},
         "output_sha256": _hash(args.output),
         "proposals": evidence,

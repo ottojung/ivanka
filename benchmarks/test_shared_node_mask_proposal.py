@@ -62,6 +62,7 @@ class SharedNodeProposalTests(unittest.TestCase):
         self.assertEqual(
             evidence[0]["complete_local_allele_distinct_pair_sequences"], 101)
         self.assertTrue(evidence[0]["original_qnames_only"])
+        self.assertEqual(evidence[0]["minimum_shared_allele_fraction"], 1)
 
     def test_insufficient_distinct_reads_or_sequence_signatures_fail_closed(self):
         for reads in (paired_rows(99), paired_rows(101, True)):
@@ -69,6 +70,26 @@ class SharedNodeProposalTests(unittest.TestCase):
                 output, evidence = proposals([final()], refs(), reads)
                 self.assertEqual(evidence, [])
                 self.assertEqual(output[0]["sequence"], MASKED)
+
+    def test_competing_allele_can_veto_a_high_depth_proposal(self):
+        records = paired_rows(101)
+        competing = paired_rows(30)
+        for record in competing:
+            record["qname"] = "other-" + record["qname"]
+            if record["flag"] == "99":
+                sequence = record["seq"]
+                record["seq"] = sequence[:31] + "T" + sequence[32:]
+        output, evidence = proposals([final()], refs(), records + competing)
+        self.assertEqual(evidence, [])
+        self.assertEqual(output[0]["sequence"], MASKED)
+        # Fraction limit is independently selectable for scientific study,
+        # but lowering it does not qualify a clinical or physical result.
+        exploratory, found = proposals(
+            [final()], refs(), records + competing,
+            minimum_allele_fraction=0.75)
+        self.assertEqual(len(found), 1)
+        self.assertLess(found[0]["minimum_shared_allele_fraction"], 0.95)
+        self.assertEqual(exploratory[0]["sequence"], LEFT + ALLELE + RIGHT)
 
     def test_conflicting_reference_alleles_are_not_resolved_by_majority(self):
         other = "G" * 400 + LEFT + "TTGA" + RIGHT + "G" * 400
@@ -105,6 +126,10 @@ class SharedNodeProposalTests(unittest.TestCase):
             proposals([final()], refs() + [row("1-HCV-1a")], paired_rows())
         with self.assertRaisesRegex(ValueError, "Positive"):
             proposals([final()], refs(), paired_rows(), required_depth=0)
+        for invalid in (0, -0.1, 1.1):
+            with self.assertRaisesRegex(ValueError, "Minimum allele fraction"):
+                proposals([final()], refs(), paired_rows(),
+                          minimum_allele_fraction=invalid)
 
 
 if __name__ == "__main__":

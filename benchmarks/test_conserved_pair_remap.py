@@ -88,6 +88,69 @@ class ConservativeRemapTests(unittest.TestCase):
             self.assertEqual(compatible_targets([valid[0], bad], refs, groups), [])
         self.assertEqual(compatible_targets([valid[0], row(flag=83)], refs, groups), [])
 
+    def test_pair_identity_must_be_genuine(self):
+        refs = load_references(self.refs)
+        groups = compatible_groups(refs)
+        for names in (("first", "second"), ("", "")):
+            mates = [row(name=names[0], flag=99),
+                     row(name=names[1], flag=147, pos=300)]
+            self.assertEqual(compatible_targets(mates, refs, groups), [])
+
+    def test_populated_mate_coordinates_must_agree(self):
+        refs = load_references(self.refs)
+        groups = compatible_groups(refs)
+        first, second = row(flag=99), row(flag=147, pos=300)
+        first["pnext"], second["pnext"] = "300", "100"
+        self.assertEqual(compatible_targets([first, second], refs, groups),
+                         ["2-HCV-1a"])
+        for invalid in ("299", "-1", "*", "bad"):
+            changed = dict(first, pnext=invalid)
+            self.assertEqual(compatible_targets([changed, second], refs, groups),
+                             [], invalid)
+        # Zero means absent mate-coordinate metadata, not a contradiction.
+        self.assertEqual(compatible_targets(
+            [dict(first, pnext="0"), second], refs, groups),
+            ["2-HCV-1a"])
+
+    def test_malformed_soft_clips_cannot_be_projected(self):
+        refs = load_references(self.refs)
+        groups = compatible_groups(refs)
+        for cigar in ("10S20S70M", "30M10S60M", "30M10S60S",
+                      "0S100M", "100M0S", "10S80M0S", "100M10S"):
+            mate = row(flag=147, cigar=cigar)
+            self.assertEqual(compatible_targets(
+                [row(flag=99), mate], refs, groups), [], cigar)
+
+    def test_invalid_sam_numeric_fields_fail_closed(self):
+        refs = load_references(self.refs)
+        groups = compatible_groups(refs)
+        for pos in ("", "*", "not-a-position", "1.5", "0"):
+            self.assertEqual(compatible_targets(
+                [row(flag=99, pos=pos), row(flag=147, pos=300)],
+                refs, groups), [], pos)
+        for flag in ("", "*", "invalid"):
+            self.assertEqual(compatible_targets(
+                [row(flag=flag), row(flag=147, pos=300)],
+                refs, groups), [], flag)
+
+    def test_minor_allele_and_pair_phase_are_not_rewritten(self):
+        # Both original mate sequences can disagree with their reference.
+        # Projection must copy those actual bases and qualities verbatim.
+        first = row(flag=99, pos=100, seq="A" * 20 + "G" + "A" * 79)
+        second = row(flag=147, pos=300, seq="A" * 35 + "T" + "A" * 64)
+        first["qual"] = "H" * 100
+        second["qual"] = "J" * 100
+        make_csv(self.src, FIELDS, [first, second])
+        _, stats = project_remap(self.src, self.refs, self.out)
+        self.assertEqual(stats["projected_pairs"], 1)
+        with self.out.open() as stream:
+            copies = list(DictReader(stream))[2:]
+        self.assertEqual([r["seq"] for r in copies],
+                         [first["seq"], second["seq"]])
+        self.assertEqual([r["qual"] for r in copies], ["H" * 100, "J" * 100])
+        self.assertEqual([r["flag"] for r in copies], ["99", "147"])
+        self.assertEqual(len({r["qname"] for r in copies}), 1)
+
     def test_multiple_alternatives_fail_closed(self):
         refs = {}
         for i, pos in enumerate((100, 250, 400, 550, 700), start=1):

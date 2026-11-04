@@ -54,29 +54,48 @@ def mapped_window(row, expected_ref, reference_length):
     if row["rname"] != expected_ref or row["rnext"] not in ("=", expected_ref):
         return None
     cigar = row["cigar"]
+    # Only terminal soft clips are SAM-valid for a single contiguous M block.
+    # Reject internal clips, repeated clips and zero-length operations rather
+    # than projecting a malformed mapping into another haplotype.
+    if not re.fullmatch(r"(?:[1-9]\d*S)?[1-9]\d*M(?:[1-9]\d*S)?", cigar):
+        return None
     ops = re.findall(r"(\d+)([MS])", cigar)
-    if not ops or "".join(n + op for n, op in ops) != cigar:
-        return None
     matches = [int(n) for n, op in ops if op == "M"]
-    if len(matches) != 1 or matches[0] < 1:
-        return None
     if sum(int(n) for n, _ in ops) != len(row["seq"]):
         return None
     if len(row["qual"]) != len(row["seq"]):
         return None
-    start, length = int(row["pos"]) - 1, matches[0]
+    try:
+        start = int(row["pos"]) - 1
+    except (ValueError, TypeError):
+        return None
+    length = matches[0]
     if start < 0 or start + length > reference_length:
         return None
     return start, start + length
 
 
 def compatible_targets(mates, refs, groups):
-    if len(mates) != 2:
+    if len(mates) != 2 or not mates[0]["qname"] or mates[0]["qname"] != mates[1]["qname"]:
         return []
     source = mates[0]["rname"]
     if source not in groups or any(r["rname"] != source for r in mates):
         return []
-    if {int(r["flag"]) for r in mates} not in _FLAGS:
+    try:
+        flags = {int(r["flag"]) for r in mates}
+    except (ValueError, TypeError):
+        return []
+    if flags not in _FLAGS:
+        return []
+    # A populated SAM PNEXT must point to the actual mate, not a third
+    # alignment with the same QNAME. MiCall remaps can leave PNEXT at zero.
+    try:
+        positions = [int(row["pos"]) for row in mates]
+        mate_positions = [int(row["pnext"]) for row in mates]
+    except (ValueError, TypeError, KeyError):
+        return []
+    if any(p < 0 or (p and p != positions[1 - i])
+           for i, p in enumerate(mate_positions)):
         return []
     windows = [mapped_window(row, source, len(refs[source])) for row in mates]
     if any(window is None for window in windows):

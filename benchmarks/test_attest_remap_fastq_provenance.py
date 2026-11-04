@@ -14,6 +14,8 @@ class RemapFastqProvenanceTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        self.audit = tempfile.TemporaryDirectory()
+        self.addCleanup(self.audit.cleanup)
         root = Path(self.tmp.name)
         self.r1, self.r2, self.sam = (root / x for x in
             ("R1.fastq", "R2.fastq", "remap.csv"))
@@ -109,13 +111,13 @@ class RemapFastqProvenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "distinct original FASTQ"):
             attest(self.sam, self.r1, self.r1)
 
-
+    def test_wrong_fastq_mate_metadata_rejected(self):
         self.r2.write_text("@original/1\nTTAACCGGTTAACC\n+\nJJJJJJJJJJJJJJ\n")
         with self.assertRaisesRegex(ValueError, "Wrong FASTQ mate"):
             attest(self.sam, self.r1, self.r2)
 
     def test_cli_private_attestation_and_no_replacement(self):
-        output = Path(self.tmp.name) / "audit.json"
+        output = Path(self.audit.name) / "audit.json"
         args = ["attestor", str(self.sam), str(self.r1),
                 str(self.r2), "--output", str(output)]
         with patch.object(sys, "argv", args):
@@ -129,6 +131,15 @@ class RemapFastqProvenanceTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 main()
         self.assertEqual(output.read_text(), "previous incompatible report")
+
+    def test_disallows_creating_reports_inside_original_source_folder(self):
+        for output in (Path(self.tmp.name) / "new-report.json",
+                       Path(self.tmp.name) / "nested" / "new-report.json"):
+            with patch.object(sys, "argv", ["attestor", str(self.sam),
+                     str(self.r1), str(self.r2), "--output", str(output)]):
+                with self.assertRaises(SystemExit):
+                    main()
+            self.assertFalse(output.exists())
 
     def test_refuses_mutating_original_sam_via_cli_output(self):
         with patch.object(sys, "argv", ["attestor", str(self.sam),

@@ -22,7 +22,9 @@ class VerifiedSharedEvidenceTests(unittest.TestCase):
         self.sidecar = root / "derived" / "sidecar.json"
         masked, refs = fixture()
         rows = pair("one", "private-synthetic-id", refs["one"])
-        self.raw_r1, self.raw_r2 = root / "original_R1.fastq", root / "original_R2.fastq"
+        source_dir = root / "original-fastqs"
+        source_dir.mkdir()
+        self.raw_r1, self.raw_r2 = source_dir / "original_R1.fastq", source_dir / "original_R2.fastq"
         for m, row, path in ((1, rows[0], self.raw_r1),
                              (2, rows[1], self.raw_r2)):
             path.write_text("@private-synthetic-id/" + str(m) + "\n"
@@ -139,6 +141,18 @@ class VerifiedSharedEvidenceTests(unittest.TestCase):
         self.assertFalse(status["independent_physical_molecules_assigned"])
         self.assertFalse(status["modifies_micall_consensus"])
         self.assertNotIn("private-synthetic-id", json.dumps(status))
+
+    def test_cannot_create_status_inside_original_fastq_source_directory(self):
+        output = self.raw_r1.parent / "new-status.json"
+        args = ["consumer", str(self.sidecar),
+                "--artifact-dir", str(self.artifacts),
+                "--original-fastq-r1", str(self.raw_r1),
+                "--original-fastq-r2", str(self.raw_r2),
+                "--status-output", str(output)]
+        with patch.object(sys, "argv", args):
+            with self.assertRaises(SystemExit):
+                main()
+        self.assertFalse(output.exists())
 
     def test_raw_fastq_mates_must_both_be_given(self):
         with self.assertRaisesRegex(EvidenceContractError, "Both original"):

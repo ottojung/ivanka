@@ -93,3 +93,12 @@ Each authenticated status still declares haplotype phase *unidentified*
 and no independent physical molecule counts. The private new statuses
 are kept beside the archived target sidecars; no original FASTQ,
 MiCall output, accepted 198 benchmark, or IVA cache was modified.
+
+## Source/output isolation
+
+With original FASTQ pairs supplied, the verified-status consumer refuses
+to write its status into either original FASTQ source folder (including
+new nested paths), or into the original MiCall output tree. It also
+protects the sidecar itself and rejects replacing a different
+preexisting verification status. Keep verified status files in their
+own private diagnostics directory outside all original sample folders.

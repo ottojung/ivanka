@@ -152,8 +152,15 @@ def main():
             source = {p.resolve() for p in (args.remap_csv,
                       args.original_r1_fastq, args.original_r2_fastq)}
             destination = args.output.resolve()
-            if destination in source:
-                raise ValueError("Refusing to overwrite an original source")
+            remap_path = args.remap_csv.resolve()
+            remap_root = (remap_path.parent.parent if remap_path.parent.name == "scratch"
+                          else remap_path.parent)
+            source_roots = {remap_root, args.original_r1_fastq.resolve().parent,
+                            args.original_r2_fastq.resolve().parent}
+            if (destination in source or any(
+                    destination == folder or folder in destination.parents
+                    for folder in source_roots)):
+                raise ValueError("Refusing to write inside original source directories")
             if destination.exists():
                 if not destination.is_file() or destination.read_text() != encoded:
                     raise ValueError("Refusing to overwrite a different attestation")

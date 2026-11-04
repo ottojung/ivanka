@@ -10,9 +10,16 @@ class SignedPowerTests(unittest.TestCase):
     def test_all_positive(self):
         result = milestone198.psi([2.0] * 198)
         self.assertEqual((result["psi0"], result["psi1"], result["psi2"]),
-                         (1, 3, 9))
+                         (1, 2, 4))
         self.assertEqual((result["gains"], result["losses"], result["ties"]),
                          (198, 0, 0))
+
+    def test_fractional_magnitudes_not_offset(self):
+        values = [0.5] * 100 + [-0.25] * 98
+        result = milestone198.psi(values)
+        self.assertAlmostEqual(result["psi1"], (50 - 24.5) / 198)
+        self.assertAlmostEqual(result["psi2"], (25 - 6.125) / 198)
+        self.assertEqual(result["psi_at_positive_infinity"], "0")
 
     def test_zero_ties_contribute_nothing_even_for_power_zero(self):
         result = milestone198.psi([0] * 198)
@@ -33,7 +40,7 @@ class SignedPowerTests(unittest.TestCase):
         self.assertLess(result["psi2"], 0)
 
     def test_late_negative_root_fails_despite_positive_0_1_2(self):
-        values = [1] * 197 + [-3]
+        values = [2] * 197 + [-4]
         result = milestone198.psi(values)
         self.assertTrue(all(result[k] > 0 for k in ("psi0", "psi1", "psi2")))
         self.assertEqual(result["psi_at_positive_infinity"], "-inf")
@@ -41,7 +48,7 @@ class SignedPowerTests(unittest.TestCase):
 
     def test_two_late_roots_fail_even_if_first_three_powers_positive(self):
         # 30*2**r - 11*4**r + 8**r has zeros at log2(5),log2(6).
-        values = [1] * 30 + [-3] * 11 + [7] + [0] * 156
+        values = [2] * 30 + [-4] * 11 + [8] + [0] * 156
         result = milestone198.psi(values)
         self.assertTrue(all(result[k] > 0 for k in ("psi0", "psi1", "psi2")))
         self.assertFalse(result["positive_all_nonnegative"])
@@ -49,14 +56,14 @@ class SignedPowerTests(unittest.TestCase):
 
     def test_negative_roots_do_not_disqualify(self):
         # 7*2**r - 24*4**r + 20*8**r has only negative roots.
-        values = [1] * 7 + [-3] * 24 + [7] * 20 + [0] * 147
+        values = [2] * 7 + [-4] * 24 + [8] * 20 + [0] * 147
         result = milestone198.psi(values)
         self.assertTrue(result["positive_all_nonnegative"])
         self.assertEqual(result["zeros_nonnegative"], [])
 
     def test_tangent_nonnegative_zero_fails(self):
         # 2**r * (2**r - 3)**2 = 9*2**r - 6*4**r + 8**r.
-        values = [1] * 9 + [-3] * 6 + [7] + [0] * 182
+        values = [2] * 9 + [-4] * 6 + [8] + [0] * 182
         result = milestone198.psi(values)
         self.assertGreater(result["psi0"], 0)
         self.assertFalse(result["positive_all_nonnegative"])
@@ -104,10 +111,10 @@ class QualificationTests(unittest.TestCase):
         report = self.score()
         self.assertTrue(report["milestone198_pass"])
         self.assertEqual(report["milestone198_valid_pairs"], 198)
-        self.assertEqual(report["score_psi"]["psi2"], 4.0)
-        self.assertEqual(report["time_psi"]["psi2"], 121.0)
+        self.assertEqual(report["score_psi"]["psi2"], 1.0)
+        self.assertEqual(report["time_psi"]["psi2"], 100.0)
         self.assertEqual(report["time_psi0"], 1)
-        self.assertEqual(report["score_psi2"], 4)
+        self.assertEqual(report["score_psi2"], 1)
 
     def test_full_cohort_fails_when_positive_0_1_2_hide_late_root(self):
         records = deepcopy(self.records)
@@ -187,7 +194,7 @@ class QualificationTests(unittest.TestCase):
             item["best_contig_acceptance"]["ivanka_score"] = 2e200
         report = self.score(records)
         self.assertFalse(report["milestone198_pass"])
-        self.assertIn("nonfinite_or_unresolved_shifted_power_psi",
+        self.assertIn("nonfinite_or_unresolved_psi",
                       report["milestone198_errors"])
 
     def test_psi_failure_does_not_pass_even_when_per_sample_floor_holds(self):
@@ -212,7 +219,7 @@ class QualificationTests(unittest.TestCase):
             item["ivanka"]["container_wall_seconds"] = 80.
         result = self.score(records)
         self.assertFalse(result["milestone198_pass"])
-        self.assertEqual(result["time_psi"]["psi1"], -11)
+        self.assertEqual(result["time_psi"]["psi1"], -10)
 
     def test_panel_threshold_is_90_only_for_new_milestone(self):
         from unittest.mock import patch

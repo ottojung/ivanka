@@ -45,7 +45,7 @@ class CompositeTests(unittest.TestCase):
 
     def test_198_valid_still_not_formal(self):
         r = self.run_audit()
-        self.assertEqual((r["milestone198_valid_pairs"], r["time_psi"]["psi1"]), (198, 3))
+        self.assertEqual((r["milestone198_valid_pairs"], r["time_psi"]["psi1"]), (198, 2))
         self.assertEqual((r["formal_qualification_pass"], len(r["legacy_95_flags_reinterpreted"])), (False, 2))
 
     def test_unexplained_failure_rejected(self):

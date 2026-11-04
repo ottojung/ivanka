@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate signed shifted-power PSI and isolate all finite real zeros.
+"""Evaluate signed-power PSI and isolate all finite real zeros.
 
 Read whitespace- or comma-separated finite p_i from standard input.  The
 constant n includes zero entries.  Requires only the Python standard library.
@@ -35,7 +35,7 @@ def values_from_stdin(source):
 
 
 def grouped_terms(values):
-    """Return increasing [(ln(1+|p|), net-sign-count)] pairs."""
+    """Return increasing [(ln(|p|), net-sign-count)] pairs."""
     groups = Counter()
     for p in values:
         if p:
@@ -44,9 +44,7 @@ def grouped_terms(values):
     for magnitude, coefficient in sorted(groups.items()):
         if not coefficient:
             continue
-        base = 1 + magnitude
-        if base == 1:
-            raise PrecisionError("magnitude is too small for this precision; use --precision")
+        base = magnitude
         result.append((base.ln(), Decimal(coefficient)))
     return result
 
@@ -145,13 +143,18 @@ def compute(values, digits=9, precision=65):
         n = Decimal(len(values))
         psi = {
             "0": sum((Decimal(sign(p)) for p in values), Decimal(0)) / n,
-            "1": sum((Decimal(sign(p)) * (1 + abs(p)) for p in values if p), Decimal(0)) / n,
-            "2": sum((Decimal(sign(p)) * (1 + abs(p))**2 for p in values if p), Decimal(0)) / n,
+            "1": sum((Decimal(sign(p)) * abs(p) for p in values if p), Decimal(0)) / n,
+            "2": sum((Decimal(sign(p)) * abs(p)**2 for p in values if p), Decimal(0)) / n,
         }
         if not terms:
             return psi, "0", [], True
         maximum_sign = sign(terms[-1][1])
-        infinity = "+inf" if maximum_sign > 0 else "-inf"
+        if terms[-1][0] < 0:
+            infinity = "0"
+        elif terms[-1][0] == 0:
+            infinity = Decimal(terms[-1][1]) / n
+        else:
+            infinity = "+inf" if maximum_sign > 0 else "-inf"
         tolerance = Decimal(10) ** (-(precision // 2))
         roots = roots_of_sum(terms, tolerance)
         return psi, infinity, roots, False
@@ -195,7 +198,7 @@ def main(argv=None):
     if args.json:
         output = {
             "psi": {key: json_decimal(value, args.digits) for key, value in psi.items()},
-            "psi_at_positive_infinity": infinity,
+            "psi_at_positive_infinity": json_decimal(infinity, args.digits) if isinstance(infinity, Decimal) else infinity,
             "zeros": "R" if identically_zero else [json_decimal(x, args.digits) for x in roots],
         }
         print(json.dumps(output, ensure_ascii=True, allow_nan=False, indent="\t"))

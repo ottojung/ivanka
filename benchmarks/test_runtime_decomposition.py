@@ -21,7 +21,7 @@ class RuntimeDecompositionTests(unittest.TestCase):
         self.assertEqual(psi["ties"], 1)
         self.assertAlmostEqual(psi["psi0"], 0)
         self.assertAlmostEqual(psi["psi1"], 1/3)
-        self.assertAlmostEqual(psi["psi2"], 7/3)
+        self.assertAlmostEqual(psi["psi2"], 5/3)
 
     def test_diagnostic_zero_assembly_bound(self):
         with tempfile.TemporaryDirectory() as tmp:

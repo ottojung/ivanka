@@ -1,4 +1,4 @@
-"""Strict shifted-power PSI qualification, reusing the standalone PSI solver."""
+"""Strict PSI qualification, reusing the standalone PSI solver."""
 from decimal import Decimal, InvalidOperation, localcontext
 
 from psi import grouped_terms, roots_of_sum, value_sign
@@ -17,9 +17,9 @@ def summarize(values):
             losses = sum(value < 0 for value in data)
             moments = {
                 "psi0": Decimal(gains - losses) / n,
-                "psi1": sum((Decimal(1 if p > 0 else -1) * (1 + abs(p))
+                "psi1": sum((Decimal(1 if p > 0 else -1) * (abs(p))
                               for p in data if p), Decimal(0)) / n,
-                "psi2": sum((Decimal(1 if p > 0 else -1) * (1 + abs(p)) ** 2
+                "psi2": sum((Decimal(1 if p > 0 else -1) * (abs(p)) ** 2
                               for p in data if p), Decimal(0)) / n,
             }
             formatted = {key: float(value) for key, value in moments.items()}
@@ -37,7 +37,9 @@ def summarize(values):
                 result["zeros_nonnegative"] = "R>=0"
                 return result
             result["psi_at_positive_infinity"] = (
-                "+inf" if terms[-1][1] > 0 else "-inf")
+                "0" if terms[-1][0] < 0
+                else float(terms[-1][1] / n) if terms[-1][0] == 0
+                else "+inf" if terms[-1][1] > 0 else "-inf")
             # If the majority already fails, or the largest uncancelled
             # magnitude is a regression, all-axis positivity is impossible.
             if moments["psi0"] <= 0 or terms[-1][1] < 0:
@@ -78,4 +80,4 @@ def summarize(values):
             result["positive_all_nonnegative"] = not nonnegative
             return result
     except (InvalidOperation, OverflowError, ArithmeticError) as exc:
-        raise ValueError("Unresolved shifted-power PSI") from exc
+        raise ValueError("Unresolved PSI") from exc

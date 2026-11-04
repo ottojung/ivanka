@@ -1,5 +1,5 @@
 """Explicit shared-sequence nodes with original read-pair provenance and
-transitive observed SNP/anchor phase linkage.
+observed SNP/anchor associations, without inferred haplotype phase.
 
 A node is an observed feature (e.g. a shared block edge/allele or a
 marker/anchor allele). An undirected edge between nodes exists only if the
@@ -8,7 +8,7 @@ nodes with unambiguous bases; unsequenced inserts are never imputed and
 missing observations break the chain. Identical paired-read sequences are
 not independent molecules (counted by pair signature). The connected
 component implies transitive observed co-association via read-pair edges
-but does not by itself prove a single haplotype order across long gaps
+and does not prove a single haplotype order across long gaps
 without direct bridging; uncertainty is reported explicitly.
 """
 from collections import defaultdict
@@ -35,14 +35,6 @@ class PhaseGraph:
         self.adj = defaultdict(set)
         self.node_pairs = defaultdict(set)  # node -> set of pair_ids that connect to it
         self.pair_nodes = defaultdict(set)  # pair_id/signature-based identity -> nodes
-        self.node_pair_sigs = defaultdict(lambda: defaultdict(set))  # node -> sig -> witness info
-
-    def add_observation(self, pair_key, sig_key, node_id, base_witness=None):
-        # pair_key is the original read pair identity; sig_key is for deduplication
-        self.pair_nodes[pair_key].add(node_id)
-        self.node_pairs[node_id].add(pair_key)
-        if base_witness is not None and sig_key is not None:
-            self.node_pair_sigs[node_id][sig_key].add(base_witness)
 
 
 def audit_transitive_links(masked, references, rows, anchor=31, radius=600,
@@ -125,7 +117,6 @@ def audit_transitive_links(masked, references, rows, anchor=31, radius=600,
     for qname, nodes in pair_node_obs.items():
         if len(nodes) < 2:
             continue
-        sig = pair_sigs.get(qname)
         node_list = list(nodes.keys())
         for idx_i in range(len(node_list)):
             ni = node_list[idx_i]
@@ -137,8 +128,6 @@ def audit_transitive_links(masked, references, rows, anchor=31, radius=600,
                 graph.node_pairs[nj].add(qname)
                 graph.pair_nodes[qname].add(ni)
                 graph.pair_nodes[qname].add(nj)
-                graph.node_pair_sigs[ni][sig].add(nodes[ni] if ni in nodes else None)
-                graph.node_pair_sigs[nj][sig].add(nodes[nj] if nj in nodes else None)
 
     # Find connected components
     visited = set()
@@ -162,72 +151,88 @@ def audit_transitive_links(masked, references, rows, anchor=31, radius=600,
         if comp:
             components.append(comp)
 
-    # Compute transitive linkages between block components and markers
+    # Distinguish direct full-block evidence from short-edge co-observations.
+    # A graph component is only a co-occurrence relation; counting every pair
+    # in it as marker-linked would manufacture hundreds of "witnesses" from a
+    # small number of direct bridging observations.
     marker_linkages = []
     for j, marker in enumerate(markers):
-        marker_nodes = [n for n in graph.adj if n.startswith(f"MARKER:{j}:")]
-        # Find which pairs connect block-edges/prefix/suffix to this marker via paths
+        marker_prefix = f"MARKER:{j}:"
         direct_pairs = set()
-        transitive_pairs = set()
-        pair_to_path = defaultdict(list)
-        # Direct: same pair observes both a block node and marker node
-        for qname in graph.pair_nodes:
-            qnodes = graph.pair_nodes[qname]
-            has_marker = any(n in marker_nodes for n in qnodes)
-            has_block = any((n.startswith("BLOCK:") or n.startswith("BLOCK_EDGE")) for n in qnodes)
-            if has_marker and has_block:
+        full_observations = defaultdict(set)
+        full_by_signature = defaultdict(set)
+        for qname, observations in pair_node_obs.items():
+            marker_bases = {n[len(marker_prefix):] for n in observations
+                            if n.startswith(marker_prefix)}
+            block_alleles = {n[len("BLOCK:"):] for n in observations
+                             if n.startswith("BLOCK:")}
+            has_edge = any(n.startswith("BLOCK_EDGE_") for n in observations)
+            if marker_bases and (block_alleles or has_edge):
                 direct_pairs.add(qname)
-                pair_to_path[qname] = ["direct"]
-        # Transitive: pairs connected through graph path of length > 1
-        # A pair observes some node A; another pair observes A and B etc., but we need
-        # to track original read-pair provenance - each edge must come from some read pair
-        # that observed both endpoints. Transitive linkage means marker is in same connected
-        # component as block nodes via edges where each edge is supported by some read pair
-        # (possibly different). But we must be careful not to count repeated alignments as
-        # independent molecules - we track by original pair signatures.
-        # Find components that contain both block and marker nodes
-        transitive_components = []
+            for allele in marker_bases:
+                for block in block_alleles:
+                    full_observations[(block, allele)].add(qname)
+                    full_by_signature[pair_sigs[qname]].add((block, allele))
+
+        # A sequence signature with incompatible witnessed alleles is
+        # unresolved, never counted twice as independent evidence.
+        valid_full_signatures = {sig: next(iter(values))
+                                 for sig, values in full_by_signature.items()
+                                 if len(values) == 1}
+        full_spectrum = [{
+            "shared_block": block, "marker_base": allele,
+            "read_pair_ids": len(qnames),
+            "distinct_pair_sequences": sum(
+                observed == (block, allele)
+                for observed in valid_full_signatures.values()),
+        } for (block, allele), qnames in sorted(full_observations.items())]
+
+        eligible_components = []
+        conflicting_components = 0
+        associated_pairs = set()
         for comp in components:
-            has_marker_c = any(n in marker_nodes for n in comp)
-            has_block_c = any((n.startswith("BLOCK:") or n.startswith("BLOCK_EDGE")) for n in comp)
-            if has_marker_c and has_block_c:
-                transitive_components.append(comp)
-                # Count all original read pairs that participate in any edge of this component
-                comp_pairs = set()
-                for n in comp:
-                    comp_pairs.update(graph.node_pairs[n])
-                # But exclude those already counted as direct? Direct means same pair observes both
-                for cp in comp_pairs:
-                    if cp not in direct_pairs:  # only add if not direct same-pair observation
-                        transitive_pairs.add(cp)
-                        pair_to_path[cp] = ["transitive_via_component"]
+            marker_bases = {n[len(marker_prefix):] for n in comp
+                            if n.startswith(marker_prefix)}
+            block_alleles = {n[len("BLOCK:"):] for n in comp
+                             if n.startswith("BLOCK:")}
+            contains_edge = any(n.startswith("BLOCK_EDGE_") for n in comp)
+            if not marker_bases or not (block_alleles or contains_edge):
+                continue
+            if len(marker_bases) > 1 or len(block_alleles) > 1:
+                conflicting_components += 1
+                continue
+            eligible_components.append(comp)
+            for n in comp:
+                associated_pairs.update(graph.node_pairs[n])
 
-        # Deduplicate by pair signature to avoid counting repeated alignments as independent molecules
-        all_linking_pairs = direct_pairs | transitive_pairs
-        # Group by signature
-        sig_to_pairs = defaultdict(set)
-        for qname in all_linking_pairs:
-            sig = pair_sigs.get(qname)
-            if sig is not None:
-                sig_to_pairs[sig].add(qname)
-            else:
-                sig_to_pairs[qname].add(qname)  # should not happen
-
+        # These are graph membership counts, not direct evidence, and not
+        # independent molecules; no indirect component membership is counted
+        # toward a phase witness threshold.
+        direct_signatures = {
+            pair_sigs[qname] for qname in direct_pairs
+            if qname in pair_sigs
+        }
         marker_linkages.append({
             "offset_from_block_start": marker["offset"],
             "reference_marker_alleles": marker["alleles"],
-            "direct_linked_read_pair_ids": len(direct_pairs),
-            "direct_linked_distinct_pair_sequences": len(sig_to_pairs) if all_linking_pairs else 0,
-            "transitive_linked_read_pair_ids": len(transitive_pairs),
-            "total_linked_read_pair_ids": len(all_linking_pairs),
-            "total_linked_distinct_pair_sequences": sum(1 for sig, pairs in sig_to_pairs.items()
-                                                        if pairs) if False else len([s for s in sig_to_pairs if sig_to_pairs[s]]),  # count distinct sigs that appear in linking
-            "linking_pair_signatures": len([s for s, plist in sig_to_pairs.items() if any(p in all_linking_pairs for p in plist)]),
-            "transitive_components_containing_both": len(transitive_components),
-            "no_direct_observation_same_pair": len(direct_pairs) == 0 and len(transitive_pairs) > 0,
-            "uncertainty": ("Transitive edges require only that different pairs connect nodes in the graph; "
-                            "this indicates observed co-occurrence via shared sequence features, "
-                            "not necessarily a single uninterrupted haplotype or molecule order without direct bridging evidence.")
+            "direct_edge_or_full_read_pair_ids": len(direct_pairs),
+            "direct_edge_or_full_distinct_pair_sequences":
+                len(direct_signatures),
+            "direct_full_block_read_pair_ids":
+                len(set().union(*full_observations.values())
+                    if full_observations else set()),
+            "direct_full_block_distinct_pair_sequences":
+                len(valid_full_signatures),
+            "direct_full_block_observed_linkages": full_spectrum,
+            "nonconflicting_components": len(eligible_components),
+            "competing_allele_components": conflicting_components,
+            "co_component_read_pair_ids_not_phase_evidence":
+                len(associated_pairs - direct_pairs),
+            "uncertainty": (
+                "Only same-pair full-block+marker co-observation constitutes "
+                "direct full-local-block linkage. Short block edges and "
+                "transitive component membership do not prove phase, "
+                "independent molecules, or haplotype order."),
         })
 
     return {
@@ -241,10 +246,12 @@ def audit_transitive_links(masked, references, rows, anchor=31, radius=600,
         "edges": sum(len(v) for v in graph.adj.values()) // 2,
         "components": len(components),
         "markers": marker_linkages,
-        "interpretation": ("Graph of explicit shared-sequence nodes with original read-pair provenance. "
-                          "Edges between nodes require same strict pair observing both (with unambiguous bases); "
-                          "transitive connectivity across different pairs is reported separately with uncertainty. "
-                          "No imputed insert bases; repeated alignments counted by pair signature only."),
+        "interpretation": ("Graph of observed shared-sequence features. "
+                          "Only direct full-block-to-marker observations are "
+                          "reported as full-local-block linkage. Short-edge "
+                          "and indirect graph associations are not phase "
+                          "witnesses and are never counted toward coverage "
+                          "or molecule independence. No imputed insert bases."),
     }
 
 

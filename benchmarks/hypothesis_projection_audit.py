@@ -26,14 +26,17 @@ def _references(path):
 
 
 def _window(row, reference):
-    cigar = re.fullmatch(r"(?:(\d+)S)?([1-9]\d*)M(?:(\d+)S)?", row["cigar"])
+    cigar = re.fullmatch(r"(?:([1-9]\d*)S)?([1-9]\d*)M(?:([1-9]\d*)S)?", row["cigar"])
     if cigar is None:
         raise ValueError("unsupported projected CIGAR")
     prefix, count, suffix = (int(x or 0) for x in cigar.groups())
     length = len(row["seq"])
     if prefix + count + suffix != length or len(row["qual"]) != length:
         raise ValueError("projected sequence or quality length mismatch")
-    start = int(row["pos"]) - 1
+    try:
+        start = int(row["pos"]) - 1
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid projected alignment position") from exc
     if start < 0 or start + count > len(reference):
         raise ValueError("projected alignment exceeds reference")
     return reference[start:start + count]
@@ -59,6 +62,13 @@ def _neighbors(refs, name):
 def audit_projection(original_path, projected_path, references_path):
     """Reject any fabricated row, cross-target duplication or unsafe placement."""
     refs = _references(references_path)
+    neighbor_cache = {}
+
+    def neighbors(name):
+        if name not in neighbor_cache:
+            neighbor_cache[name] = _neighbors(refs, name)
+        return neighbor_cache[name]
+
     originals = {}
     original_count = 0
     with Path(original_path).open(newline="") as handle:
@@ -94,9 +104,17 @@ def audit_projection(original_path, projected_path, references_path):
             if len(sources) != 1:
                 raise ValueError("original pair maps to multiple references")
             source_name = next(iter(sources))
+            try:
+                coordinates = [int(m["pos"]) for m in original_pair]
+                mates_at = [int(m["pnext"]) for m in original_pair]
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("invalid original mate coordinates") from exc
+            if any(p < 0 or (p and p != coordinates[1-i])
+                   for i, p in enumerate(mates_at)):
+                raise ValueError("contradictory original mate coordinates")
             if (source_name not in refs or target not in refs or
-                    _neighbors(refs, source_name) != [target] or
-                    _neighbors(refs, target) != [source_name]):
+                    neighbors(source_name) != [target] or
+                    neighbors(target) != [source_name]):
                 raise ValueError("target is not an isolated reciprocal hypothesis")
             mates = [r for r in original_pair if r["flag"] == row["flag"]]
             if len(mates) != 1:

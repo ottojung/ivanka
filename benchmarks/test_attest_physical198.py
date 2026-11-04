@@ -64,6 +64,14 @@ class Physical198AttestationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "modified"):
                 audit.verify_pair(record, results, cache, "run", "c" * 64)
             (folder / "conseq.csv").write_text("candidate")
+            outside = base / "outside.csv"
+            outside.write_text("candidate")
+            (folder / "conseq.csv").unlink()
+            (folder / "conseq.csv").symlink_to(outside)
+            with self.assertRaisesRegex(ValueError, "modified"):
+                audit.verify_pair(record, results, cache, "run", "c" * 64)
+            (folder / "conseq.csv").unlink()
+            (folder / "conseq.csv").write_text("candidate")
             (original / "conseq.csv").write_text("tampered")
             with self.assertRaisesRegex(ValueError, "modified"):
                 audit.verify_pair(record, results, cache, "run", "c" * 64)
@@ -85,6 +93,10 @@ class Physical198AttestationTests(unittest.TestCase):
             state.mkdir()
             with patch.object(audit, "sha", return_value=audit.MANIFEST_SHA256):
                 with self.assertRaisesRegex(ValueError, "Frozen cohort"):
+                    audit.verify(base, state, manifest, base / "cache", "run")
+            manifest.write_text("sample\\n" + "".join("S" + str(i) + "\\n" for i in range(198)))
+            with patch.object(audit, "sha", return_value=audit.MANIFEST_SHA256):
+                with self.assertRaisesRegex(ValueError, "Physical runner did not finish"):
                     audit.verify(base, state, manifest, base / "cache", "run")
 
 

@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 use super::index::{kmer_codes,INVALID};
+use super::quality_filter::{low_quality_prefix,valid_window};
 
 struct Placement {start:isize,end:isize,calls:HashMap<usize,u8>}
-fn locate(read: &[u8], index: &HashMap<u128,Option<usize>>,
+fn locate(read: &[u8],quality: &[u8], index: &HashMap<u128,Option<usize>>,
           a: usize) -> Option<Placement> {
-    if read.len()<2*a+1 {return None;}
-    let kmers=kmer_codes(read,a);
+    if read.len()<2*a+1 || read.len()!=quality.len() {return None;}
+    let low=low_quality_prefix(quality);let kmers=kmer_codes(read,a);
     let mut start=None;
     let mut calls=HashMap::new();
     for i in 0..=read.len()-2*a-1 {
-        let (left,right)=(kmers[i],kmers[i+a+1]);
+        if !valid_window(&low,i,i+2*a+1) {continue;}let (left,right)=(kmers[i],kmers[i+a+1]);
         if left==INVALID || right==INVALID {continue;}
         let key=((left as u128)<<(2*a))|right as u128;
         let Some(Some(pos))=index.get(&key) else {continue;};
@@ -24,11 +25,11 @@ fn locate(read: &[u8], index: &HashMap<u128,Option<usize>>,
     let start=start?;
     Some(Placement{start,end:start+read.len() as isize,calls})
 }
-pub(super) fn original_pair_calls(pair: &[Vec<u8>], index:
+pub(super) fn original_pair_calls(pair: &[Vec<u8>],quality:&[Vec<u8>], index:
         &HashMap<u128,Option<usize>>,a:usize) -> HashMap<usize,u8> {
-    if pair.len()!=4 {return HashMap::new();}
-    let oriented=[locate(&pair[0],index,a),locate(&pair[1],index,a),
-                  locate(&pair[2],index,a),locate(&pair[3],index,a)];
+    if pair.len()!=4 || quality.len()!=4 {return HashMap::new();}
+    let oriented=[locate(&pair[0],&quality[0],index,a),locate(&pair[1],&quality[1],index,a),
+                  locate(&pair[2],&quality[2],index,a),locate(&pair[3],&quality[3],index,a)];
     let (a,b) = match &oriented {
         [Some(r1),None,None,Some(r2)] if r1.start<=r2.start=>(r1,r2),
         [None,Some(r1),Some(r2),None] if r2.start<=r1.start=>(r1,r2),

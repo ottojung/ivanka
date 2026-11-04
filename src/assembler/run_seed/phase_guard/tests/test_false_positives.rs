@@ -18,7 +18,7 @@ use super::test_support::{synthetic,split,reverse_complement};
     reads.push(reverse_complement(&first));
     reads.push(second.clone());
     reads.push(reverse_complement(&second));
-    let calls=observations(&seq,&reads,25);
+    let calls=observations(&seq,&reads,&super::test_support::qualities(&reads),25);
     assert!(calls[0].get(&200).is_none());
 }
 #[test] fn distant_paired_mappings_are_not_direct_phase_bridges() {

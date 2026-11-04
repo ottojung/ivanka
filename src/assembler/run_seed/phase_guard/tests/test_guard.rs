@@ -6,7 +6,7 @@ use super::{collect::observations,detect::incompatible_link};
     assert_eq!(contigs.len(),2);
     assert_eq!(contigs.concat(),chimera);
     for fragment in &contigs {
-        assert!(incompatible_link(fragment,&reads,&observations(fragment,&reads,25)).is_none());
+        assert!(incompatible_link(fragment,&reads,&observations(fragment,&reads,&super::test_support::qualities(&reads),25)).is_none());
     }
     assert!(contigs.iter().all(|c|c.len()>=31));
     assert_eq!(contigs[0][200],truth[200]);
@@ -27,13 +27,13 @@ use super::{collect::observations,detect::incompatible_link};
     assert!(result.is_empty());
 }
 fn split_unsupported(seq: Vec<u8>,reads:&[Vec<u8>])->Vec<Vec<u8>> {
-    super::split::split_unsupported_contigs(vec![seq],reads,1)
+    super::split::split_unsupported_contigs(vec![seq],reads,&super::test_support::qualities(reads),1)
 }
 
 
 #[test] fn audit_does_not_mutate_even_an_unsupported_recombinant() {
     let (chimera,_,reads)=synthetic(true);
     let contigs=vec![chimera.clone()];
-    super::split::audit_unsupported_contigs(&contigs,&reads);
+    super::split::audit_unsupported_contigs(&contigs,&reads,&super::test_support::qualities(&reads));
     assert_eq!(contigs,vec![chimera]);
 }

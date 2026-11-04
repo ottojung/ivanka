@@ -24,16 +24,23 @@ IVANKA_EXPERIMENTAL_PHASE_SPLIT=1 target/debug/ivanka \
   --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output experimental.fasta
 ```
 
-If both modes are set, split mode takes precedence. Only the exact
-value `1` activates either mode; absent flags, `0`, and other values
+When multiple modes are enabled, precedence is split, then mask, then
+audit-only. The exact environment flag value `1` activates either mode; absent flags, `0`, and other values
 preserve normal assembly behavior. Input paired-end read
 identities are checked by the ordinary Rust FASTQ loader.
 
 ## What is checked
 
-After normal assembly and support-based ranking, unique exact flanks of
-25 ACGT bases on **each side** of a candidate contig site allow an original
-oriented FASTQ read to vote for the observed center base. An original pair
+After normal assembly and support-based ranking, the experimental mode
+**reopens the original R1/R2 FASTQs** to retrieve actual Phred+33 qualities.
+It validates that original read IDs and bases still match those used by
+assembly. Ordinary assembly does not reopen files or keep extra qualities.
+
+Unique exact flanks of 25 ACGT bases on **each side** of a candidate contig
+site allow an original oriented FASTQ read to vote for the observed center
+base **only when all 51 bases are Q15 or higher**. Q14 windows are rejected
+even if sequence-exact; reverse-complemented mates reverse their quality
+arrays as well. An original pair
 contributes only when both mates have uniquely consistent exact-flank
 placements in opposing *inward-facing* orientation and the
 inferred mapped span is within the conservative bound. Alternative placements,
@@ -91,8 +98,10 @@ These timings are not comparable to the frozen 198 full-MiCall runtime gate.
 
 ## Why it stays experimental
 
-- No base-quality scores are retained by the Rust assembler's read store:
-  these anchors are **sequence-exact**, not Q15 evidence.
+- Ordinary assembly does not store base qualities; opt-in audit/mask/split
+  reopen immutable original FASTQs, verify original pair IDs and bases, and
+  check all 51 observed bases are Q15+. Even genuine Q15 evidence does not
+  certify independent physical molecules or long-range haplotype phase.
 - A repeated or structurally rearranged region can create misleading exact
   anchors. Unique contig flanks, same-pair inward-facing geometry and the span
   heuristic are not a calibrated insert-size distribution or proof of
@@ -104,10 +113,10 @@ These timings are not comparable to the frozen 198 full-MiCall runtime gate.
 - An *unflagged* contig is not proven phased; the test is a one-sided
   warning for certain directly contradicted combinations.
 
-Promotion requires a proper per-library fragment model, base-quality
-evidence, stronger repetitive-locus ambiguity guards, preservation
-metrics, and real-pair full-MiCall comparisons on S48/S98 before the
-frozen cohort is attempted.
+Promotion requires a proper per-library fragment model, independently
+validated quality-aware allele observation, stronger repetitive-locus
+ambiguity guards, preservation metrics, and real-pair full-MiCall
+comparisons on S48/S98 before the frozen cohort is attempted.
 
 ## Validation checkpoints
 
@@ -165,8 +174,32 @@ two-site phase. Both unlinked fixtures remained byte-identical
 (no masked sites). Both authentic S48/S98 first-3,000-pair controls
 remained byte-identical to ordinary Ivanka (four-contig cap).
 
+An isolated execution in the **pinned MiCall container** verified that
+micall.core.remap.counts_to_conseqs changes a seed N to the most-supported
+read base (A or G in the controlled test) when read coverage exists,
+and leaves N only without coverage. Consequently **N is not a
+persistent phase-uncertainty marker in MiCall's normal pipeline**;
+reference or remapping bias can reassert unsupported phase downstream.
 This is not evidence that MiCall will preserve an N-bearing contig
 without remap/reference bias. It should not be used to improve
 benchmark alignment by deliberately hiding negative evidence.
 The ambiguous site must remain explicitly marked as unresolved
 throughout any future downstream processing and acceptance reporting.
+
+## Quality-aware regression (November 4, 2026)
+
+Original FASTQ qualities are now reloaded *only for opt-in diagnostics*.
+A strict immutable-read comparison ensures the quality bytes match the
+same original reads and orientations that the assembler used. Exact
+left 25 + middle variant 1 + right 25 windows must all have quality
+at least Phred 15. The file reader fails closed for malformed FASTQ
+quality bytes, mate IDs, or changed sequence sources. The 64 Rust unit
+tests include Q14 rejection, omitted/short quality arrays and
+reverse-complemented R1/R2 quality order.
+
+The synthetic seed17 linked counterexample still yields 35 distinct
+qualifying original paired-sequence signatures and the noisier seed23
+fixture still yields nine. The original unlinked fixtures retain
+unidentifiable phase, with no added warnings. This is an observed
+validation of the quality-filtered *experimental diagnostics* only,
+not a calibrated phase-error rate or real-data release acceptance.

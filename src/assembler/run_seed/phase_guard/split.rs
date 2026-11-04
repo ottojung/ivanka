@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
 use super::{collect::observations,detect::incompatible_link};
 pub(crate) fn split_unsupported_contigs(contigs: Vec<Vec<u8>>,
-    reads: &[Vec<u8>], max: usize) -> Vec<Vec<u8>> {
+    reads: &[Vec<u8>], qualities:&[Vec<u8>], max: usize) -> Vec<Vec<u8>> {
     let mut queue=VecDeque::from(contigs);
     let mut output=Vec::new();
     while let Some(seq)=queue.pop_front() {
-        let calls=observations(&seq,reads,25);
+        let calls=observations(&seq,reads,qualities,25);
         if let Some((p,q,bridges))=incompatible_link(&seq,reads,&calls) {
             let cut=(p+q)/2;
             eprintln!("EXPERIMENTAL_PHASE_GUARD unsupported join {p}..{q}, {bridges} distinct observed pair sequences");
@@ -24,9 +24,9 @@ pub(crate) fn split_unsupported_contigs(contigs: Vec<Vec<u8>>,
 
 
 // Report read-backed contradictions without touching any assembly sequence.
-pub(crate) fn audit_unsupported_contigs(contigs: &[Vec<u8>],reads: &[Vec<u8>]) {
+pub(crate) fn audit_unsupported_contigs(contigs: &[Vec<u8>],reads: &[Vec<u8>],qualities:&[Vec<u8>]) {
     for (i,seq) in contigs.iter().enumerate() {
-        let calls=observations(seq,reads,25);
+        let calls=observations(seq,reads,qualities,25);
         if let Some((p,q,n))=incompatible_link(seq,reads,&calls) {
             eprintln!("EXPERIMENTAL_PHASE_AUDIT contig={} candidate join {}..{} contradicted by {} distinct paired sequences; no proof of physical molecules",i+1,p,q,n);
         }

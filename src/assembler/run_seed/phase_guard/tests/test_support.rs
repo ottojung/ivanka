@@ -24,6 +24,9 @@ pub(super) fn reverse_complement(seq: &[u8]) -> Vec<u8> {
         b'A'=>b'T',b'T'=>b'A',b'C'=>b'G',b'G'=>b'C',_=>b'N'
     }).collect()
 }
+pub(super) fn qualities(reads: &[Vec<u8>])->Vec<Vec<u8>> {
+    reads.iter().map(|r|vec![b'I';r.len()]).collect()
+}
 pub(super) fn split(seq: Vec<u8>, reads: &[Vec<u8>]) -> Vec<Vec<u8>> {
-    split_unsupported_contigs(vec![seq],reads,2)
+    split_unsupported_contigs(vec![seq],reads,&qualities(reads),2)
 }

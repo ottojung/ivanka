@@ -236,6 +236,45 @@ class ConservativeRemapTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicated"):
             audit_projection(self.src, self.out, self.refs)
 
+    def test_independent_audit_checks_each_neighbor_set_only_once(self):
+        from unittest.mock import patch
+        import hypothesis_projection_audit as independent
+        make_csv(self.src, FIELDS, [
+            row(name="one", flag=99), row(name="one", flag=147, pos=300),
+            row(name="two", flag=99), row(name="two", flag=147, pos=300),
+        ])
+        project_remap(self.src, self.refs, self.out)
+        with patch.object(independent, "_neighbors",
+                          wraps=independent._neighbors) as neighbors:
+            result = independent.audit_projection(self.src, self.out, self.refs)
+        self.assertEqual(result["extra_conditional_pairs"], 2)
+        self.assertEqual(neighbors.call_count, 2)
+
+    def test_independent_audit_rejects_invalid_original_mate_metadata(self):
+        from hypothesis_projection_audit import audit_projection
+        initial = [row(flag=99), row(flag=147, pos=300)]
+        make_csv(self.src, FIELDS, initial)
+        _, stats = project_remap(self.src, self.refs, self.out)
+        self.assertEqual(stats["projected_pairs"], 1)
+        with self.out.open(newline="") as stream:
+            projected = list(DictReader(stream))
+        self.assertEqual(len(projected), 4)
+        for field, changed, error in (
+                ("cigar", "0S100M", "unsupported projected CIGAR"),
+                ("pnext", "999", "contradictory original mate coordinates"),
+                ("pnext", "*", "invalid original mate coordinates"),
+                ("pos", "*", "invalid original mate coordinates")):
+            with self.subTest(field=field, changed=changed):
+                originals = [dict(r) for r in initial]
+                copies = [dict(r) for r in projected]
+                originals[0][field] = changed
+                copies[0][field] = changed
+                copies[2][field] = changed
+                make_csv(self.src, FIELDS, originals)
+                make_csv(self.out, FIELDS, copies)
+                with self.assertRaisesRegex(ValueError, error):
+                    audit_projection(self.src, self.out, self.refs)
+
     def test_independent_audit_rejects_unsafe_reference_and_changed_original(self):
         from hypothesis_projection_audit import audit_projection
         original = [row(flag=99), row(flag=147, pos=300)]

@@ -68,6 +68,15 @@ referenceless stitching, remapping and final consensus) unchanged. However,
 pipeline**. Both arms still process the same genuine sample FASTQs against the
 pinned MiCall reference panel; authentic cached IVA controls are never modified.
 
+**The November 3 experimental 198-sample candidate also changes the
+MiCall remapping-to-`sam2aln` boundary.** The conservative isolated-HCV
+pair-sharing patch (PR #137) is beyond the assembler/stitcher-only surface.
+Report its results as a comparison of end-to-end candidate pipelines, **not**
+as an assembler-only claim. The frozen IVA image, MiCall consensus depth
+threshold and all qualification gates remain unchanged. See
+[mutable pipeline scope](docs/mutable-pipeline-scope.md) for the explicit
+scientific interpretation and limits.
+
 ### Mutable referenceless stitcher: requirements
 
 The scientific milestone permits improvements to MiCall's **referenceless

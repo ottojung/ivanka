@@ -203,3 +203,22 @@ fixture still yields nine. The original unlinked fixtures retain
 unidentifiable phase, with no added warnings. This is an observed
 validation of the quality-filtered *experimental diagnostics* only,
 not a calibrated phase-error rate or real-data release acceptance.
+
+## Expanded real-pair Q15 audit-only smoke (not MiCall acceptance)
+
+On genuine S48 and S98, expanded the isolated read-only control from 3,000
+to **10,000 original read pairs per sample** at a fixed four-contig cap.
+Both samples produced byte-identical FASTA in normal and Q15 audit-only
+mode; no phase-contradiction warning appeared. The saved SHA256s were:
+
+- S48: 5924ffcbafb25c0635f6d73b0038ddbb2c06afe36f7640c8286df13a8007986a
+- S98: 7187ef7e480f733f8b2876c6c0aa1065f172e8847258eb817a389d4f5163e82c
+
+Elapsed inside the same native shell: S48 ordinary 5.5 s vs Q15 audit
+10.5 s, S98 ordinary 28.5 s vs Q15 audit 35.9 s. This includes the
+extra original-FASTQ decompression, original-sequence comparison, Q15
+window matching and candidate-contig phase screening. The overhead is
+real and **cannot** be billed to the standard 198 runtime benchmark
+since audit is disabled by default. Do not infer whole-sample or
+final-MiCall phase safety from these prefixes. Frozen 198 data and
+all original IVA controls remain unchanged.

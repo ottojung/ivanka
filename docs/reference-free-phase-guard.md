@@ -4,8 +4,8 @@
 a prototype safety check against unsupported joins, not validated phase
 reconstruction, physical molecule counting, or clinical interpretation.
 
-To audit without changing output, set the
-IVANKA_EXPERIMENTAL_PHASE_AUDIT=1 environment flag. Audit mode reports
+To audit without changing output, set
+`IVANKA_EXPERIMENTAL_PHASE_AUDIT=1` in the environment. Audit mode reports
 candidate contradictions to stderr and never edits, suppresses, or splits
 contigs.
 
@@ -16,27 +16,25 @@ IVANKA_EXPERIMENTAL_PHASE_SPLIT=1 target/debug/ivanka \
   --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output experimental.fasta
 ```
 
-If both modes are set, split mode takes
-precedence. Only the exact environment value `1` activates the guard. Absent, `0`,
-and other values preserve normal assembly behavior. Input paired-end read
+If both modes are set, split mode takes precedence. Only the exact
+value `1` activates either mode; absent flags, `0`, and other values
+preserve normal assembly behavior. Input paired-end read
 identities are checked by the ordinary Rust FASTQ loader.
 
 ## What is checked
 
 After normal assembly and support-based ranking, unique exact flanks of
 25 ACGT bases on **each side** of a candidate contig site allow an original
-oriented FASTQ read to vote for the observed center base. An original pair contributes only when both mates have uniquely consistent,
-exact-flank placements in opposing *inward-facing* orientation and the
+oriented FASTQ read to vote for the observed center base. An original pair
+contributes only when both mates have uniquely consistent exact-flank
+placements in opposing *inward-facing* orientation and the
 inferred mapped span is within the conservative bound. Alternative placements,
 same-orientation pairs and conflicting mate observations are excluded. The
 two mates and their reverse complements remain one original pair, never
 four molecular votes.
 
-Before treating a read pair as a linkage witness, both mates must have
-self-consistent unique exact-anchor placements on the candidate contig,
-with an inward-facing orientation and a plausible common fragment span.
-An isolated anchor hit, an ambiguous repeated alignment, or sites too
-far apart cannot establish paired linkage.
+An isolated anchor hit, ambiguous placement or implausible fragment
+span cannot establish paired linkage.
 
 For candidate sites with at least five observations of the contig base
 and five of an alternative, the guard looks for original read pairs

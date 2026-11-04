@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import attest_physical198 as audit
 from milestone198 import IVA_IMAGE_SHA256
-from podman_full_micall import sha
+from attest_physical198 import sha
 
 
 class Physical198AttestationTests(unittest.TestCase):

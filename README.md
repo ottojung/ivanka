@@ -55,12 +55,27 @@ The role mapping is private because it contains sample names. Store it in
 
 ## Full MiCall IVA/Ivanka A/B benchmark
 
+The benchmark shell entrypoints use `python3` by default, or the interpreter
+selected by `IVANKA_BENCH_PYTHON=/path/to/venv/bin/python`. That interpreter
+must have the packages in `benchmarks/requirements.txt` installed. This
+avoids depending on the original host's absolute MiCall checkout location.
+
+
 The Podman harness substitutes Ivanka at the IVA assembler boundary in a pinned
 MiCall container. The default assembler-only A/B leaves the other MiCall steps (G2P,
 referenceless stitching, remapping and final consensus) unchanged. However,
 **the referenceless stitcher is explicitly part of the mutable Ivanka candidate
 pipeline**. Both arms still process the same genuine sample FASTQs against the
 pinned MiCall reference panel; authentic cached IVA controls are never modified.
+
+**The November 3 experimental 198-sample candidate also changes the
+MiCall remapping-to-`sam2aln` boundary.** The conservative isolated-HCV
+pair-sharing patch (PR #137) is beyond the assembler/stitcher-only surface.
+Report its results as a comparison of end-to-end candidate pipelines, **not**
+as an assembler-only claim. The frozen IVA image, MiCall consensus depth
+threshold and all qualification gates remain unchanged. See
+[mutable pipeline scope](docs/mutable-pipeline-scope.md) for the explicit
+scientific interpretation and limits.
 
 ### Mutable referenceless stitcher: requirements
 
@@ -223,6 +238,43 @@ rustc --test source_lints/mod.rs -o /tmp/ivanka-source-lint-tests
 ```
 
 ### Full 198-sample milestone qualification
+
+After a completed run, inspect the **198-sample** runner's strict verdict
+(not the older 18-sample two-arm alpha verdict) with:
+
+```sh
+python3 benchmarks/summarize.py --results /path/to/results \\
+  --invocation EXACT_INVOCATION_ID
+```
+
+The command exits nonzero unless the saved runner summary certifies **198/198**,
+zero failures/resumed samples, both all-real-r shifted PSI checks, pinned
+manifest/reference-panel/IVA image provenance, and the 1,800-second per-container
+budget. It displays the maximum whole-container wall time rather than the
+historical alpha sample duration. This is a **summary consistency check**, not
+independent authentication of the original FASTQs, in-container execution or
+output hashes; keep the original physical invocation and its artifacts.
+
+For an additional **read-only artifact integrity check** after the physical
+runner has exited successfully, use:
+
+```sh
+python3 benchmarks/attest_physical198.py \\
+  --results-dir /path/to/results --state-dir /path/to/run-state \\
+  --manifest /path/to/frozen/manifest.tsv \\
+  --iva-cache /path/to/authentic/iva-cache \\
+  --invocation EXACT_INVOCATION_ID
+```
+
+This requires the physical exit-0 and finish markers, exactly 198 matching
+started and finished events, the original 198 manifest, the frozen original
+IVA image, authentic cached-IVA metadata and consensus checksums, final Ivanka
+consensus checksums contained within the original result directory, and an
+independent recomputation of both recorded all-real-r PSI conditions. It
+rejects resumed, incomplete or mismatched results. **This checks stored
+evidence and original file contents, but does not independently prove
+container execution or recompute alignments from nucleotide sequences.**
+Retain the original physical results and image IDs for reproducibility.
 
 The full-cohort benchmark is **separate** from the historical 18-sample,
 95%-of-IVA alpha gate. It requires the exact private cohort manifest SHA-256

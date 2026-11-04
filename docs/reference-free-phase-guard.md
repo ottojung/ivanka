@@ -121,3 +121,26 @@ low-quality mismatches, PCR duplicates or true low-frequency haplotypes,
 not observing the contig allele pair is only a **warning**, not proof that
 the assembled allele pair is impossible. A human-reviewed opt-in audit is
 safer until those problems are modeled and tested.
+
+
+## Independent noisy synthetic check (1% substitutions)
+
+Generated a separate deterministic 1,000-original-pair fixture with 100-base
+mates, a 300-base fragment, seed 23 and a 1% independent substitution rate.
+The linked sites were 400 and 600; the unlinked control sites were 280 and
+900. Both tests used the actual Rust binary and its opt-in audit/split modes.
+
+- **Linked:** normal output was one 1,380-base unsupported recombinant.
+  Audit-only identified positions 393..593 with **9 distinct consistent
+  paired-sequence signatures**, leaving that FASTA unchanged. Splitting
+  produced 493- and 887-base fragments; the synthetic truth evaluator then
+  reported zero *detected* unsupported two-site recombinants, but neither
+  fragment establishes the original full-length haplotypes.
+- **Unlinked:** both modes retained one 1,380-base contig with no warning;
+  phase remained explicitly unidentifiable from direct paired reads.
+
+The experiments remain reproducible under
+/workspace/ivanka-lab/phase-guard-noisy-20261104 on marceline-dev.
+Nine sequence signatures are close to this prototype's fixed threshold of
+eight. This threshold is **not** a probability of correctness and cannot be
+extrapolated to real samples, PCR families or higher error rates.

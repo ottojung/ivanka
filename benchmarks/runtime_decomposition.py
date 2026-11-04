@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import statistics
 
-from psi_acceptance import summarize as summarize_shifted_psi
+from psi_acceptance import summarize as summarize_psi
 
 STAMP = r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3})"
 ASSEMBLY = re.compile(r"Ivanka wrote \d+ contigs in ([0-9]+(?:\.[0-9]+)?)s")
@@ -38,10 +38,10 @@ def parse_stages(log):
 
 
 def signed_psi(differences):
-    """Diagnostic shifted PSI; never establishes formal qualification."""
+    """Diagnostic PSI; never establishes formal qualification."""
     if not differences or any(not math.isfinite(d) for d in differences):
         raise ValueError("Empty or nonfinite signed-power cohort")
-    result = summarize_shifted_psi(differences)
+    result = summarize_psi(differences)
     return {
         "faster": result["gains"], "slower": result["losses"],
         "ties": result["ties"],

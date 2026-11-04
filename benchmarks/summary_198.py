@@ -74,7 +74,7 @@ def evaluate(summary):
                 or psi.get("zeros_nonnegative") != []
                 or psi.get("psi_at_positive_infinity") != "+inf"
                 or any(not _positive_number(psi.get("psi" + str(k))) for k in range(3))):
-            reasons.append(kind + " shifted-power PSI is not certified positive for all r>=0")
+            reasons.append(kind + " PSI is not certified positive for all r>=0")
     if summary.get("milestone198_pass") is not True:
         reasons.append("runner did not certify milestone198_pass")
     return {

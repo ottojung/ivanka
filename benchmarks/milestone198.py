@@ -21,7 +21,7 @@ def finite(value, *, positive=False):
 
 
 def psi(values):
-    """Shifted-power PSI and strict positivity over every real r >= 0."""
+    """PSI and strict positivity over every real r >= 0."""
     if len(values) != SAMPLE_COUNT or not all(finite(value) for value in values):
         raise ValueError("PSI requires 198 finite paired differences")
     return summarize_psi(values)
@@ -105,7 +105,7 @@ def qualify(records, names, iva_image, ivanka_image, sample_limit, panel_sha):
         report["score_psi"] = psi(score_deltas)
         report["time_psi"] = psi(time_deltas)
     except ValueError:
-        errors.append("nonfinite_or_unresolved_shifted_power_psi")
+        errors.append("nonfinite_or_unresolved_psi")
         return report
     for prefix in ("score", "time"):
         report.update({f"{prefix}_{key}": report[f"{prefix}_psi"][key]

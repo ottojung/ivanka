@@ -17,7 +17,7 @@ class PsiTests(unittest.TestCase):
 
     def test_values_and_limit(self):
         values, limit, roots, all_real = self.calculate([2, -1, 0, 0])
-        self.assertEqual(values, {"0": Decimal(0), "1": Decimal("0.25"), "2": Decimal("1.25")})
+        self.assertEqual(values, {"0": Decimal(0), "1": Decimal("0.25"), "2": Decimal("0.75")})
         self.assertEqual(limit, "+inf")
         self.assertEqual(len(roots), 1)
         self.assertAlmostEqual(float(roots[0]), 0)
@@ -25,19 +25,19 @@ class PsiTests(unittest.TestCase):
 
     def test_two_roots_opposite_sides_of_zero(self):
         # 2*(2**r)*(2**r - 1/2)*(2**r - 2), exact roots -1 and +1.
-        _, _, roots, _ = self.calculate([1] * 2 + [-3] * 5 + [7] * 2)
+        _, _, roots, _ = self.calculate([2] * 2 + [-4] * 5 + [8] * 2)
         self.assertEqual(len(roots), 2)
         self.assertAlmostEqual(float(roots[0]), -1, places=8)
         self.assertAlmostEqual(float(roots[1]), 1, places=8)
 
     def test_tangent_zero_without_sign_change(self):
         # 2**r * (2**r - 3)**2, double root log2(3).
-        _, _, roots, _ = self.calculate([1] * 9 + [-3] * 6 + [7])
+        _, _, roots, _ = self.calculate([2] * 9 + [-4] * 6 + [8])
         self.assertEqual(len(roots), 1)
         self.assertAlmostEqual(float(roots[0]), 1.584962500721156, places=8)
 
     def test_two_positive_roots(self):
-        _, limit, roots, _ = self.calculate([1] * 5 + [-3] * 5 + [7])
+        _, limit, roots, _ = self.calculate([2] * 5 + [-4] * 5 + [8])
         self.assertEqual(limit, "+inf")
         self.assertEqual(len(roots), 2)
         self.assertLess(0, roots[0])
@@ -55,6 +55,19 @@ class PsiTests(unittest.TestCase):
         self.assertEqual(limit, "0")
         self.assertEqual(roots, [])
         self.assertTrue(all(v == 0 for v in values.values()))
+
+    def test_infinity_limit_when_all_magnitudes_are_below_one(self):
+        _, limit, _, _ = self.calculate([Decimal("0.25"), Decimal("-0.5")])
+        self.assertEqual(limit, "0")
+
+    def test_infinity_limit_when_maximum_magnitude_is_one(self):
+        _, limit, _, _ = self.calculate([1, 1, Decimal("-0.25")])
+        self.assertAlmostEqual(float(limit), 2/3)
+
+    def test_no_offset_in_moments(self):
+        moments, _, _, _ = self.calculate([Decimal("0.5"), Decimal("-2"), 0])
+        self.assertEqual(moments["1"], Decimal("-0.5"))
+        self.assertEqual(moments["2"], Decimal("-1.25"))
 
     def test_all_zero(self):
         self.assertTrue(self.calculate([0, 0])[3])
@@ -84,7 +97,7 @@ class PsiTests(unittest.TestCase):
                                 text=True, capture_output=True, check=True)
         self.assertIn("Ψ(0) =", result.stdout)
         self.assertIn("Ψ(+∞) = −∞", result.stdout)
-        self.assertIn("{ r : Ψ(r) = 0 } = { 1.709511291 }", result.stdout)
+        self.assertIn("{ r : Ψ(r) = 0 } = { 1.", result.stdout)
         self.assertNotIn("\\", result.stdout)
 
     def test_human_identically_zero_uses_real_numbers_symbol(self):

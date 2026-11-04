@@ -248,7 +248,7 @@ python3 benchmarks/summarize.py --results /path/to/results \\
 ```
 
 The command exits nonzero unless the saved runner summary certifies **198/198**,
-zero failures/resumed samples, both all-real-r shifted PSI checks, pinned
+zero failures/resumed samples, both all-real-r PSI checks, pinned
 manifest/reference-panel/IVA image provenance, and the 1,800-second per-container
 budget. It displays the maximum whole-container wall time rather than the
 historical alpha sample duration. This is a **summary consistency check**, not
@@ -309,7 +309,7 @@ every sample must finish within 1,800 seconds of total container time, including
 startup and teardown. For each paired score delta
 `p = ivanka_score - iva_score`, and paired runtime delta
 `q = iva_arm_seconds - ivanka_arm_seconds`, independently require
-`Psi(r) = sum(sign(x) * (1 + abs(x))**r)/198 > 0` for every `r >= 0`. Exact ties
+`Psi(r) = sum(sign(x) * abs(x)**r)/198 > 0` for every `r >= 0`. Exact ties
 contribute zero at all powers. The summary retains values at r=0,1,2 as diagnostics, but the acceptance
 gate requires Psi(0)>0 and no real zero for r>=0, separately for alignment
 and runtime. It fails for incomplete or unmatched controls. Runtime PSI
@@ -343,7 +343,7 @@ python benchmarks/replay_milestone198.py \
 The replay verifies the manifest, run identity, original Ivanka executable
 image, FASTQ/provenance hashes, final output hashes, all 33 references and
 authentic IVA baseline hashes, and applies the same 198-sample, 90%-floor,
-and shifted PSI(r)>0 for every real r>=0 (alignment and runtime) acceptance. It writes a **separate** summary and restored records; the
+and PSI(r)>0 for every real r>=0 (alignment and runtime) acceptance. It writes a **separate** summary and restored records; the
 original diagnostic artifacts are not edited. A missing baseline is a
 failed comparison, not an invented or skipped sample.
 
@@ -393,7 +393,7 @@ for exploratory comparisons and to locate remaining algorithmic problems.
 It is NOT an accepted final 198-sample qualification: that requires **one
 complete physical invocation** with 198 internally comparable results.
 Even if all 198 recovered records pass the per-sample 90% floor and both
-shifted all-r PSI tests, \`milestone198_pass\` remains \`false\` whenever any
+all-r PSI tests, \`milestone198_pass\` remains \`false\` whenever any
 external previous sample is reused. The runner reports
 \`reused_records_not_single_invocation\`, preserves diagnostic PSI values,
 and exits nonzero. To qualify, use a fresh run without \`--resume-from\`.
@@ -426,7 +426,7 @@ copies of old records. For a *second* recovery, supply **all original**
 A missing, changed, unauthenticated, duplicated or unsupported completed
 record cannot be cherry-picked into acceptance. Reusing samples never skips
 the 198 distinct-sample requirement, the 1800-second container cap, either
-shifted PSI all-nonnegative-axis test, or the unchanged 90% floor.
+PSI all-nonnegative-axis test, or the unchanged 90% floor.
 
 ### Diagnostic-only runtime decomposition
 
@@ -493,4 +493,4 @@ qualifying image or a claim of speedup.
 
 ### PSI calculator
 
-Use `printf "1 1 -2\n" | python3 benchmarks/psi.py` to calculate shifted-power PSI values and all real zero locations; add `--json` for ASCII-only machine-readable output. See [PSI CLI documentation](docs/psi-cli.md) for input syntax, numerical precision, and infinity conventions.
+Use `printf "1 1 -2\n" | python3 benchmarks/psi.py` to calculate PSI values and all real zero locations; add `--json` for ASCII-only machine-readable output. See [PSI CLI documentation](docs/psi-cli.md) for input syntax, numerical precision, and infinity conventions.

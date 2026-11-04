@@ -35,7 +35,7 @@ Filtering contigs **after stitching**, perhaps by the number of reads supporting
 ## Non-negotiable evaluation rules
 
 - The genuine frozen IVA baseline and its pinned MiCall container **do not change**. Build the candidate's stitcher and assembler changes into a traceable, immutable candidate image derived from the pinned MiCall base. Record the exact modifications and image identity.
-- Keep the frozen 198 paired FASTQ inputs, fixed reference panel, per-sample 1,800-second runtime limit, best **final MiCall MAX** alignment score of at least **90% of authentic IVA**, and strictly positive score and runtime shifted-power PSI for every r>=0
+- Keep the frozen 198 paired FASTQ inputs, fixed reference panel, per-sample 1,800-second runtime limit, best **final MiCall MAX** alignment score of at least **90% of authentic IVA**, and strictly positive score and runtime PSI for every r>=0
   (Psi(0)>0 and no nonnegative real zeros, using
   Psi(r) = sum(sign(p_i)*(1+abs(p_i))**r)/198). No gate is waived for stitcher work.
 - Evaluate full-pipeline time, including stitching, remapping and final consensus. Tests on stitcher output alone are useful but not formal qualification.

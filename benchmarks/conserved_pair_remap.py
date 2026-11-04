@@ -1,0 +1,150 @@
+"""Opt-in, reference-consistent HCV read-pair sharing between contig hypotheses.
+
+The same original read pair may support multiple *alternative contigs* only
+when both mates align to exactly identical reference sequence on each.
+It contributes once per target, never independent molecules across targets.
+This is NOT a global abundance estimate or a full haplotype proof.
+
+Production MiCall must remain unchanged unless an explicitly experimental
+candidate image installs this module at the remap -> sam2aln boundary.
+"""
+from collections import Counter, defaultdict
+import csv
+import os
+from pathlib import Path
+import re
+import tempfile
+
+_DNA = frozenset("ACGT")
+_FLAGS = ({83, 163}, {99, 147})
+_TARGET_SUFFIX = "|ivanka_hypothesis="
+_HCV_REGION = re.compile(r"^\d+-(HCV-\d+[a-z])$")
+
+
+def load_references(path):
+    refs = {}
+    with Path(path).open(newline="") as stream:
+        for row in csv.DictReader(stream):
+            name, sequence = row["region"], row["sequence"].upper()
+            if name in refs:
+                raise ValueError("duplicate remapping reference")
+            if _HCV_REGION.fullmatch(name) and set(sequence) <= _DNA:
+                refs[name] = sequence
+    return refs
+
+
+def compatible_groups(refs):
+    """Group same-length, nearly identical, unambiguous HCV alternatives."""
+    groups = {}
+    for name, source in refs.items():
+        suffix = _HCV_REGION.fullmatch(name).group(1)
+        options = []
+        for target, other in refs.items():
+            if (target == name or len(source) != len(other) or len(source) < 1000
+                    or _HCV_REGION.fullmatch(target).group(1) != suffix):
+                continue
+            differences = sum(a != b for a, b in zip(source, other))
+            if 0 < differences <= min(20, len(source) // 100):
+                options.append(target)
+        # Skip enormous ambiguity groups rather than exploding runtime.
+        if 1 <= len(options) <= 4:
+            groups[name] = sorted(options)
+    return groups
+
+
+def mapped_window(row, expected_ref, reference_length):
+    """Reference interval of one M block, optionally with terminal S clips."""
+    if row["rname"] != expected_ref or row["rnext"] not in ("=", expected_ref):
+        return None
+    cigar = row["cigar"]
+    ops = re.findall(r"(\d+)([MS])", cigar)
+    if not ops or "".join(n + op for n, op in ops) != cigar:
+        return None
+    matches = [int(n) for n, op in ops if op == "M"]
+    if len(matches) != 1 or matches[0] < 1:
+        return None
+    if sum(int(n) for n, _ in ops) != len(row["seq"]):
+        return None
+    if len(row["qual"]) != len(row["seq"]):
+        return None
+    start, length = int(row["pos"]) - 1, matches[0]
+    if start < 0 or start + length > reference_length:
+        return None
+    return start, start + length
+
+
+def compatible_targets(mates, refs, groups):
+    if len(mates) != 2:
+        return []
+    source = mates[0]["rname"]
+    if source not in groups or any(r["rname"] != source for r in mates):
+        return []
+    if {int(r["flag"]) for r in mates} not in _FLAGS:
+        return []
+    windows = [mapped_window(row, source, len(refs[source])) for row in mates]
+    if any(window is None for window in windows):
+        return []
+    sequence = refs[source]
+    return [target for target in groups[source]
+            if all(sequence[a:b] == refs[target][a:b] for a, b in windows)]
+
+
+def project_remap(remap_path, reference_path, output_path):
+    """Return (effective_remap_path, stats); original input is never changed."""
+    remap_path = Path(remap_path)
+    output_path = Path(output_path)
+    if remap_path.resolve() == output_path.resolve():
+        raise ValueError("remap input and output must be separate")
+    refs = load_references(reference_path)
+    groups = compatible_groups(refs)
+    if not groups:
+        return remap_path, {"groups": 0, "projected_pairs": 0}
+    counts = Counter()
+    with remap_path.open(newline="") as original:
+        reader = csv.DictReader(original)
+        fields = reader.fieldnames
+        if not fields or not {"qname", "flag", "rname", "pos", "cigar", "rnext", "seq", "qual"} <= set(fields):
+            raise ValueError("missing SAM-like remap columns")
+        for row in reader:
+            counts[row["qname"]] += 1
+    projected = Counter()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", newline="", dir=output_path.parent,
+                                     prefix="ivanka-remap-", suffix=".csv", delete=False) as temp:
+        intermediate = Path(temp.name)
+        writer = csv.DictWriter(temp, fields, lineterminator="\n")
+        try:
+            writer.writeheader()
+            with remap_path.open(newline="") as original:
+                writer.writerows(csv.DictReader(original))
+            # Reopen to avoid holding all read records in memory.
+            pending = {}
+            with remap_path.open(newline="") as original:
+                for row in csv.DictReader(original):
+                    name = row["qname"]
+                    if counts[name] != 2 or _TARGET_SUFFIX in name:
+                        continue
+                    first = pending.pop(name, None)
+                    if first is None:
+                        pending[name] = row
+                        continue
+                    for target in compatible_targets((first, row), refs, groups):
+                        projected_name = name + _TARGET_SUFFIX + target
+                        if projected_name in counts:
+                            continue
+                        for mate in (first, row):
+                            copy = dict(mate)
+                            copy["qname"] = projected_name
+                            copy["rname"] = target
+                            if copy["rnext"] == first["rname"]:
+                                copy["rnext"] = target
+                            writer.writerow(copy)
+                        projected[target] += 1
+        except BaseException:
+            intermediate.unlink(missing_ok=True)
+            raise
+    os.replace(intermediate, output_path)
+    return output_path, {
+        "groups": len(groups), "projected_pairs": sum(projected.values()),
+        "projected_pairs_per_reference": dict(sorted(projected.items())),
+    }

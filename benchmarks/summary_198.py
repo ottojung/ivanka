@@ -14,7 +14,12 @@ _SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def _positive_number(value):
-    return type(value) in (int, float) and math.isfinite(value) and value > 0
+    if type(value) not in (int, float):
+        return False
+    try:
+        return value > 0 and math.isfinite(value)
+    except (OverflowError, TypeError, ValueError):
+        return False
 
 
 def evaluate(summary):

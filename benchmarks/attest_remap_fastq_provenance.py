@@ -67,6 +67,8 @@ def exact_original_fragment(sequence, quality, originals):
 
 def attest(remap_csv, fastq_r1, fastq_r2):
     """Fail closed on missing raw names, altered rows, duplicates, or missing quality."""
+    if Path(fastq_r1).resolve() == Path(fastq_r2).resolve():
+        raise ValueError("R1 and R2 must be distinct original FASTQ files")
     groups = defaultdict(list)
     with Path(remap_csv).open(newline="") as stream:
         for row in csv.DictReader(stream):

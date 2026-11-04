@@ -22,6 +22,11 @@ class VerifiedSharedEvidenceTests(unittest.TestCase):
         self.sidecar = root / "derived" / "sidecar.json"
         masked, refs = fixture()
         rows = pair("one", "private-synthetic-id", refs["one"])
+        self.raw_r1, self.raw_r2 = root / "original_R1.fastq", root / "original_R2.fastq"
+        for m, row, path in ((1, rows[0], self.raw_r1),
+                             (2, rows[1], self.raw_r2)):
+            path.write_text("@private-synthetic-id/" + str(m) + "\n"
+                            + row["seq"] + "\n+\n" + row["qual"] + "\n")
         self.csv_file("conseq.csv",
             ("region", "q-cutoff", "consensus-percent-cutoff", "sequence"),
             [{"region": "one", "q-cutoff": "15",
@@ -52,6 +57,7 @@ class VerifiedSharedEvidenceTests(unittest.TestCase):
         status = verify(self.sidecar, self.artifacts)
         self.assertEqual(status["verification"],
                          "passed_source_sha256_and_exact_recomputation")
+        self.assertNotIn("original_fastq_provenance", status)
         self.assertEqual(status["haplotype_phase"], "unidentified")
         self.assertFalse(status["independent_physical_molecules_assigned"])
         self.assertFalse(status["haplotype_specific_depth_assigned"])
@@ -122,6 +128,40 @@ class VerifiedSharedEvidenceTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 main()
         self.assertEqual(output.read_text(), "different report")
+
+    def test_optional_full_original_fastq_chain(self):
+        status = verify(self.sidecar, self.artifacts, self.raw_r1, self.raw_r2)
+        self.assertEqual(status["original_fastq_provenance"],
+                         "sequence_and_phred_authenticated_per_original_mate")
+        self.assertEqual(status["raw_original_read_pairs_scanned"], 1)
+        self.assertEqual(status["original_remap_pair_ids_authenticated"], 1)
+        self.assertEqual(status["haplotype_phase"], "unidentified")
+        self.assertFalse(status["independent_physical_molecules_assigned"])
+        self.assertFalse(status["modifies_micall_consensus"])
+        self.assertNotIn("private-synthetic-id", json.dumps(status))
+
+    def test_raw_fastq_mates_must_both_be_given(self):
+        with self.assertRaisesRegex(EvidenceContractError, "Both original"):
+            verify(self.sidecar, self.artifacts, self.raw_r1, None)
+
+    def test_raw_fastq_quality_change_rejected(self):
+        self.raw_r2.write_text(self.raw_r2.read_text().replace("I", "!"))
+        with self.assertRaisesRegex(EvidenceContractError, "FASTQ mate provenance"):
+            verify(self.sidecar, self.artifacts, self.raw_r1, self.raw_r2)
+
+    def test_cli_with_raw_fastq_writes_distinct_schema(self):
+        output = Path(self.temp.name) / "raw-verified-status.json"
+        args = ["consumer", str(self.sidecar),
+                "--artifact-dir", str(self.artifacts),
+                "--original-fastq-r1", str(self.raw_r1),
+                "--original-fastq-r2", str(self.raw_r2),
+                "--status-output", str(output)]
+        with patch.object(sys, "argv", args):
+            main()
+        data = json.loads(output.read_text())
+        self.assertEqual(data["schema_version"],
+                         "ivanka.unphased_sidecar_verification_raw_fastq.v1")
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
 
     def test_cli_status_output_never_mutates_micall_artifacts(self):
         root = Path(self.temp.name)

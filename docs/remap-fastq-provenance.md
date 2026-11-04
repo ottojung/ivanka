@@ -25,6 +25,9 @@ or quality strings. A remap record is checked against both
 original mates but a read-pair ID is counted **once**. Quality
 strings, not only bases, must match exact raw FASTQ substrings.
 
+R1 and R2 must be separate source files; using the same FASTQ twice
+cannot establish paired source provenance.
+
 The audit fails closed for a missing or duplicated QNAME,
 unaligned original mate order, malformed FASTQ record, a
 remap row without original sequence-and-quality provenance,

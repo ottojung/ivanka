@@ -6,12 +6,20 @@ or actual execution of a container. Never repairs or reuses a failed invocation.
 import argparse
 import csv
 import json
+from hashlib import sha256
 from pathlib import Path
 
 from milestone198 import (IVA_IMAGE_SHA256, MANIFEST_SHA256, PANEL_SHA256,
                           SAMPLE_COUNT, qualify)
-from podman_full_micall import sha
 from summary_198 import evaluate
+
+
+def sha(path):
+    digest = sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def completed_events(path, invocation, names):

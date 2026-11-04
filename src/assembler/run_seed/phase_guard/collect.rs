@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use super::index::{build_prep, unique_flanks, ReadPrep};
-use super::place::original_pair_calls_cached;
+use super::place::original_pair_calls_cached_borrowed;
 
 pub(super) struct PrepCache {
     pub preps: Vec<ReadPrep>,
@@ -18,9 +18,9 @@ pub(super) fn observations_cached(seq: &[u8], reads: &[Vec<u8>], cache: &PrepCac
     let mut out = Vec::with_capacity(reads.len() / 4);
     let mut i = 0;
     while i + 4 <= reads.len() {
-        let pr = vec![reads[i].clone(), reads[i + 1].clone(), reads[i + 2].clone(), reads[i + 3].clone()];
-        let pp = vec![cache.preps[i].clone(), cache.preps[i + 1].clone(), cache.preps[i + 2].clone(), cache.preps[i + 3].clone()];
-        out.push(original_pair_calls_cached(&pr, &pp, &index, a));
+        let pr = [&reads[i], &reads[i + 1], &reads[i + 2], &reads[i + 3]];
+        let pp = [&cache.preps[i], &cache.preps[i + 1], &cache.preps[i + 2], &cache.preps[i + 3]];
+        out.push(original_pair_calls_cached_borrowed(&pr, &pp, &index, a));
         i += 4;
     }
     out

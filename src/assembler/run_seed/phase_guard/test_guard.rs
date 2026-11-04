@@ -16,6 +16,11 @@ use super::{collect::observations,detect::incompatible_link};
     let (_,truth,reads)=synthetic(true);
     assert_eq!(split(truth.clone(),&reads),vec![truth]);
 }
+#[test] fn same_orientation_mates_do_not_create_false_phase_witnesses() {
+    let (chimera,_,mut reads)=synthetic(true);
+    for pair in reads.chunks_exact_mut(4) {pair.swap(2,3);}
+    assert_eq!(split(chimera,&reads).len(),1);
+}
 #[test] fn maximum_contig_cap_is_not_bypassed() {
     let (chimera,_,reads)=synthetic(true);
     let result=split_unsupported(chimera,&reads);

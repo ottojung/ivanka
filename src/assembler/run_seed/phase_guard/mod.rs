@@ -7,5 +7,5 @@ mod split;
 #[cfg(test)] mod test_guard;
 #[cfg(test)] mod test_unlinked;
 #[cfg(test)] mod test_false_positives;
-#[cfg(test)] mod test_index;
+mod place;
 pub(crate) use split::split_unsupported_contigs;

@@ -13,7 +13,7 @@ pub(super) fn synthetic(linked: bool) -> (Vec<u8>,Vec<u8>,Vec<Vec<u8>>) {
         let sequence=if i%2==0 {&one} else {&two};
         let s=140+i;let t=if linked {365+i} else {530+i};
         let a=sequence[s..s+100].to_vec();
-        let b=sequence[t..t+100].to_vec();
+        let b=reverse_complement(&sequence[t..t+100]);
         reads.push(a.clone());reads.push(reverse_complement(&a));
         reads.push(b.clone());reads.push(reverse_complement(&b));
     }

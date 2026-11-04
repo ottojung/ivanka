@@ -26,8 +26,6 @@ class RemapOverlayTests(unittest.TestCase):
         )
         updated = patched_source(source)
         self.assertIn("ivanka_conserved_remap import project_remap", updated)
-        self.assertIn("_IvankaPath(with_prefix(self.remap_csv))", updated)
-        self.assertIn("_IvankaPath(with_prefix(self.remap_conseq_csv))", updated)
         self.assertIn("with open(_ivanka_remap_path) as remap_csv", updated)
         self.assertNotIn(INPUT_MARKER, updated)
         self.assertEqual(updated.count("Running sam2aln"), 1)
@@ -50,38 +48,6 @@ class RemapOverlayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "order"):
             patched_source(reversed_order)
 
-    def test_string_prefix_paths_execute_in_the_patched_stage(self):
-        import sys
-        from pathlib import Path
-        from tempfile import TemporaryDirectory
-        from types import ModuleType
-        from unittest.mock import patch
-        script = ("class Sample:\n"
-                  "    def stage(self):\n"
-                  "        with_prefix = lambda path: path\n"
-                  "        logger = type('Log', (), {'info': lambda *args: None})()\n"
-                  + LOG_MARKER + "\n"
-                  + "        " + INPUT_MARKER + ":\n"
-                  + "            self.text = remap_csv.read()\n")
-        module = ModuleType("micall.core.ivanka_conserved_remap")
-        module.project_remap = lambda original, reference, output: (original, {})
-        package = ModuleType("micall")
-        package.__path__ = []
-        core = ModuleType("micall.core")
-        core.__path__ = []
-        ns = {}
-        exec(patched_source(script), ns)
-        with TemporaryDirectory() as d, patch.dict(sys.modules, {
-                "micall": package, "micall.core": core,
-                "micall.core.ivanka_conserved_remap": module}):
-            remap = Path(d) / "remap.csv"
-            remap.write_text("unchanged original remap")
-            sample = ns["Sample"]()
-            sample.remap_csv = str(remap)
-            sample.remap_conseq_csv = str(Path(d) / "remap_conseq.csv")
-            sample.stage()
-            self.assertEqual(sample.text, "unchanged original remap")
-
     def test_compiles_pinned_shape(self):
         source = (
             "class Sample:\n"
@@ -91,6 +57,46 @@ class RemapOverlayTests(unittest.TestCase):
             + "            pass\n"
         )
         compile(patched_source(source), "<test>", "exec")
+
+    def test_actual_micall_string_path_at_patched_boundary(self):
+        """MiCall with_prefix() returns str; the overlay must accept it."""
+        import sys
+        import tempfile
+        import types
+        from pathlib import Path
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            remap = Path(directory) / "remap.csv"
+            reference = Path(directory) / "remap_conseq.csv"
+            remap.write_text("unchanged\n")
+            reference.write_text("region,sequence\n")
+            fake = types.ModuleType("micall.core.ivanka_conserved_remap")
+            fake.project_remap = lambda original, refs, output: (
+                original, {"reassigned_pairs": 0})
+            micall = types.ModuleType("micall")
+            micall.__path__ = []
+            core = types.ModuleType("micall.core")
+            core.__path__ = []
+            source = (
+                "class Sample:\n"
+                + f"    remap_csv = {str(remap)!r}\n"
+                + f"    remap_conseq_csv = {str(reference)!r}\n"
+                + "    def stage(self):\n"
+                + "        def with_prefix(value): return value\n"
+                + "        logger = type('Logger', (), {'info': lambda *args: None})()\n"
+                + LOG_MARKER + "\n"
+                + "        " + INPUT_MARKER + ":\n"
+                + "            return remap_csv.read()\n"
+            )
+            namespace = {}
+            with patch.dict(sys.modules, {
+                "micall": micall,
+                "micall.core": core,
+                "micall.core.ivanka_conserved_remap": fake,
+            }):
+                exec(patched_source(source), namespace)
+                self.assertEqual(namespace["Sample"]().stage(), "unchanged\n")
 
 
 if __name__ == "__main__":

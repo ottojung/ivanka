@@ -7,4 +7,4 @@ COPY benchmarks/patch_micall_conserved_remap.py /tmp/patch_micall_conserved_rema
 RUN python /tmp/patch_micall_conserved_remap.py /tmp/ivanka_conserved_remap.py \
     && rm /tmp/patch_micall_conserved_remap.py /tmp/ivanka_conserved_remap.py \
     && python -c 'from micall.core.ivanka_conserved_remap import project_remap; assert callable(project_remap)'
-LABEL org.ottojung.ivanka.experimental.conserved-pair-remap="SAM-reference-identity-and-soft-clips; coverage-unchanged"
+LABEL org.ottojung.ivanka.experimental.conserved-pair-remap="single-placement-Q15-conservative; no-synthetic-qnames"

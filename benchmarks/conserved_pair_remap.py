@@ -1,10 +1,8 @@
-"""Opt-in, reference-consistent HCV read-pair sharing between contig hypotheses.
+"""Opt-in, molecule-conserving HCV hypothesis read-pair reassignment.
 
-The same original read pair may support one reciprocal alternative only
-when both mates align to exactly identical reference sequence on each.
-One observation contributes once per hypothesis, never independent molecules.
-Multi-haplotype groups are explicitly excluded because they can change already
-called minor alleles (observed in genuine MidHCV S11).
+Each read pair is retained once with its original identifier. A transfer is
+allowed only where both mates have compatible reference intervals and the
+source retains conservative Q15 depth estimated from read-pair observations.
 This is NOT a global abundance estimate or a full haplotype proof.
 
 Production MiCall must remain unchanged unless an explicitly experimental
@@ -19,7 +17,8 @@ import tempfile
 
 _DNA = frozenset("ACGT")
 _FLAGS = ({83, 163}, {99, 147})
-_TARGET_SUFFIX = "|ivanka_hypothesis="
+_SOURCE_Q15_RESERVE = 110
+_TARGET_Q15_GUIDE = 120
 _HCV_REGION = re.compile(r"^\d+-(HCV-\d+[a-z])$")
 
 
@@ -36,17 +35,22 @@ def load_references(path):
 
 
 def compatible_groups(refs):
-    """Only isolated reciprocal pairs; multi-hypothesis sharing can alter alleles."""
-    neighbors = {}
+    """Group same-length, nearly identical, unambiguous HCV alternatives."""
+    groups = {}
     for name, source in refs.items():
         suffix = _HCV_REGION.fullmatch(name).group(1)
-        neighbors[name] = sorted(target for target, other in refs.items()
-            if target != name and len(source) == len(other) and len(source) >= 1000
-            and _HCV_REGION.fullmatch(target).group(1) == suffix
-            and 0 < sum(a != b for a, b in zip(source, other))
-            <= min(20, len(source) // 100))
-    return {name: targets for name, targets in neighbors.items()
-            if len(targets) == 1 and neighbors[targets[0]] == [name]}
+        options = []
+        for target, other in refs.items():
+            if (target == name or len(source) != len(other) or len(source) < 1000
+                    or _HCV_REGION.fullmatch(target).group(1) != suffix):
+                continue
+            differences = sum(a != b for a, b in zip(source, other))
+            if 0 < differences <= min(20, len(source) // 100):
+                options.append(target)
+        # Skip enormous ambiguity groups rather than exploding runtime.
+        if 1 <= len(options) <= 4:
+            groups[name] = sorted(options)
+    return groups
 
 
 def mapped_window(row, expected_ref, reference_length):
@@ -86,62 +90,124 @@ def compatible_targets(mates, refs, groups):
             if all(sequence[a:b] == refs[target][a:b] for a, b in windows)]
 
 
+
+def _valid_base_sites(mates, reference_length, minimum_quality=15):
+    """Approximate merged high-quality pair coverage; one vote per position."""
+    calls = defaultdict(set)
+    for row in mates:
+        cigar = re.fullmatch(r"(?:(\d+)S)?([1-9]\d*)M(?:(\d+)S)?", row["cigar"])
+        if cigar is None:
+            return None
+        left_clip = int(cigar.group(1) or 0)
+        aligned = int(cigar.group(2))
+        if left_clip + aligned + int(cigar.group(3) or 0) != len(row["seq"]):
+            return None
+        start = int(row["pos"]) - 1
+        if start < 0 or start + aligned > reference_length:
+            return None
+        for i in range(aligned):
+            index = left_clip + i
+            base = row["seq"][index].upper()
+            if base in _DNA and ord(row["qual"][index]) - 33 >= minimum_quality:
+                calls[start + i].add(base)
+    return tuple(pos for pos, alleles in calls.items() if len(alleles) == 1)
+
+
 def project_remap(remap_path, reference_path, output_path):
-    """Return (effective_remap_path, stats); original input is never changed."""
+    """Allocate existing molecules once, never create synthetic read identities.
+
+    The source retains at least 110 estimated Q15 pair-covered observations at
+    each transferred base. Move only to a compatible hypothesis with low
+    estimated depth; this is not a MiCall consensus-depth calculation.
+    """
     remap_path = Path(remap_path)
     output_path = Path(output_path)
     if remap_path.resolve() == output_path.resolve():
         raise ValueError("remap input and output must be separate")
     refs = load_references(reference_path)
     groups = compatible_groups(refs)
-    if not groups:
-        return remap_path, {"groups": 0, "projected_pairs": 0}
     counts = Counter()
-    with remap_path.open(newline="") as original:
-        reader = csv.DictReader(original)
+    fields = None
+    with remap_path.open(newline="") as source:
+        reader = csv.DictReader(source)
         fields = reader.fieldnames
-        if not fields or not {"qname", "flag", "rname", "pos", "cigar", "rnext", "seq", "qual"} <= set(fields):
+        required = {"qname", "flag", "rname", "pos", "cigar", "rnext", "seq", "qual"}
+        if not fields or not required <= set(fields):
             raise ValueError("missing SAM-like remap columns")
-        for row in reader:
-            counts[row["qname"]] += 1
-    projected = Counter()
+        counts.update(row["qname"] for row in reader)
+    if not groups:
+        return remap_path, {"groups": 0, "reassigned_pairs": 0}
+    pending = {}
+    pairs = []
+    depth = {name: [0] * len(seq) for name, seq in refs.items()}
+    with remap_path.open(newline="") as source:
+        for row in csv.DictReader(source):
+            name = row["qname"]
+            if counts[name] != 2:
+                continue
+            first = pending.pop(name, None)
+            if first is None:
+                pending[name] = row
+                continue
+            mates = (first, row)
+            ref = first["rname"]
+            if ref not in refs or row["rname"] != ref:
+                continue
+            if {int(r["flag"]) for r in mates} not in _FLAGS:
+                continue
+            if any(mapped_window(r, ref, len(refs[ref])) is None for r in mates):
+                continue
+            sites = _valid_base_sites(mates, len(refs[ref]))
+            if not sites:
+                continue
+            for pos in sites:
+                depth[ref][pos] += 1
+            pairs.append((name, mates, ref, sites))
+    transfers = {}
+    moved = Counter()
+    for name, mates, source, sites in pairs:
+        options = compatible_targets(mates, refs, groups)
+        if not options or any(depth[source][pos] <= _SOURCE_Q15_RESERVE for pos in sites):
+            continue
+        ranked = sorted(
+            ((sum(max(0, _TARGET_Q15_GUIDE - depth[target][pos]) for pos in sites), target)
+             for target in options),
+            key=lambda value: (-value[0], value[1]),
+        )
+        if not ranked or ranked[0][0] == 0:
+            continue
+        target = ranked[0][1]
+        transfers[name] = (source, target)
+        moved[target] += 1
+        for pos in sites:
+            depth[source][pos] -= 1
+            depth[target][pos] += 1
+    if not transfers:
+        return remap_path, {"groups": len(groups), "reassigned_pairs": 0}
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode="w", newline="", dir=output_path.parent,
-                                     prefix="ivanka-remap-", suffix=".csv", delete=False) as temp:
+    with tempfile.NamedTemporaryFile(
+            mode="w", newline="", dir=output_path.parent, prefix="ivanka-remap-",
+            suffix=".csv", delete=False) as temp:
         intermediate = Path(temp.name)
         writer = csv.DictWriter(temp, fields, lineterminator="\n")
         try:
             writer.writeheader()
-            with remap_path.open(newline="") as original:
-                writer.writerows(csv.DictReader(original))
-            # Reopen to avoid holding all read records in memory.
-            pending = {}
-            with remap_path.open(newline="") as original:
-                for row in csv.DictReader(original):
-                    name = row["qname"]
-                    if counts[name] != 2 or _TARGET_SUFFIX in name:
-                        continue
-                    first = pending.pop(name, None)
-                    if first is None:
-                        pending[name] = row
-                        continue
-                    for target in compatible_targets((first, row), refs, groups):
-                        projected_name = name + _TARGET_SUFFIX + target
-                        if projected_name in counts:
-                            continue
-                        for mate in (first, row):
-                            copy = dict(mate)
-                            copy["qname"] = projected_name
-                            copy["rname"] = target
-                            if copy["rnext"] == first["rname"]:
-                                copy["rnext"] = target
-                            writer.writerow(copy)
-                        projected[target] += 1
+            with remap_path.open(newline="") as source:
+                for row in csv.DictReader(source):
+                    transfer = transfers.get(row["qname"])
+                    if transfer is not None:
+                        old, target = transfer
+                        row["rname"] = target
+                        if row["rnext"] == old:
+                            row["rnext"] = target
+                    writer.writerow(row)
         except BaseException:
             intermediate.unlink(missing_ok=True)
             raise
     os.replace(intermediate, output_path)
     return output_path, {
-        "groups": len(groups), "projected_pairs": sum(projected.values()),
-        "projected_pairs_per_reference": dict(sorted(projected.items())),
+        "groups": len(groups), "reassigned_pairs": len(transfers),
+        "reassigned_pairs_per_reference": dict(sorted(moved.items())),
+        "output_read_records_added": 0,
+        "read_identity_preserved": True,
     }

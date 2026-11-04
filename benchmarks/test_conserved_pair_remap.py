@@ -1,195 +1,161 @@
-"""Safety regressions for reference-consistent alternative-haplotype remapping."""
-from csv import DictReader, DictWriter
-from pathlib import Path
+
+"""Regressions for one-placement-per-molecule HCV hypothesis balancing."""
+import csv
 import tempfile
 import unittest
+from collections import Counter
+from pathlib import Path
 
 from conserved_pair_remap import (
-    compatible_groups, compatible_targets, load_references, mapped_window,
-    project_remap,
+    compatible_targets, load_references, mapped_window, project_remap,
+    _valid_base_sites,
 )
 
 FIELDS = ["qname", "flag", "rname", "pos", "mapq", "cigar",
           "rnext", "pnext", "tlen", "seq", "qual"]
 
 
-def row(name="read", flag=99, pos=100, rname="1-HCV-1a",
-        cigar="100M", seq=None, qual=None):
-    if seq is None:
-        seq = "A" * 100
-    return dict(qname=name, flag=str(flag), rname=rname, pos=str(pos),
+def row(name, flag=99, pos=100, ref="1-HCV-1a", cigar="100M", quality=None):
+    return dict(qname=name, flag=str(flag), rname=ref, pos=str(pos),
                 mapq="0", cigar=cigar, rnext="=", pnext="0", tlen="0",
-                seq=seq, qual="I" * len(seq) if qual is None else qual)
+                seq="A" * 100, qual=quality or "I" * 100)
 
 
-def make_csv(path, fields, records):
+def dump(path, fields, rows):
     with path.open("w", newline="") as stream:
-        writer = DictWriter(stream, fields, lineterminator="\n")
+        writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
-        writer.writerows(records)
+        writer.writerows(rows)
 
 
-class ConservativeRemapTests(unittest.TestCase):
+class ConserveMoleculesTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
-        self.src = self.base / "remap.csv"
-        self.refs = self.base / "remap_conseq.csv"
-        self.out = self.base / "hypotheses.csv"
-        self.seq1 = "A" * 1200
-        self.seq2 = self.seq1[:600] + "C" + self.seq1[601:]
-        self.ref_rows = [
-            {"region": "1-HCV-1a", "sequence": self.seq1},
-            {"region": "2-HCV-1a", "sequence": self.seq2},
-        ]
-        make_csv(self.refs, ["region", "sequence"], self.ref_rows)
+        self.root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.root.cleanup)
+        self.path = Path(self.root.name)
+        self.src = self.path / "remap.csv"
+        self.dst = self.path / "candidate.csv"
+        self.refs = self.path / "refs.csv"
+        self.ref1 = "A" * 1200
+        self.ref2 = self.ref1[:600] + "C" + self.ref1[601:]
+        dump(self.refs, ["region", "sequence"],
+             [{"region": "1-HCV-1a", "sequence": self.ref1},
+              {"region": "2-HCV-1a", "sequence": self.ref2}])
 
-    def test_identical_regions_support_both_alternatives_once(self):
-        originals = [row(flag=99), row(flag=147, pos=300)]
-        make_csv(self.src, FIELDS, originals)
-        used, stats = project_remap(self.src, self.refs, self.out)
-        self.assertEqual(used, self.out)
-        self.assertEqual(stats["projected_pairs"], 1)
-        with self.out.open() as stream:
-            copied = list(DictReader(stream))
-        self.assertEqual(copied[:2], originals)
-        self.assertEqual(len(copied), 4)
-        self.assertEqual({x["qname"] for x in copied[2:]},
-                         {"read|ivanka_hypothesis=2-HCV-1a"})
-        self.assertEqual({x["rname"] for x in copied[2:]}, {"2-HCV-1a"})
-        self.assertEqual([x["seq"] for x in copied[2:]], ["A" * 100] * 2)
-        self.assertEqual(self.src.read_text().count("hypothesis="), 0)
+    def pairs(self, count, start=0):
+        result = []
+        for i in range(start, start + count):
+            name = f"read-{i}"
+            result.extend([row(name), row(name, 147, 300)])
+        return result
 
-    def test_distinguishing_allele_blocks_projection(self):
-        make_csv(self.src, FIELDS, [
-            row(pos=550), row(flag=147, pos=300),
-        ])
-        _, stats = project_remap(self.src, self.refs, self.out)
-        self.assertEqual(stats["projected_pairs"], 0)
-        with self.out.open() as stream:
-            self.assertEqual(len(list(DictReader(stream))), 2)
+    def report(self):
+        output, stats = project_remap(self.src, self.refs, self.dst)
+        with output.open(newline="") as stream:
+            records = list(csv.DictReader(stream))
+        return output, stats, records
 
-    def test_reverse_flag_and_terminal_soft_clip(self):
-        one = row(flag=83, cigar="1S99M", seq="G" + "A" * 99)
-        two = row(flag=163, pos=300, cigar="99M1S", seq="A" * 99 + "T")
-        make_csv(self.src, FIELDS, [one, two])
-        _, stats = project_remap(self.src, self.refs, self.out)
-        self.assertEqual(stats["projected_pairs"], 1)
-        self.assertEqual(mapped_window(one, "1-HCV-1a", 1200), (99, 198))
+    def test_reassigns_only_surplus_without_duplicate_read_names(self):
+        before = self.pairs(200)
+        dump(self.src, FIELDS, before)
+        original_bytes = self.src.read_bytes()
+        output, stats, after = self.report()
+        self.assertEqual(output, self.dst)
+        self.assertEqual(stats["reassigned_pairs"], 90)
+        self.assertEqual(stats["output_read_records_added"], 0)
+        self.assertEqual(len(after), len(before))
+        self.assertEqual(self.src.read_bytes(), original_bytes)
+        self.assertEqual(Counter(r["qname"] for r in after),
+                         Counter(r["qname"] for r in before))
+        self.assertEqual(sum(r["rname"] == "2-HCV-1a" for r in after), 180)
+        self.assertEqual(len({r["qname"] for r in after}), 200)
+        self.assertFalse(any("|ivanka_hypothesis=" in r["qname"] for r in after))
 
-    def test_reject_indels_missing_quality_and_wrong_mate_flags(self):
-        refs = load_references(self.refs)
-        groups = compatible_groups(refs)
-        valid = [row(flag=83), row(flag=163, pos=300)]
-        self.assertEqual(compatible_targets(valid, refs, groups), ["2-HCV-1a"])
-        for bad in (row(flag=163, cigar="50M1I49M", seq="A" * 100),
-                    row(flag=163, qual="*"), row(flag=163, rname="2-HCV-1a")):
-            self.assertEqual(compatible_targets([valid[0], bad], refs, groups), [])
-        self.assertEqual(compatible_targets([valid[0], row(flag=83)], refs, groups), [])
+    def test_insufficient_source_depth_remains_unchanged(self):
+        records = self.pairs(110)
+        dump(self.src, FIELDS, records)
+        output, stats, after = self.report()
+        self.assertEqual(output, self.src)
+        self.assertEqual(stats["reassigned_pairs"], 0)
+        self.assertEqual(after, records)
 
-    def test_multiple_alternatives_fail_closed(self):
-        refs = {}
-        for i, pos in enumerate((100, 250, 400, 550, 700), start=1):
-            seq = list("A" * 1200)
-            seq[pos] = "C"
-            refs[f"{i}-HCV-1a"] = "".join(seq)
-        self.assertEqual(compatible_groups(refs), {})
-        make_csv(self.refs, ["region", "sequence"],
-                 [{"region": k, "sequence": v} for k, v in refs.items()])
-        make_csv(self.src, FIELDS, [row(pos=750), row(flag=147, pos=900)])
-        used, stats = project_remap(self.src, self.refs, self.out)
-        self.assertEqual(used, self.src)
-        self.assertEqual(stats["projected_pairs"], 0)
-        self.assertFalse(self.out.exists())
+    def test_distinguishing_allele_excludes_pair(self):
+        records = self.pairs(200)
+        records.extend([row("allele", pos=550), row("allele", 147, 300)])
+        dump(self.src, FIELDS, records)
+        _, _, after = self.report()
+        self.assertTrue(all(r["rname"] == "1-HCV-1a"
+                            for r in after if r["qname"] == "allele"))
 
-    def test_isolated_reciprocal_pairs_remain_eligible(self):
-        refs = {
-            "1-HCV-1a": "A" * 1200,
-            "2-HCV-1a": "A" * 600 + "C" + "A" * 599,
-            "3-HCV-1a": "C" * 1200,
-            "4-HCV-1a": "C" * 600 + "A" + "C" * 599,
-        }
-        self.assertEqual(compatible_groups(refs), {
-            "1-HCV-1a": ["2-HCV-1a"], "2-HCV-1a": ["1-HCV-1a"],
-            "3-HCV-1a": ["4-HCV-1a"], "4-HCV-1a": ["3-HCV-1a"],
-        })
+    def test_invalid_flag_and_cigar_do_not_transfer(self):
+        records = self.pairs(200)
+        records.extend([row("bad-flag"), row("bad-flag", 99, 300)])
+        a = row("bad-cigar", cigar="10S10S80M")
+        a["seq"] = "A" * 100
+        records.extend([a, row("bad-cigar", 147, 300)])
+        dump(self.src, FIELDS, records)
+        _, _, after = self.report()
+        for name in ("bad-flag", "bad-cigar"):
+            self.assertTrue(all(r["rname"] == "1-HCV-1a"
+                                for r in after if r["qname"] == name))
 
-    def test_nonreciprocal_nearest_neighbor_chain_is_rejected(self):
-        base = "A" * 1200
-        near = "C" * 8 + "A" * 1192
-        far = "C" * 16 + "A" * 1184
-        refs = {"1-HCV-1a": base, "2-HCV-1a": near, "3-HCV-1a": far}
-        # An ambiguous center must not lend evidence to either end.
-        self.assertEqual(compatible_groups(refs), {})
+    def test_invalid_quality_cannot_prove_coverage(self):
+        records = []
+        for i in range(200):
+            name = f"low-{i}"
+            records.extend([row(name, quality="!" * 100),
+                            row(name, 147, 300, quality="!" * 100)])
+        dump(self.src, FIELDS, records)
+        output, stats, _ = self.report()
+        self.assertEqual(output, self.src)
+        self.assertEqual(stats["reassigned_pairs"], 0)
 
-    def test_duplicate_names_do_not_create_synthetic_independence(self):
-        records = [row(flag=99), row(flag=147, pos=300),
-                   row(flag=99), row(flag=147, pos=300)]
-        make_csv(self.src, FIELDS, records)
-        _, stats = project_remap(self.src, self.refs, self.out)
-        self.assertEqual(stats["projected_pairs"], 0)
-        with self.out.open() as stream:
-            self.assertEqual(len(list(DictReader(stream))), 4)
+    def test_multiple_matching_hypotheses_are_not_multiplied(self):
+        extra = self.ref1[:800] + "C" + self.ref1[801:]
+        dump(self.refs, ["region", "sequence"],
+             [{"region": "1-HCV-1a", "sequence": self.ref1},
+              {"region": "2-HCV-1a", "sequence": self.ref2},
+              {"region": "3-HCV-1a", "sequence": extra}])
+        dump(self.src, FIELDS, self.pairs(200))
+        _, stats, after = self.report()
+        self.assertEqual(stats["reassigned_pairs"], 90)
+        self.assertEqual(len(after), 400)
+        self.assertEqual(len(set(r["qname"] for r in after)), 200)
 
-    def test_no_alternative_keeps_original_remap_unchanged(self):
-        make_csv(self.refs, ["region", "sequence"],
-                 [self.ref_rows[0], {"region": "2-HCV-1b", "sequence": self.seq2}])
-        make_csv(self.src, FIELDS, [row(), row(flag=147)])
-        used, stats = project_remap(self.src, self.refs, self.out)
-        self.assertEqual(used, self.src)
-        self.assertEqual(stats["projected_pairs"], 0)
-        self.assertFalse(self.out.exists())
+    def test_duplicate_names_untouched(self):
+        dump(self.src, FIELDS, self.pairs(200) + self.pairs(1, 0))
+        _, _, after = self.report()
+        self.assertEqual(len(after), 402)
+        self.assertEqual(sum(r["qname"] == "read-0" for r in after), 4)
+        self.assertTrue(all(r["rname"] == "1-HCV-1a"
+                            for r in after if r["qname"] == "read-0"))
 
-    def test_reference_names_from_remap_conseq_not_array_positions(self):
-        make_csv(self.refs, ["region", "sequence"],
-                 self.ref_rows + [{"region": "3-unknown-partial", "sequence": self.seq1}])
-        self.assertEqual(set(load_references(self.refs)), {"1-HCV-1a", "2-HCV-1a"})
-
-    def test_no_overwrite_or_missing_sam_fields(self):
-        make_csv(self.src, FIELDS, [row(), row(flag=147)])
+    def test_reference_guard_and_fail_closed(self):
+        original = self.pairs(1)
+        dump(self.src, FIELDS, original)
         with self.assertRaisesRegex(ValueError, "separate"):
             project_remap(self.src, self.refs, self.src)
+        dump(self.refs, ["region", "sequence"],
+             [{"region": "1-HCV-1a", "sequence": self.ref1},
+              {"region": "2-HCV-1b", "sequence": self.ref2}])
+        output, stats, after = self.report()
+        self.assertEqual(output, self.src)
+        self.assertEqual(stats["reassigned_pairs"], 0)
+        self.assertEqual(after, original)
         self.src.write_text("qname,flag\nx,99\n")
         with self.assertRaisesRegex(ValueError, "missing SAM"):
-            project_remap(self.src, self.refs, self.out)
+            project_remap(self.src, self.refs, self.dst)
 
-    def test_independent_projection_audit_rejects_invented_bases_and_depth(self):
-        from hypothesis_projection_audit import audit_projection
-        make_csv(self.src, FIELDS, [row(flag=99), row(flag=147, pos=300)])
-        _, generated = project_remap(self.src, self.refs, self.out)
-        self.assertEqual(generated["projected_pairs"], 1)
-        result = audit_projection(self.src, self.out, self.refs)
-        self.assertEqual(result["extra_conditional_pairs"], 1)
-        self.assertEqual(result["cross_target_duplicate_pairs"], 0)
-        with self.out.open(newline="") as handle:
-            records = list(DictReader(handle))
-        records[-1]["seq"] = "C" * 100
-        make_csv(self.out, FIELDS, records)
-        with self.assertRaisesRegex(ValueError, "modified"):
-            audit_projection(self.src, self.out, self.refs)
-        records[-1]["seq"] = "A" * 100
-        make_csv(self.out, FIELDS, records + records[2:])
-        with self.assertRaisesRegex(ValueError, "duplicated"):
-            audit_projection(self.src, self.out, self.refs)
-
-    def test_independent_audit_rejects_unsafe_reference_and_changed_original(self):
-        from hypothesis_projection_audit import audit_projection
-        original = [row(flag=99), row(flag=147, pos=300)]
-        make_csv(self.src, FIELDS, original)
-        project_remap(self.src, self.refs, self.out)
-        with self.out.open(newline="") as handle:
-            records = list(DictReader(handle))
-        records[0]["seq"] = "C" * 100
-        make_csv(self.out, FIELDS, records)
-        with self.assertRaisesRegex(ValueError, "removed or modified"):
-            audit_projection(self.src, self.out, self.refs)
-        project_remap(self.src, self.refs, self.out)
-        extra = "A" * 700 + "C" + "A" * 499
-        make_csv(self.refs, ["region", "sequence"],
-                 self.ref_rows + [{"region": "3-HCV-1a", "sequence": extra}])
-        with self.assertRaisesRegex(ValueError, "isolated reciprocal"):
-            audit_projection(self.src, self.out, self.refs)
+    def test_windows_and_mates(self):
+        records = self.pairs(1)
+        refs = load_references(self.refs)
+        groups = {"1-HCV-1a": ["2-HCV-1a"]}
+        self.assertEqual(compatible_targets(records, refs, groups), ["2-HCV-1a"])
+        self.assertEqual(mapped_window(records[0], "1-HCV-1a", 1200), (99, 199))
+        self.assertEqual(len(_valid_base_sites(records, 1200)), 200)
+        bad = dict(records[0])
+        bad["cigar"] = "25S25S50M"
+        self.assertIsNone(_valid_base_sites((bad, records[1]), 1200))
 
 
 if __name__ == "__main__":

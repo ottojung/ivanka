@@ -100,5 +100,48 @@ class Physical198AttestationTests(unittest.TestCase):
                     audit.verify(base, state, manifest, base / "cache", "run")
 
 
+    def test_prior_attestation_pins_both_immutable_logs_and_recorded_metrics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            summary_path = root / "summary-run.json"
+            results_path = root / "results.jsonl"
+            summary = {"score_psi": {"psi1": 3},
+                       "time_psi": {"psi1": 5}}
+            summary_path.write_text(json.dumps(summary))
+            results_path.write_text("original-records")
+            image = "c" * 64
+            prior = {
+                "attestation": "read_only_artifact_integrity_and_recorded_psi",
+                "pass": True, "invocation": "run",
+                "verified_samples": audit.SAMPLE_COUNT,
+                "original_iva_image_id": audit.IVA_IMAGE_SHA256,
+                "candidate_image_id": image,
+                "manifest_sha256": audit.MANIFEST_SHA256,
+                "reference_panel_sha256": audit.PANEL_SHA256,
+                "results_sha256": sha(results_path),
+                "summary_sha256": sha(summary_path),
+                **summary,
+            }
+            attestation = root / "prior.json"
+            attestation.write_text(json.dumps(prior))
+            def verify():
+                audit.validate_prior_attestation(attestation, root,
+                                                 summary_path, summary, "run", image)
+            verify()
+            results_path.write_text("tampered-records")
+            with self.assertRaisesRegex(ValueError, "does not pin"):
+                verify()
+            results_path.write_text("original-records")
+            prior["score_psi"] = {"psi1": -1}
+            attestation.write_text(json.dumps(prior))
+            with self.assertRaisesRegex(ValueError, "does not pin"):
+                verify()
+            prior["score_psi"] = summary["score_psi"]
+            prior["pass"] = False
+            attestation.write_text(json.dumps(prior))
+            with self.assertRaisesRegex(ValueError, "does not pin"):
+                verify()
+
+
 if __name__ == "__main__":
     unittest.main()

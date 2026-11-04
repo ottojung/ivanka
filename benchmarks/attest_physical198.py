@@ -15,7 +15,8 @@ from summary_198 import evaluate
 
 
 def completed_events(path, invocation, names):
-    rows = [json.loads(line) for line in path.open() if line.strip()]
+    with path.open() as handle:
+        rows = [json.loads(line) for line in handle if line.strip()]
     started = [row for row in rows if row.get("status") == "started"]
     finished = [row for row in rows if row.get("status") == "finished"]
     if (len(rows) != 2 * SAMPLE_COUNT or len(started) != SAMPLE_COUNT
@@ -33,7 +34,8 @@ def checked_artifact(folder, expected_sha):
     artifact = next((p for p in (folder / "conseq.csv",
                   folder / "scratch" / "conseq.csv") if p.is_file()), None)
     if (not isinstance(expected_sha, str) or len(expected_sha) != 64
-            or artifact is None or sha(artifact) != expected_sha):
+            or artifact is None or not artifact.resolve().is_relative_to(folder.resolve())
+            or sha(artifact) != expected_sha):
         raise ValueError("Missing or modified final MAX consensus")
     return artifact
 
@@ -52,6 +54,8 @@ def verify_pair(record, root, cache, invocation, image):
     if cache_dir != (cache.resolve() / sample):
         raise ValueError("Cached IVA artifact escaped the cache")
     path = cache_dir / "baseline.json"
+    if not path.resolve().is_relative_to(cache_dir):
+        raise ValueError("IVA metadata escaped its verified cache directory")
     stored = json.loads(path.read_text())
     if (stored.get("provenance") != record.get("provenance")
             or stored["iva"]["image_id"] != IVA_IMAGE_SHA256

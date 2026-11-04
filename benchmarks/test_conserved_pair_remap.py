@@ -97,6 +97,18 @@ class ConservativeRemapTests(unittest.TestCase):
             self.assertEqual(compatible_targets(
                 [row(flag=99), mate], refs, groups), [], cigar)
 
+    def test_invalid_sam_numeric_fields_fail_closed(self):
+        refs = load_references(self.refs)
+        groups = compatible_groups(refs)
+        for pos in ("", "*", "not-a-position", "1.5", "0"):
+            self.assertEqual(compatible_targets(
+                [row(flag=99, pos=pos), row(flag=147, pos=300)],
+                refs, groups), [], pos)
+        for flag in ("", "*", "invalid"):
+            self.assertEqual(compatible_targets(
+                [row(flag=flag), row(flag=147, pos=300)],
+                refs, groups), [], flag)
+
     def test_minor_allele_and_pair_phase_are_not_rewritten(self):
         # Both original mate sequences can disagree with their reference.
         # Projection must copy those actual bases and qualities verbatim.

@@ -65,7 +65,11 @@ def mapped_window(row, expected_ref, reference_length):
         return None
     if len(row["qual"]) != len(row["seq"]):
         return None
-    start, length = int(row["pos"]) - 1, matches[0]
+    try:
+        start = int(row["pos"]) - 1
+    except (ValueError, TypeError):
+        return None
+    length = matches[0]
     if start < 0 or start + length > reference_length:
         return None
     return start, start + length
@@ -77,7 +81,11 @@ def compatible_targets(mates, refs, groups):
     source = mates[0]["rname"]
     if source not in groups or any(r["rname"] != source for r in mates):
         return []
-    if {int(r["flag"]) for r in mates} not in _FLAGS:
+    try:
+        flags = {int(r["flag"]) for r in mates}
+    except (ValueError, TypeError):
+        return []
+    if flags not in _FLAGS:
         return []
     windows = [mapped_window(row, source, len(refs[source])) for row in mates]
     if any(window is None for window in windows):

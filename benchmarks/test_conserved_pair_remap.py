@@ -122,18 +122,41 @@ class ConserveMoleculesTests(unittest.TestCase):
         self.assertEqual(stats["reassigned_pairs"], 0)
         self.assertEqual(after, records)
 
-    def test_minor_allele_pair_stays_original_when_moving_majority(self):
+    def test_minor_allele_blocks_rebalancing_at_that_site(self):
         records = self.pairs(200)
         first = row("minor")
         first["seq"] = "C" + "A" * 99
         records.extend([first, row("minor", 147, 300)])
         dump(self.src, FIELDS, records)
         _, stats, after = self.report()
-        self.assertEqual(stats["reassigned_pairs"], 90)
+        self.assertEqual(stats["reassigned_pairs"], 0)
         self.assertTrue(all(r["rname"] == "1-HCV-1a"
                             for r in after if r["qname"] == "minor"))
         self.assertEqual(Counter(r["qname"] for r in after),
                          Counter(r["qname"] for r in records))
+
+    def test_target_minor_allele_blocks_dilution(self):
+        records = self.pairs(200)
+        first = row("recipient-minor", ref="2-HCV-1a")
+        first["seq"] = "C" + "A" * 99
+        records.extend([first, row("recipient-minor", 147, 300,
+                                   ref="2-HCV-1a")])
+        dump(self.src, FIELDS, records)
+        _, stats, after = self.report()
+        self.assertEqual(stats["reassigned_pairs"], 0)
+        self.assertEqual(Counter(r["qname"] for r in after),
+                         Counter(r["qname"] for r in records))
+
+    def test_nonoverlapping_minor_allele_does_not_block_transfer(self):
+        records = self.pairs(200)
+        first = row("far-minor", pos=700)
+        first["seq"] = "C" + "A" * 99
+        records.extend([first, row("far-minor", 147, pos=850)])
+        dump(self.src, FIELDS, records)
+        _, stats, after = self.report()
+        self.assertEqual(stats["reassigned_pairs"], 90)
+        self.assertTrue(all(r["rname"] == "1-HCV-1a"
+                            for r in after if r["qname"] == "far-minor"))
 
     def test_conflicting_overlap_never_qualifies_as_molecule(self):
         mates = [row("conflict"), row("conflict", 147, 100)]

@@ -91,9 +91,10 @@ def compatible_targets(mates, refs, groups):
 
 
 
-def _valid_base_sites(mates, reference, minimum_quality=15):
-    """Conservative source-allele Q15 coverage; reject variant/conflicted pairs."""
+def _valid_base_sites(mates, reference, minimum_quality=15, variant_sites=None):
+    """Conservative source-allele Q15 coverage; protect observed variants."""
     calls = defaultdict(set)
+    observed_variants = set()
     for row in mates:
         cigar = re.fullmatch(r"(?:(\d+)S)?([1-9]\d*)M(?:(\d+)S)?", row["cigar"])
         if cigar is None or len(row["qual"]) != len(row["seq"]):
@@ -113,8 +114,13 @@ def _valid_base_sites(mates, reference, minimum_quality=15):
                 # remain on its original hypothesis; neither protect the
                 # source with it nor loan the variant to another hypothesis.
                 if base != reference[start + i]:
-                    return None
-                calls[start + i].add(base)
+                    observed_variants.add(start + i)
+                else:
+                    calls[start + i].add(base)
+    if variant_sites is not None:
+        variant_sites.update(observed_variants)
+    if observed_variants:
+        return None
     return tuple(calls)
 
 
@@ -144,6 +150,7 @@ def project_remap(remap_path, reference_path, output_path):
         return remap_path, {"groups": 0, "reassigned_pairs": 0}
     pending = {}
     pairs = []
+    variant_sites = defaultdict(set)
     depth = {name: [0] * len(seq) for name, seq in refs.items()}
     with remap_path.open(newline="") as source:
         for row in csv.DictReader(source):
@@ -162,7 +169,7 @@ def project_remap(remap_path, reference_path, output_path):
                 continue
             if any(mapped_window(r, ref, len(refs[ref])) is None for r in mates):
                 continue
-            sites = _valid_base_sites(mates, refs[ref])
+            sites = _valid_base_sites(mates, refs[ref], variant_sites=variant_sites[ref])
             if not sites:
                 continue
             for pos in sites:
@@ -171,7 +178,12 @@ def project_remap(remap_path, reference_path, output_path):
     transfers = {}
     moved = Counter()
     for name, mates, source, sites in pairs:
-        options = compatible_targets(mates, refs, groups)
+        # Moving a reference-allele molecule at a polymorphic source or target
+        # position would change the observed minority fraction at that site.
+        if variant_sites[source].intersection(sites):
+            continue
+        options = [target for target in compatible_targets(mates, refs, groups)
+                   if not variant_sites[target].intersection(sites)]
         if not options or any(depth[source][pos] <= _SOURCE_Q15_RESERVE for pos in sites):
             continue
         ranked = sorted(

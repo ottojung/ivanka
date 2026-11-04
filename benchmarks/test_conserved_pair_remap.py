@@ -110,6 +110,36 @@ class ConserveMoleculesTests(unittest.TestCase):
         self.assertEqual(output, self.src)
         self.assertEqual(stats["reassigned_pairs"], 0)
 
+    def test_alternate_alleles_do_not_inflate_source_reserve(self):
+        records = self.pairs(110)
+        for i in range(150):
+            first = row(f"alternate-{i}")
+            first["seq"] = "C" + "A" * 99
+            records.extend([first, row(f"alternate-{i}", 147, 300)])
+        dump(self.src, FIELDS, records)
+        output, stats, after = self.report()
+        self.assertEqual(output, self.src)
+        self.assertEqual(stats["reassigned_pairs"], 0)
+        self.assertEqual(after, records)
+
+    def test_minor_allele_pair_stays_original_when_moving_majority(self):
+        records = self.pairs(200)
+        first = row("minor")
+        first["seq"] = "C" + "A" * 99
+        records.extend([first, row("minor", 147, 300)])
+        dump(self.src, FIELDS, records)
+        _, stats, after = self.report()
+        self.assertEqual(stats["reassigned_pairs"], 90)
+        self.assertTrue(all(r["rname"] == "1-HCV-1a"
+                            for r in after if r["qname"] == "minor"))
+        self.assertEqual(Counter(r["qname"] for r in after),
+                         Counter(r["qname"] for r in records))
+
+    def test_conflicting_overlap_never_qualifies_as_molecule(self):
+        mates = [row("conflict"), row("conflict", 147, 100)]
+        mates[1]["seq"] = "C" + "A" * 99
+        self.assertIsNone(_valid_base_sites(mates, self.ref1))
+
     def test_multiple_matching_hypotheses_are_not_multiplied(self):
         extra = self.ref1[:800] + "C" + self.ref1[801:]
         dump(self.refs, ["region", "sequence"],
@@ -152,10 +182,10 @@ class ConserveMoleculesTests(unittest.TestCase):
         groups = {"1-HCV-1a": ["2-HCV-1a"]}
         self.assertEqual(compatible_targets(records, refs, groups), ["2-HCV-1a"])
         self.assertEqual(mapped_window(records[0], "1-HCV-1a", 1200), (99, 199))
-        self.assertEqual(len(_valid_base_sites(records, 1200)), 200)
+        self.assertEqual(len(_valid_base_sites(records, self.ref1)), 200)
         bad = dict(records[0])
         bad["cigar"] = "25S25S50M"
-        self.assertIsNone(_valid_base_sites((bad, records[1]), 1200))
+        self.assertIsNone(_valid_base_sites((bad, records[1]), self.ref1))
 
 
 if __name__ == "__main__":

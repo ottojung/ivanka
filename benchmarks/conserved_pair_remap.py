@@ -91,33 +91,38 @@ def compatible_targets(mates, refs, groups):
 
 
 
-def _valid_base_sites(mates, reference_length, minimum_quality=15):
-    """Approximate merged high-quality pair coverage; one vote per position."""
+def _valid_base_sites(mates, reference, minimum_quality=15):
+    """Conservative source-allele Q15 coverage; reject variant/conflicted pairs."""
     calls = defaultdict(set)
     for row in mates:
         cigar = re.fullmatch(r"(?:(\d+)S)?([1-9]\d*)M(?:(\d+)S)?", row["cigar"])
-        if cigar is None:
+        if cigar is None or len(row["qual"]) != len(row["seq"]):
             return None
         left_clip = int(cigar.group(1) or 0)
         aligned = int(cigar.group(2))
         if left_clip + aligned + int(cigar.group(3) or 0) != len(row["seq"]):
             return None
         start = int(row["pos"]) - 1
-        if start < 0 or start + aligned > reference_length:
+        if start < 0 or start + aligned > len(reference):
             return None
         for i in range(aligned):
             index = left_clip + i
             base = row["seq"][index].upper()
             if base in _DNA and ord(row["qual"][index]) - 33 >= minimum_quality:
+                # A pair carrying any observed alternate source allele must
+                # remain on its original hypothesis; neither protect the
+                # source with it nor loan the variant to another hypothesis.
+                if base != reference[start + i]:
+                    return None
                 calls[start + i].add(base)
-    return tuple(pos for pos, alleles in calls.items() if len(alleles) == 1)
+    return tuple(calls)
 
 
 def project_remap(remap_path, reference_path, output_path):
     """Allocate existing molecules once, never create synthetic read identities.
 
-    The source retains at least 110 estimated Q15 pair-covered observations at
-    each transferred base. Move only to a compatible hypothesis with low
+    The source retains at least 110 estimated reference-allele Q15 observations
+    at each transferred base. Alternate-allele and conflicting pairs never move. Move only to a compatible hypothesis with low
     estimated depth; this is not a MiCall consensus-depth calculation.
     """
     remap_path = Path(remap_path)
@@ -157,7 +162,7 @@ def project_remap(remap_path, reference_path, output_path):
                 continue
             if any(mapped_window(r, ref, len(refs[ref])) is None for r in mates):
                 continue
-            sites = _valid_base_sites(mates, len(refs[ref]))
+            sites = _valid_base_sites(mates, refs[ref])
             if not sites:
                 continue
             for pos in sites:

@@ -19,7 +19,7 @@ clips or conflicting paired high-quality base calls are not used as transfer
 evidence.
 
 Before transferring a pair, a conservative Q15 merged-position estimate
-must show **more than 110** observations at every source position it covers.
+must show **more than 110 source-reference-allele** observations at every source position it covers. Read pairs containing a high-quality alternate allele are not transferable and do not support the source-reference reserve.
 The recipient must have a deficit relative to a target of 120 observations.
 The source is never intentionally depleted below this reserve, a 10-observation buffer above the MiCall coverage threshold of 100 (not an exact merged-depth guarantee). The estimate
 is *not* MiCall's merged consensus depth and does not certify coverage.

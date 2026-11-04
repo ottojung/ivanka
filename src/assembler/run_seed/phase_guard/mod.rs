@@ -8,4 +8,4 @@ mod split;
 #[cfg(test)] mod test_unlinked;
 #[cfg(test)] mod test_false_positives;
 mod place;
-pub(crate) use split::split_unsupported_contigs;
+pub(crate) use split::{split_unsupported_contigs,audit_unsupported_contigs};

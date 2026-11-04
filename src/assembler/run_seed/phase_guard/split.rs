@@ -21,3 +21,14 @@ pub(crate) fn split_unsupported_contigs(contigs: Vec<Vec<u8>>,
     }
     output
 }
+
+
+// Report read-backed contradictions without touching any assembly sequence.
+pub(crate) fn audit_unsupported_contigs(contigs: &[Vec<u8>],reads: &[Vec<u8>]) {
+    for (i,seq) in contigs.iter().enumerate() {
+        let calls=observations(seq,reads,25);
+        if let Some((p,q,n))=incompatible_link(seq,reads,&calls) {
+            eprintln!("EXPERIMENTAL_PHASE_AUDIT contig={} candidate join {}..{} contradicted by {} distinct paired sequences; no proof of physical molecules",i+1,p,q,n);
+        }
+    }
+}

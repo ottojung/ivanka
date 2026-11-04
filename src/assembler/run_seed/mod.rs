@@ -62,4 +62,4 @@ pub(super) use rescue::rescue_short;
 #[cfg(test)] mod rescue_rank_test;
 #[cfg(test)] mod rescue_rank_equiv_test;
 mod phase_guard;
-pub(super) use self::{phase_guard::split_unsupported_contigs,rescue_rank::append_preserving_diversity};
+pub(super) use self::{phase_guard::{split_unsupported_contigs,audit_unsupported_contigs},rescue_rank::append_preserving_diversity};

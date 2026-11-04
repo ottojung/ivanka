@@ -4,14 +4,20 @@
 a prototype safety check against unsupported joins, not validated phase
 reconstruction, physical molecule counting, or clinical interpretation.
 
-To opt in explicitly:
+To audit without changing output, set the
+IVANKA_EXPERIMENTAL_PHASE_AUDIT=1 environment flag. Audit mode reports
+candidate contradictions to stderr and never edits, suppresses, or splits
+contigs.
+
+To opt into the more invasive split experiment explicitly:
 
 ```sh
 IVANKA_EXPERIMENTAL_PHASE_SPLIT=1 target/debug/ivanka \
   --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output experimental.fasta
 ```
 
-Only the exact environment value `1` activates the guard. Absent, `0`,
+If both modes are set, split mode takes
+precedence. Only the exact environment value `1` activates the guard. Absent, `0`,
 and other values preserve normal assembly behavior. Input paired-end read
 identities are checked by the ordinary Rust FASTQ loader.
 
@@ -96,3 +102,24 @@ Promotion requires a proper per-library fragment model, base-quality
 evidence, stronger repetitive-locus ambiguity guards, preservation
 metrics, and real-pair full-MiCall comparisons on S48/S98 before the
 frozen cohort is attempted.
+
+## Validation checkpoints
+
+On the synthetic linked fixture, audit-only mode emits a candidate join warning
+for positions 397..597 with 35 distinct original paired-sequence signatures.
+Its FASTA is **byte-identical** to the unguarded output; splitting mode produces
+497- and 695-base fragments, with no contig asserting the unsupported two-site
+phase. The synthetic unlinked fixture has no warning and is unchanged.
+
+On the two authentic HCV samples, a 3,000-pair diagnostic prefix and a four-
+contig output cap produced byte-identical FASTAs in audit and splitting modes.
+These are **small input subsets**, not full-MiCall validation and not whole-
+sample proof of phase correctness. Audit-mode total runtimes were approximately
+3.3 seconds (S48) and 12.2 seconds (S98), while the frozen historical 198
+run and original IVA controls were not rerun.
+
+Do not use the splitter by default. For unknown clinical library geometry,
+low-quality mismatches, PCR duplicates or true low-frequency haplotypes,
+not observing the contig allele pair is only a **warning**, not proof that
+the assembled allele pair is impossible. A human-reviewed opt-in audit is
+safer until those problems are modeled and tested.

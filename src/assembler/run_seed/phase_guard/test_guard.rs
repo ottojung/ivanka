@@ -29,3 +29,11 @@ use super::{collect::observations,detect::incompatible_link};
 fn split_unsupported(seq: Vec<u8>,reads:&[Vec<u8>])->Vec<Vec<u8>> {
     super::split::split_unsupported_contigs(vec![seq],reads,1)
 }
+
+
+#[test] fn audit_does_not_mutate_even_an_unsupported_recombinant() {
+    let (chimera,_,reads)=synthetic(true);
+    let contigs=vec![chimera.clone()];
+    super::split::audit_unsupported_contigs(&contigs,&reads);
+    assert_eq!(contigs,vec![chimera]);
+}

@@ -144,9 +144,13 @@ def main():
         if args.status_output:
             dest = args.status_output.resolve()
             source_root = args.artifact_dir.resolve()
-            if (dest == source_root or source_root in dest.parents
-                    or dest == args.sidecar_json.resolve()):
-                raise EvidenceContractError("Cannot mutate source evidence or MiCall artifacts")
+            raw_roots = [path.resolve().parent for path in
+                         (args.original_fastq_r1, args.original_fastq_r2)
+                         if path is not None]
+            if (dest == args.sidecar_json.resolve()
+                    or any(dest == folder or folder in dest.parents
+                           for folder in [source_root, *raw_roots])):
+                raise EvidenceContractError("Cannot write within original source directories")
             encoded = json.dumps(result, indent=2, sort_keys=True) + "\n"
             if dest.exists():
                 if not dest.is_file() or dest.read_text() != encoded:

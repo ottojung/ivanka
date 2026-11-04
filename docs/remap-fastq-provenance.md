@@ -58,3 +58,16 @@ The reports with input SHA256s are kept privately at
 /workspace/ivanka-lab/remap-original-fastq-provenance-20261104/.
 These results cannot be generalized to different MiCall preprocessing
 or library formats without rerunning the verifier.
+
+## Source/output isolation
+
+The attestor now refuses to create a report anywhere inside the
+original paired-FASTQ source folders or the original MiCall output tree
+(the parent of scratch/remap.csv). It also refuses to overwrite a
+different existing report or any input path. Provide an isolated,
+private --output directory instead, as shown above.
+
+This closes a subtle hazard: even when original source files themselves
+were protected against overwrites, a newly created diagnostic report in
+a frozen sample/output directory would mutate that dataset's artifact
+tree. Such modifications are now rejected, including new nested paths.

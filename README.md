@@ -255,6 +255,26 @@ historical alpha sample duration. This is a **summary consistency check**, not
 independent authentication of the original FASTQs, in-container execution or
 output hashes; keep the original physical invocation and its artifacts.
 
+For an additional **read-only artifact integrity check** after the physical
+runner has exited successfully, use:
+
+```sh
+python3 benchmarks/attest_physical198.py \\
+  --results-dir /path/to/results --state-dir /path/to/run-state \\
+  --manifest /path/to/frozen/manifest.tsv \\
+  --iva-cache /path/to/authentic/iva-cache \\
+  --invocation EXACT_INVOCATION_ID
+```
+
+This requires the physical exit-0 and finish markers, exactly 198 matching
+started and finished events, the original 198 manifest, the frozen original
+IVA image, authentic cached-IVA metadata and consensus checksums, final Ivanka
+consensus checksums contained within the original result directory, and an
+independent recomputation of both recorded all-real-r PSI conditions. It
+rejects resumed, incomplete or mismatched results. **This checks stored
+evidence and original file contents, but does not independently prove
+container execution or recompute alignments from nucleotide sequences.**
+Retain the original physical results and image IDs for reproducibility.
 
 The full-cohort benchmark is **separate** from the historical 18-sample,
 95%-of-IVA alpha gate. It requires the exact private cohort manifest SHA-256

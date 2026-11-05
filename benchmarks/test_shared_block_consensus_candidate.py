@@ -146,6 +146,39 @@ class SharedBlockCandidateTests(unittest.TestCase):
         self.assertTrue(_strict_pair(rows))
 
 
+    def test_missing_copy_of_same_pair_sequence_vetoes_signature_evidence(self):
+        signatures = {"observed": ("ACG", "TGC"),
+                      "missing": ("ACG", "TGC")}
+        result = candidate_from_calls("A", [(0, "observed", "A")],
+                                      required_depth=1,
+                                      pair_signatures=signatures)
+        self.assertEqual(result["positions"][0]["shared_base_qnames"], 1)
+        self.assertEqual(
+            result["positions"][0]["shared_base_distinct_pair_sequences"], 0)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["positions"][0]["conflicting_pair_sequences"], 1)
+        self.assertEqual(result["positions"][0]["unobserved_pair_sequences"], 0)
+        self.assertEqual(
+            result["complete_block_observations"][
+                "distinct_pair_sequence_evidence"][
+                    "shared_allele_distinct_pair_sequences"], 0)
+
+    def test_distinct_observed_signature_can_count_despite_unrelated_missing_copy(self):
+        signatures = {"observed": ("ACG", "TGC"),
+                      "other_unobserved": ("GGG", "TTT")}
+        result = candidate_from_calls("A", [(0, "observed", "A")],
+                                      required_depth=1,
+                                      pair_signatures=signatures)
+        self.assertEqual(
+            result["positions"][0]["shared_base_distinct_pair_sequences"], 1)
+        self.assertTrue(result["eligible"])
+        self.assertEqual(result["positions"][0]["conflicting_pair_sequences"], 0)
+        self.assertEqual(result["positions"][0]["unobserved_pair_sequences"], 1)
+        self.assertEqual(
+            result["complete_block_observations"][
+                "distinct_pair_sequence_evidence"][
+                    "shared_allele_distinct_pair_sequences"], 1)
+
     def test_identical_pair_sequences_cannot_inflate_depth(self):
         calls = [(0, f"q{i}", "A") for i in range(100)]
         signatures = {f"q{i}": ("ACG", "TGC") for i in range(100)}

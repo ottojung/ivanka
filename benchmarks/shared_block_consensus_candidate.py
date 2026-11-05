@@ -3,7 +3,7 @@
 Never modifies MiCall calls or the 100-depth rule. A qname is a read-pair ID,
 not an independent original molecule. This module is an experiment, not a fix.
 """
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 COMPLEMENT = str.maketrans("ACGT", "TGCA")
 BASES = frozenset("ACGT")
@@ -30,10 +30,12 @@ def _complete_block_evidence(by_site, shared_allele, pair_signatures):
     distinct_allele_counts = defaultdict(int)
     if pair_signatures is not None:
         grouped = defaultdict(set)
-        for qname in observed:
-            if qname not in pair_signatures:
-                raise ValueError("Missing paired-read sequence provenance")
-            grouped[pair_signatures[qname]].add(complete.get(qname))
+        if any(qname not in pair_signatures for qname in observed):
+            raise ValueError("Missing paired-read sequence provenance")
+        # All original strict pairs sharing the sequence signature matter:
+        # an entirely missing copy makes the signature only partly observed.
+        for qname, signature in pair_signatures.items():
+            grouped[signature].add(complete.get(qname))
         for values in grouped.values():
             if len(values) == 1 and None not in values:
                 distinct_allele_counts[next(iter(values))] += 1
@@ -100,6 +102,11 @@ def candidate_from_calls(shared_allele, calls, required_depth=100,
         if not isinstance(qname, str) or not qname or base not in BASES:
             raise ValueError("Invalid read-pair ID or base")
         by_site[site][qname].add(base)
+    # Repeated original paired sequences can have different Q15 visibility.
+    # Count a signature only if EVERY original strict qname copy observes
+    # the same nonconflicting allele at the particular site.
+    signature_totals = (Counter(pair_signatures.values())
+                        if pair_signatures is not None else None)
     positions = []
     for i, expected in enumerate(shared_allele):
         counts = {b: 0 for b in "ACGT"}
@@ -116,19 +123,27 @@ def candidate_from_calls(shared_allele, calls, required_depth=100,
         distinct = None
         shared_distinct = None
         conflicting_signatures = None
+        unobserved_signatures = None
         if pair_signatures is not None:
             by_signature = defaultdict(set)
+            seen = Counter()
             for qname, bases in by_site[i].items():
                 if qname not in pair_signatures:
                     raise ValueError("Missing paired-read sequence provenance")
-                by_signature[pair_signatures[qname]].update(bases)
+                signature = pair_signatures[qname]
+                by_signature[signature].update(bases)
+                seen[signature] += 1
             unique_counts = {b: 0 for b in "ACGT"}
-            for bases in by_signature.values():
-                if len(bases) == 1:
+            for signature, bases in by_signature.items():
+                if (len(bases) == 1
+                        and seen[signature] == signature_totals[signature]):
                     unique_counts[next(iter(bases))] += 1
             distinct = sum(unique_counts.values())
             shared_distinct = unique_counts[expected]
+            # Do not call entirely unobserved signatures "conflicting".
+            # The observed group may be partial or contain contradictory calls.
             conflicting_signatures = len(by_signature) - distinct
+            unobserved_signatures = len(signature_totals) - len(by_signature)
         winner = max(counts, key=counts.get)
         runner_up = max(counts[b] for b in BASES if b != expected)
         accepted = (counts[expected] >= required_depth
@@ -143,6 +158,7 @@ def candidate_from_calls(shared_allele, calls, required_depth=100,
                           "distinct_pair_sequences": distinct,
                           "shared_base_distinct_pair_sequences": shared_distinct,
                           "conflicting_pair_sequences": conflicting_signatures,
+                          "unobserved_pair_sequences": unobserved_signatures,
                           "allele_qnames": counts,
                           "read_major_base": winner if counts[winner] * 2 > depth else None,
                           "eligible": accepted})

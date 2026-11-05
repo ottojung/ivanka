@@ -76,6 +76,9 @@ class UnphasedLocalGraphTests(unittest.TestCase):
         man=local_manifest(emitted=emitted, seq=seq)
         fa=Path(tmp)/("n.fasta" if emitted else "empty.fasta"); write_fasta(fa, emitted, seq)
         v2=v2_report(rows or (pair("one","a",(refs or fixture()[1])["one"])+pair("one","b",(refs or fixture()[1])["one"])), refs)
+        obs["shared_reference_membership"]["selected_reference_names"] = list(v2["selected_reference_names"])
+        obs["shared_reference_membership"]["reference_count"] = len(v2["selected_reference_names"])
+        man["selected_reference_names"] = list(v2["selected_reference_names"])
         # bind v2 provenance to obs checksums
         for k in ("final_conseq_csv","remap_conseq_csv","remap_sam_csv"):
             v2["input_provenance"][k]["sha256"]=obs["source_checksums_sha256"][k]
@@ -83,7 +86,8 @@ class UnphasedLocalGraphTests(unittest.TestCase):
                              observation_sha256=g.sha256_file(Path(tmp)/"obs.json") if False else "o",
                              local_manifest_sha256="m",
                              local_fasta_sha256=g.sha256_file(fa),
-                             v2_sha256="v", min_joint_pairs=min_joint)
+                             v2_sha256="v", min_joint_pairs=min_joint,
+                             min_consistent_signatures=min_joint)
 
     def test_s48_like_emitted_node_has_direct_same_qname_edge(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -107,11 +111,26 @@ class UnphasedLocalGraphTests(unittest.TestCase):
             self.assertFalse(graph["safety"]["affects_198_acceptance"])
             self.assertFalse(graph["safety"]["full_length_haplotype_phase_claimed"])
 
+    def test_duplicate_qnames_with_one_identical_sequence_signature_do_not_pass_default_link_threshold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, refs = fixture()
+            rows = []
+            for i in range(40):
+                rows += pair("one", f"duplicate{i}", refs["one"])
+            graph = self._make(tmp, emitted=True, seq="GCG",
+                               rows=rows, refs=refs, min_joint=5)
+            linked = [e for e in graph["edges"]
+                      if e["from"].startswith("shared_local_node::")]
+            self.assertEqual(linked, [])
+            self.assertTrue(any(
+                item["kind"] == "insufficient_direct_support"
+                for item in graph["negative_unknown"]))
+
     def test_s12_vetoed_no_eligible_shared_node(self):
         with tempfile.TemporaryDirectory() as tmp:
             graph = self._make(tmp, emitted=False)
-            self.assertFalse(any(n["type"]=="shared_unphased_local_node" for n in graph["nodes"]))
-            self.assertFalse(any(e["from"].startswith("shared_local_node::") for e in graph["edges"]))
+            self.assertEqual(graph["nodes"], [])
+            self.assertEqual(graph["edges"], [])
             self.assertTrue(any(u["kind"]=="no_eligible_shared_local_node_emitted" for u in graph["negative_unknown"]))
 
     def test_transitive_path_veto_no_edge_from_graph_path_only(self):
@@ -165,6 +184,36 @@ class UnphasedLocalGraphTests(unittest.TestCase):
             fa=Path(tmp)/"n.fasta"; write_fasta(fa, True, "ACT") # wrong sequence/hash
             with self.assertRaises(g.GraphBuildError):
                 g.verify_local_manifest(man, fa)
+
+    def test_mismatched_reference_group_must_not_be_joined(self):
+        obs=minimal_obs()
+        _, refs=fixture()
+        v2=v2_report(pair("one","a",refs["one"]))
+        for k in ("final_conseq_csv","remap_conseq_csv","remap_sam_csv"):
+            v2["input_provenance"][k]["sha256"]=obs["source_checksums_sha256"][k]
+        v2["selected_reference_names"]=["one"]
+        with self.assertRaisesRegex(g.GraphBuildError, "reference membership"):
+            g._bind_v2_to_observation(obs,v2)
+
+    def test_mismatched_node_manifest_never_inherits_observation(self):
+        obs=minimal_obs()
+        man=local_manifest(emitted=True, region="OTHER")
+        with self.assertRaisesRegex(g.GraphBuildError, "region mismatch"):
+            g._bind_manifest_to_observation(obs,man)
+
+    def test_multiple_fasta_nodes_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fasta=Path(tmp)/"fake.fasta"
+            fasta.write_text(chr(10).join([">first phase=unknown", "ACG", ">second phase=unknown", "ACG", ""]))
+            with self.assertRaisesRegex(g.GraphBuildError, "Only one"):
+                g._parse_fasta(fasta)
+
+    def test_builder_without_original_source_replay_is_not_empirically_authenticated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            graph=self._make(tmp,emitted=True,seq="GCG")
+            self.assertFalse(graph["source_verification"]["empirical_use_permitted"])
+            self.assertFalse(graph["source_verification"][
+                "externally_pinned_original_data_replayed"])
 
     def test_private_write_refuses_protected_root(self):
         with tempfile.TemporaryDirectory() as tmp:

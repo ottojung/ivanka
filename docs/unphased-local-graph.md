@@ -23,8 +23,8 @@ a consensus/assembly pipeline change.
 - Missing insert bases are **never imputed**.
 - A node/segment connects to a haplotype-specific marker only when the **same
   original strict read-pair QNAME** directly observes both at Q15 with enough
-  consistent unique paired signatures (default `--min-joint-pairs 1`,
-  `--min-consistent-signatures 1`; raise for stricter use).
+  consistent unique paired signatures (default `--min-joint-pairs 5`,
+  `--min-consistent-signatures 5`; raise for stricter use).
 - Edges are **tentative/local-only**, never full-length phase.
 - **No transitive inference**: only direct v2 same-qname observations become
   edges; no path traversal.
@@ -45,6 +45,12 @@ python3 benchmarks/export_unphased_local_graph.py \
   --expected-local-fasta-sha256 <sha256> \
   --expected-local-manifest-sha256 <sha256> \
   --expected-direct-v2-sha256 <sha256> \
+  --artifact-dir FROZEN_RUN/SAMPLE/ivanka \
+  --screen-ledger PRIVATE/frozen198-v2-direct-summary.json \
+  --screen-sha256 5d6caefe76cfee3ec368223482e2e36e91dd82d5ce92d52dc54b93eccda4c716 \
+  --sample SAMPLE \
+  --original-fastq-r1 ORIGINAL_R1.fastq.gz \
+  --original-fastq-r2 ORIGINAL_R2.fastq.gz \
   --protect-root /workspace/denovo-example-io-1 \
   --protect-root /workspace/ivanka-isolated-pairs-full198-results-20261103
 ```
@@ -64,17 +70,17 @@ Read-only authenticated artifacts used (no source/FASTQ mutation, no full198/IVA
 | S12 local manifest #170 | `c92855ec4bae72254a628f07321db48b416b52317facb6d2464d037e238d841f` |
 | S12 direct v2 #164 | `7fca53dcad1a291b9e7851f97712acdf44f571e04db521c4dcc2fce9e8b9597f` |
 
-Results (private `/tmp/opencode/ivanka-graph-TtLs4qf3/private-out/`):
+Results (private `/workspace/ivanka-lab/unphased-local-graph-reviewed-20261105/`):
 
 - **S48** `S48-unphased-local-graph.json` SHA256
-  `33a7c9261ee76ab03733f3107234c3fe72f062e23639e7699c0fa5c91454e6fe`:
-  3 nodes, 2 tentative local-only edges from the emitted 31bp shared local node
-  to marker alleles A/G, each requiring direct same-qname Q15 observation
-  (4+35 joint pairs/signatures for edges from the emitted allele to markers A/G; observed non-emitted block allele edges preserved separately). No
+  `be1bf10da124a536a846d0c2a2df3f9cbf6bec97c38b672c0682d1706d41a0f6`:
+  4 nodes, one tentative local-only edge from the emitted 31bp shared local node
+  to one directly observed marker allele, each requiring direct same-qname Q15 observation
+  (35 directly observed paired QNAMEs and 35 consistent paired-sequence signatures for the one accepted local edge; four-pair marker evidence was withheld). No
   transitive edges, no molecule/phase claims.
 - **S12** `S12-unphased-local-graph.json` SHA256
-  `dc6528fec0aad2cef8a9f8594f464f34260f914fc3dfb7c44e0116187b33675a`:
-  0 eligible shared local nodes, 0 edges to emitted shared node; explicit
+  `4e1d950479619ae986f5bc0436405ff6da68bd992ce8e0e3c63f5e7a1403fce5`:
+  zero promoted graph nodes and zero edges; explicit
   `no_eligible_shared_local_node_emitted` and
   `competing_minority_allele_fraction` preserved.
 
@@ -85,3 +91,40 @@ node with direct same-qname edge counts, S12 veto/no node, no transitive
 inference, no molecule duplication claims, low-Phred/ambiguous exclusion by
 upstream direct evidence, mask/region mismatch, manifest/FASTA hash mismatch,
 protected output roots, and phase/molecule/transitive flags false.
+
+
+## Independent original source replay and stronger safeguards
+
+A self-consistent set of JSON paths and SHA256 values does not establish
+independent source provenance. The CLI now requires the caller's selected
+original per-sample MiCall directory, exact sample identity, independent
+frozen-cohort direct-mask ledger and externally known SHA256, original R1/R2
+FASTQ mates, and caller-pinned SHA256s for all four graph input artifacts.
+
+Before publishing it replays both source-bound stages from the original
+data: first the complete #170 read-derived local node and exact safety
+decision, then the #164 v2 same-original-strict-QNAME direct links. Both
+reattest original paired FASTQ mate sequence and Phred qualities. It checks
+exact reference membership, region, masked interval, source hashes, and
+exact original FASTA and manifest. Missing or altered evidence fails closed.
+A pure in-memory graph constructed without replay is explicitly marked
+source_verification.empirical_use_permitted=false.
+
+Tentative local edges now require at least FIVE direct original paired
+QNAMEs and FIVE consistent distinct paired-read sequence signatures,
+rather than the previous default of one. These signatures are not proven
+independent physical DNA molecules. Transitive/distant haplotype phase
+remains unknown. Where the #170 local node is vetoed, NO marker or other
+unqualified sequence is promoted to a graph node: S12 has zero nodes
+and zero edges, with observed evidence retained only as unknown diagnostics.
+
+Genuine immutable S48 original FASTQ/MiCall replay produced four typed
+nodes and one tentative direct local edge supported by 35 paired reads
+and 35 consistent paired sequences; its four-pair association was withheld.
+S12 had no nodes or edges. Private verified result SHA256s:
+S48 be1bf10da124a536a846d0c2a2df3f9cbf6bec97c38b672c0682d1706d41a0f6
+S12 4e1d950479619ae986f5bc0436405ff6da68bd992ce8e0e3c63f5e7a1403fce5
+
+No original MiCall MAX, IVA baseline, reference panel, raw FASTQ,
+frozen 198 numerical qualification or signed-power PSI changed.
+The full repository regression suite passes 606 Python tests, six skipped.

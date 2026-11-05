@@ -37,6 +37,8 @@ def _parse_fasta(path: Path):
     _require(lines and lines[0].startswith(">"), "FASTA must start with header")
     seq = "".join(l.strip() for l in lines[1:] if not l.startswith(">")).upper()
     _require(seq and set(seq) <= set("ACGT"), "FASTA sequence must be resolved A/C/G/T")
+    _require(sum(line.startswith(">") for line in lines) == 1,
+             "Only one explicitly unphased local FASTA node is allowed")
     return lines[0][1:].strip(), seq
 
 def verify_observation(obs, expected_sha=None):
@@ -103,17 +105,64 @@ def _bind_v2_to_observation(obs, v2):
     obs_src = obs.get("source_paths") or {}
     obs_sha = obs.get("source_checksums_sha256") or {}
     prov = v2["input_provenance"]
-    mapping = [("final_conseq_csv","final_conseq_csv"),("remap_conseq_csv","remap_conseq_csv"),("remap_sam_csv","remap_sam_csv")]
+    _require(v2.get("selected_reference_names") ==
+             obs.get("shared_reference_membership",{}).get("selected_reference_names"),
+             "v2/observation reference membership mismatch")
+    mapping = (("final_conseq_csv","final_conseq_csv"),
+               ("remap_conseq_csv","remap_conseq_csv"),
+               ("remap_sam_csv","remap_sam_csv"))
     for obs_key, prov_key in mapping:
-        if prov_key in prov and obs_key in obs_sha:
-            _require(prov[prov_key]["sha256"] == obs_sha[obs_key], f"v2/observation SHA mismatch: {obs_key}")
-        if prov_key in prov and obs_key in obs_src:
-            # path equality is best-effort; SHA is authoritative
-            pass
+        _require(prov_key in prov and obs_key in obs_sha
+                 and obs_key in obs_src, f"Missing source binding: {obs_key}")
+        _require(prov[prov_key]["sha256"] == obs_sha[obs_key],
+                 f"v2/observation source SHA mismatch: {obs_key}")
+
+
+def _bind_manifest_to_observation(obs, manifest):
+    _require(manifest.get("region") == obs.get("region"),
+             "Manifest/observation region mismatch")
+    _require(manifest.get("mask_interval_zero_based_half_open") ==
+             obs.get("mask_interval_zero_based_half_open"),
+             "Manifest/observation mask mismatch")
+    _require(manifest.get("selected_reference_names") ==
+             obs.get("shared_reference_membership",{}).get("selected_reference_names"),
+             "Manifest/observation selected references mismatch")
+
+
+def replay_original_sources(args, observation, manifest):
+    """Never classify local graph edges as authentic without reobserving sources.
+
+    The caller independently pins the MiCall source root, sample identity,
+    cohort screen hash, original R1/R2, and exact artifact hashes.
+    """
+    from export_unphased_local_nodes import compute
+    from verify_shared_unphased_sidecar import verify
+    expected_fasta, expected_manifest = compute(
+        observation, artifact_dir=args.artifact_dir,
+        screen_ledger=args.screen_ledger,
+        screen_sha256=args.screen_sha256,
+        sample=args.sample,
+        fastq_r1=args.original_fastq_r1,
+        fastq_r2=args.original_fastq_r2,
+        depth=args.depth,
+        min_fraction=args.minimum_fraction,
+        min_complete_signatures=args.min_complete_signatures)
+    _require(manifest == expected_manifest,
+             "Local-node manifest disagrees with authenticated recomputation")
+    _require(args.local_node_fasta.read_text() == expected_fasta,
+             "Local FASTA disagrees with authenticated read-derived sequence")
+    status = verify(
+        args.direct_v2_sidecar, args.artifact_dir,
+        args.original_fastq_r1, args.original_fastq_r2)
+    _require(status.get("original_fastq_provenance") ==
+             "sequence_and_phred_authenticated_per_original_mate",
+             "Direct-link read-pair source was not authenticated to original FASTQs")
+    return status
+
 
 def build_graph(*, observation, local_manifest, local_fasta_path, v2_sidecar,
                 observation_sha256, local_manifest_sha256, local_fasta_sha256,
-                v2_sha256, min_joint_pairs=1, min_consistent_signatures=1,
+                v2_sha256, min_joint_pairs=5, min_consistent_signatures=5,
                 sample=None):
     _require(type(min_joint_pairs) is int and min_joint_pairs >= 1, "min_joint_pairs >= 1")
     _require(type(min_consistent_signatures) is int and min_consistent_signatures >= 1,
@@ -123,6 +172,7 @@ def build_graph(*, observation, local_manifest, local_fasta_path, v2_sidecar,
     v2 = verify_v2(v2_sidecar)
     manifest, node_id, node_seq = verify_local_manifest(local_manifest, local_fasta_path,
                                                         expected_fasta_sha=None)
+    _bind_manifest_to_observation(obs, manifest)
     sample_name = sample or manifest.get("sample") or obs.get("label")
     region = obs["region"]
     mask = obs["mask_interval_zero_based_half_open"]
@@ -159,6 +209,15 @@ def build_graph(*, observation, local_manifest, local_fasta_path, v2_sidecar,
     # We never invent qnames and never create transitive edges.
     other_block_nodes = {}
     for marker in v2["marker_direct_links"]:
+        if emitted_node_id is None:
+            negative_unknown.append({
+                "kind": "vetoed_local_node_no_graph_promotion",
+                "marker_index": marker.get("marker_index"),
+                "observed_direct_pairs_not_promoted_to_graph":
+                    marker.get("direct_joint_observation_count", 0),
+                "reason": "no_strictly_eligible_unphased_shared_node",
+            })
+            continue
         midx = marker.get("marker_index")
         pos = marker.get("reference_positions_zero_based") or {}
         for obs_item in marker.get("local_block_marker_observations") or []:
@@ -304,9 +363,13 @@ def build_graph(*, observation, local_manifest, local_fasta_path, v2_sidecar,
             "transitive_inference_used": False,
             "missing_insert_bases_imputed": False,
         },
+        "source_verification": {
+            "externally_pinned_original_data_replayed": False,
+            "empirical_use_permitted": False,
+        },
         "interpretation": (
-            "Typed local graph from authenticated unphased observation, eligible local node, "
-            "and direct same-original-strict-read-pair QNAME v2 evidence. Edges are tentative "
+            "Typed local graph from supplied unphased observations; source trust is "
+            "independently established by source_verification. Edges are tentative "
             "and local-only; same QNAME must observe both ends at Q15 with consistent unique "
             "paired signatures. No transitive paths, no haplotype assignment, no molecule "
             "duplication claims, no MAX/198/IVA/reference changes."
@@ -337,13 +400,21 @@ def main(argv=None):
     p.add_argument("--local-node-manifest", type=Path, required=True)
     p.add_argument("--direct-v2-sidecar", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
-    p.add_argument("--expected-observation-sha256")
-    p.add_argument("--expected-local-manifest-sha256")
-    p.add_argument("--expected-local-fasta-sha256")
-    p.add_argument("--expected-direct-v2-sha256")
-    p.add_argument("--min-joint-pairs", type=int, default=1)
-    p.add_argument("--min-consistent-signatures", type=int, default=1)
-    p.add_argument("--sample")
+    p.add_argument("--expected-observation-sha256", required=True)
+    p.add_argument("--expected-local-manifest-sha256", required=True)
+    p.add_argument("--expected-local-fasta-sha256", required=True)
+    p.add_argument("--expected-direct-v2-sha256", required=True)
+    p.add_argument("--min-joint-pairs", type=int, default=5)
+    p.add_argument("--min-consistent-signatures", type=int, default=5)
+    p.add_argument("--sample", required=True)
+    p.add_argument("--artifact-dir", type=Path, required=True)
+    p.add_argument("--screen-ledger", type=Path, required=True)
+    p.add_argument("--screen-sha256", required=True)
+    p.add_argument("--original-fastq-r1", type=Path, required=True)
+    p.add_argument("--original-fastq-r2", type=Path, required=True)
+    p.add_argument("--depth", type=int, default=100)
+    p.add_argument("--minimum-fraction", type=float, default=0.95)
+    p.add_argument("--min-complete-signatures", type=int, default=20)
     p.add_argument("--protect-root", action="append", default=[], type=Path)
     args = p.parse_args(argv)
     def check(path, expected, label):
@@ -355,9 +426,12 @@ def main(argv=None):
     man_sha = check(args.local_node_manifest, args.expected_local_manifest_sha256, "local manifest")
     fa_sha = check(args.local_node_fasta, args.expected_local_fasta_sha256, "local FASTA")
     v2_sha = check(args.direct_v2_sidecar, args.expected_direct_v2_sha256, "direct v2")
+    obs = _load_json(args.observation_json)
+    manifest = _load_json(args.local_node_manifest)
+    attestation = replay_original_sources(args, obs, manifest)
     graph = build_graph(
-        observation=_load_json(args.observation_json),
-        local_manifest=_load_json(args.local_node_manifest),
+        observation=obs,
+        local_manifest=manifest,
         local_fasta_path=args.local_node_fasta,
         v2_sidecar=_load_json(args.direct_v2_sidecar),
         observation_sha256=obs_sha,
@@ -368,8 +442,18 @@ def main(argv=None):
         min_consistent_signatures=args.min_consistent_signatures,
         sample=args.sample,
     )
+    graph["source_verification"] = {
+        "externally_pinned_original_data_replayed": True,
+        "empirical_use_permitted": True,
+        "original_micall_source_directory": str(args.artifact_dir.resolve()),
+        "independent_cohort_screen_sha256": args.screen_sha256,
+        "raw_original_mate_provenance_authenticated": True,
+        "direct_link_source_verification": attestation["verification"],
+    }
     protected = [args.observation_json.parent, args.local_node_fasta.parent,
                  args.local_node_manifest.parent, args.direct_v2_sidecar.parent,
+                 args.artifact_dir, args.screen_ledger.parent,
+                 args.original_fastq_r1.parent, args.original_fastq_r2.parent,
                  *args.protect_root]
     _private_write(args.output, _canonical_json(graph), protected)
     print(_canonical_json({
@@ -383,5 +467,5 @@ def main(argv=None):
 if __name__ == "__main__":
     try:
         main()
-    except (GraphBuildError, OSError, json.JSONDecodeError, KeyError, TypeError) as e:
+    except (GraphBuildError, ValueError, OSError, json.JSONDecodeError, KeyError, TypeError) as e:
         raise SystemExit(f"ERROR: {e}")

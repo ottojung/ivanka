@@ -48,7 +48,7 @@ def _complete_calls(pair, coords, allele, markers, minimum_quality):
 
 def build_shared_evidence(masked, references, sam_rows, anchor=31,
                           radius=600, minimum_quality=15,
-                          include_qnames=False):
+                          include_qnames=False, include_direct_links=False):
     """Audit only complete directly observed original-pair local alleles.
 
     Distinct sequence-signature support is counted for a feature ONLY if
@@ -56,7 +56,8 @@ def build_shared_evidence(masked, references, sam_rows, anchor=31,
     nonmissing observation. Contradictory/partial signatures are withheld.
     This conservative count is not an independent molecule count.
     """
-    if minimum_quality < 0 or not isinstance(include_qnames, bool):
+    if (minimum_quality < 0 or not isinstance(include_qnames, bool)
+            or not isinstance(include_direct_links, bool)):
         raise ValueError("Invalid quality or provenance disclosure option")
     allele, loci, markers = discover_markers(
         masked, references, anchor, radius)
@@ -71,6 +72,7 @@ def build_shared_evidence(masked, references, sam_rows, anchor=31,
     # Group original qname observations by original paired SEQUENCE signature,
     # never by synthetic remap row multiplicity or per-target coverage.
     observations = {}
+    pair_signatures = {}
     by_signature = defaultdict(lambda: defaultdict(set))
     raw_node_qnames = defaultdict(set)
     for qname, pair in groups.items():
@@ -86,6 +88,7 @@ def build_shared_evidence(masked, references, sam_rows, anchor=31,
         features.update({("marker", j): value
                          for j, value in enumerate(observed_markers)})
         observations[qname] = features
+        pair_signatures[qname] = signature
         for key, value in features.items():
             by_signature[(key, signature)]["calls"].add(value)
             if value is not None:
@@ -137,6 +140,60 @@ def build_shared_evidence(masked, references, sam_rows, anchor=31,
             "block to a haplotype; this tool never alters MiCall consensus or 198 "
             "acceptance."),
     }
+    if include_direct_links:
+        # A direct link is a *single original strict qname* observing
+        # the complete local block and one nearby marker at Q15.
+        # Incomplete/conflicting copies of the same sequence signature veto
+        # that signature's support, even when another copy is complete.
+        result["schema_version"] = "ivanka.shared_unphased_evidence_direct.v2"
+        result["direct_linkage_observation_scope"] = (
+            "same_original_remap_qname_complete_block_and_one_marker")
+        result["marker_direct_links"] = []
+        for j, marker in enumerate(markers):
+            pair_observations = defaultdict(set)
+            signatures = defaultdict(set)
+            for qname, features in observations.items():
+                block = features[("block", 0)]
+                allele_call = features[("marker", j)]
+                joint = ((block, allele_call) if block is not None
+                         and allele_call is not None else None)
+                signatures[pair_signatures[qname]].add(joint)
+                if joint is not None:
+                    pair_observations[joint].add(qname)
+            links = []
+            for (block, allele_call), qnames in sorted(pair_observations.items()):
+                link = {
+                    "shared_block_allele": block,
+                    "marker_allele": allele_call,
+                    "original_pair_ids_directly_observing_both": len(qnames),
+                    "consistent_distinct_pair_sequence_signatures": len({
+                        pair_signatures[name] for name in qnames
+                        if signatures[pair_signatures[name]] == {(block, allele_call)}
+                    }),
+                    "is_full_length_haplotype_phased": False,
+                }
+                links.append(link)
+            positions = {ref: pos for ref, (pos, _) in
+                         sorted(marker["coords"].items())}
+            result["marker_direct_links"].append({
+                "marker_index": j,
+                "reference_positions_zero_based": positions,
+                "direct_joint_observation_count": sum(
+                    len(qnames) for qnames in pair_observations.values()),
+                "direct_joint_distinct_pair_sequence_signatures": sum(
+                    len({pair_signatures[name] for name in qnames
+                         if signatures[pair_signatures[name]] == {joint}})
+                    for joint, qnames in pair_observations.items()),
+                "local_block_marker_observations": links,
+                "indirect_graph_members_counted_as_direct": False,
+                "long_range_haplotype_phase_inferred": False,
+            })
+        result["direct_linkage_interpretation"] = (
+            "Only co-observation by the same original remap read-pair ID. "
+            "Pair-sequence signatures are not independent physical molecules. "
+            "Partial and conflicting signature reuses are excluded from distinct "
+            "signature counts. This is local linkage to exactly one marker, "
+            "not complete haplotype phase; gaps and inserts are not imputed.")
     if include_qnames:
         result["original_qname_provenance"] = {
             name: [
@@ -169,6 +226,8 @@ def main():
     parser.add_argument("--anchor", type=int, default=31)
     parser.add_argument("--radius", type=int, default=600)
     parser.add_argument("--min-phred", type=int, default=15)
+    parser.add_argument("--direct-links", action="store_true",
+                        help="Version 2: observe direct complete-block-to-marker links, no inferred phase")
     parser.add_argument("--include-qnames", action="store_true",
                         help="Explicitly expose original read identifiers in private reports")
     parser.add_argument("--output", type=Path,
@@ -202,7 +261,8 @@ def main():
     with args.remap_sam_csv.open() as fh:
         report = build_shared_evidence(
             masked, refs, csv.DictReader(fh), args.anchor,
-            args.radius, args.min_phred, args.include_qnames)
+            args.radius, args.min_phred, args.include_qnames,
+            args.direct_links)
     report.update({"region": args.region, "mask_start": args.mask_start,
                    "mask_end": args.mask_end})
     report["input_provenance"] = {

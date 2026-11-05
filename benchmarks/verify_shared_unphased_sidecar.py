@@ -31,7 +31,12 @@ def verify(sidecar_path, artifact_dir, original_r1=None, original_r2=None):
     if not root.is_dir():
         raise EvidenceContractError("Expected a MiCall artifact directory")
     report = json.loads(sidecar_path.read_text())
-    if (report.get("schema_version") != "ivanka.shared_unphased_evidence.v1"
+    is_direct_v2 = report.get("schema_version") == (
+        "ivanka.shared_unphased_evidence_direct.v2")
+    if (report.get("schema_version") not in (
+            "ivanka.shared_unphased_evidence.v1",
+            "ivanka.shared_unphased_evidence_direct.v2")
+            or ("marker_direct_links" in report) != is_direct_v2
             or report.get("artifact_type") != "shared_unphased_evidence_sidecar"
             or report.get("phase_status") != "unidentified"
             or report.get("phase_inferred") is not False
@@ -66,6 +71,8 @@ def verify(sidecar_path, artifact_dir, original_r1=None, original_r2=None):
                "--region", report["region"]]
     for ref in references:
         command.extend(["--reference", ref])
+    if is_direct_v2:
+        command.append("--direct-links")
     for flag, key in (("--mask-start", "mask_start"),
                       ("--mask-end", "mask_end"),
                       ("--anchor", "anchor"),
@@ -115,9 +122,31 @@ def verify(sidecar_path, artifact_dir, original_r1=None, original_r2=None):
         "modifies_micall_consensus": False,
         "affects_198_acceptance": False,
     }
+    if is_direct_v2:
+        # These per-marker same-original-pair link counts MUST NOT be added
+        # across markers or treated as independent physical molecules.
+        marker_links = report["marker_direct_links"]
+        if (not isinstance(marker_links, list)
+                or len(marker_links) != report["marker_count"]):
+            raise EvidenceContractError("Invalid direct marker linkage shape")
+        result.update({
+            "schema_version": "ivanka.unphased_sidecar_verification_direct.v2",
+            "local_direct_marker_linkage_only": True,
+            "per_marker_direct_original_pair_observations": [
+                link["direct_joint_observation_count"] for link in marker_links],
+            "per_marker_distinct_consistent_pair_sequence_signatures": [
+                link["direct_joint_distinct_pair_sequence_signatures"]
+                for link in marker_links],
+            "transitive_graph_links_assigned": False,
+            "long_range_haplotype_phase_inferred": False,
+            "cross_marker_pair_counts_summable": False,
+        })
     if raw is not None:
         result.update({
-            "schema_version": "ivanka.unphased_sidecar_verification_raw_fastq.v1",
+            "schema_version": (
+                "ivanka.unphased_sidecar_verification_direct_raw_fastq.v2"
+                if is_direct_v2 else
+                "ivanka.unphased_sidecar_verification_raw_fastq.v1"),
             "verification": "passed_source_sha256_exact_recomputation_and_per_mate_raw_fastq",
             "original_fastq_provenance": "sequence_and_phred_authenticated_per_original_mate",
             "raw_original_read_pairs_scanned": raw["raw_pair_ids_scanned"],

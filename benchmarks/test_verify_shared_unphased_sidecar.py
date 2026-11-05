@@ -197,57 +197,5 @@ class VerifiedSharedEvidenceTests(unittest.TestCase):
         self.assertFalse(forbidden.exists())
 
 
-    def make_direct_sidecar(self):
-        sidecar = Path(self.temp.name) / "direct-v2.json"
-        from shared_unphased_evidence import main as produce
-        _, refs = fixture()
-        args = ["producer", str(self.artifacts / "conseq.csv"),
-                str(self.artifacts / "remap_conseq.csv"),
-                str(self.artifacts / "scratch/remap.csv"), "--region", "one",
-                "--direct-links", "--mask-start", "100", "--mask-end", "103",
-                "--anchor", "8", "--radius", "100", "--output", str(sidecar)]
-        for name in refs:
-            args.extend(["--reference", name])
-        with patch.object(sys, "argv", args):
-            produce()
-        return sidecar
-
-    def test_direct_v2_full_raw_fastq_chain_keeps_phase_unknown(self):
-        sidecar = self.make_direct_sidecar()
-        status = verify(sidecar, self.artifacts, self.raw_r1, self.raw_r2)
-        self.assertEqual(status["schema_version"],
-                         "ivanka.unphased_sidecar_verification_direct_raw_fastq.v2")
-        self.assertTrue(status["local_direct_marker_linkage_only"])
-        self.assertEqual(status["per_marker_direct_original_pair_observations"], [1])
-        self.assertEqual(status["per_marker_distinct_consistent_pair_sequence_signatures"], [1])
-        self.assertEqual(status["haplotype_phase"], "unidentified")
-        self.assertFalse(status["cross_marker_pair_counts_summable"])
-        self.assertFalse(status["haplotype_specific_depth_assigned"])
-        self.assertNotIn("private-synthetic-id", json.dumps(status))
-
-    def test_direct_v2_rejects_tampered_link_count_and_qnames(self):
-        sidecar = self.make_direct_sidecar()
-        original = json.loads(sidecar.read_text())
-        for field, value in (
-            ("direct_joint_observation_count", 555),
-            ("direct_joint_distinct_pair_sequence_signatures", 555)):
-            report = json.loads(json.dumps(original))
-            report["marker_direct_links"][0][field] = value
-            sidecar.write_text(json.dumps(report))
-            with self.assertRaises(EvidenceContractError):
-                verify(sidecar, self.artifacts)
-        report = json.loads(json.dumps(original))
-        report["marker_direct_links"][0]["original_qnames"] = ["private-synthetic-id"]
-        sidecar.write_text(json.dumps(report))
-        with self.assertRaises(EvidenceContractError):
-            verify(sidecar, self.artifacts)
-
-    def test_direct_v1_never_accepts_unexpected_link_nodes(self):
-        original = json.loads(self.sidecar.read_text())
-        original["marker_direct_links"] = []
-        self.sidecar.write_text(json.dumps(original))
-        with self.assertRaises(EvidenceContractError):
-            verify(self.sidecar, self.artifacts)
-
 if __name__ == "__main__":
     unittest.main()

@@ -293,8 +293,10 @@ class SNVQ15TypedLocalGraphTests(unittest.TestCase):
             reports.mkdir()
             n = reports / 'node.json'
             l = reports / 'link.json'
-            n.write_text(S48_NODE.read_text())
-            l.write_text(S48_LINK.read_text())
+            # Use a synthetic fixture here so public CI needs no private FASTQ evidence.
+            synthetic_node, synthetic_link = self._synthetic_reports()
+            n.write_text(json.dumps(synthetic_node, sort_keys=True))
+            l.write_text(json.dumps(synthetic_link, sort_keys=True))
             out = root / 'out' / 'test-s48-snv-graph.json'
             import subprocess, sys
             cmd = [sys.executable, 'benchmarks/export_snv_q15_typed_local_graph.py',

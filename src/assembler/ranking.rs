@@ -1,4 +1,4 @@
-use super::ranking_score::{ranked_candidates,supported_snv_alternative,append_only_to_spare_slots};
+use super::ranking_score::{ranked_candidates,supported_snv_alternative};
 use std::collections::{HashMap,HashSet};
 use super::reads::rolling_canonical_kmers;
 use super::reads::{K, encode};
@@ -16,10 +16,10 @@ pub(super) fn canonical_kmer(seq:&[u8])->Option<u64> {
 }
 pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
                             n:usize, protected:usize)->Vec<Vec<u8>> {
-    select_supported_contigs_with_kmers(seqs,counts,n,protected,&HashMap::new())
+    select_supported_contigs_with_kmers(seqs,counts,n,protected,&HashMap::new()).0
 }
 pub(super) fn select_supported_contigs_with_kmers(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
-                            n:usize, protected:usize, sampled:&HashMap<u64,u32>)->Vec<Vec<u8>> {
+                            n:usize, protected:usize, sampled:&HashMap<u64,u32>)->(Vec<Vec<u8>>,Vec<(Vec<u8>,usize)>) {
     let candidates=ranked_candidates(seqs,counts,n,protected);
     // Use read support to prioritize assemblies and k-mer novelty to avoid
     // passing hundreds of near-identical contigs into MiCall's stitcher.
@@ -48,15 +48,14 @@ pub(super) fn select_supported_contigs_with_kmers(seqs:Vec<Vec<u8>>, counts:Vec<
         let snv=supported_snv_alternative(&seq,support,&retained,&retained_support,
                                             sampled,canonical_kmer);
         if !is_seed && valid>0 && (shared*20>=valid*19 || short_shadow) {
-            if snv {variants.push(seq);} else {duplicates+=1;}
+            if snv {variants.push((seq,support));} else {duplicates+=1;}
             continue;
         }
         for k in rolling_canonical_kmers(&seq) {represented.insert(k);}
         retained.push(seq);
         retained_support.push(support);
     }
-    let appended=append_only_to_spare_slots(&mut retained,variants,n,&mut represented,canonical_kmer);
-    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={} snv_spare_slots={}",
-              retained.len(),duplicates,no_extension_support,appended);
-    retained
+    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={} snv_audit_candidates={}",
+              retained.len(),duplicates,no_extension_support,variants.len());
+    (retained,variants)
 }

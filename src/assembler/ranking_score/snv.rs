@@ -36,19 +36,3 @@ pub(crate) fn supported_snv_alternative(
     assert!(!supported_snv_alternative(&changed,1,&[original.clone()],&[200],&counts,encode));
     assert!(!supported_snv_alternative(&changed,150,&[original],&[200],&HashMap::new(),encode));
 }
-
-// Variant preservation must never evict a different contig at the caller's cap.
-pub(crate) fn append_only_to_spare_slots(
-    contigs:&mut Vec<Vec<u8>>, variants:Vec<Vec<u8>>, cap:usize,
-    covered:&mut HashSet<u64>, canonical:fn(&[u8])->Option<u64>,
-)->usize {
-    let mut added=0; for seq in variants.into_iter().take((cap/8).clamp(1,16)) {
-        if contigs.len()>=cap { break; }
-        let novel=seq.windows(31).filter_map(canonical)
-            .filter(|key|!covered.contains(key)).collect::<HashSet<_>>();
-        if !novel.is_empty() && !contigs.contains(&seq) {
-            covered.extend(novel); contigs.push(seq); added+=1;
-        }
-    }
-    added
-}

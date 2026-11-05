@@ -55,6 +55,4 @@ pub(super) fn ranked_candidates(seqs: Vec<Vec<u8>>, counts: Vec<usize>, n: usize
 // Keep the variant-specific evidence guard in a sibling source file
 // under the existing structural-linter limits.
 mod snv;
-pub(super) use snv::{supported_snv_alternative,append_only_to_spare_slots};
-
-#[cfg(test)] mod test_budget;
+pub(super) use snv::supported_snv_alternative;

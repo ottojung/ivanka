@@ -235,24 +235,97 @@ def _canonical_json(obj):
 def _assert_safety_metadata(report):
     if report.get("schema_version") != SCHEMA:
         raise ObservationExportError(f"Unsupported schema: {report.get('schema_version')}")
-    if report.get("modifies_micall_consensus") or report.get("safe_for_final_max_overwrite"):
-        raise ObservationExportError("Unsafe export claims it may modify final MAX")
-    if report.get("full_length_haplotype_phase_inferred") or not report.get("unphased"):
+    required_false = (
+        "modifies_micall_consensus", "modifies_final_max_sequence",
+        "safe_for_final_max_overwrite", "affects_198_acceptance",
+        "full_length_haplotype_phase_inferred",
+        "original_fragment_assigned_to_competing_haplotypes",
+        "haplotype_specific_depth_assigned",
+        "independent_physical_molecules_assigned", "missing_insert_bases_imputed",
+        "raw_qnames_included",
+    )
+    if any(report.get(field) is not False for field in required_false):
+        raise ObservationExportError("Unsafe or incomplete export safety metadata")
+    if (report.get("artifact_type") != "shared_unphased_observation_export"
+            or report.get("unphased") is not True
+            or report.get("phase_status") != "unidentified"):
         raise ObservationExportError("Export must be explicitly unphased")
-    if report.get("original_fragment_assigned_to_competing_haplotypes"):
-        raise ObservationExportError("Export assigns fragments to competing haplotypes")
-    if report.get("haplotype_specific_depth_assigned"):
-        raise ObservationExportError("Export assigns haplotype-specific depth")
-    if report.get("independent_physical_molecules_assigned"):
-        raise ObservationExportError("Export assigns independent physical molecules")
-    if report.get("raw_qnames_included"):
-        raise ObservationExportError("Export leaks raw QNAMEs")
     if type(report.get("minimum_phred_quality")) is not int or report["minimum_phred_quality"] < 15:
         raise ObservationExportError("Export quality below Q15")
 
 
-def verify_observation_export(report, *, require_fastq=False):
+def _bind_independent_sources(report, artifact_dir, screen_ledger, sample,
+                              expected_screen_sha256):
+    """Bind an otherwise self-describing report to trusted caller inputs.
+
+    The caller selects both the original MiCall directory and the separately
+    attested discovery/direct-link cohort ledger. JSON cannot select its own
+    trusted source root, sample, mask or expected source hashes.
+    """
+    root = Path(artifact_dir).resolve(strict=True)
+    if not root.is_dir():
+        raise ObservationExportError("Expected original MiCall result directory")
+    paths = report["source_paths"]
+    expected = {"final_conseq_csv": root / "conseq.csv",
+                "remap_conseq_csv": root / "remap_conseq.csv",
+                "remap_sam_csv": root / "scratch" / "remap.csv"}
+    for name, path in expected.items():
+        if (not path.is_file() or
+                Path(paths.get(name, "")).resolve() != path.resolve()):
+            raise ObservationExportError(f"Independent source path mismatch: {name}")
+    if not isinstance(sample, str) or not sample:
+        raise ObservationExportError("Missing independent sample identity")
+    if (not isinstance(expected_screen_sha256, str)
+            or len(expected_screen_sha256) != 64
+            or any(c not in "0123456789abcdef" for c in expected_screen_sha256)
+            or _sha256(screen_ledger) != expected_screen_sha256):
+        raise ObservationExportError("Independent cohort screen SHA256 is not externally pinned")
+    ledger = json.loads(Path(screen_ledger).read_text())
+    if ledger.get("schema_version") != "ivanka.shared_mask_direct_cohort_screen.v1":
+        raise ObservationExportError("Expected caller-supplied direct-link cohort ledger")
+    mask = report["mask_interval_zero_based_half_open"]
+    refs = report["shared_reference_membership"]["selected_reference_names"]
+    chosen = [item for item in ledger.get("records", [])
+              if item.get("sample") == sample
+              and item.get("region") == report["region"]
+              and item.get("mask_start") == mask["start"]
+              and item.get("mask_end") == mask["end"]
+              and item.get("selected_reference_names") == refs]
+    if len(chosen) != 1:
+        raise ObservationExportError("Independent ledger does not select this exact mask")
+    previous = chosen[0]["source_sha256"]
+    for name in expected:
+        key = "original_remap_sam_csv" if name == "remap_sam_csv" else name
+        if (previous.get(key) != report["source_checksums_sha256"].get(name)
+                or previous[key] != _sha256(expected[name])):
+            raise ObservationExportError(f"Independent source hash mismatch: {name}")
+    return _sha256(screen_ledger)
+
+
+def verify_observation_export(report, *, require_fastq=False,
+                              artifact_dir=None, screen_ledger=None, sample=None,
+                              expected_screen_sha256=None,
+                              original_fastq_r1=None, original_fastq_r2=None):
     _assert_safety_metadata(report)
+    binding = (artifact_dir, screen_ledger, sample, expected_screen_sha256)
+    if any(v is not None for v in binding) and not all(
+            v is not None for v in binding):
+        raise ObservationExportError("Require artifact directory, screen ledger and sample together")
+    independent_ledger_sha = (
+        _bind_independent_sources(report, artifact_dir, screen_ledger, sample,
+                                  expected_screen_sha256)
+        if artifact_dir is not None else None)
+    if (original_fastq_r1 is None) != (original_fastq_r2 is None):
+        raise ObservationExportError("Both external FASTQ mate paths required")
+    externally_bound_raw = False
+    if original_fastq_r1 is not None:
+        paths = report.get("source_paths") or {}
+        if not all(
+            Path(paths.get(name, "")).resolve() == Path(path).resolve(strict=True)
+            for name, path in (("original_fastq_r1", original_fastq_r1),
+                               ("original_fastq_r2", original_fastq_r2))):
+            raise ObservationExportError("External FASTQ source paths disagree with report")
+        externally_bound_raw = True
     paths = report.get("source_paths") or {}
     sums = report.get("source_checksums_sha256") or {}
     for key in ("final_conseq_csv", "remap_conseq_csv", "remap_sam_csv"):
@@ -312,10 +385,21 @@ def verify_observation_export(report, *, require_fastq=False):
         "haplotype_specific_depth_assigned": False,
         "independent_physical_molecules_assigned": False,
         "consumer_mode": "authenticated_recomputed",
+        "source_binding": ("caller_pinned_original_micall_and_cohort_screen"
+                           if independent_ledger_sha is not None
+                           else "self_declared_source_paths_not_trusted"),
+        "independent_cohort_screen_sha256": independent_ledger_sha,
+        "externally_bound_original_fastq_mates": externally_bound_raw,
+        "empirical_use_permitted": (
+            independent_ledger_sha is not None and externally_bound_raw and
+            fastq_claimed and require_fastq),
     }
 
 
-def consume_observations(path, *, authenticated=True, require_fastq=False):
+def consume_observations(path, *, authenticated=True, require_fastq=False,
+                         artifact_dir=None, screen_ledger=None, sample=None,
+                         expected_screen_sha256=None,
+                         original_fastq_r1=None, original_fastq_r2=None):
     report = json.loads(Path(path).read_text())
     _assert_safety_metadata(report)
     if not authenticated:
@@ -323,7 +407,12 @@ def consume_observations(path, *, authenticated=True, require_fastq=False):
         report["consumer_mode"] = "untrusted_parse_diagnostic_only"
         report["empirical_use_permitted"] = False
         return report
-    status = verify_observation_export(report, require_fastq=require_fastq)
+    status = verify_observation_export(
+        report, require_fastq=require_fastq, artifact_dir=artifact_dir,
+        screen_ledger=screen_ledger, sample=sample,
+        expected_screen_sha256=expected_screen_sha256,
+        original_fastq_r1=original_fastq_r1,
+        original_fastq_r2=original_fastq_r2)
     report = dict(report)
     report["verification_status"] = status
     report["consumer_mode"] = status["consumer_mode"]
@@ -368,6 +457,12 @@ def main(argv=None):
     vf = sub.add_parser("verify", help="Fail-closed authenticated verification")
     vf.add_argument("observation_json", type=Path)
     vf.add_argument("--require-fastq", action="store_true")
+    vf.add_argument("--artifact-dir", type=Path)
+    vf.add_argument("--screen-ledger", type=Path)
+    vf.add_argument("--screen-sha256")
+    vf.add_argument("--sample")
+    vf.add_argument("--original-fastq-r1", type=Path)
+    vf.add_argument("--original-fastq-r2", type=Path)
     vf.add_argument("--status-output", type=Path)
     args = p.parse_args(argv)
     try:
@@ -389,7 +484,12 @@ def main(argv=None):
             print(json.dumps(status, sort_keys=True))
         else:
             report = json.loads(args.observation_json.read_text())
-            status = verify_observation_export(report, require_fastq=args.require_fastq)
+            status = verify_observation_export(
+                report, require_fastq=args.require_fastq,
+                artifact_dir=args.artifact_dir, screen_ledger=args.screen_ledger,
+                sample=args.sample, expected_screen_sha256=args.screen_sha256,
+                original_fastq_r1=args.original_fastq_r1,
+                original_fastq_r2=args.original_fastq_r2)
             encoded = _canonical_json(status)
             if args.status_output:
                 dest = args.status_output.resolve()

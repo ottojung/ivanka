@@ -1,5 +1,5 @@
 """Guards for shared unphased observation export: no phase, no double-count, authenticated verification."""
-import csv, json, sys, tempfile, unittest
+import csv, hashlib, json, shutil, sys, tempfile, unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -56,6 +56,102 @@ class ExportGuardTests(unittest.TestCase):
             _safe_write(r, out, [Path(td)])
             loaded = consume_observations(out, authenticated=True)
             self.assertEqual(loaded["consumer_mode"], "authenticated_recomputed")
+
+    def independent_fixture(self, base):
+        masked, refs, rows = self.base()
+        root = Path(base) / "sample-A" / "ivanka"
+        root.mkdir(parents=True)
+        final, seeds, sam = write_synthetic(root, masked, refs, rows)
+        (root / "scratch").mkdir()
+        moved = root / "scratch" / "remap.csv"
+        sam.rename(moved)
+        report = export_observations(
+            final, seeds, moved, region="one", references=list(refs),
+            mask_start=100, mask_end=103, anchor=8)
+        shas = {name: hashlib.sha256(path.read_bytes()).hexdigest()
+                for name, path in (("final_conseq_csv", final),
+                                   ("remap_conseq_csv", seeds),
+                                   ("original_remap_sam_csv", moved))}
+        ledger = Path(base) / "direct-screen.json"
+        ledger.write_text(json.dumps({
+            "schema_version": "ivanka.shared_mask_direct_cohort_screen.v1",
+            "records": [{"sample": "sample-A", "region": "one",
+                         "mask_start": 100, "mask_end": 103,
+                         "selected_reference_names": list(refs),
+                         "source_sha256": shas}]}))
+        return root, ledger, report
+
+    def test_independent_original_artifact_and_screen_binding(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, ledger, report = self.independent_fixture(td)
+            status = verify_observation_export(
+                report, artifact_dir=root, screen_ledger=ledger, sample="sample-A",
+                expected_screen_sha256=hashlib.sha256(ledger.read_bytes()).hexdigest())
+            self.assertEqual(
+                status["source_binding"],
+                "caller_pinned_original_micall_and_cohort_screen")
+            self.assertIsNotNone(status["independent_cohort_screen_sha256"])
+            self.assertFalse(status["externally_bound_original_fastq_mates"])
+            self.assertFalse(status["empirical_use_permitted"])
+            status_self = verify_observation_export(report)
+            self.assertEqual(status_self["source_binding"],
+                             "self_declared_source_paths_not_trusted")
+            self.assertFalse(status_self["empirical_use_permitted"])
+
+    def test_wrong_externally_bound_artifact_fails_even_when_self_consistent(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, ledger, report = self.independent_fixture(td)
+            fake = Path(td) / "fake" / "ivanka"
+            shutil.copytree(root, fake)
+            report_from_fake = export_observations(
+                fake / "conseq.csv", fake / "remap_conseq.csv",
+                fake / "scratch" / "remap.csv",
+                region="one", references=["one", "two"],
+                mask_start=100, mask_end=103, anchor=8)
+            self.assertEqual(verify_observation_export(
+                report_from_fake)["consumer_mode"], "authenticated_recomputed")
+            with self.assertRaisesRegex(ObservationExportError, "Independent source path"):
+                verify_observation_export(
+                    report_from_fake, artifact_dir=root,
+                    screen_ledger=ledger, sample="sample-A",
+                    expected_screen_sha256=hashlib.sha256(ledger.read_bytes()).hexdigest())
+
+    def test_stale_or_wrong_independent_cohort_hash_and_sample_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, ledger, report = self.independent_fixture(td)
+            with self.assertRaisesRegex(ObservationExportError, "exact mask"):
+                verify_observation_export(
+                    report, artifact_dir=root, screen_ledger=ledger,
+                    sample="wrong-sample",
+                    expected_screen_sha256=hashlib.sha256(ledger.read_bytes()).hexdigest())
+            changed = json.loads(ledger.read_text())
+            changed["records"][0]["source_sha256"]["original_remap_sam_csv"] = "0" * 64
+            ledger.write_text(json.dumps(changed))
+            with self.assertRaisesRegex(ObservationExportError, "Independent source hash"):
+                verify_observation_export(
+                    report, artifact_dir=root, screen_ledger=ledger,
+                    sample="sample-A",
+                    expected_screen_sha256=hashlib.sha256(ledger.read_bytes()).hexdigest())
+
+    def test_externally_pinned_cohort_digest_cannot_be_forged_by_report(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, ledger, report = self.independent_fixture(td)
+            with self.assertRaisesRegex(ObservationExportError, "externally pinned"):
+                verify_observation_export(
+                    report, artifact_dir=root, screen_ledger=ledger,
+                    sample="sample-A", expected_screen_sha256="0" * 64)
+
+    def test_partial_external_bindings_fail_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, ledger, report = self.independent_fixture(td)
+            with self.assertRaisesRegex(ObservationExportError, "together"):
+                verify_observation_export(report, artifact_dir=root)
+            with self.assertRaisesRegex(ObservationExportError, "together"):
+                verify_observation_export(
+                    report, artifact_dir=root, screen_ledger=ledger)
+            with self.assertRaisesRegex(ObservationExportError, "Both external"):
+                verify_observation_export(
+                    report, original_fastq_r1=root / "fake_R1.fastq")
 
     def test_per_site_spectrum_preserves_minority_alleles(self):
         masked, refs = fixture()
@@ -127,6 +223,26 @@ class ExportGuardTests(unittest.TestCase):
             p = Path(outd) / "b.json"; p.write_text(json.dumps(bad))
             with self.assertRaisesRegex(ObservationExportError, "Unsafe"):
                 consume_observations(p, authenticated=False)
+
+    def test_unsafe_or_missing_metadata_rejected_even_in_untrusted_parse(self):
+        masked, refs, rows = self.base()
+        with tempfile.TemporaryDirectory() as td:
+            f, ss, sm = write_synthetic(td, masked, refs, rows)
+            original = export_observations(f, ss, sm, region="one",
+                                           references=list(refs),
+                                           mask_start=100, mask_end=103, anchor=8)
+            for key, value in (
+                ("modifies_final_max_sequence", True),
+                ("affects_198_acceptance", True),
+                ("missing_insert_bases_imputed", True),
+                ("full_length_haplotype_phase_inferred", True),
+                ("raw_qnames_included", True),
+                ("phase_status", "phased"),
+                ("modifies_final_max_sequence", None)):
+                changed = json.loads(json.dumps(original))
+                changed[key] = value
+                with self.assertRaises(ObservationExportError):
+                    verify_observation_export(changed)
 
     def test_refuses_write_inside_source(self):
         masked, refs, rows = self.base()

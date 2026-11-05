@@ -60,3 +60,60 @@ candidate MiCall image for genuine isolated S48/S12 end-to-end MiCall A/B was
 no 198/IVA/frozen benchmark was touched. Any future A/B must use an isolated
 derived image/workdir, keep final MAX/acceptance/gates unchanged, and require
 explicit approval before expensive cohort runs.
+
+## Independent trust anchor (required for empirical use)
+
+Recomputing observations from paths and SHA256 hashes stored **inside**
+a report only establishes internal consistency; an attacker can replace
+both a report and its self-declared sources. Such a verification returns
+`source_binding=self_declared_source_paths_not_trusted` and
+`empirical_use_permitted=false`.
+
+For an empirically authenticated observation, the caller must additionally
+provide **four independent values**, never taken from the report itself:
+the original MiCall artifact directory, the exact sample ID, a separately
+attested direct-mask cohort screen, and its previously known SHA256.
+If original FASTQ claims are relevant, the caller must also explicitly
+supply **both** expected original FASTQ mate paths and request
+`--require-fastq`. The verifier then fails closed unless:
+
+- Original `conseq.csv`, `remap_conseq.csv` and `scratch/remap.csv`
+  exist in the caller-selected original MiCall artifact directory.
+- The report points to those exact files, and their SHA256 hashes match
+  the independently pinned cohort screen's per-sample selected mask entry.
+- The exact region, zero-based mask endpoints, selected reference names,
+  and sample all match one unique entry in that independent screen.
+- The cohort screen itself has the expected externally supplied SHA256.
+- Original FASTQ paths are the same as the caller-provided R1/R2 and all
+  MiCall remap mates' sequence and Phred strings reauthenticate.
+- Deterministic recomputation reproduces the *entire* report, including
+  minority-allele observations and all safety metadata.
+
+For example, from this preserved 198 cohort (read-only):
+
+    python3 benchmarks/export_shared_unphased_observations.py verify PRIVATE/S48-shared-unphased.json \
+      --artifact-dir FROZEN_RUN/73090AMIDI-MidHCV_S48/ivanka \
+      --screen-ledger PRIVATE/frozen198-v2-direct-summary.json \
+      --screen-sha256 5d6caefe76cfee3ec368223482e2e36e91dd82d5ce92d52dc54b93eccda4c716 \
+      --sample 73090AMIDI-MidHCV_S48 \
+      --original-fastq-r1 ORIGINAL_S48_R1.fastq.gz \
+      --original-fastq-r2 ORIGINAL_S48_R2.fastq.gz \
+      --require-fastq --status-output PRIVATE/S48-source-bound-status.json
+
+The status is an authenticated, **unphased observation diagnostic**.
+`empirical_use_permitted=true` means the original data and selected
+diagnostic claim are source-bound; it does **not** authorize overwriting
+MiCall MAX, treating pooled coverage as haplotype-specific, or claiming
+independent physical DNA molecules. With incomplete external inputs,
+the verifier either rejects their inconsistent subset or explicitly
+marks empirical use as false.
+
+Independent S48 31-bp and S12 38-bp original source-bound verification
+statuses passed on November 5, 2026. Private status files:
+`/workspace/ivanka-lab/observation-sourcebound-20261105/`,
+with SHA256s:
+
+- S48: `4ba1ed7acc3756bd5d4cf07b3866a558cfa79b3278455b831a2b747f60147949`
+- S12: `6ec169785fe53188fe76934893af11100826ca136b957e3f24793973597567b4`
+
+The original frozen 198 results and IVA caches have not been modified.

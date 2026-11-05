@@ -4,7 +4,7 @@ This optional, **read-only** verifier checks the standalone Ivanka assembler's l
 
 ## Authentication and input contract
 
-The command requires four source inputs and four independently known SHA256 values: Ivanka's unphased SNV audit TSV, its exact ordinary FASTA, and the original R1/R2 FASTQs. Expected hashes must come from a trusted external ledger, not be derived from possibly modified input files. The verifier checks all four hashes before analysis.
+The command requires four source inputs and four independently known SHA256 values: Ivanka's unphased SNV audit TSV, its exact ordinary FASTA, and the original R1/R2 FASTQs. Expected hashes must come from a trusted external ledger, not be derived from possibly modified input files. The verifier checks all four hashes before analysis **and again after the read-pair scan**, rejecting inputs changed while measurements were collected. Original R1 and R2 must also be distinct files.
 
 The audit must carry the expected unphased, quality-unchecked, molecule-nonindependent v1 metadata. A candidate must match the exact FASTA parent index and length, original base at the zero-based offset, and 61-base context differing from that FASTA at exactly the center position. It refuses duplicate candidate reports, malformed reads, mismatched original paired IDs, duplicated read-pair identifiers, inconsistent mate designators, and incomplete FASTQ pairs.
 

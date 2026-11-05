@@ -173,6 +173,20 @@ class OriginalFastqSNVTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unequal original"):
             self.run_audit()
 
+    def test_rejects_identical_original_mate_path(self):
+        with self.assertRaisesRegex(ValueError, "distinct mate"):
+            audit(self.tsv, self.fasta, self.r1, self.r1,
+                  expected_hashes=dict(self.hashes,
+                                       original_r2=self.hashes["original_r1"]),
+                  min_pairs=1)
+
+    def test_rejects_impossible_novel_31mer_count(self):
+        self.tsv.write_text(self.tsv.read_text().replace(
+            "\t120\t7\t", "\t120\t32\t"))
+        self.refresh_hashes()
+        with self.assertRaises(ValueError):
+            self.run_audit()
+
     def test_threshold_and_source_protected_private_write(self):
         self.assertFalse(self.run_audit(min_pairs=2)["candidates"][0][
             "candidate_meets_local_q15_screen"])

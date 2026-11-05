@@ -20,6 +20,8 @@ def audit(audit_tsv, ordinary_fasta, original_r1, original_r2, *,
             or type(min_pairs) is not int or min_pairs < 1
             or type(max_pairs) is not int or not 1 <= max_pairs <= 50000):
         raise ValueError("Invalid research evidence constraints")
+    if Path(original_r1).resolve() == Path(original_r2).resolve():
+        raise ValueError("Original paired FASTQs must be distinct mate files")
     sources = {"audit_tsv": audit_tsv, "ordinary_fasta": ordinary_fasta,
                "original_r1": original_r1, "original_r2": original_r2}
     sha = {key: verify_source(path, expected_hashes[key])
@@ -36,6 +38,10 @@ def audit(audit_tsv, ordinary_fasta, original_r1, original_r2, *,
         pair_signatures.append((mate1[0], mate2[0]))
         for candidate, observed in zip(candidates, states):
             observed.append(observe_pair(candidate, mate1, mate2, min_phred))
+    # Recheck all input bytes after scanning: never attest a source that
+    # changed between initial digest and direct Q15 observations.
+    for key, path in sources.items():
+        verify_source(path, sha[key])
     report = {
         "schema_version": "ivanka.unphased_snv_original_fastq_q15.v1",
         "source_sha256": sha,

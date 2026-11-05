@@ -106,7 +106,7 @@ def bound_candidates(tsv, fasta):
                 or context[30] != alt
                 or context[31:] != original[pos+1:pos+31]
                 or int(row["assembling_read_record_support"]) < 50
-                or int(row["novel_sampled_31mers_ge5"]) < 3):
+                or not 3 <= int(row["novel_sampled_31mers_ge5"]) <= 31):
             raise ValueError("SNV does not match original FASTA local context")
         marker = (parent_index, pos, alt)
         if marker in observed:

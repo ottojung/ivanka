@@ -10,3 +10,4 @@ pub(super) use input::fasta_seeds;
 pub(super) use types::Reads;
 #[cfg(test)] mod test_input;
 #[cfg(test)] mod test_overhang;
+pub(super) use fastq::load_phase_qualities_if_optin;

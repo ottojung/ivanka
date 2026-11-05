@@ -2,11 +2,11 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 use std::time::Instant;
-use super::reads::{K, fasta_seeds, Reads};
+use super::reads::{K, fasta_seeds, Reads,load_phase_qualities_if_optin};
 use super::extension::extend;
 use super::ranking::select_supported_contigs;
 use super::setup::{parse, balanced_seed_candidates};
-use super::run_seed::{assemble_candidates,rescue_short,append_preserving_diversity};
+use super::run_seed::{assemble_candidates,rescue_short,append_preserving_diversity,apply};
 
 pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
     let (a,b,out,max,max_pairs,seeds_path)=parse().map_err(io::Error::other)?;
@@ -40,12 +40,13 @@ pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
         // otherwise withhold the rescue to avoid losing distinct evidence.
         append_preserving_diversity(&mut contigs,rescue,max,protected_seed_count);
     }
+    if let Some(q)=load_phase_qualities_if_optin(&a,&b,max_pairs,&reads.seqs)? {
+        if q.len()!=reads.seqs.len() {return Err(io::Error::other("phase quality/sequence count mismatch").into());}contigs=apply(contigs,&reads.seqs,&q,max);
+    }
     let mut w=BufWriter::new(File::create(Path::new(&out))?);
     for (i,c) in contigs.iter().enumerate(){
         writeln!(w,">ivanka_{} len={}",i+1,c.len())?;
-        for line in c.chunks(80){w.write_all(line)?;
-            w.write_all(b"\n")?
-            ;}
+        for line in c.chunks(80){w.write_all(line)?;w.write_all(b"\n")?;}
     }
     w.flush()?;
     eprintln!("Ivanka wrote {} contigs in {:.1}s",contigs.len(),now.elapsed().as_secs_f64());

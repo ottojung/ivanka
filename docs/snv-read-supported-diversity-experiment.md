@@ -46,3 +46,69 @@ Experiment S12 cap-1000 FASTA SHA256: `faddf4c15ec3e4963969d32dfbf1061c66fbe206c
 ## Safety and release blockers
 
 A contig that introduces new read-supported kmers can still steal alignment depth from another contig in MiCall. Before considering this experimental ranker for production, build an isolated candidate MiCall image with an explicitly pinned executable, run genuine paired S48/S12 **full** MiCall comparisons with identical original FASTQs and frozen IVA controls, preserve per-region Q15/MAX and minority-allele results, verify all original-pair placements and phase-marker retention, and measure timing inside each container. This is **not** a historical 198-sample requalification and does not justify beta readiness. Keep this change **draft** until safety is demonstrated.
+
+## Full original FASTQ, genuine MiCall A/B (follow-up, November 5, 2026)
+
+The earlier assembler-only comparison above was **not** sufficient to qualify
+biological results. We therefore tested the draft candidate with eight
+**separate genuine MiCall analyze runs** over complete original paired
+FASTQs for S48 and S12. Control was freshly rebuilt from main `2d98c33`;
+experimental binary was from this draft `de2f9f3`. Source binary SHA256s
+were `2e882e519df5631d4d7df97d16dae90b05e10ac424dd0a69ce32537695ee45ef`
+(control) and
+`f1e188581324d06f7606f330354e40c68bdf6d3f4a1b353397db537d1e4aa4c3`
+(experiment).
+
+Both isolated container image arms derive from the **identical frozen MiCall
+base** `bb22d7e58e795d06062b5e36644aeac03bd6a0137022395a801ec55da55a5d0d`;
+the Guix-host Rust binaries require a Guix glibc-2.41 ELF loader, so both
+images used the **same** isolated wrapper, loader and libraries. MiCall
+itself was otherwise unchanged. The **symmetric** 1,000-contig test applied
+the identical additional `--max-contigs 1000` argument to MiCall's
+Ivanka subprocess in *both* images; default 16 uses the original invocation.
+The original FASTQs were mounted read-only and IVA cache and frozen
+historical 198 results were not modified. Each arm completed normally
+within its 1,200-second experiment bound; timing is in-container monotonic
+seconds, not just Podman startup.
+
+| Sample | Contig cap | MiCall control / candidate time | Best final-MAX fixed 33-ref score (control / candidate) | Original strict paired QNAMEs reassigned to another source sequence | Matched Q15 minority allele observations falling from >=10 to below 10 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| S48 | 16 | 109.2s / 115.1s | 1021 / 1021 | 0 | 0 |
+| S12 | 16 | 232.8s / 231.0s | 1088 / 1088 | 0 | 0 |
+| S48 | 1000 | 143.6s / 148.6s | 957 / 957 | **2471** | **4** |
+| S12 | 1000 | 255.3s / 246.1s | 1094 / 1094 | **27** | **1** |
+
+The fixed 33-reference scoring panel was independently authenticated
+to SHA256
+`018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8`.
+At **16 contigs** both arms' `conseq.csv`, `nuc.csv` and strict original
+read-pair remap assignments are byte-for-byte identical: the draft
+algorithm appends nothing because there are **zero spare slots**.
+At **1,000 contigs**, actual MiCall S48 assembly retains 70 rather than
+69 source contigs, and S12 retains 61 rather than 53; scores are unchanged,
+while competing contigs reassign original paired-read evidence.
+
+S48's four diminished NS5b low-frequency A observations were
+11→8, 10→9, 10→9 and 11→9 at original genome positions 8313,
+8319, 8321 and 8326. S12 lost one A count 10→9 at position 9247.
+Total depth >=100 was not lost at a matched locus in either case, but
+that aggregate does **not** protect low-frequency alleles or establish
+independent physical molecules. S48 lost at least 10 original-pair
+assignments to eight earlier contig sequences; one newly retained
+sequence received 246 pairs, 242 reassigned from previous placements.
+No 1,000-cap experiment improved fixed-panel best alignment. These are
+experimental original MiCall remap assignments, not physical molecule
+counts or proven biological phase.
+
+**Decision:** DO NOT MERGE this experimental branch. The conservative
+original-allele-retention gate fails at larger caps, while the default
+cap has zero benefit. The next task is an *allele-aware or
+molecule-conserving MiCall remapping design* that can preserve evidence
+on competing contigs without fabricating independent DNA molecules.
+
+Private frozen-source/image/run ledger (not uploaded):
+`/workspace/ivanka-lab/snv-full-micall-ab-20261105/source_pinned_full_micall_ab_20261105.json`.
+SHA256 `6a6e02b6aa56ee17487e71369d6126763a936a9b4d87d4b2d107e26119ae06d1`.
+An independent read-only negative safety screening tool is being
+integrated separately in PR #173 so the **unsafe scientific experiment
+stays unmerged**.

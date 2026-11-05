@@ -1,5 +1,5 @@
-use super::ranking_score::ranked_candidates;
-use std::collections::HashSet;
+use super::ranking_score::{ranked_candidates,supported_snv_alternative,append_only_to_spare_slots};
+use std::collections::{HashMap,HashSet};
 use super::reads::rolling_canonical_kmers;
 use super::reads::{K, encode};
 
@@ -16,10 +16,14 @@ pub(super) fn canonical_kmer(seq:&[u8])->Option<u64> {
 }
 pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
                             n:usize, protected:usize)->Vec<Vec<u8>> {
+    select_supported_contigs_with_kmers(seqs,counts,n,protected,&HashMap::new())
+}
+pub(super) fn select_supported_contigs_with_kmers(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
+                            n:usize, protected:usize, sampled:&HashMap<u64,u32>)->Vec<Vec<u8>> {
     let candidates=ranked_candidates(seqs,counts,n,protected);
     // Use read support to prioritize assemblies and k-mer novelty to avoid
     // passing hundreds of near-identical contigs into MiCall's stitcher.
-    let mut retained=Vec::new();
+    let mut retained=Vec::new(); let mut retained_support=Vec::new();let mut variants=Vec::new();
     let mut represented=HashSet::new();
     let mut duplicates=0usize;
     let mut no_extension_support=0usize;
@@ -30,8 +34,7 @@ pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
             no_extension_support+=1;
             continue;
         }
-        let mut valid=0usize;
-        let mut shared=0usize;
+        let mut valid=0usize; let mut shared=0usize;
         for k in rolling_canonical_kmers(&seq) {
             valid+=1;
             if represented.contains(&k){shared+=1;}
@@ -42,14 +45,18 @@ pub(super) fn select_supported_contigs(seqs:Vec<Vec<u8>>, counts:Vec<usize>,
         // equal-length alternatives retain the normal haplotype-diversity rule.
         let longest=retained.iter().map(Vec::len).max().unwrap_or(0);
         let short_shadow=seq.len()*4<=longest*3 && shared*20>=valid*17;
+        let snv=supported_snv_alternative(&seq,support,&retained,&retained_support,
+                                            sampled,canonical_kmer);
         if !is_seed && valid>0 && (shared*20>=valid*19 || short_shadow) {
-            duplicates+=1;
+            if snv {variants.push(seq);} else {duplicates+=1;}
             continue;
         }
         for k in rolling_canonical_kmers(&seq) {represented.insert(k);}
         retained.push(seq);
+        retained_support.push(support);
     }
-    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={}",
-              retained.len(),duplicates,no_extension_support);
+    let appended=append_only_to_spare_slots(&mut retained,variants,n,&mut represented,canonical_kmer);
+    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={} snv_spare_slots={}",
+              retained.len(),duplicates,no_extension_support,appended);
     retained
 }

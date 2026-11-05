@@ -52,3 +52,30 @@ Private verification statuses are stored in
 as files ending \`.raw-verified.json\`. This authenticates the two selected
 source chains, not all 35 cohort candidates, and does not prove physical
 molecule independence or complete haplotype phase.
+
+## Complete seven-sample source provenance check
+
+The previously selected **35 candidate sidecars** derive from only **seven
+distinct original MiCall remap files**. For *each* of those samples, one v2
+sidecar was independently recomputed, and the entire original MiCall remap
+CSV was authenticated against the matching raw R1 and R2 FASTQs (correct
+mate, original nucleotides, and exact Phred quality strings). Every other
+candidate sidecar in the same sample was checked to pin that identical
+original remap-file SHA256; no duplicate per-candidate FASTQ scans were
+necessary.
+
+The seven samples each passed. This completes original FASTQ-source
+provenance for the input evidence used by all 35 mask diagnostics, not
+independent validation of each candidate's biological interpretation.
+The per-sample source-hash and provenance ledger is private:
+
+\`/workspace/ivanka-lab/mask-target-discovery-20261105/all35-raw-fastq-source-verification.json\`
+
+SHA256: 9a5167642ab233396093b357f5c50c855e3ac984c3376ccf4577112ba101fce2.
+
+**Important:** This does not change the fact that the pooled-depth CLI itself
+does not read FASTQs and explicitly sets its raw FASTQ provenance field
+to false. Verification is a separate authenticated artifact. Neither
+the source attestation nor the direct-pair signature distinctness implies
+independent original DNA molecules, absence of PCR duplication, or
+identifiable haplotypes.

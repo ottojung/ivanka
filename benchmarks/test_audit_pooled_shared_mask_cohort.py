@@ -22,6 +22,8 @@ class PooledMaskCohortTests(DirectCohortScreenTests):
             self.assertEqual(block["minimum_shared_base_distinct_pair_sequences"], 1)
             self.assertEqual(block["complete_shared_allele_original_pair_ids"], 1)
             self.assertTrue(block["every_site_meets_q15_original_pair_depth_threshold"])
+            self.assertTrue(block["complete_shared_block_meets_both_pair_and_sequence_thresholds"])
+            self.assertFalse(block["safe_to_assign_haplotype_specific_coverage"])
             self.assertEqual(len(block["per_site"]), 3)
             self.assertNotIn("private-qname", json.dumps(r))
 
@@ -29,6 +31,7 @@ class PooledMaskCohortTests(DirectCohortScreenTests):
         result = audit_cohort(self.ledger, self.cohort, depth=100)
         self.assertEqual(result["candidates_meeting_all_pooled_depth_guards"], 0)
         self.assertEqual(result["candidates_with_any_complete_shared_allele_pair"], 2)
+        self.assertEqual(result["candidates_meeting_full_block_pair_and_signature_depth"], 0)
 
     def test_quality_q14_cannot_count_toward_support(self):
         source = self.cohort / "S1" / "ivanka" / "scratch" / "remap.csv"

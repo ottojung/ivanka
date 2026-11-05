@@ -21,13 +21,13 @@ The private report records per-base original pair IDs, consistent distinct seque
 | Q15 pooled 100-read and 100-consistent-paired-sequence threshold at **every base** | 13 |
 | At least one base fails that diagnostic | 22 |
 | At least one original pair observes the entire shared allele | 34 |
-| At least 100 original pairs directly observe the entire shared block | 0 |
+| At least 100 original pairs **and** 100 distinct consistent paired sequences directly observe the complete shared block | 0 |
 
 Examples: S48's 20–35-base masks have weakest-site support of 119 but only 74–79 full-block original pairs. S12's 205-base mask has weakest-site support 77 and zero complete shared-block pairs. S11's 67–87-base masks have minimum 19 and only five complete-block pairs. S38 has minimum 127 but only 56–66 complete-block pairs. Thus even apparently sufficient per-site support cannot be called complete molecule or haplotype coverage.
 
-Private authenticated diagnostic: `/workspace/ivanka-lab/mask-target-discovery-20261105/frozen198-pooled-q15-audit-v2.json
+Private authenticated diagnostic: `/workspace/ivanka-lab/mask-target-discovery-20261105/frozen198-pooled-q15-fullblock-audit.json
 
-SHA256: 3a4026e1f0266b20759987e8832f76b1fee1ab74f138eb89903c5f75f4a5048d`. Do not upload private raw reads or reports to public GitHub.
+SHA256: 4b7b69fa41eae62cb85efc39ade6a691199bc9040135f650f742c8c8f1611462`. Do not upload private raw reads or reports to public GitHub.
 
 **Next:** Independently authenticate promising original remap evidence against original paired FASTQs and prototype a shared/unphased node that survives MiCall without multiplying reads or suppressing minority alleles. Validate single-sample full MiCall results before touching 198. Do not merge the experimental phase mask or splitter simply because this diagnostic is positive.
 

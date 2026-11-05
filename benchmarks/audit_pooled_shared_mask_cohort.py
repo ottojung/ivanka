@@ -16,7 +16,7 @@ from shared_block_consensus_candidate import audit_remap
 from discover_shared_mask_cohort import write_private
 
 
-def per_block(result):
+def per_block(result, depth):
     positions = result["positions"]
     full = result["complete_block_observations"]
     return {
@@ -35,6 +35,11 @@ def per_block(result):
         "complete_shared_allele_distinct_pair_sequences":
             full["distinct_pair_sequence_evidence"][
                 "shared_allele_distinct_pair_sequences"],
+        "complete_shared_block_meets_both_pair_and_sequence_thresholds": (
+            full["shared_allele_complete_read_pair_ids"] >= depth
+            and full["distinct_pair_sequence_evidence"][
+                "shared_allele_distinct_pair_sequences"] >= depth),
+        "safe_to_assign_haplotype_specific_coverage": False,
         "per_site": [
             {"site_zero_based": p["site"],
              "q15_shared_base_original_pair_ids": p["shared_base_qnames"],
@@ -81,7 +86,7 @@ def audit_cohort(discovery, cohort, *, depth=100):
                              required_depth=depth)
         if len(result["positions"]) != entry["mask_length"]:
             raise ValueError("Observed shared allele disagrees with mask")
-        records.append({**entry, "per_base_q15_pooled_support": per_block(result)})
+        records.append({**entry, "per_base_q15_pooled_support": per_block(result, depth)})
     if len(records) != provenance["candidate_count"]:
         raise ValueError("Lost selected candidate during pooled depth audit")
     return {
@@ -95,6 +100,10 @@ def audit_cohort(discovery, cohort, *, depth=100):
         "candidates_with_any_complete_shared_allele_pair": sum(
             r["per_base_q15_pooled_support"][
                 "complete_shared_allele_original_pair_ids"] > 0 for r in records),
+        "candidates_meeting_full_block_pair_and_signature_depth": sum(
+            r["per_base_q15_pooled_support"][
+                "complete_shared_block_meets_both_pair_and_sequence_thresholds"]
+            for r in records),
         "records": records,
         "raw_fastq_per_mate_provenance_authenticated": False,
         "long_range_haplotype_phase_inferred": False,

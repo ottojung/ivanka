@@ -53,10 +53,15 @@ def _id(header, mate):
 
 
 def audit_pairwise_phase(r1, r2, reference, positions, contigs,
-                         anchor=25, minimum_bridges=3, minimum_quality=15):
+                         anchor=25, minimum_bridges=3, minimum_quality=15,
+                         minimum_distinct_signatures=3):
     """No real haplotype labels are used: only original paired read observations."""
     if (len(positions) != 2 or positions[0] >= positions[1]
-            or anchor < 1 or minimum_bridges < 1 or minimum_quality < 0
+            or type(anchor) is not int or anchor < 1
+            or type(minimum_bridges) is not int or minimum_bridges < 1
+            or type(minimum_distinct_signatures) is not int
+            or minimum_distinct_signatures < 1
+            or type(minimum_quality) is not int or not 0 <= minimum_quality <= 60
             or positions[0] < anchor or positions[1] + anchor >= len(reference)):
         raise ValueError("Invalid phase sites or anchor geometry")
     spectrum, sig_observations = Counter(), defaultdict(set)
@@ -95,6 +100,11 @@ def audit_pairwise_phase(r1, r2, reference, positions, contigs,
         for pair, count in sorted(spectrum.items())
     ]
     total_direct = sum(spectrum.values())
+    qualified_events = {
+        phase for phase, count in spectrum.items()
+        if count >= minimum_bridges
+        and distinct[phase] >= minimum_distinct_signatures
+    }
     out = []
     for header, sequence in contigs:
         orientations = []
@@ -107,24 +117,35 @@ def audit_pairwise_phase(r1, r2, reference, positions, contigs,
             label, calls, status = None, (None, None), "unresolved_or_ambiguous"
         else:
             label, calls = orientations[0]
-            if total_direct < minimum_bridges:
+            if not qualified_events:
                 status = "not_identifiable_from_direct_pairs"
-            elif spectrum[calls] == 0:
-                status = "unsupported_by_observed_direct_pair_phase"
-            else:
+            elif calls in qualified_events:
                 status = "observed_direct_pair_phase"
+            elif spectrum[calls] > 0:
+                status = "weak_direct_pair_phase_observation"
+            else:
+                status = "unsupported_by_observed_direct_pair_phase"
         out.append({"contig": header, "orientation": label,
                     "allele_calls": list(calls), "classification": status,
-                    "supporting_original_pair_ids": spectrum[calls]})
+                    "supporting_original_pair_ids": spectrum[calls],
+                    "supporting_distinct_consistent_read_pair_sequences":
+                        distinct[calls],
+                    "may_delete_contig_based_on_this_classification": False})
     return {
         "original_pair_ids_read": pair_count,
         "original_pair_ids_sequencing_both_sites": total_direct,
         "phase_observations": phase_evidence,
         "minimum_direct_pair_ids_for_assessment": minimum_bridges,
+        "minimum_distinct_consistent_pair_sequences_for_assessment":
+            minimum_distinct_signatures,
+        "qualified_direct_pair_allele_combinations": [
+            list(event) for event in sorted(qualified_events)],
         "minimum_phred_per_exact_anchor_base": minimum_quality,
         "contigs": out,
         "independent_physical_molecules_inferred": False,
         "phase_beyond_two_selected_sites_inferred": False,
+        "absence_of_direct_support_never_proves_biological_absence": True,
+        "source_haplotype_phase_is_unknown": True,
         "interpretation": (
             "Counts of directly observed Q15-filtered original paired-read "
             "local anchors, not independent physical molecules. The absence "
@@ -143,6 +164,8 @@ def main():
     parser.add_argument("--sites", nargs=2, type=int, required=True)
     parser.add_argument("--anchor", type=int, default=25)
     parser.add_argument("--min-phred", type=int, default=15)
+    parser.add_argument("--min-direct-pairs", type=int, default=3)
+    parser.add_argument("--min-distinct-signatures", type=int, default=3)
     args = parser.parse_args()
     reference = fasta_records(args.reference_fasta)
     if len(reference) != 1:
@@ -150,7 +173,9 @@ def main():
     result = audit_pairwise_phase(
         args.r1, args.r2, reference[0][1], args.sites,
         fasta_records(args.assembled_fasta), args.anchor,
-        minimum_quality=args.min_phred)
+        minimum_bridges=args.min_direct_pairs,
+        minimum_quality=args.min_phred,
+        minimum_distinct_signatures=args.min_distinct_signatures)
     print(json.dumps(result, indent=2))
 
 

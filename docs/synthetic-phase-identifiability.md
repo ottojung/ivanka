@@ -87,3 +87,34 @@ proof of independent physical molecules. A useful assembler regression
 should preserve uncertainty when linkage is absent and may resolve
 phase only when genuine read-backed linkage exists. Do not translate
 these synthetic results into a clinical or physical 198-sample pass.
+
+## Conservative direct-phase support in the legacy FASTQ auditor (Nov 6)
+
+The read-only `benchmarks/read_backed_pair_phase.py` auditor historically
+classified a candidate two-site phase as `observed_direct_pair_phase` if
+**one** original read pair supported it, provided at least three original
+pairs *of any phase* covered both loci. That could misclassify a single
+sequencing-error-generated allele pair as positive evidence, especially when
+synthetic errors are deliberately introduced with all base qualities `'I'`.
+
+The auditor now requires two independent positive support floors
+for **that same candidate allele combination**: at least three original
+QNAME-pair observations (`--min-direct-pairs 3`) AND at least three
+distinct, consistently called original R1+R2 *sequence signatures*
+(`--min-distinct-signatures 3`). This still does **not** prove that
+those signatures are independent physical DNA molecules.
+Pairs with only subthreshold positive support are classified
+`weak_direct_pair_phase_observation`. When no phase satisfies both
+floors, all candidate phases are `not_identifiable_from_direct_pairs`.
+A candidate lacking direct support when other combinations qualify is a
+research-only `unsupported_by_observed_direct_pair_phase` warning, **never
+permission to delete a contig or proof of biological absence**.
+
+The deterministic 2,000-pair, seed-17 synthetic control with 0.2% injected
+errors, local sites 280 and 480, and 15-base flanks contains one erroneous
+CG link supported by one original pair and one distinct sequence signature,
+against the true CT/GA links. CG must remain `weak...`, not `observed...`.
+Repeating a single authentic read-pair sequence under eight different
+original QNAMEs does not provide the three distinct signatures needed.
+This is diagnostic only: no MiCall or assembler behavior, physical-molecule
+phase claim, 198-cohort benchmark, or clinical threshold changes.

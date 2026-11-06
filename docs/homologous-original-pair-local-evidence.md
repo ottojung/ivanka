@@ -34,3 +34,13 @@ Private source-hash-attested reports, on marceline-dev only:
 - S12: `/workspace/ivanka-lab/homologous-local-loci-20261105/S12-longest8-10000-v2.json`, SHA256 `1b3c4453f24334fced257dca7212191f4e6b7de26af4439b2785471f46f0e1b9`.
 
 The prototype must NOT feed this graph back into ordinary MiCall MAX or reinterpret shared observations as separate contig depth. The next requirement is a true assembler/stitcher consumer that preserves uncertainty and passes genuine isolated MiCall A/B, especially retaining previously supported minority alleles without introducing competing full-length mapping targets.
+
+## Evidence-consistency hardening (November 6, 2026)
+
+A local DNA motif and its reverse complement can have identical flanks while implying **different central alleles**. The locus-group index now rejects that group outright, rather than silently assigning whichever allele was indexed last. A dedicated strand-symmetric synthetic counterexample exercises this case.
+
+Distinct paired-read *sequence signatures* on a direct two-locus link now count only if **every** original QNAME with that identical R1+R2 sequence has the same complete directly observed allele combination. Previously, a matching sequence observed at one locus but missing or quality-failing at another could be omitted from the distinct-signature check. It now vetoes the signature as incomplete. Contradictory allele pairs also veto the signature. Original QNAME counts remain separate from distinct sequence signatures; neither is a physical DNA molecule count.
+
+New unit tests exercise partial duplicate signatures, inconsistent duplicate alleles, missing transitive A-C links, and source-contig-independent group evidence. A known-truth all-Q14 FASTQ negative control also produces no qualified group variants or links. With original source SHA256s checked before and after, authentic S48/S12 longest-eight / first-10,000-pair reports remain **byte-identical** to the previous v2 reports. Their private v3 SHA256s remain respectively `be75d01e3d55589b1f2847a40767681888fb2cd750c61a2befd34a65812aa343` and `1b3c4453f24334fced257dca7212191f4e6b7de26af4439b2785471f46f0e1b9`.
+
+These are correctness checks for an *experimental, read-only* locus evidence representation. No claim of improved MiCall consensus, assembly quality, independent molecules, or beta qualification is made.

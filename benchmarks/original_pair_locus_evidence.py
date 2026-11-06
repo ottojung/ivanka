@@ -2,6 +2,8 @@
 from collections import Counter, defaultdict
 from itertools import combinations
 
+from original_pair_locus_links import count_direct_links
+
 from original_pair_phase_calls import pair_q15_calls
 from original_pair_locus_groups import locus_groups
 from snv_q15_fastq import iter_original_pairs
@@ -44,22 +46,7 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
                 variants.append(gid)
         per_contig.append((header, sites))
     unique_groups = set(variants)
-    pair_counts = defaultdict(Counter)
-    signatures = defaultdict(lambda: defaultdict(set))
-    for signature, calls in records:
-        observed = sorted((gid, allele) for gid, allele in calls.items()
-                          if gid in unique_groups)
-        for (a, abase), (b, bbase) in combinations(observed, 2):
-            if a == b:
-                continue
-            event = (abase, bbase)
-            pair_counts[a,b][event] += 1
-            signatures[a,b][signature].add(event)
-    unique_counts = {}
-    for edge, by_signature in signatures.items():
-        unique_counts[edge] = Counter(
-            next(iter(events)) for events in by_signature.values()
-            if len(events) == 1)
+    pair_counts, unique_counts = count_direct_links(records, unique_groups)
     # Report original read counts exactly ONCE per local equivalence group,
     # never in each competing full-length contig record.
     shared_loci = [

@@ -28,6 +28,7 @@ def locus_groups(contigs, *, long_flank=15, short_flank=7):
                 if max(Counter(ci for ci, _, _ in sites).values()) > 1}
     owners = defaultdict(set)
     tokens = {}
+    ambiguous_alleles = set()
     for gi, key in enumerate(keys):
         left, right = key[0][-short_flank:], key[1][:short_flank]
         contexts = set()
@@ -37,9 +38,14 @@ def locus_groups(contigs, *, long_flank=15, short_flank=7):
                 owners[token].add(gi)
                 contexts.add((token, allele))
         tokens[gi] = contexts
+        by_word = defaultdict(set)
+        for word, allele in contexts:
+            by_word[word].add(allele)
+        if any(len(alleles) != 1 for alleles in by_word.values()):
+            ambiguous_alleles.add(gi)
     viable = {}
     for gi, key in enumerate(keys):
-        if (key not in repeated and all(
+        if (key not in repeated and gi not in ambiguous_alleles and all(
                 owners[word] == {gi} for word, _ in tokens[gi])):
             viable[gi] = key
     index = {}

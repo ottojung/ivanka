@@ -1,4 +1,5 @@
 """Unphased homologous-locus groups never duplicate original paired reads."""
+import gzip
 import hashlib
 import tempfile
 import unittest
@@ -88,6 +89,39 @@ class HomologousOriginalPairLocusTests(unittest.TestCase):
         index,_,groups,_=locus_groups([("a",first),("b",other)])
         self.assertEqual(len(index),0)
         self.assertEqual(len(groups),0)
+
+    def test_strand_symmetric_short_context_cannot_choose_arbitrary_allele(self):
+        # A short motif can be its own opposite orientation with a
+        # *different central allele*: e.g. AAAAAAACTTTTTTT is the RC of
+        # AAAAAAAGTTTTTTT. A one-group owner is not sufficient.
+        sequence = "GGCACGTA" + "AAAAAAA" + "C" + "TTTTTTT" + "CGTCGACG"
+        index, memberships, groups, scope = locus_groups(
+            [("symmetric-allele", sequence)])
+        self.assertEqual(index, {})
+        self.assertEqual(memberships, {})
+        self.assertEqual(groups, {})
+        self.assertEqual(scope["admissible_unique_locus_groups"], 0)
+
+    def test_q14_original_reads_do_not_supply_local_allele_or_pair_links(self):
+        source = self.root / "linked"
+        altered = self.root / "all-q14"
+        altered.mkdir()
+        for mate in (1, 2):
+            name = f"synthetic_R{mate}.fastq.gz"
+            with gzip.open(source/name, "rt") as stream:
+                original = stream.read().splitlines()
+            for index in range(3, len(original), 4):
+                original[index] = "/" * len(original[index])
+            with gzip.open(altered/name, "wt") as stream:
+                stream.write("\n".join(original) + "\n")
+        results = evaluate_loci(
+            self.records(self.linked),
+            altered/"synthetic_R1.fastq.gz",
+            altered/"synthetic_R2.fastq.gz",
+            max_pairs=1000, max_contigs=3)
+        self.assertEqual(results["unique_local_variant_groups_screened"], 0)
+        self.assertEqual(results["unique_shared_locus_evidence"], [])
+        self.assertEqual(results["unique_direct_original_pair_link_evidence"], [])
 
     def test_source_hash_binding_and_invalid_parameter_guards(self):
         truth=self.linked

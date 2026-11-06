@@ -105,3 +105,26 @@ reference. The 3+3 threshold is an exploratory guard, *not* a measured
 clinical false-discovery rate. No 198-sample PSI, exact-copy PCR history,
 whole-MiCall runtime, or assembler alignment improvement has been tested by
 this tool. It must not be used by Ivanka to delete competing contigs.
+
+## Generator truth now reports both bridge geometries
+
+The synthetic generator's existing
+`read_pairs_directly_observing_both_variants` field retains its original
+**base-level** meaning for the exact observational-equivalence theorem. It
+now ALSO reports
+`read_pairs_covering_both_complete_31mer_contexts_before_errors`.
+This second field is a *pre-sequencing-error geometry count*: both 31-base
+contexts must fit fully within one original mate each (they may be in
+different mates of the same source read pair). It is **not** a Q15 read
+observation, a DNA molecule count, or a full-length phase certificate.
+
+A generator output flag
+`direct_context_count_is_geometry_not_verified_q15_evidence: true` records
+that distinction. Tests on deterministic 2,000-pair, no-error synthetic
+FASTQs confirm geometry and blinded actual Q15 counts agree exactly for
+the three representative site separations (280/400, 280/480, 280/900):
+0, 140 and 0 full-context paired observations versus 38, 189 and 0
+base-level bridges. With deliberately injected sequencing errors, the
+source-confirmed full-Q15-context count drops below geometric potential.
+This addition changes no synthetic FASTQ base, read identity or quality;
+it only makes the latent truth metadata less likely to be misinterpreted.

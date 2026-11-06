@@ -25,6 +25,20 @@ def observed(position, start, read_length, fragment_length):
             < start + fragment_length)
 
 
+def complete_context_observed(position, start, read_length,
+                              fragment_length, flank=15):
+    # The entire 31-mer must occur within ONE mate, not across the
+    # unsequenced insert or separately split between the mate ends.
+    if type(flank) is not int or flank < 0:
+        raise ValueError('Nonnegative full-context flank required')
+    first = (start <= position - flank and
+             position + flank < start + read_length)
+    second_start = start + fragment_length - read_length
+    second = (second_start <= position - flank and
+              position + flank < start + fragment_length)
+    return first or second
+
+
 def variant_truths(length, positions, randomizer):
     ancestor = "".join(randomizer.choice(DNA) for _ in range(length))
     alternatives = tuple(DNA[(DNA.index(ancestor[pos]) + 1) % 4]
@@ -81,6 +95,7 @@ def generate(directory, length=1400, read_length=100, fragment_length=300,
     coupled, decoupled, alleles = variant_truths(length, positions, randomizer)
     first_fastq, second_fastq = [], []
     bridges = 0
+    full_context_bridges_before_errors = 0
     alternative_explains = True
     alternate_hap_counts = [0, 0]
     for i in range(2 * pairs_per_haplotype):
@@ -89,6 +104,10 @@ def generate(directory, length=1400, read_length=100, fragment_length=300,
         seeing = tuple(observed(pos, start, read_length, fragment_length)
                        for pos in positions)
         bridges += int(all(seeing))
+        full_context_bridges_before_errors += int(all(
+            complete_context_observed(pos, start, read_length,
+                                      fragment_length, flank=15)
+            for pos in positions))
         alternative_hap = which ^ int(seeing[1])
         alternate_hap_counts[alternative_hap] += 1
         unaltered = paired_reads(coupled[which], start, read_length,
@@ -123,10 +142,16 @@ def generate(directory, length=1400, read_length=100, fragment_length=300,
         "phase_coupled_haplotypes": list(coupled),
         "phase_decoupled_haplotypes": list(decoupled),
         "read_pairs_directly_observing_both_variants": bridges,
+        "read_pairs_covering_both_complete_31mer_contexts_before_errors":
+            full_context_bridges_before_errors,
+        "direct_context_count_is_geometry_not_verified_q15_evidence": True,
         "decoupled_latent_haplotype_pair_counts": alternate_hap_counts,
         "alternative_phase_explains_identical_original_reads":
             alternative_explains,
         "interpretation": (
+            "The legacy bridge count is base-coordinate coverage; complete "
+            "31-mer geometry is reported separately and quality/errors "
+            "may reduce direct usable support. "
             "If no original pair observes both variants, opposite long-range "
             "phase assignments can explain exactly the same paired-end "
             "sequences. This does not prove which haplotypes are biological. "
@@ -152,6 +177,7 @@ def main():
                       args.variants, args.seed, args.error_rate)
     print(json.dumps({k: result[k] for k in (
         "original_qname_pairs", "read_pairs_directly_observing_both_variants",
+        "read_pairs_covering_both_complete_31mer_contexts_before_errors",
         "alternative_phase_explains_identical_original_reads")}, indent=2))
 
 

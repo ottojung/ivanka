@@ -6,6 +6,9 @@ from pathlib import Path
 
 from read_backed_pair_phase import audit_pairwise_phase
 from synthetic_phase_pairs import generate
+from snv_q15_fastq import iter_original_pairs
+from source_q15_phase_bridges import (
+    local_words, allele_at_pair)
 
 
 class OriginalPairPhaseTests(unittest.TestCase):
@@ -94,6 +97,80 @@ class OriginalPairPhaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Duplicate original"):
             audit_pairwise_phase(r1, r2, truth["phase_coupled_haplotypes"][0],
                                  (400, 600), [])
+
+    def test_single_erroneous_read_pair_cannot_certify_phase(self):
+        # Deterministic sequencing errors manufacture one apparent CG
+        # original pair, although only CT and GA generate this source.
+        sites=(280,480)
+        truth=generate(self.root/'erroneous',variants=sites,seed=17,
+                       pairs_per_haplotype=1000,error_rate=.002)
+        template=truth['phase_coupled_haplotypes'][0]
+        wrong=list(template)
+        wrong[sites[0]], wrong[sites[1]] = 'C', 'G'
+        wrong=''.join(wrong)
+        result=audit_pairwise_phase(
+            self.root/'erroneous/synthetic_R1.fastq.gz',
+            self.root/'erroneous/synthetic_R2.fastq.gz',
+            template,sites,[('spurious-CG',wrong),('true',template)],
+            anchor=15)
+        rows={x['contig']:x for x in result['contigs']}
+        self.assertEqual(rows['spurious-CG']['supporting_original_pair_ids'],1)
+        self.assertEqual(rows['spurious-CG'][
+            'supporting_distinct_consistent_read_pair_sequences'],1)
+        self.assertEqual(rows['spurious-CG']['classification'],
+                         'weak_direct_pair_phase_observation')
+        self.assertEqual(rows['true']['classification'],
+                         'observed_direct_pair_phase')
+        self.assertFalse(rows['spurious-CG'][
+            'may_delete_contig_based_on_this_classification'])
+        self.assertTrue(result[
+            'absence_of_direct_support_never_proves_biological_absence'])
+
+    def test_many_duplicate_pair_ids_do_not_make_independent_support(self):
+        sites=(280,480)
+        truth=generate(self.root/'normal',variants=sites,seed=17,
+                       pairs_per_haplotype=500,error_rate=0)
+        template=truth['phase_coupled_haplotypes'][0]
+        src=self.root/'normal'
+        words=[local_words(template,site) for site in sites]
+        suitable=None
+        for qname,a,b in iter_original_pairs(
+                src/'synthetic_R1.fastq.gz',
+                src/'synthetic_R2.fastq.gz',max_pairs=1100):
+            if all(allele_at_pair(a,b,w,15)==template[pos]
+                   for pos,w in zip(sites,words)):
+                suitable=(a,b)
+                break
+        self.assertIsNotNone(suitable)
+        repeat=self.root/'repeated'
+        repeat.mkdir()
+        for mate,source in enumerate(suitable,1):
+            with gzip.open(repeat/f'R{mate}.fq.gz','wt') as stream:
+                for i in range(8):
+                    seq,quality=source
+                    stream.write(
+                        f'@rep{i} {mate}:N:0:0\n{seq}\n+\n{quality}\n')
+        args=(repeat/'R1.fq.gz',repeat/'R2.fq.gz',
+              template,sites,[('truth',template)])
+        result=audit_pairwise_phase(*args,anchor=15)
+        row=result['contigs'][0]
+        self.assertEqual(row['supporting_original_pair_ids'],8)
+        self.assertEqual(row['supporting_distinct_consistent_read_pair_sequences'],1)
+        self.assertEqual(row['classification'],
+                         'not_identifiable_from_direct_pairs')
+        self.assertEqual(result['qualified_direct_pair_allele_combinations'],[])
+        explicit=audit_pairwise_phase(*args,anchor=15,
+                minimum_distinct_signatures=1)
+        self.assertEqual(explicit['contigs'][0]['classification'],
+                         'observed_direct_pair_phase')
+
+    def test_phase_threshold_must_be_positive_integer_not_boolean(self):
+        truth,r1,r2=self.experiment(pair_count=2)
+        for invalid in (0,-1,True,1.5):
+            with self.subTest(invalid=invalid),self.assertRaises(ValueError):
+                audit_pairwise_phase(
+                    r1,r2,truth['phase_coupled_haplotypes'][0],(400,600),[],
+                    minimum_distinct_signatures=invalid)
 
     def test_invalid_geometry_rejected(self):
         truth, r1, r2 = self.experiment(pair_count=2)

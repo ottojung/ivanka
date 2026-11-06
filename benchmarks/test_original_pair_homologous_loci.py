@@ -9,6 +9,8 @@ from original_pair_homologous_loci import source_bound
 from original_pair_locus_groups import locus_groups
 from original_pair_locus_evidence import evaluate_loci
 from synthetic_phase_pairs import generate
+from snv_q15_evidence import reverse_complement
+from original_pair_locus_orient import canonical_allele
 
 
 class HomologousOriginalPairLocusTests(unittest.TestCase):
@@ -71,6 +73,50 @@ class HomologousOriginalPairLocusTests(unittest.TestCase):
             len(copy["results"][0]["qualifying_locus_sites"]),2)
         self.assertNotIn("q15_original_pair_allele_counts",
                          str(copy["results"]))
+
+    def test_reverse_complement_source_must_not_multiply_evidence(self):
+        original = self.records(self.linked)
+        base = self.evaluate("linked", original)
+        reverse = self.evaluate(
+            "linked", original + [("reverse A", reverse_complement(
+                original[0][1]))])
+        self.assertEqual(base["unique_local_variant_groups_screened"], 2)
+        self.assertEqual(reverse["unique_local_variant_groups_screened"], 2)
+        self.assertEqual(base["unique_direct_original_pair_link_evidence"],
+                         reverse["unique_direct_original_pair_link_evidence"])
+        for left, right in zip(base["unique_shared_locus_evidence"],
+                               reverse["unique_shared_locus_evidence"]):
+            self.assertEqual(left["group_sha256"], right["group_sha256"])
+            self.assertEqual(left["q15_original_pair_allele_counts"],
+                             right["q15_original_pair_allele_counts"])
+            self.assertEqual(right["distinct_member_contigs"], 4)
+        rows = {row["contig"]: row for row in reverse["results"]}
+        self.assertEqual(rows["recombinant"]["tentative_conflict_positions"],
+                         [[280, 400]])
+        self.assertEqual(rows["reverse A"]["tentative_conflict_positions"], [])
+        for item in rows["reverse A"]["qualifying_locus_sites"]:
+            self.assertEqual(item["canonical_locus_base"], canonical_allele(
+                item["base"], item["reverse_complement_member"]))
+
+    def test_reversed_b_source_keeps_actual_phase_semantics(self):
+        records = self.records(self.linked)
+        reversed_b = ("reverse true B", reverse_complement(records[1][1]))
+        report = self.evaluate(
+            "linked", [records[0], reversed_b, records[2]])
+        rows = {row["contig"]: row for row in report["results"]}
+        self.assertEqual(report["unique_local_variant_groups_screened"], 2)
+        self.assertEqual(rows["reverse true B"]["tentative_conflict_positions"], [])
+        self.assertEqual(rows["recombinant"]["tentative_conflict_positions"],
+                         [[280, 400]])
+
+    def test_long_flank_strand_symmetric_central_base_is_unorientable(self):
+        left = "ACGTACGTACGTACG"
+        sequence = left + "C" + reverse_complement(left)
+        index, members, groups, scope = locus_groups([("ambiguous", sequence)])
+        self.assertEqual(index, {})
+        self.assertEqual(members, {})
+        self.assertEqual(groups, {})
+        self.assertEqual(scope["strand_symmetric_long_flank_sites_excluded"], 1)
 
     def test_unlinked_control_never_invents_a_bridge(self):
         report=self.evaluate("unlinked")

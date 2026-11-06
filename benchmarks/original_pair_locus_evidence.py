@@ -6,6 +6,7 @@ from original_pair_locus_links import count_direct_links
 
 from original_pair_phase_calls import pair_q15_calls
 from original_pair_locus_groups import locus_groups
+from original_pair_locus_orient import canonical_allele
 from snv_q15_fastq import iter_original_pairs
 
 
@@ -37,14 +38,18 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
     for ci, (header, seq) in enumerate(screened):
         sites = []
         for pos, base in enumerate(seq):
-            gid = positions.get((ci, pos))
+            assignment = positions.get((ci, pos))
+            if assignment is None:
+                continue
+            gid, reversed_strand = assignment
+            canon_base = canonical_allele(base, reversed_strand)
             counts = calls_by_group.get(gid, Counter())
-            if (gid is not None and counts[base] >= min_alleles
+            if (counts[canon_base] >= min_alleles
                     and any(counts[a] >= min_alleles for a in "ACGT"
-                            if a != base)):
-                sites.append((pos, gid, base))
+                            if a != canon_base)):
+                sites.append((pos, gid, canon_base))
                 variants.append(gid)
-        per_contig.append((header, sites))
+        per_contig.append((ci, header, seq, sites))
     unique_groups = set(variants)
     pair_counts, unique_counts = count_direct_links(records, unique_groups)
     # Report original read counts exactly ONCE per local equivalence group,
@@ -65,7 +70,7 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
          "independent_original_dna_molecules": False}
         for a,b in sorted(pair_counts)]
     results = []
-    for header, sites in per_contig:
+    for ci, header, seq, sites in per_contig:
         reports = []
         suspicious = []
         for (pa, ga, basea), (pb, gb, baseb) in combinations(sites, 2):
@@ -89,7 +94,8 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
                 "positions_zero_based": [pa,pb],
                 "equivalent_locus_group_sha256": [
                     groups[ga]["digest"], groups[gb]["digest"]],
-                "contig_alleles": [basea,baseb],
+                "contig_alleles": [seq[pa],seq[pb]],
+                "canonical_locus_alleles_for_direct_comparison": [basea,baseb],
                 "source_locus_evidence_is_global_not_per_contig": True,
                 "candidate_allele_observed_directly": counts[expected] > 0,
                 "other_direct_combination_exceeds_threshold":
@@ -105,7 +111,9 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
                  "equivalence_group_sha256": groups[gid]["digest"],
                  "group_member_contigs": len({
                      ci for ci,_,_ in groups[gid]["members"]}),
-                 "base": base,
+                 "base": seq[pos],
+                 "canonical_locus_base": base,
+                 "reverse_complement_member": positions[ci,pos][1],
                  "read_support_must_be_looked_up_once_in_shared_loci": True}
                 for pos,gid,base in sites],
             "direct_candidate_locus_pairs": reports,

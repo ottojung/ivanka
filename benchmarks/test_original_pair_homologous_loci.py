@@ -169,6 +169,32 @@ class HomologousOriginalPairLocusTests(unittest.TestCase):
         self.assertEqual(results["unique_shared_locus_evidence"], [])
         self.assertEqual(results["unique_direct_original_pair_link_evidence"], [])
 
+    def test_true_haplotypes_survive_multiple_linked_synthetic_seeds(self):
+        # Sensitivity is deliberately incomplete: a few valid bridges can
+        # be lost at the Q15/flank/signature floor. No absence is proof.
+        for seed in (4, 18, 19, 20, 39):
+            with self.subTest(seed=seed):
+                folder = self.root / f"linked-extra-{seed}"
+                truth = generate(folder, variants=(280, 400),
+                                 pairs_per_haplotype=500, seed=seed,
+                                 error_rate=0.002)
+                a, b = truth["phase_coupled_haplotypes"]
+                recombinant = list(a)
+                recombinant[400] = b[400]
+                sequences = [("truth A", a), ("truth B", b),
+                             ("recombinant", "".join(recombinant)),
+                             ("reverse truth A", reverse_complement(a))]
+                result = evaluate_loci(
+                    sequences, folder / "synthetic_R1.fastq.gz",
+                    folder / "synthetic_R2.fastq.gz",
+                    max_pairs=1000, max_contigs=4)
+                rows = {row["contig"]:row for row in result["results"]}
+                for name in ("truth A", "truth B", "reverse truth A"):
+                    self.assertEqual(rows[name]["tentative_conflict_positions"], [])
+                self.assertFalse(result["full_length_haplotype_phase_inferred"])
+                self.assertTrue(result[
+                    "original_pairs_not_multiplied_across_equivalent_contigs"])
+
     def test_source_hash_binding_and_invalid_parameter_guards(self):
         truth=self.linked
         records=self.records(truth)

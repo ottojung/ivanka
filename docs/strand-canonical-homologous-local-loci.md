@@ -37,3 +37,7 @@ Private authenticated artifacts on `marceline-dev`, not uploaded to public GitHu
 - `/workspace/ivanka-lab/oriented-homologous-loci-20261106/S12-longest8-10000.json` SHA256 `e12d83859897bd306236525f54e3d261028362de06580cacec29c3cd0b60be09`.
 
 Next requirement: typed graph consumer with local orientation, original-pair support counted once, and conservative unknown phase, followed by a derived MiCall single-sample A/B demonstrating retention of existing Q15 minority calls and a measurable alignment or runtime improvement. This experimental diagnostic is **not** an Ivanka beta release.
+
+## Additional synthetic-seed conservatism check
+
+The orientation-aware graph was also tested with five additional deterministic linked 1000-pair truth sets (seeds 4, 18, 19, 20, 39, same two variant coordinates and 0.2% base-error model) plus reverse-complement true haplotypes. Together with seed 17, **none of the six true generating haplotypes was falsely flagged** (nor the included reverse-complement truth). The deliberately recombinant candidate was flagged for **four of six seeds**, and remained unresolved for seeds 4 and 18. That is acceptable for this conservative diagnostic: an undetected recombinant is UNKNOWN, not certified valid. These synthetic controls are not evidence of clinically calibrated false-positive or true-positive rates.

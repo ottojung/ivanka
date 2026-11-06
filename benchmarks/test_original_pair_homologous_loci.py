@@ -1,6 +1,7 @@
 """Unphased homologous-locus groups never duplicate original paired reads."""
 import gzip
 import hashlib
+import random
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +10,8 @@ from original_pair_homologous_loci import source_bound
 from original_pair_locus_groups import locus_groups
 from original_pair_locus_evidence import evaluate_loci
 from synthetic_phase_pairs import generate
+from snv_q15_evidence import reverse_complement
+from original_pair_locus_orient import canonical_allele
 
 
 class HomologousOriginalPairLocusTests(unittest.TestCase):
@@ -72,6 +75,50 @@ class HomologousOriginalPairLocusTests(unittest.TestCase):
         self.assertNotIn("q15_original_pair_allele_counts",
                          str(copy["results"]))
 
+    def test_reverse_complement_source_must_not_multiply_evidence(self):
+        original = self.records(self.linked)
+        base = self.evaluate("linked", original)
+        reverse = self.evaluate(
+            "linked", original + [("reverse A", reverse_complement(
+                original[0][1]))])
+        self.assertEqual(base["unique_local_variant_groups_screened"], 2)
+        self.assertEqual(reverse["unique_local_variant_groups_screened"], 2)
+        self.assertEqual(base["unique_direct_original_pair_link_evidence"],
+                         reverse["unique_direct_original_pair_link_evidence"])
+        for left, right in zip(base["unique_shared_locus_evidence"],
+                               reverse["unique_shared_locus_evidence"]):
+            self.assertEqual(left["group_sha256"], right["group_sha256"])
+            self.assertEqual(left["q15_original_pair_allele_counts"],
+                             right["q15_original_pair_allele_counts"])
+            self.assertEqual(right["distinct_member_contigs"], 4)
+        rows = {row["contig"]: row for row in reverse["results"]}
+        self.assertEqual(rows["recombinant"]["tentative_conflict_positions"],
+                         [[280, 400]])
+        self.assertEqual(rows["reverse A"]["tentative_conflict_positions"], [])
+        for item in rows["reverse A"]["qualifying_locus_sites"]:
+            self.assertEqual(item["canonical_locus_base"], canonical_allele(
+                item["base"], item["reverse_complement_member"]))
+
+    def test_reversed_b_source_keeps_actual_phase_semantics(self):
+        records = self.records(self.linked)
+        reversed_b = ("reverse true B", reverse_complement(records[1][1]))
+        report = self.evaluate(
+            "linked", [records[0], reversed_b, records[2]])
+        rows = {row["contig"]: row for row in report["results"]}
+        self.assertEqual(report["unique_local_variant_groups_screened"], 2)
+        self.assertEqual(rows["reverse true B"]["tentative_conflict_positions"], [])
+        self.assertEqual(rows["recombinant"]["tentative_conflict_positions"],
+                         [[280, 400]])
+
+    def test_long_flank_strand_symmetric_central_base_is_unorientable(self):
+        left = "ACGTACGTACGTACG"
+        sequence = left + "C" + reverse_complement(left)
+        index, members, groups, scope = locus_groups([("ambiguous", sequence)])
+        self.assertEqual(index, {})
+        self.assertEqual(members, {})
+        self.assertEqual(groups, {})
+        self.assertEqual(scope["strand_symmetric_long_flank_sites_excluded"], 1)
+
     def test_unlinked_control_never_invents_a_bridge(self):
         report=self.evaluate("unlinked")
         self.assertEqual(report["unique_local_variant_groups_screened"],2)
@@ -122,6 +169,58 @@ class HomologousOriginalPairLocusTests(unittest.TestCase):
         self.assertEqual(results["unique_local_variant_groups_screened"], 0)
         self.assertEqual(results["unique_shared_locus_evidence"], [])
         self.assertEqual(results["unique_direct_original_pair_link_evidence"], [])
+
+    def test_duplicate_original_reads_do_not_inflate_local_variant_gate(self):
+        rng = random.Random(9407)
+        source = "".join(rng.choices("ACGT", k=121))
+        position = 60
+        alternative = next(base for base in "ACGT" if base != source[position])
+        changed = source[:position] + alternative + source[position+1:]
+        originals = [("first", source), ("alternative", changed)]
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            r1, r2 = folder/"R1.fastq", folder/"R2.fastq"
+            for unique in (False, True):
+                with r1.open("w") as a, r2.open("w") as b:
+                    for kind, seq in enumerate((source, changed)):
+                        for i in range(5):
+                            first = seq[position-7:position+8]
+                            suffix = "".join("ACGT"[(i >> (2*k)) & 3]
+                                             for k in range(4))
+                            second = "TGCATGCATGC" + (suffix if unique else "AAAA")
+                            for out, mate, word in ((a,1,first),(b,2,second)):
+                                out.write(f"@pair{kind}-{i}/{mate}\n{word}\n+\n"
+                                          + "I"*len(word) + "\n")
+                result = evaluate_loci(originals, r1, r2, max_pairs=10,
+                                       max_contigs=2, min_alleles=5)
+                self.assertEqual(result["unique_local_variant_groups_screened"],
+                                 1 if unique else 0)
+
+    def test_true_haplotypes_survive_multiple_linked_synthetic_seeds(self):
+        # Sensitivity is deliberately incomplete: a few valid bridges can
+        # be lost at the Q15/flank/signature floor. No absence is proof.
+        for seed in (4, 18, 19, 20, 39):
+            with self.subTest(seed=seed):
+                folder = self.root / f"linked-extra-{seed}"
+                truth = generate(folder, variants=(280, 400),
+                                 pairs_per_haplotype=500, seed=seed,
+                                 error_rate=0.002)
+                a, b = truth["phase_coupled_haplotypes"]
+                recombinant = list(a)
+                recombinant[400] = b[400]
+                sequences = [("truth A", a), ("truth B", b),
+                             ("recombinant", "".join(recombinant)),
+                             ("reverse truth A", reverse_complement(a))]
+                result = evaluate_loci(
+                    sequences, folder / "synthetic_R1.fastq.gz",
+                    folder / "synthetic_R2.fastq.gz",
+                    max_pairs=1000, max_contigs=4)
+                rows = {row["contig"]:row for row in result["results"]}
+                for name in ("truth A", "truth B", "reverse truth A"):
+                    self.assertEqual(rows[name]["tentative_conflict_positions"], [])
+                self.assertFalse(result["full_length_haplotype_phase_inferred"])
+                self.assertTrue(result[
+                    "original_pairs_not_multiplied_across_equivalent_contigs"])
 
     def test_source_hash_binding_and_invalid_parameter_guards(self):
         truth=self.linked

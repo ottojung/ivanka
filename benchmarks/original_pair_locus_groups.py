@@ -8,6 +8,7 @@ import hashlib
 from collections import Counter, defaultdict
 
 from snv_q15_evidence import reverse_complement
+from original_pair_locus_orient import canonical_flanks, canonical_allele
 
 
 def locus_groups(contigs, *, long_flank=15, short_flank=7):
@@ -15,17 +16,24 @@ def locus_groups(contigs, *, long_flank=15, short_flank=7):
             or not 5 <= short_flank < long_flank <= 50):
         raise ValueError("Expected strict short/long flank bounds")
     entries = defaultdict(list)
+    strand_symmetric = 0
     for ci, (_, seq) in enumerate(contigs):
         if not seq or set(seq) - set("ACGT"):
             raise ValueError("Only resolved A/C/G/T contigs may define groups")
         for pos in range(long_flank, len(seq)-long_flank):
-            key = (seq[pos-long_flank:pos],
-                   seq[pos+1:pos+long_flank+1])
-            entries[key].append((ci, pos, seq[pos]))
+            key, reversed_strand = canonical_flanks(
+                seq[pos-long_flank:pos],
+                seq[pos+1:pos+long_flank+1])
+            if key is None:
+                strand_symmetric += 1
+                continue
+            entries[key].append((ci, pos,
+                                 canonical_allele(seq[pos], reversed_strand),
+                                 reversed_strand))
     keys = sorted(entries)
     # One long-flank site per contig: within-contig repeats are unsafe.
     repeated = {key for key, sites in entries.items()
-                if max(Counter(ci for ci, _, _ in sites).values()) > 1}
+                if max(Counter(entry[0] for entry in sites).values()) > 1}
     owners = defaultdict(set)
     tokens = {}
     ambiguous_alleles = set()
@@ -54,14 +62,18 @@ def locus_groups(contigs, *, long_flank=15, short_flank=7):
     for gi, key in viable.items():
         for token, allele in tokens[gi]:
             index[token] = (gi, allele)
-        for ci, pos, base in entries[key]:
-            positions[ci, pos] = gi
+        for ci, pos, base, reversed_strand in entries[key]:
+            positions[ci, pos] = (gi, reversed_strand)
         groups[gi] = {
             "digest": hashlib.sha256((key[0]+"|"+key[1]).encode()).hexdigest(),
-            "members": tuple(entries[key]),
+            "members": tuple((ci, pos, base) for ci, pos, base, _ in entries[key]),
         }
     return index, positions, groups, {
         "long_flank": long_flank,
+        "orientation_canonicalized": True,
+        "strand_symmetric_long_flank_sites_excluded": strand_symmetric,
+        "reverse_complement_memberships": sum(
+            reverse for _, reverse in positions.values()),
         "short_flank": short_flank,
         "all_candidate_locus_groups": len(entries),
         "admissible_unique_locus_groups": len(viable),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate signed-power PSI and isolate all finite real zeros.
+"""Evaluate signed-power PSI, its real zeros, and its local minima.
 
 Read whitespace- or comma-separated finite p_i from standard input.  The
 constant n includes zero entries.  Requires only the Python standard library.
@@ -160,6 +160,60 @@ def compute(values, digits=9, precision=65):
         return psi, infinity, roots, False
 
 
+def local_minima(values, precision=65):
+    """Find finite local minima and minimizing limits at either end of R.
+
+    Returned (r, Psi(r)) pairs use Decimal for finite coordinates/values,
+    "+inf"/"-inf" for infinite coordinates or divergent limits, and "R"
+    when every real r minimizes a constant Psi. Infinite endpoints describe
+    infima approached along that tail, not attained values.
+    """
+    with localcontext() as ctx:
+        ctx.prec = precision
+        terms = grouped_terms(values)
+        n = Decimal(len(values))
+        derivative = [(lam, coefficient * lam) for lam, coefficient in terms
+                      if lam]
+        if not derivative:
+            return [("R", sum((coefficient for _, coefficient in terms),
+                              Decimal(0)) / n)]
+
+        tolerance = Decimal(10) ** (-(precision // 2))
+        stationary = roots_of_sum(derivative, tolerance)
+        # Between successive derivative zeros the sign is constant.
+        # The signs at both infinities come from the extreme exponential.
+        directions = [value_sign(derivative, Decimal("-Infinity"))]
+        for left, right in zip(stationary, stationary[1:]):
+            midpoint = (left + right) / 2
+            direction = value_sign(derivative, midpoint)
+            if direction == 0:
+                raise PrecisionError("cannot distinguish adjacent stationary points")
+            directions.append(direction)
+        directions.append(value_sign(derivative, Decimal("Infinity")))
+        if not stationary and directions[0] != directions[-1]:
+            raise PrecisionError("failed to isolate a stationary point")
+
+        def tail_value(positive):
+            lam, coefficient = terms[-1] if positive else terms[0]
+            grows = lam > 0 if positive else lam < 0
+            if grows:
+                return "+inf" if coefficient > 0 else "-inf"
+            return coefficient / n if lam == 0 else Decimal(0)
+
+        result = []
+        if directions[0] > 0:
+            result.append(("-inf", tail_value(False)))
+        for index, r in enumerate(stationary):
+            # Derivative zeros with no - to + transition are not minima.
+            if directions[index] < 0 and directions[index + 1] > 0:
+                value = sum((coefficient * (lam * r).exp()
+                             for lam, coefficient in terms), Decimal(0)) / n
+                result.append((r, value))
+        if directions[-1] < 0:
+            result.append(("+inf", tail_value(True)))
+        return result
+
+
 def format_decimal(value, digits):
     if not value:
         return "0"
@@ -193,6 +247,7 @@ def main(argv=None):
     try:
         numbers = values_from_stdin(sys.stdin)
         psi, infinity, roots, identically_zero = compute(numbers, args.digits, args.precision)
+        mins = local_minima(numbers, args.precision)
     except (ValueError, InvalidOperation) as exc:
         parser.error(str(exc))
     if args.json:
@@ -200,6 +255,12 @@ def main(argv=None):
             "psi": {key: json_decimal(value, args.digits) for key, value in psi.items()},
             "psi_at_positive_infinity": json_decimal(infinity, args.digits) if isinstance(infinity, Decimal) else infinity,
             "zeros": "R" if identically_zero else [json_decimal(x, args.digits) for x in roots],
+            "mins": [
+                {"r": json_decimal(r, args.digits) if isinstance(r, Decimal) else r,
+                 "psi": json_decimal(value, args.digits)
+                        if isinstance(value, Decimal) else value}
+                for r, value in mins
+            ],
         }
         print(json.dumps(output, ensure_ascii=True, allow_nan=False, indent="\t"))
     else:
@@ -217,6 +278,14 @@ def main(argv=None):
         else:
             zeros = ", ".join(human(format_decimal(x, args.digits)) for x in roots)
             print(label + "{ " + zeros + " }")
+        print("mins:")
+        for r, value in mins:
+            if r == "R":
+                print(f"  Ψ(r) = {human(format_decimal(value, args.digits))} (all r ∈ ℝ)")
+            else:
+                argument = format_decimal(r, args.digits) if isinstance(r, Decimal) else r
+                output = format_decimal(value, args.digits) if isinstance(value, Decimal) else value
+                print(f"  Ψ({human(argument)}) = {human(output)}")
     return 0
 
 

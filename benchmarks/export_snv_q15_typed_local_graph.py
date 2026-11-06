@@ -206,6 +206,84 @@ def _allele_node_id(parent_id, allele_kind):
     return f"{parent_id}::{allele_kind}"
 
 
+def _require_positive_edge_node(graph_nodes_by_id, edge, endpoint_key):
+    endpoint = edge.get(endpoint_key)
+    _require(isinstance(endpoint, str) and endpoint in graph_nodes_by_id,
+             f"supported edge endpoint missing from nodes: {endpoint_key}={endpoint!r}")
+    return endpoint
+
+
+def verify_typed_local_graph_integrity(graph):
+    """Fail closed on malformed emitted graphs.
+
+    This checks graph-shape invariants only; it does not replay FASTQs and does
+    not change MiCall/MAX/assembly behavior.
+    """
+    _require(isinstance(graph, dict), "graph must be an object")
+    _require(graph.get("schema_version") == GRAPH_SCHEMA, "graph schema mismatch")
+    nodes = graph.get("nodes")
+    edges = graph.get("edges")
+    unknown = graph.get("negative_unknown")
+    _require(isinstance(nodes, list), "graph nodes must be a list")
+    _require(isinstance(edges, list), "graph edges must be a list")
+    _require(isinstance(unknown, list), "graph negative_unknown must be a list")
+
+    nodes_by_id = {}
+    for node in nodes:
+        _require(isinstance(node, dict) and isinstance(node.get("id"), str),
+                 "graph node must have string id")
+        _require(node["id"] not in nodes_by_id, f"duplicate graph node id: {node['id']}")
+        nodes_by_id[node["id"]] = node
+
+    edge_ids = set()
+    emitted_supported = set()
+    for edge in edges:
+        _require(isinstance(edge, dict), "graph edge must be an object")
+        edge_id = edge.get("id")
+        _require(isinstance(edge_id, str), "graph edge id must be string")
+        _require(edge_id not in edge_ids, f"duplicate graph edge id: {edge_id}")
+        edge_ids.add(edge_id)
+        _require(edge.get("direct_local_link_supported") is True,
+                 "edges collection may contain only supported direct links")
+        _require(edge.get("transitive_link_imputed") is False
+                 and edge.get("transitive_inference_used") is False,
+                 "transitive edge emitted")
+        _require(edge.get("modifies_micall_final_max") is False
+                 and edge.get("changes_198_acceptance") is False,
+                 "edge must not claim MiCall/198 acceptance changes")
+        from_allele = _require_positive_edge_node(nodes_by_id, edge, "from")
+        to_allele = _require_positive_edge_node(nodes_by_id, edge, "to")
+        pair = edge.get("candidate_sites")
+        _require(isinstance(pair, list) and len(pair) == 2
+                 and all(isinstance(site, str) and site in nodes_by_id for site in pair),
+                 "supported edge candidate_sites must reference emitted nodes")
+        combo = edge.get("allele_combination")
+        _require(combo in DIRECT_ALT_COMBINATIONS, "supported edge has unknown allele combination")
+        emitted_supported.add((from_allele, to_allele, combo))
+
+    for item in unknown:
+        _require(isinstance(item, dict), "negative_unknown item must be object")
+        if item.get("transitive_link_imputed") is True:
+            raise GraphBuildError("negative_unknown cannot carry transitive link")
+        if item.get("kind") in ("withheld_for_unqualified_node", "insufficient_direct_support"):
+            combo = item.get("allele_combination")
+            key = (item.get("from"), item.get("to"), combo)
+            _require(key not in emitted_supported,
+                     "same allele combination cannot be both supported edge and negative_unknown")
+
+    safety = graph.get("safety")
+    _require(isinstance(safety, dict), "graph safety must be object")
+    _require(safety.get("affects_198_acceptance") is False,
+             "graph must not affect 198 acceptance")
+    _require(safety.get("transitive_inference_used") is False,
+             "graph safety cannot claim transitive inference")
+    _require(safety.get("full_length_haplotype_phase_claimed") is False,
+             "graph safety cannot claim full-length haplotype phase")
+    _require(safety.get("independent_physical_molecules_claimed") is False,
+             "graph safety cannot claim independent physical molecules")
+    return graph
+
+
 def build_typed_local_graph(*, sample, node_report, link_report,
                             node_report_sha256, link_report_sha256,
                             min_joint_pairs=None, min_consistent_signatures=None):
@@ -430,7 +508,7 @@ def build_typed_local_graph(*, sample, node_report, link_report,
             "fabrication, and no MiCall MAX/198/IVA/reference/gate changes."
         ),
     }
-    return graph
+    return verify_typed_local_graph_integrity(graph)
 
 
 def _private_write(path: Path, content: str, protected_roots):

@@ -276,6 +276,59 @@ class SNVQ15TypedLocalGraphTests(unittest.TestCase):
         self.assertFalse(aa['direct_local_link_supported'])
         self.assertEqual(aa['kind'], 'insufficient_direct_support')
 
+    def test_verify_integrity_rejects_supported_edge_missing_referenced_node(self):
+        node, link = self._synthetic_reports()
+        graph = graph_from(node, link)
+        self.assertTrue(graph['edges'])
+        supported_edge = copy.deepcopy(graph['edges'][0])
+        bad = copy.deepcopy(graph)
+        bad['nodes'] = [n for n in bad['nodes'] if n['id'] != supported_edge['from']]
+        with self.assertRaisesRegex(g.GraphBuildError, "supported edge endpoint missing from nodes"):
+            g.verify_typed_local_graph_integrity(bad)
+
+    def test_verify_integrity_rejects_supported_edge_missing_candidate_site_node(self):
+        node, link = self._synthetic_reports()
+        graph = graph_from(node, link)
+        supported_edge = copy.deepcopy(graph['edges'][0])
+        missing_site = supported_edge['candidate_sites'][0]
+        bad = copy.deepcopy(graph)
+        bad['nodes'] = [n for n in bad['nodes'] if n['id'] != missing_site]
+        with self.assertRaisesRegex(g.GraphBuildError, "candidate_sites must reference emitted nodes"):
+            g.verify_typed_local_graph_integrity(bad)
+
+    def test_verify_integrity_rejects_unsupported_or_transitive_edge_in_edges(self):
+        node, link = self._synthetic_reports()
+        graph = graph_from(node, link)
+        bad = copy.deepcopy(graph)
+        bad['edges'][0]['direct_local_link_supported'] = False
+        with self.assertRaisesRegex(g.GraphBuildError, "edges collection may contain only supported direct links"):
+            g.verify_typed_local_graph_integrity(bad)
+
+        bad = copy.deepcopy(graph)
+        bad['edges'][0]['transitive_link_imputed'] = True
+        with self.assertRaisesRegex(g.GraphBuildError, "transitive edge emitted"):
+            g.verify_typed_local_graph_integrity(bad)
+
+    def test_verify_integrity_rejects_same_allele_pair_as_edge_and_negative_unknown(self):
+        node, link = self._synthetic_reports()
+        graph = graph_from(node, link)
+        edge = copy.deepcopy(graph['edges'][0])
+        bad = copy.deepcopy(graph)
+        bad['negative_unknown'].append({
+            'kind': 'insufficient_direct_support',
+            'edge_id': edge['id'],
+            'candidate_sites': edge['candidate_sites'],
+            'from': edge['from'],
+            'to': edge['to'],
+            'allele_combination': edge['allele_combination'],
+            'observed_joint_original_pair_ids': edge['observed_joint_original_pair_ids'],
+            'observed_joint_distinct_consistent_pair_sequences': edge['observed_joint_distinct_consistent_pair_sequences'],
+            'direct_local_link_supported': False,
+            'transitive_link_imputed': False,
+        })
+        with self.assertRaisesRegex(g.GraphBuildError, "both supported edge and negative_unknown"):
+            g.verify_typed_local_graph_integrity(bad)
+
     def test_no_pcr_duplicate_independent_molecule_claim_and_no_full_length_fabrication(self):
         node, link = self._synthetic_reports()
         graph = graph_from(node, link)

@@ -97,6 +97,8 @@ class RollingCanonTest(unittest.TestCase):
         source = patched_source(Path(spec.origin).read_text())
         exec(compile(source, spec.origin, "exec"), ns)
         fast = ns["preserves_source_kmers"]
+        cached_map = ns["map_overlap"]
+        from micall.utils.referenceless_contig_with_aligner import map_overlap as raw_map
 
         def old(sources, stitched, k=31):
             represented = original_canonical(stitched, k)
@@ -119,8 +121,9 @@ class RollingCanonTest(unittest.TestCase):
         changed = list(pieces[1])
         changed[170] = next(b for b in "ACGT" if b != changed[170])
 
-        def run(veto, sequences):
+        def run(veto, sequences, mapper):
             ns["preserves_source_kmers"] = veto
+            ns["map_overlap"] = mapper
             contigs = [
                 ns["ContigWithAligner"](name=f"check_{i}", seq=s, reads_count=None)
                 for i, s in enumerate(sequences)
@@ -131,5 +134,14 @@ class RollingCanonTest(unittest.TestCase):
         cases = (pieces, [pieces[0], "".join(changed), pieces[2]],
                  [pieces[0], pieces[1], reverse_complement(pieces[2])])
         for case in cases:
-            self.assertEqual(run(old, case), run(fast, case))
-        self.assertLess(len(run(fast, pieces)), len(pieces))
+            self.assertEqual(run(old, case, raw_map), run(fast, case, cached_map))
+        self.assertLess(len(run(fast, pieces, cached_map)), len(pieces))
+        contig = ns["ContigWithAligner"](
+            name="cached_probe", seq=pieces[0], reads_count=None,
+        )
+        request = (contig, ns["SCORE_EPSILON"], "right", pieces[0][200:340])
+        expected = tuple(raw_map(*request))
+        before = ns["_overlap_coordinates"].cache_info().hits
+        self.assertEqual(tuple(cached_map(*request)), expected)
+        self.assertEqual(tuple(cached_map(*request)), expected)
+        self.assertEqual(ns["_overlap_coordinates"].cache_info().hits, before + 1)

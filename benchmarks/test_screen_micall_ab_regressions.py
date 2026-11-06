@@ -52,6 +52,21 @@ class MiCallRegressionScreenTests(unittest.TestCase):
         self.assertEqual(report["conservative_observed_regressions"][
             "original_read_pairs_reassigned_between_contigs"],1)
 
+    def test_unchanged_dna_but_changed_contig_labels_still_blocks_release(self):
+        fields=('region','q-cutoff','consensus-percent-cutoff','offset','sequence')
+        write_csv(self.c/'conseq.csv',fields,[{
+            'region':'renamed-HCV','q-cutoff':'15',
+            'consensus-percent-cutoff':'MAX','offset':'2',
+            'sequence':'ACGT'}])
+        report=assess(self.b,self.c)
+        self.assertTrue(report[
+            'identical_final_max_nucleotides_ignoring_region_offset'])
+        self.assertTrue(report[
+            'max_region_offset_changes_still_require_review'])
+        self.assertEqual(report['conservative_observed_regressions'][
+            'baseline_q15_max_sequences_changed'],1)
+        self.assertFalse(report['automatic_reconstruction_release_permitted'])
+
     def test_readonly_screen_does_not_make_an_unphased_call(self):
         report=assess(self.b,self.c)
         self.assertFalse(report["independent_physical_molecule_counts_verified"])

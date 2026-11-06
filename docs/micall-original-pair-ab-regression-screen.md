@@ -43,3 +43,31 @@ The original read-only private source-and-image ledger:
 SHA256 `6a6e02b6aa56ee17487e71369d6126763a936a9b4d87d4b2d107e26119ae06d1`.
 
 All eight MiCall runs completed within their 20-minute experimental bound. No input, IVA cache, frozen 198 outputs or production image changed. **Draft PR #172 is not safe to merge.** The next work is molecule-conserving, allele-aware remapping that preserves original evidence when competing candidate contigs coexist, followed by full S48/S12 end-to-end tests and phase safety checks.
+
+## Distinguish final-MAX nucleotide content from region/offset association (Nov 6)
+
+The original conservative screen compares `(region, offset, sequence)` for
+each Q15 final-MAX row. This deliberately detects context/placement changes,
+but its field `baseline_max_sequence_rows_lost` must **not** be interpreted
+as the number of lost *DNA sequences*: region renumbering or changed offsets
+can produce that difference without changing any MAX nucleotide content.
+
+The read-only diagnostic now reports both views separately:
+
+- `identical_q15_max_sequence_multiset`: the existing strict, context-aware
+  comparison, still used to block automatic release.
+- `identical_q15_max_nucleotide_multiset_ignoring_region_offset`: a
+  multiplicity-preserving comparison of MAX DNA sequences alone, without
+  claiming that their origin, genomic position, phase or molecule identity
+  has been established.
+- Explicit counts of nucleotide sequences lost/added and a flag indicating
+  that the DNA multiset is equal even though region/offset associations have
+  changed. **This flag does not clear any existing conservative failure.**
+
+On the private original Q15 S48/S12 cap-1000 restoration A/B, each sample has
+identical MAX DNA sequence multisets, but the strict screen still reports
+**17 S48** and **two S12** region/offset-sensitive changed rows and remains
+red. This prevents both a false claim of lost DNA sequences and an unsafe
+claim that changing an existing DNA sequence's placement is biologically
+irrelevant. Only a separately evidenced, correctly phased full MiCall
+assembly can satisfy the still-open Ivanka biological milestone.

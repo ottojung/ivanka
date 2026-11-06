@@ -35,6 +35,10 @@ def assess(baseline, candidate):
         "conservative_screen_status":(
             "negative_evidence_detected_manual_review_required"
             if failures else "no_screened_regression_detected_not_biological_clearance"),
+        "identical_final_max_nucleotides_ignoring_region_offset":
+            nucleotide["identical_q15_max_nucleotide_multiset_ignoring_region_offset"],
+        "max_region_offset_changes_still_require_review":
+            nucleotide["max_region_or_offset_associations_differ_but_nucleotides_equal"],
         "automatic_reconstruction_release_permitted":False,
         "full_length_haplotype_phase_verified":False,
         "independent_physical_molecule_counts_verified":False,

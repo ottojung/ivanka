@@ -3,6 +3,7 @@ from collections import Counter, defaultdict
 from itertools import combinations
 
 from original_pair_locus_links import count_direct_links
+from original_pair_locus_signatures import consistent_locus_signatures
 
 from original_pair_phase_calls import pair_q15_calls
 from original_pair_locus_groups import locus_groups
@@ -32,6 +33,7 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
         records.append(((mate1[0], mate2[0]), calls))
         for gid, allele in calls.items():
             calls_by_group[gid][allele] += 1
+    distinct_site_signatures = consistent_locus_signatures(records)
     screened = contigs[:max_contigs]
     variants = []
     per_contig = []
@@ -44,8 +46,11 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
             gid, reversed_strand = assignment
             canon_base = canonical_allele(base, reversed_strand)
             counts = calls_by_group.get(gid, Counter())
+            unique = distinct_site_signatures.get(gid, Counter())
             if (counts[canon_base] >= min_alleles
-                    and any(counts[a] >= min_alleles for a in "ACGT"
+                    and unique[canon_base] >= min_alleles
+                    and any(counts[a] >= min_alleles
+                            and unique[a] >= min_alleles for a in "ACGT"
                             if a != canon_base)):
                 sites.append((pos, gid, canon_base))
                 variants.append(gid)
@@ -58,7 +63,9 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
         {"group_sha256": groups[gid]["digest"],
          "distinct_member_contigs": len({
              ci for ci,_,_ in groups[gid]["members"]}),
-         "q15_original_pair_allele_counts": dict(calls_by_group[gid])}
+         "q15_original_pair_allele_counts": dict(calls_by_group[gid]),
+         "q15_distinct_consistent_paired_sequence_allele_counts":
+             dict(distinct_site_signatures[gid])}
         for gid in sorted(unique_groups)]
     direct_links = [
         {"locus_group_sha256": [groups[a]["digest"], groups[b]["digest"]],
@@ -121,7 +128,7 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
             "delete_or_filter_contig": False,
         })
     return {
-        "schema_version": "ivanka.original_pair_homologous_unphased_loci.v1",
+        "schema_version": "ivanka.original_pair_homologous_unphased_loci.v2",
         "source_contig_scope": scope,
         "original_read_pairs_scanned": len(records),
         "minimum_phred_each_observed_context_base": 15,
@@ -132,6 +139,7 @@ def evaluate_loci(contigs, r1, r2, *, max_pairs=1000, max_contigs=8,
         "unique_direct_original_pair_link_evidence": direct_links,
         "results": results,
         "original_pairs_not_multiplied_across_equivalent_contigs": True,
+        "minimum_site_depth_requires_consistent_distinct_paired_sequences": True,
         "full_length_haplotype_phase_inferred": False,
         "independent_physical_molecules_inferred": False,
         "may_modify_micall_max_or_fasta": False,

@@ -41,3 +41,16 @@ Next requirement: typed graph consumer with local orientation, original-pair sup
 ## Additional synthetic-seed conservatism check
 
 The orientation-aware graph was also tested with five additional deterministic linked 1000-pair truth sets (seeds 4, 18, 19, 20, 39, same two variant coordinates and 0.2% base-error model) plus reverse-complement true haplotypes. Together with seed 17, **none of the six true generating haplotypes was falsely flagged** (nor the included reverse-complement truth). The deliberately recombinant candidate was flagged for **four of six seeds**, and remained unresolved for seeds 4 and 18. That is acceptable for this conservative diagnostic: an undetected recombinant is UNKNOWN, not certified valid. These synthetic controls are not evidence of clinically calibrated false-positive or true-positive rates.
+
+## v2 single-locus duplicate-read conservatism
+
+The group-evidence report now uses schema `ivanka.original_pair_homologous_unphased_loci.v2`. A variant group is shortlisted only when *both* its original Q15 paired-ID count **and** its distinct consistently observed paired-sequence-signature count meet the configured local base-support floor for the candidate and at least one alternative allele. Every original QNAME with identical R1+R2 sequences must directly observe the *same nonmissing allele* or that paired-sequence signature is excluded at the locus. A replicated fragment cannot manufacture independent local variant evidence. No grouping method here proves independently sampled physical DNA molecules.
+
+A dedicated known-sequence test demonstrates that five original QNAMEs sharing one identical paired sequence per allele are insufficient to create a qualified local variant, while five distinct consistently observed paired sequences per allele meet the exploratory floor. Partial and contradictory duplicate sequences are rejected. This is in addition to the existing direct two-locus pair-signature safeguards.
+
+Replaying original independently SHA-pinned sources on November 6, 2026, 10,000 original read pairs per sample, the stricter schema retains S48's 24 qualifying groups and 165 raw directly co-observed group pairs; S12 retains 22 and 151. Two S12 tentative phase-conflict flags remain **non-actionable**. Private authenticated v2 reports:
+
+- `/workspace/ivanka-lab/oriented-homologous-loci-20261106/S48-longest8-10000-v2.json` SHA256 `4fc0650fc13320555db4624d88b1d2ba3952cbf154c0d76284aa086494028c22`.
+- `/workspace/ivanka-lab/oriented-homologous-loci-20261106/S12-longest8-10000-v2.json` SHA256 `491c696e32a78d98590a0d87c3369857c7181f463b1fd46130f67af3cf64d709`.
+
+This change is research-only and has **not** modified Ivanka Rust contig selection, MiCall, IVA or the frozen 198 results.

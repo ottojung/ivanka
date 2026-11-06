@@ -1,6 +1,7 @@
 """Unphased homologous-locus groups never duplicate original paired reads."""
 import gzip
 import hashlib
+import random
 import tempfile
 import unittest
 from pathlib import Path
@@ -168,6 +169,32 @@ class HomologousOriginalPairLocusTests(unittest.TestCase):
         self.assertEqual(results["unique_local_variant_groups_screened"], 0)
         self.assertEqual(results["unique_shared_locus_evidence"], [])
         self.assertEqual(results["unique_direct_original_pair_link_evidence"], [])
+
+    def test_duplicate_original_reads_do_not_inflate_local_variant_gate(self):
+        rng = random.Random(9407)
+        source = "".join(rng.choices("ACGT", k=121))
+        position = 60
+        alternative = next(base for base in "ACGT" if base != source[position])
+        changed = source[:position] + alternative + source[position+1:]
+        originals = [("first", source), ("alternative", changed)]
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            r1, r2 = folder/"R1.fastq", folder/"R2.fastq"
+            for unique in (False, True):
+                with r1.open("w") as a, r2.open("w") as b:
+                    for kind, seq in enumerate((source, changed)):
+                        for i in range(5):
+                            first = seq[position-7:position+8]
+                            suffix = "".join("ACGT"[(i >> (2*k)) & 3]
+                                             for k in range(4))
+                            second = "TGCATGCATGC" + (suffix if unique else "AAAA")
+                            for out, mate, word in ((a,1,first),(b,2,second)):
+                                out.write(f"@pair{kind}-{i}/{mate}\n{word}\n+\n"
+                                          + "I"*len(word) + "\n")
+                result = evaluate_loci(originals, r1, r2, max_pairs=10,
+                                       max_contigs=2, min_alleles=5)
+                self.assertEqual(result["unique_local_variant_groups_screened"],
+                                 1 if unique else 0)
 
     def test_true_haplotypes_survive_multiple_linked_synthetic_seeds(self):
         # Sensitivity is deliberately incomplete: a few valid bridges can

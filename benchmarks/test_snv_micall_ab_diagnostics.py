@@ -67,6 +67,46 @@ class SNVFullMicallABTests(unittest.TestCase):
         self.assertEqual(x["matched_loci_dropped_below_depth_100"],0)
         self.assertEqual(x["baseline_high_depth_loci_missing_candidate"],1)
 
+    def test_label_and_offset_only_changes_preserve_nucleotide_multiset(self):
+        modified=dict(self.conseq,region='renamed',offset='5')
+        self.write(self.candidate,[modified],self.loci)
+        report=compare(self.base,self.candidate)
+        self.assertFalse(report['identical_q15_max_sequence_multiset'])
+        self.assertTrue(report[
+            'identical_q15_max_nucleotide_multiset_ignoring_region_offset'])
+        self.assertEqual(report[
+            'baseline_max_nucleotide_sequences_lost_ignoring_region_offset'],0)
+        self.assertEqual(report[
+            'candidate_max_nucleotide_sequences_added_ignoring_region_offset'],0)
+        self.assertTrue(report[
+            'max_region_or_offset_associations_differ_but_nucleotides_equal'])
+        self.assertTrue(report[
+            'same_nucleotide_sequences_do_not_prove_placement_or_phase'])
+        self.assertEqual(report['baseline_max_sequence_rows_lost'],1)
+
+    def test_real_max_sequence_change_does_not_look_like_a_rename(self):
+        modified=dict(self.conseq,region='renamed',offset='5',sequence='ATG')
+        self.write(self.candidate,[modified],self.loci)
+        report=compare(self.base,self.candidate)
+        self.assertFalse(report[
+            'identical_q15_max_nucleotide_multiset_ignoring_region_offset'])
+        self.assertEqual(report[
+            'baseline_max_nucleotide_sequences_lost_ignoring_region_offset'],1)
+        self.assertEqual(report[
+            'candidate_max_nucleotide_sequences_added_ignoring_region_offset'],1)
+        self.assertFalse(report[
+            'max_region_or_offset_associations_differ_but_nucleotides_equal'])
+
+    def test_multiset_counts_cannot_be_reduced_to_set_membership(self):
+        before=[self.conseq,dict(self.conseq,region='duplicate')]
+        self.write(self.base,before,self.loci)
+        self.write(self.candidate,[self.conseq],self.loci)
+        report=compare(self.base,self.candidate)
+        self.assertFalse(report[
+            'identical_q15_max_nucleotide_multiset_ignoring_region_offset'])
+        self.assertEqual(report[
+            'baseline_max_nucleotide_sequences_lost_ignoring_region_offset'],1)
+
     def test_bool_depth_threshold_and_empty_q15_file_rejected(self):
         for bad in (True, 0, -1):
             with self.assertRaisesRegex(ValueError, "Positive integer"):

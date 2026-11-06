@@ -60,6 +60,13 @@ def compare(base,candidate, *, threshold=100, allele_floor=10):
                     for p in shared for allele in ("A","C","G","T"))
     totals=lambda xs:sum(xs[p]["coverage"] for p in xs)
     cb,cc=max_rows(base),max_rows(candidate)
+    def nucleotide_max(rows):
+        values=Counter()
+        for (_,_,sequence),count in rows.items():
+            values[sequence]+=count
+        return values
+    cb_sequences,cc_sequences=nucleotide_max(cb),nucleotide_max(cc)
+    same_nucleotides=cb_sequences==cc_sequences
     return {
         "schema_version":"ivanka.snv_micall_original_read_ab_diagnostic.v1",
         "base_conseq_sha256":sha256(base/"conseq.csv"),
@@ -69,6 +76,15 @@ def compare(base,candidate, *, threshold=100, allele_floor=10):
         "base_q15_max_sequences":sum(cb.values()),
         "candidate_q15_max_sequences":sum(cc.values()),
         "identical_q15_max_sequence_multiset":cb==cc,
+        "identical_q15_max_nucleotide_multiset_ignoring_region_offset":
+            same_nucleotides,
+        "baseline_max_nucleotide_sequences_lost_ignoring_region_offset":
+            sum((cb_sequences-cc_sequences).values()),
+        "candidate_max_nucleotide_sequences_added_ignoring_region_offset":
+            sum((cc_sequences-cb_sequences).values()),
+        "max_region_or_offset_associations_differ_but_nucleotides_equal":
+            same_nucleotides and cb!=cc,
+        "same_nucleotide_sequences_do_not_prove_placement_or_phase":True,
         "baseline_max_sequence_rows_lost":sum((cb-cc).values()),
         "candidate_max_sequence_rows_added":sum((cc-cb).values()),
         "matched_q15_nuc_loci":len(shared),

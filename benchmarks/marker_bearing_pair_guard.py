@@ -17,8 +17,14 @@ from pathlib import Path
 def load_refs(path):
     refs = {}
     with Path(path).open(newline="") as f:
-        for row in csv.DictReader(f):
-            refs[row["region"]] = row["sequence"].upper()
+        reader = csv.DictReader(f)
+        if tuple(reader.fieldnames or ()) != ("region", "sequence"):
+            raise ValueError("Unknown remap reference CSV format")
+        for row in reader:
+            name = row["region"]
+            if not name or not row["sequence"] or name in refs:
+                raise ValueError("Missing or duplicate remap reference")
+            refs[name] = row["sequence"].upper()
     return refs
 
 
@@ -47,29 +53,30 @@ def strict_pairs(remap_csv):
 
 
 def assess_safe_restorations(baseline_dir, candidate_dir):
-    baseline_dir = Path(baseline_dir)
-    candidate_dir = Path(candidate_dir)
-    b_refs = load_refs(baseline_dir / "scratch" / "remap_conseq.csv")
-    c_refs = load_refs(candidate_dir / "scratch" / "remap_conseq.csv")
-    b_pairs = strict_pairs(baseline_dir / "scratch" / "remap.csv")
-    c_pairs = strict_pairs(candidate_dir / "scratch" / "remap.csv")
-    moved = restorable = unsafe = 0
-    for qname in set(b_pairs) & set(c_pairs):
-        b_ref = b_pairs[qname][0]
-        c_ref = c_pairs[qname][0]
-        if b_ref == c_ref:
-            continue
-        moved += 1
-        if b_ref in c_refs and b_refs.get(b_ref) == c_refs.get(b_ref):
-            restorable += 1
-        else:
-            unsafe += 1
+    """Report exact sequence/mate-valid replay options, not mere name changes.
+
+    Even a valid byte-exact original-pair placement does NOT establish MiCall
+    Q15 or MAX correctness: those require an independent downstream A/B.
+    """
+    from sequence_exact_pair_restoration import project_original_pairs, rows_from_file
+    before = Path(baseline_dir) / "scratch"
+    after = Path(candidate_dir) / "scratch"
+    b = rows_from_file(before / "remap.csv")
+    e = rows_from_file(after / "remap.csv")
+    _,stats = project_original_pairs(
+        b, load_refs(before / "remap_conseq.csv"),
+        e, load_refs(after / "remap_conseq.csv"))
+    moved = stats.get("changed_reference_sequence",0)
+    restored = stats.get("restored_original_pairs",0)
     return {
-        "strict_pairs_compared": len(set(b_pairs) & set(c_pairs)),
+        "strict_pairs_compared": stats.get("already_same_reference_sequence",0)+moved,
         "moved_pairs": moved,
-        "restorable_to_identical_baseline_reference": restorable,
-        "unsafe_sequence_changed_or_missing_baseline_reference": unsafe,
+        "reference_label_changes_not_counted_as_biological_moves": True,
+        "restorable_to_identical_baseline_reference": restored,
+        "unsafe_sequence_changed_or_missing_baseline_reference": moved-restored,
+        "offline_q15_or_max_improvement_proven": False,
         "original_pairs_duplicated": 0,
         "restoration_applied": False,
-        "reason": "diagnostic_only_no_cross_contig_transplant",
+        "reason": "offline_diagnostic_does_not_mutate_original_data",
+        "breakdown":stats,
     }

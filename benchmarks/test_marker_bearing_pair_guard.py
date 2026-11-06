@@ -1,5 +1,5 @@
-import json
 import unittest
+from pathlib import Path
 from marker_bearing_pair_guard import assess_safe_restorations
 
 S48B = '/workspace/ivanka-lab/snv-full-micall-ab-20261105/outputs/pinned-wrapper-main-vs-snv-cap1000/73090AMIDI-MidHCV_S48/baseline'
@@ -8,18 +8,24 @@ S12B = '/workspace/ivanka-lab/snv-full-micall-ab-20261105/outputs/pinned-wrapper
 S12E = '/workspace/ivanka-lab/snv-full-micall-ab-20261105/outputs/pinned-wrapper-main-vs-snv-cap1000/73111AMIDI-MidHCV_S12/experimental'
 
 class T(unittest.TestCase):
-    def test_s48_moved_pairs_not_safely_restorable(self):
+    @unittest.skipUnless(Path(S48B).is_dir() and Path(S48E).is_dir(),
+                         'Private S48 original-data artifacts not in public CI')
+    def test_s48_original_pair_exact_sequence_match_recovery_is_diagnostic(self):
         r = assess_safe_restorations(S48B, S48E)
-        self.assertGreater(r['moved_pairs'], 2000)
+        self.assertEqual(r['moved_pairs'], 2471)
+        self.assertGreaterEqual(r['restorable_to_identical_baseline_reference'],2400)
         self.assertEqual(r['restoration_applied'], False)
         self.assertEqual(r['original_pairs_duplicated'], 0)
-        # Most moved pairs land on changed/new contig contexts; no transplant.
+        # Restoration is only an offline hypothetical; original source untouched.
         self.assertEqual(r['restorable_to_identical_baseline_reference'] + r['unsafe_sequence_changed_or_missing_baseline_reference'], r['moved_pairs'])
 
-    def test_s12_reports_moves(self):
+    @unittest.skipUnless(Path(S12B).is_dir() and Path(S12E).is_dir(),
+                         'Private S12 original-data artifacts not in public CI')
+    def test_s12_original_pair_exact_sequence_match_diagnostic(self):
         r = assess_safe_restorations(S12B, S12E)
         self.assertEqual(r['restoration_applied'], False)
         self.assertEqual(r['original_pairs_duplicated'], 0)
+        self.assertEqual(r['moved_pairs'],27)
 
 if __name__ == '__main__':
     unittest.main()

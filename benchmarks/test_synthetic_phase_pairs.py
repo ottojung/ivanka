@@ -5,7 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from synthetic_phase_pairs import generate, paired_reads, reverse_complement
+from synthetic_phase_pairs import (
+    generate, paired_reads, reverse_complement, complete_context_observed)
+from snv_q15_fastq import iter_original_pairs
+from source_q15_phase_bridges import direct_source_links
 
 
 class PhaseIdentifiabilityTests(unittest.TestCase):
@@ -90,6 +93,54 @@ class PhaseIdentifiabilityTests(unittest.TestCase):
             with self.subTest(kwargs=kwargs):
                 with self.assertRaises(ValueError):
                     generate(self.root / "bad", **kwargs)
+
+    def test_complete_31mer_coverage_is_not_base_coverage(self):
+        for positions, expected_base, expected_full in (
+            ((280,400),38,0),
+            ((280,480),189,140),
+            ((280,900),0,0),
+        ):
+            with self.subTest(positions=positions):
+                target=self.root/f'bridge-{positions[1]}'
+                truth=generate(target,variants=positions,
+                               pairs_per_haplotype=1000,seed=17,error_rate=0)
+                self.assertEqual(
+                    truth['read_pairs_directly_observing_both_variants'],
+                    expected_base)
+                self.assertEqual(
+                    truth['read_pairs_covering_both_complete_31mer_contexts_before_errors'],
+                    expected_full)
+                evidence=direct_source_links(
+                    truth['phase_coupled_haplotypes'][0],positions,
+                    iter_original_pairs(
+                        target/'synthetic_R1.fastq.gz',
+                        target/'synthetic_R2.fastq.gz',max_pairs=2100))
+                self.assertEqual(
+                    evidence['original_pairs_with_both_loci_observed'],
+                    expected_full)
+                self.assertTrue(truth[
+                    'direct_context_count_is_geometry_not_verified_q15_evidence'])
+
+    def test_sequencing_errors_can_reduce_full_context_support(self):
+        target=self.root/'errors'
+        truth=generate(target,variants=(280,480),pairs_per_haplotype=1000,
+                       seed=17,error_rate=0.002)
+        evidence=direct_source_links(truth['phase_coupled_haplotypes'][0],
+            (280,480),iter_original_pairs(
+                target/'synthetic_R1.fastq.gz',
+                target/'synthetic_R2.fastq.gz',max_pairs=2100))
+        self.assertGreater(
+            truth['read_pairs_covering_both_complete_31mer_contexts_before_errors'],
+            evidence['original_pairs_with_both_loci_observed'])
+        self.assertEqual(evidence['original_pairs_scanned'],2000)
+
+    def test_complete_context_must_fit_entirely_inside_one_mate(self):
+        self.assertTrue(complete_context_observed(245,200,100,300,15))
+        self.assertFalse(complete_context_observed(295,200,100,300,15))
+        self.assertTrue(complete_context_observed(445,200,100,300,15))
+        self.assertFalse(complete_context_observed(395,200,100,300,15))
+        with self.assertRaises(ValueError):
+            complete_context_observed(245,200,100,300,True)
 
     def test_explicit_mate_geometry_no_imputed_insert(self):
         seq="ACGT"*300

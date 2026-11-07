@@ -27,6 +27,7 @@ pub(super) fn write(
             contigs,
             supporting_counts,
             &reads.seqs,
+            &reads.quals,
         );
     let (mut contigs, audit) = if audit_path.is_some() {
         select_supported_contigs_with_kmers(

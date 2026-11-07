@@ -53,6 +53,7 @@ pub(super) fn assemble_candidates(candidates:Vec<(u64,u32)>, reads:&Reads, conti
     }
     eprintln!("Ivanka supplementary high-depth seeds produced {} novel contigs",rescued);
 }
+pub(crate) mod phase_veto;
 mod rescue;
 mod rescue_rank;
 pub(super) use rescue::rescue_short;

@@ -22,7 +22,7 @@ fn bounded_left_reverse_complement_matches_full_contig() {
         reads_seq.push(b"N".repeat(180));
         reads_seq.push(b"N".repeat(180));
         let max_read_len=reads_seq.iter().map(Vec::len).max().unwrap();
-        let reads=Reads{index:build_index(&reads_seq),seqs:reads_seq,
+        let reads=Reads{index:build_index(&reads_seq),quals:reads_seq.iter().map(|s|vec![b'I';s.len()]).collect(),seqs:reads_seq,
             max_read_len,seed_counts:Default::default(),
             overhang_cache:Default::default(),overlength_rejections:Default::default()};
         let short=rc(&contig[..contig.len().min(reads.max_read_len)]);

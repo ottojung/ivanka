@@ -28,6 +28,7 @@ fn bounded_left_reverse_complement_matches_full_contig() {
         let max_read_len = reads_seq.iter().map(Vec::len).max().unwrap();
         let reads = Reads {
             index: build_index(&reads_seq),
+            quals: reads_seq.iter().map(|s| vec![b'I'; s.len()]).collect(),
             seqs: reads_seq,
             max_read_len,
             seed_counts: Default::default(),

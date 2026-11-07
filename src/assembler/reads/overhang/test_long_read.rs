@@ -13,6 +13,7 @@ fn long_read_extends_across_ambiguous_suffix_without_losing_its_anchor() {
     let seqs = vec![read.clone(), rc(&read)];
     let reads = Reads {
         index: build_index(&seqs),
+        quals: seqs.iter().map(|s| vec![b'I'; s.len()]).collect(),
         seqs,
         max_read_len: read.len(),
         seed_counts: HashMap::new(),

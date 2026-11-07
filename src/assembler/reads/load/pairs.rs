@@ -10,6 +10,7 @@ pub(super) fn parse_pairs(
     let mut r1 = FastqSeqReader::new(read_open(fq1)?);
     let mut r2 = FastqSeqReader::new(read_open(fq2)?);
     let mut seqs = Vec::new();
+    let mut quals = Vec::new();
     let mut seed_counts = HashMap::new();
     let mut pairs = 0usize;
     loop {
@@ -18,7 +19,7 @@ pub(super) fn parse_pairs(
         }
         let (a, b) = (r1.read_seq()?, r2.read_seq()?);
         let mismatch = a.is_some() != b.is_some();
-        let (Some(a), Some(b)) = (a, b) else {
+        let (Some((a, aq)), Some((b, bq))) = (a, b) else {
             if mismatch {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -33,19 +34,23 @@ pub(super) fn parse_pairs(
                 "FASTQ read-pair IDs or mate designators disagree",
             ));
         }
-        for read in [a, b] {
+        for (read, qual) in [(a, aq), (b, bq)] {
             super::validate::indexed_length(&read)?;
             if pairs < 50000 {
                 count_sampled_seed_kmers(&read, &mut seed_counts);
             }
+            let mut rqual = qual.clone();
+            rqual.reverse();
             let reverse = rc(&read);
             seqs.push(read);
+            quals.push(qual);
             seqs.push(reverse);
+            quals.push(rqual);
         }
         pairs += 1;
         if pairs.is_multiple_of(1000000) {
             eprintln!("loaded {} read pairs", pairs);
         }
     }
-    Ok((seqs, seed_counts, pairs))
+    Ok((seqs, quals, seed_counts, pairs))
 }

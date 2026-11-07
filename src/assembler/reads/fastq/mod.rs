@@ -9,3 +9,4 @@ use super::types::Reads;
 
 mod reader;
 pub(crate) use reader::FastqSeqReader;
+

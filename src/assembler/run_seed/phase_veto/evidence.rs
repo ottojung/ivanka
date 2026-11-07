@@ -10,7 +10,8 @@ fn kcodes(seq:&[u8],a:usize)->Vec<u64>{
 fn lowq(q:&[u8])->Vec<usize>{ let mut o=vec![0;q.len()+1]; for (i,&x) in q.iter().enumerate(){o[i+1]=o[i]+usize::from(x<Q15);} o }
 fn validw(p:&[usize],s:usize,e:usize)->bool{ e<p.len() && s<=e && p[s]==p[e] }
 fn encode_a(seq:&[u8])->Option<u64>{ let mut n=0u64; for &b in seq { n=(n<<2)|match b{b'A'=>0,b'C'=>1,b'G'=>2,b'T'=>3,_=>return None}; } Some(n) }
-pub(super) fn make_preps(reads:&[Vec<u8>])->Vec<Prep>{ reads.iter().map(|r|Prep{km:kcodes(r,A),lq:lowq(&vec![b'I';r.len()])}).collect() }
+pub(super) fn make_preps(reads:&[Vec<u8>],quals:&[Vec<u8>])->Vec<Prep>{
+    reads.iter().zip(quals).map(|(r,q)|{ let fallback=vec![b'I';r.len()]; Prep{km:kcodes(r,A),lq:lowq(if q.len()==r.len(){q}else{&fallback})} }).collect() }
 fn uniq_flanks(seq:&[u8])->HashMap<K128,Option<usize>>{
     let mut out=HashMap::new();
     for (i,w) in seq.windows(2*A+1).enumerate(){ if w[A]==b'N'{continue;}

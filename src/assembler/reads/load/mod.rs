@@ -6,14 +6,14 @@ use super::types::Reads;
 use std::collections::HashMap;
 use std::io;
 
-type LoadedPairs = (Vec<Vec<u8>>, HashMap<u64, u32>, usize);
+type LoadedPairs = (Vec<Vec<u8>>, Vec<Vec<u8>>, HashMap<u64, u32>, usize);
 mod pairs;
 mod seed_counts;
 mod validate;
 pub(super) use seed_counts::count_sampled_seed_kmers;
 impl Reads {
     pub(crate) fn load(fq1: &str, fq2: &str, max_pairs: Option<usize>) -> io::Result<Self> {
-        let (seqs, seed_counts, pairs) = pairs::parse_pairs(fq1, fq2, max_pairs)?;
+        let (seqs, quals, seed_counts, pairs) = pairs::parse_pairs(fq1, fq2, max_pairs)?;
         eprintln!(
             "building index for {} read pairs ({} oriented sequences)",
             pairs,
@@ -28,6 +28,7 @@ impl Reads {
         );
         Ok(Self {
             seqs,
+            quals,
             index,
             seed_counts,
             max_read_len,

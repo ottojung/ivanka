@@ -15,6 +15,7 @@ fn bitset_deduplicates_orientations_and_handles_odd_read_count() {
         ],
     );
     let reads = Reads {
+        quals: vec![vec![b'I'; 41]; 3],
         seqs: vec![read.clone(), read.clone(), read],
         index,
         max_read_len: 41,
@@ -38,6 +39,7 @@ fn terminal_index_dedup_preserves_repetitive_high_depth_overhangs() {
     let anchor = encode(&[b'A'; K]).unwrap();
     assert_eq!(index[&anchor].len(), 40_000);
     let reads = Reads {
+        quals: seqs.iter().map(|s| vec![b'I'; s.len()]).collect(),
         seqs,
         index,
         max_read_len: 43,

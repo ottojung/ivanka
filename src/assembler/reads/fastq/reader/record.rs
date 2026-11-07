@@ -4,7 +4,7 @@ use std::io;
 impl<R: BufRead> FastqSeqReader<R> {
     /// Preserve record order while normalizing bases; the quality line
     /// must describe exactly the same number of sequence characters.
-    pub(crate) fn read_seq(&mut self) -> io::Result<Option<Vec<u8>>> {
+    pub(crate) fn read_seq(&mut self) -> io::Result<Option<(Vec<u8>, Vec<u8>)>> {
         self.header.clear();
         self.bases.clear();
         self.plus.clear();
@@ -40,12 +40,13 @@ impl<R: BufRead> FastqSeqReader<R> {
             .iter()
             .map(|b| b.to_ascii_uppercase())
             .collect::<Vec<_>>();
-        if seq.len() != self.quality.trim_end().len() {
+        let qual = self.quality.trim_end().as_bytes().to_vec();
+        if seq.len() != qual.len() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "bases / qualities differ",
             ));
         }
-        Ok(Some(seq))
+        Ok(Some((seq, qual)))
     }
 }

@@ -6,6 +6,7 @@ fn exact_suffix_cache_matches_fresh_query() {
     read.extend_from_slice(b"AG");
     let reads = Reads {
         max_read_len: read.len(),
+        quals: vec![vec![b'I'; read.len()]],
         seqs: vec![read.clone()],
         index: super::build_index(&[read]),
         seed_counts: Default::default(),
@@ -26,6 +27,7 @@ fn short_sequences_have_distinct_keys_and_cache_stays_bounded() {
     let reads = Reads {
         max_read_len: 300,
         seqs: Vec::new(),
+        quals: Vec::new(),
         index: Default::default(),
         seed_counts: Default::default(),
         overhang_cache: Default::default(),

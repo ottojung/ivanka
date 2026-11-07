@@ -9,6 +9,8 @@ use std::collections::HashSet;
 
 mod assembly;
 pub(super) use assembly::assemble_candidates;
+pub(crate) mod phase_veto;
+
 mod rescue;
 mod rescue_rank;
 pub(super) use rescue::rescue_short;

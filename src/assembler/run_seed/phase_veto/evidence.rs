@@ -38,9 +38,7 @@ fn pair_calls(pr:[&Vec<u8>;4],pp:[&Prep;4],index:&HashMap<K128,Option<usize>>)->
 }
 pub(super) fn observations(seq:&[u8],reads:&[Vec<u8>],preps:&[Prep])->Vec<HashMap<usize,u8>>{
     let index=uniq_flanks(seq);
-    reads.chunks_exact(4).zip(preps.chunks_exact(4)).enumerate().map(|(idx,(pr,pp))|{
-        let c=pair_calls([&pr[0],&pr[1],&pr[2],&pr[3]],[&pp[0],&pp[1],&pp[2],&pp[3]],&index);
-        if idx<2 { let mut k=c.keys().copied().collect::<Vec<_>>(); k.sort(); eprintln!("PC{} n={} {:?}",idx,c.len(),k); }
-        c
+    reads.chunks_exact(4).zip(preps.chunks_exact(4)).map(|(pr,pp)|{
+        pair_calls([&pr[0],&pr[1],&pr[2],&pr[3]],[&pp[0],&pp[1],&pp[2],&pp[3]],&index)
     }).collect()
 }

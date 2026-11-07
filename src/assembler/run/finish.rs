@@ -22,6 +22,12 @@ pub(super) fn write(
         protected: protected_seed_count,
         rescue,
     } = prepared;
+    let (contigs, supporting_counts) =
+        crate::assembler::run_seed::phase_veto::reject_unsupported_recombinants(
+            contigs,
+            supporting_counts,
+            &reads.seqs,
+        );
     let (mut contigs, audit) = if audit_path.is_some() {
         select_supported_contigs_with_kmers(
             contigs,

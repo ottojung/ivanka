@@ -7,5 +7,6 @@ mod index;
 mod fastq;
 pub(super) use dna::{K, MAX_EXTENSION, MAX_CONTIG_LENGTH, encode, decode, rc, rolling_canonical_kmers};
 pub(super) use types::Reads;
+pub(super) use input::fasta_seeds;
 #[cfg(test)] mod test_input;
 #[cfg(test)] mod test_overhang;

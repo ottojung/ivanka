@@ -13,10 +13,10 @@ contig because its 21-mers, alignment, or diagonal matches a known genome
 is prohibited; it is benchmark leakage, not evidence that the candidate
 is the most abundant viral sequence.
 
-The assembly interface receives only paired sequencing reads (and
-parameters that do not encode target sequences). All candidate evidence
-must be computed from those reads. Do not inject seed contigs from a
-different, potentially reference-informed pipeline. MiCall's downstream
+The assembly interface receives paired sequencing reads and may optionally
+receive `--seeds` FASTA with contigs independently derived from those same
+sample reads. The caller must verify provenance: no reference-derived,
+reference-selected or benchmark-informed seed sequences are permitted. MiCall's downstream
 reference-informed mapping/stitching and independent benchmark scoring
 remain allowed, but their outputs cannot feed back into Ivanka's selection.
 

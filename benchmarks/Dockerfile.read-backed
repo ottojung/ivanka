@@ -1,0 +1,26 @@
+# Read-only candidate selection from the sample's own paired FASTQs.
+FROM docker.io/library/rust:1.93-bookworm AS ivanka-builder
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY build.rs ./
+COPY source_lints ./source_lints
+RUN cargo build --release --locked
+
+# Pin the identical updated-MiCall base used by the frozen IVA control.
+FROM localhost/micall:newmicall-e0073cb5-base
+ARG NATIVE_PRIMARY_SEEDS=50
+ARG NATIVE_RESCUE_SEEDS=20
+ARG POSTSELECT_CONTIGS=1
+ENV IVANKA_BENCH_PRIMARY_SEEDS=${NATIVE_PRIMARY_SEEDS}
+ENV IVANKA_BENCH_RESCUE_SEEDS=${NATIVE_RESCUE_SEEDS}
+ENV IVANKA_POSTSELECT_CONTIGS=${POSTSELECT_CONTIGS}
+ENV IVANKA_SUPPORT_PAIRS=80000
+COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka-native
+COPY benchmarks/ivanka_read_support_selector.py /usr/local/bin/ivanka
+RUN chmod 755 /usr/local/bin/ivanka && python -m py_compile /usr/local/bin/ivanka
+COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_micall_for_ivanka.py
+COPY benchmarks/verify_ivanka_binding.py /tmp/verify_ivanka_binding.py
+RUN python /tmp/patch_micall_for_ivanka.py && python /tmp/verify_ivanka_binding.py
+RUN rm /tmp/patch_micall_for_ivanka.py /tmp/verify_ivanka_binding.py
+LABEL org.ottojung.ivanka.experiment="native-read-backed-contig-selection"

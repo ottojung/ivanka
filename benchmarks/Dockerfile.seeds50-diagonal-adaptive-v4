@@ -1,0 +1,9 @@
+# Same underlying native50 reference-guided candidate; sparse-support
+# fallback retains ranked native contigs without changing MiCall.
+FROM localhost/micall:ivanka-newmicall-seeds50-diagonal-small-v3
+COPY benchmarks/ivanka_postselect_longest.py /usr/local/bin/ivanka
+COPY benchmarks/ivanka_diagonal_selector.py /usr/local/bin/ivanka_diagonal_selector.py
+ENV IVANKA_WEAK_DIAGONAL_DENSITY=0.02
+ENV IVANKA_WEAK_CONTIGS=16
+RUN chmod 755 /usr/local/bin/ivanka && test -x /usr/local/bin/ivanka
+LABEL org.ottojung.ivanka.experiment="consistent-reference-diagonal-adaptive-weak-homology"

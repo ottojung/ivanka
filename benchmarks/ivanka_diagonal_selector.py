@@ -1,5 +1,6 @@
 """Coherent reference-kmer support, not aggregate cross-reference hits."""
 from collections import Counter,defaultdict
+import math
 from ivanka_reference_selector import COMPLEMENT
 
 def build_position_index(references,k=21):
@@ -38,3 +39,15 @@ def preserve_original_order(entries, ranking, limit):
         raise ValueError("Invalid native-order selection limit")
     chosen = sorted(ranking[:limit], key=lambda item: item[0])
     return [entries[i] for i, _, _ in chosen], [score for _, _, score in chosen]
+
+
+def weak_reference_contig_limit(ranking, limit, density_cutoff, weak_limit):
+    if not ranking or not 1 <= limit <= 1000 or not 1 <= weak_limit <= 1000:
+        raise ValueError("Invalid weak-reference fallback settings")
+    if not math.isfinite(density_cutoff) or not 0 <= density_cutoff <= 1:
+        raise ValueError("Invalid reference-density cutoff")
+    _, length, matched = ranking[0]
+    fraction = matched / max(1, length - 20)
+    if fraction < density_cutoff:
+        return max(limit, weak_limit), fraction
+    return limit, fraction

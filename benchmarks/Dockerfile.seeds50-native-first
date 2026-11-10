@@ -1,0 +1,6 @@
+FROM localhost/micall:ivanka-newmicall-seeds50-diagonal-small-v3
+COPY benchmarks/ivanka_postselect_longest.py /usr/local/bin/ivanka
+ENV IVANKA_SELECTOR_MODE=native_first
+ENV IVANKA_POSTSELECT_CONTIGS=1
+RUN chmod 755 /usr/local/bin/ivanka && test -x /usr/local/bin/ivanka
+LABEL org.ottojung.ivanka.experiment="native-contribution-ranked-dominant-contig"

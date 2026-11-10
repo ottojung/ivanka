@@ -133,6 +133,11 @@ def main(arguments):
     if selection == "longest":
         selected = top_contigs(original, limit)
         supporting_hits = None
+    elif selection == "native_first":
+        # Preserve Ivanka's own contribution-weighted ranking: it favors
+        # the predominant supported haplotype, even when references diverge.
+        selected = original[:limit]
+        supporting_hits = None
     elif selection == "reference21":
         from ivanka_reference_selector import (
             load_pinned_panel, index_references, select_reference_supported,
@@ -147,11 +152,23 @@ def main(arguments):
         from ivanka_reference_selector import load_pinned_panel
         from ivanka_diagonal_selector import (
             build_position_index, rank_diagonal, preserve_original_order,
+            weak_reference_contig_limit,
         )
         ref_path = os.environ["IVANKA_PINNED_SELECTOR_PANEL"]
         references = load_pinned_panel(ref_path)
         index = build_position_index(references, k=21)
         ranking = rank_diagonal(original, index, k=21)
+        density_threshold = float(os.environ.get(
+            "IVANKA_WEAK_DIAGONAL_DENSITY", "0"
+        ))
+        weak_keep = int(os.environ.get("IVANKA_WEAK_CONTIGS", "16"))
+        limit, density = weak_reference_contig_limit(
+            ranking, limit, density_threshold, weak_keep
+        )
+        if density < density_threshold:
+            print("IVANKA_WEAK_REFERENCE", "density", round(density, 5),
+                  "threshold", density_threshold, "contigs", limit,
+                  file=sys.stderr, flush=True)
         selected, supporting_hits = preserve_original_order(
             original, ranking, limit
         )

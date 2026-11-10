@@ -1,7 +1,7 @@
 import random
 import unittest
 
-from ivanka_diagonal_selector import build_position_index, diagonal_support, rank_diagonal, preserve_original_order
+from ivanka_diagonal_selector import build_position_index, diagonal_support, rank_diagonal, preserve_original_order, weak_reference_contig_limit
 from ivanka_reference_selector import COMPLEMENT
 
 
@@ -20,7 +20,17 @@ class CoherentKmerRankingTests(unittest.TestCase):
         self.assertEqual(ranking[0][0], 1)
         self.assertGreater(ranking[0][2], ranking[1][2])
 
-    def test_native_emitter_order_preserved_after_quality_selection(self):
+    def test_weak_reference_fallback_only_when_support_is_sparse(self):
+        weak = [(3, 8985, 103), (0, 18102, 3)]
+        strong = [(1, 1159, 214), (0, 744, 5)]
+        self.assertEqual(weak_reference_contig_limit(weak, 1, 0.02, 16)[0], 16)
+        self.assertEqual(weak_reference_contig_limit(strong, 1, 0.02, 16)[0], 1)
+        self.assertEqual(weak_reference_contig_limit(weak, 1, 0, 16)[0], 1)
+
+    def test_reject_invalid_density_fallback_parameters(self):
+        with self.assertRaises(ValueError):
+            weak_reference_contig_limit([(0, 100, 5)], 1, float("nan"), 16)
+
         entries = [(">a", "A"), (">b", "BB"), (">c", "CCC")]
         ranked = [(2, 3, 20), (0, 1, 10), (1, 2, 5)]
         selected, scores = preserve_original_order(entries, ranked, 2)

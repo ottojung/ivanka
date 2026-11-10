@@ -5,6 +5,15 @@ This is the procedure for an Ivanka improver, reviewer, or Antonina agent.
 missing evidence. Diagnostic metrics can guide optimization, but must never
 become extra pass/fail conditions for the real-data milestone.
 
+**Assembly objective (read first):** Ivanka primarily reconstructs the
+**dominant read-supported viral sequence**, not an exhaustive list of
+haplotypes. Failure to recover a valid minority contig is **not**, by
+itself, a failure. Evaluate a contig-pruning proposal by its effect on
+the dominant sequence, phase integrity, downstream MiCall allele counts,
+and whole-pipeline runtime. Synthetic minority-haplotype recovery is a
+diagnostic and safety investigation, not a mandatory exhaustive-recall
+gate. See [Primary assembly objective](assembly-objective.md).
+
 ## Fixed qualification contract
 
 For a **fresh, pinned, identical MiCall base** in both arms:
@@ -43,8 +52,9 @@ an acceptance gate. They supply evidence and opportunities for improvements.
    alignment looks good. Unobservable phase must stay unidentifiable.
 4. **Targeted authentic A/B:** run S12, S48, S98 (or other documented
    representatives) through full MiCall with and without the Ivanka binary.
-   Inspect original QNAME accounting, Q15 minority alleles, final MAX
-   sequences, and capped-mapping groups. New MiCall keeps *equal-best*
+   Inspect original QNAME accounting, Q15 minority *allele evidence*,
+   dominant final MAX sequences, and capped-mapping groups. Do not
+   require an assembled contig for every observed minority haplotype. New MiCall keeps *equal-best*
    alternatives up to Bowtie2 -k 12, not all conceivable mappings.
 5. **Independent full 198 qualification** only after the above work has
    convincing evidence. Do not silently reuse prior finished results, IVA
@@ -66,7 +76,7 @@ Record per sample and per arm:
 | Q15 max / fractional depth totals and means | `multimap_depth.csv` | higher | one original fragment per position; multi-contig sums duplicate hypotheses |
 | unique aligned and mapped fragments | `unique_aligned_fragments.csv`, `remap_counts.csv` | higher | original QNAME counts, **not** hypothesis counts |
 | capped / oversized alignment groups | `remap_counts.csv` | lower | diagnostic only; a capped group need not have missed a best match |
-| final/stitched/unstitched contig counts, unknown contig count, and total assembled bases | `contigs.csv`, `stitched_contigs.csv`, `unstitched_contigs.csv` | lower *as runtime burden only* | a genuine minority haplotype may require extra contigs; never use these as quality or release gates |
+| final/stitched/unstitched contig counts, unknown contig count, and total assembled bases | `contigs.csv`, `stitched_contigs.csv`, `unstitched_contigs.csv` | lower *as runtime burden only* | optional minority contigs may be useful but their exhaustive recovery is not required; never use contig count as a quality or release gate |
 | repeated canonical 31-mer fraction across final contigs | `contigs.csv` | lower *as redundancy only* | overlapping true haplotypes share 31-mers; distinct canonical 31-mers are not proof of original-pair phase |
 | reference positions at depth >=100 | `genome_coverage.csv` | higher | row count, not unique coordinates |
 

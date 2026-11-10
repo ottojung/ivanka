@@ -4,6 +4,14 @@ Ivanka is a **reference-free** seed-and-read assembler. MiCall, not Ivanka,
 provides reference assignment, referenceless/reference-informed contig
 stitching, mapping, remapping and final consensus scoring.
 
+**Design objective:** reconstruct the **dominant read-supported viral
+sequence**, not every haplotype in a mixed sample. Optional additional
+paths must be justified by evidence and downstream utility. Prune weak
+alternatives when beneficial to quality and speed, but do not fabricate
+phased recombinants or corrupt MiCall allele-frequency measurements.
+A locally best reference alignment is not proof of a true phased genome.
+Start with [Primary assembly objective](assembly-objective.md).
+
 ## Current implementation gap
 
 The Rust implementation currently takes high-count 31-mers from an early
@@ -35,15 +43,18 @@ contigs alone must not be mistaken for equivalent IVA functionality.
    trim only when real read evidence restores more than was removed.
    Synthetic tests must catch spurious recovery and infinite cycles.
 4. **Overlap-based contig reconciliation.** Merge only when overlapping
-   contigs have consistent bases *and* adequate read support; retain
-   alternative paths for genuine mixed populations.
-5. **Iterative re-seeding.** Find new seeds in underrepresented reads
-   after existing contigs stall. Avoid a fixed small set of early,
-   highest-count seeds monopolizing all contig slots.
-6. **Prune/score alternatives.** Use observed read and proper-pair
-   support, not HXB2 or IVA outputs, to rank assembly paths. Bound
-   search deterministically, with explicit test cases for mixtures
-   and structural variation.
+   contigs have consistent bases *and* adequate read support. Preserve
+   alternative paths if they are needed to identify the dominant sequence
+   or for explicitly validated downstream measurements; cataloguing
+   every genuine minority haplotype is not an objective.
+5. **Selective re-seeding.** Re-seed from unexplained reads only when
+   there is evidence that the dominant assembly remains incomplete;
+   discovering every rare variant is not an obligation.
+6. **Prune/score alternatives.** Prioritize abundant, original-pair-
+   supported sequence rather than the number of emitted contigs.
+   Use observed read and proper-pair support, not HXB2 or IVA outputs,
+   to rank paths. Bound search deterministically, with synthetic
+   mixtures and unsupported-recombinant controls.
 
 ## Evidence policy
 

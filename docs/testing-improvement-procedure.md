@@ -14,6 +14,20 @@ and whole-pipeline runtime. Synthetic minority-haplotype recovery is a
 diagnostic and safety investigation, not a mandatory exhaustive-recall
 gate. See [Primary assembly objective](assembly-objective.md).
 
+## Scientific blinding: a prerequisite to valid comparisons
+
+**Ivanka and all candidate selectors must have zero access to known
+reference sequences, the 33-reference benchmark panel, reference-based
+similarity scores, and evaluator feedback.** Do not use matches to known
+genomes to pick contigs: that contaminates the benchmark. MiCall may use
+references only after assembly and the evaluator only after the result
+is frozen. The abandoned PRs #202/#203 used reference-guided selection;
+their scores must not be cited as valid benchmark progress. G2P-derived
+auxiliary seed contigs are not sent into Ivanka. CI runs
+`python benchmarks/reference_isolation.py`; add a regression test for
+any newly discovered leakage path. Benchmark results from unblinded
+candidates are invalid, even when both PSI metrics happen to pass.
+
 ## Current stage policy: only the existing benchmark is a gate
 
 Until the current benchmark milestone is passed, optimize directly for the

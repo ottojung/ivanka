@@ -7,6 +7,28 @@ map reads, merge contigs, or select a reference during assembly.
 This is early experimental code. It is **not** validated for clinical use.
 
 
+## Reference-blind assembly: a hard boundary
+
+**Ivanka and every contig selector in its execution path must be completely
+blind to viral reference sequences, reference alignments and the benchmark's
+33-reference scoring panel.** Ivanka may use only original paired sequencing
+reads and evidence computed from those reads. It may **not** rank or discard
+contigs based on similarity to HXB2, HCV, subtype templates or any other
+known sequence, even if this improves the benchmark result.
+
+MiCall still uses references in its **downstream** mapping and analysis; the
+benchmark evaluator still uses its fixed panel for **measurement**, not
+candidate selection. Passing that information back into Ivanka invalidates
+the comparison. The 2026-11-10 reference-21-mer and diagonal-selection
+experiments were rejected and are not valid benchmark evidence.
+
+The Rust `--seeds` auxiliary-FASTA option has been removed: no external
+contig or template file may be supplied to bias native assembly.
+
+The CI guard `python benchmarks/reference_isolation.py` checks this
+boundary, including the MiCall assembler invocation. See
+[the assembly objective](docs/assembly-objective.md).
+
 ## Primary objective: recover the dominant viral sequence
 
 **Ivanka is not required to assemble every viral haplotype.** Its primary
@@ -295,8 +317,8 @@ multiplied by assembled sequence length; read count and then length break ties.
 Individual observations with identical sequence count separately (multiplicity),
 but a record used repeatedly within a contig contributes only once to its
 support count. Each read remains available to other extensions and contigs.
-MiCall-derived G2P seed contigs are kept ahead of ordinary candidates to
-preserve downstream seed support.
+No reference-derived or externally supplied seed contigs enter Ivanka;
+the emitted candidates are formed entirely from the paired input reads.
 
 This initial construction-time quality heuristic is *not* a validated
 likelihood or confidence score. Actual full-MiCall comparisons, including

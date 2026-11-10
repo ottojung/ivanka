@@ -24,8 +24,8 @@ replacement = '''
 @cached("denovo[ivanka]")
 def run_subprocess(fastq1: Path, fastq2: Path, merged_contigs_csv: Optional[Path]) -> Path:
     # The MiCall sequencing, G2P, stitching and mapping stages remain untouched.
-    # Ivanka currently has no --seeds interface; MiCall still appends the same
-    # G2P-derived contigs to both assembler arms before stitching.
+    # The assembler consumes only original paired reads. MiCall's auxiliary
+    # G2P-derived contigs are handled downstream, never used as Ivanka seeds.
     work_dir = WorkDir.get()
     for existing in work_dir.glob("assembly_*"):
         shutil.rmtree(existing, ignore_errors=True)
@@ -33,17 +33,7 @@ def run_subprocess(fastq1: Path, fastq2: Path, merged_contigs_csv: Optional[Path
     output = tmp_dir / "ivanka_contigs.fasta"
     command = ["ivanka", "--reads1", str(fastq1),
                "--reads2", str(fastq2), "--output", str(output)]
-    if merged_contigs_csv is not None:
-        from csv import DictReader
-        seed_fasta = tmp_dir / "g2p-seeds.fasta"
-        with open(merged_contigs_csv) as source, seed_fasta.open("w") as target:
-            for index, row in enumerate(DictReader(source)):
-                sequence = row.get("contig", "").strip().upper()
-                if sequence:
-                    target.write(f">g2p_{index}\\n{sequence}\\n")
-        if seed_fasta.stat().st_size:
-            command.extend(["--seeds", str(seed_fasta)])
-    logger.info("Running Ivanka assembler with MiCall G2P seed input.")
+    logger.info("Running Ivanka using paired reads only.")
     subprocess.run(command, check=True, cwd=tmp_dir)
     if not output.is_file():
         raise RuntimeError("Ivanka returned success but wrote no FASTA")

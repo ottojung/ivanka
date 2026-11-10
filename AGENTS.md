@@ -3,6 +3,25 @@
 **Start with [README: Primary objective](README.md#primary-objective-recover-the-dominant-viral-sequence)
 and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
+
+**NON-NEGOTIABLE SCIENTIFIC BOUNDARY: IVANKA IS REFERENCE-BLIND.**
+Never supply a known viral reference genome, alignment panel, HXB2, subtype
+template, benchmark scoring reference, or reference-derived candidate-ranking
+score to Ivanka **or any wrapper/contig selector acting on its output**.
+Never choose an assembled contig because it better matches the benchmark panel,
+even if doing so would improve PSI. Ivanka uses original paired sequencing
+reads and evidence derived from those reads only. MiCall may use reference
+sequences downstream; the independent evaluator may use them solely for
+measuring, **never to steer the candidate**. No G2P-derived seed contigs
+are passed to Ivanka as auxiliary assembly inputs. The previous
+reference-21-mer and diagonal-ranking experiments (PRs #202 and #203)
+were rejected: their numerical wins are invalid for qualifying the
+assembler. Do not resurrect those branches, images, or algorithms.
+
+**Enforce** this with `python benchmarks/reference_isolation.py` and its
+CI regression tests. This is a validity prerequisite for the existing
+benchmark, not another biological performance metric.
+
 **Current founder-directed development priority (2026-11-10): PASS THE
 EXISTING BENCHMARK FIRST.** The only milestone gates are the original
 physical-198, >=90%-per-sample alignment, no timeouts, and positive

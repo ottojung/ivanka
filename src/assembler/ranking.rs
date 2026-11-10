@@ -5,7 +5,7 @@ use super::reads::{K, encode};
 
 // A first-pass ranking heuristic, not a calibrated confidence score:
 // independent extension-supporting FASTQ records (with multiplicity) times
-// assembled span. Preserve G2P-derived seeds before applying the safety cap.
+// assembled span. Native read-only assembly passes no protected external seeds.
 // Orientation-neutral 31-mer identity, used only to avoid reporting
 // redundant assembled paths; it never consumes or filters FASTQ reads.
 pub(super) fn canonical_kmer(seq:&[u8])->Option<u64> {

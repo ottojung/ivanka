@@ -18,11 +18,13 @@ ENV IVANKA_POSTSELECT_CONTIGS=${POSTSELECT_CONTIGS}
 ENV IVANKA_SUPPORT_PAIRS=80000
 ENV IVANKA_TRIM_UNSUPPORTED_TERMINI=1
 ENV IVANKA_TRIM_SUPPORTED_ISLAND=1
-ENV IVANKA_READ_BACKED_MAX_SPAN=2000
+ENV IVANKA_READ_BACKED_MAX_SPAN=0
+ENV IVANKA_READ_BACKED_TILE_SPAN=2000
 COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka-native
 COPY benchmarks/ivanka_read_support_selector.py /usr/local/bin/ivanka
 COPY benchmarks/ivanka_trim_unsupported.py /usr/local/bin/ivanka_trim_unsupported.py
 COPY benchmarks/ivanka_read_window.py /usr/local/bin/ivanka_read_window.py
+COPY benchmarks/ivanka_read_tiling.py /usr/local/bin/ivanka_read_tiling.py
 RUN chmod 755 /usr/local/bin/ivanka && python -m py_compile /usr/local/bin/ivanka
 COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_micall_for_ivanka.py
 COPY benchmarks/verify_ivanka_binding.py /tmp/verify_ivanka_binding.py

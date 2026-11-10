@@ -93,3 +93,13 @@ This is strictly reference-blind; the benchmark reference panel and scores
 never influence sequence selection. A window is considered only if the
 conservative supported-island strategy leaves the candidate unchanged.
 This is a runtime hypothesis, not a qualification result.
+
+## Complete-coverage read-backed tiling (experimental)
+
+A densest standalone 2 kb window failed S65 alignment (830 vs IVA1292),
+although it eliminated the runtime gap. To avoid dropping distant viral
+sequence, an optional distinct experimental mode divides uniformly
+read-supported long contigs into non-overlapping tiles of at most 2,000 nt,
+retaining every base in original order, without selecting a genomic target.
+It refuses to tile weakly supported segments and leaves other sequences intact.
+The same immutable benchmark and reference-blindness contract apply.

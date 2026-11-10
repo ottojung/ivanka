@@ -159,6 +159,13 @@ def main(args):
         selected = [dominant_read_window(entries[i], depth[i], span)
                     if entries[i] == result else result
                     for i, result in zip(chosen, selected)]
+    tile_span = int(os.environ.get("IVANKA_READ_BACKED_TILE_SPAN", "0"))
+    if tile_span:
+        from ivanka_read_tiling import tile_supported_contig
+        selected = [part for i, result in zip(chosen, selected)
+                    for part in (tile_supported_contig(entries[i], depth[i],
+                                                     tile_span)
+                                 if entries[i] == result else [result])]
     write_selected(paths["--output"], selected)
     print("IVANKA_READ_BACKED_SELECTION",
           "native", len(entries), "selected", chosen,

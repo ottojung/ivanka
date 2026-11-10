@@ -1,5 +1,6 @@
 mod evidence;
 mod detect;
+#[cfg(test)] mod test_vet_rescue;
 pub(crate) fn reject_unsupported_recombinants(seqs:Vec<Vec<u8>>,counts:Vec<usize>,reads:&[Vec<u8>],quals:&[Vec<u8>],protected:usize)->(Vec<Vec<u8>>,Vec<usize>){
     let preps=evidence::make_preps(reads,quals); let mut kept_s=Vec::new(); let mut kept_c=Vec::new(); let mut dropped=0usize;
     for (index,(seq,count)) in seqs.into_iter().zip(counts).enumerate(){
@@ -12,6 +13,8 @@ pub(crate) fn reject_unsupported_recombinants(seqs:Vec<Vec<u8>>,counts:Vec<usize
     if dropped>0 { eprintln!("IVANKA_PHASE_GUARD filtered {} candidate(s) contradicted by direct original-pair evidence",dropped); }
     (kept_s,kept_c)
 }
+pub(crate) fn vet_rescue(seq:Vec<u8>,reads:&[Vec<u8>],quals:&[Vec<u8>])->Option<Vec<u8>>{
+    let (mut kept,_)=reject_unsupported_recombinants(vec![seq],vec![0],reads,quals,0); kept.pop() }
 #[cfg(test)] mod tests{ use super::reject_unsupported_recombinants;
     fn rc(s:&[u8])->Vec<u8>{ s.iter().rev().map(|c|match c{b'A'=>b'T',b'T'=>b'A',b'C'=>b'G',b'G'=>b'C',_=>b'N'}).collect() }
     fn highq(reads:&[Vec<u8>])->Vec<Vec<u8>>{ reads.iter().map(|r|vec![b'I';r.len()]).collect() }

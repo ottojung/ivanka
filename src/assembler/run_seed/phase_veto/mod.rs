@@ -1,9 +1,11 @@
 mod evidence;
 mod detect;
-pub(crate) fn reject_unsupported_recombinants(seqs:Vec<Vec<u8>>,counts:Vec<usize>,reads:&[Vec<u8>],quals:&[Vec<u8>])->(Vec<Vec<u8>>,Vec<usize>){
+pub(crate) fn reject_unsupported_recombinants(seqs:Vec<Vec<u8>>,counts:Vec<usize>,reads:&[Vec<u8>],quals:&[Vec<u8>],protected:usize)->(Vec<Vec<u8>>,Vec<usize>){
     let preps=evidence::make_preps(reads,quals); let mut kept_s=Vec::new(); let mut kept_c=Vec::new(); let mut dropped=0usize;
-    for (seq,count) in seqs.into_iter().zip(counts){
-        if seq.len()>=200 && detect::incompatible(&seq,reads,&preps){
+    for (index,(seq,count)) in seqs.into_iter().zip(counts).enumerate(){
+        // MiCall-supplied seeds stay protected: their admission belongs to the
+        // original-pair-preserving MiCall front, not to this de novo veto.
+        if seq.len()>=200 && index>=protected && detect::incompatible(&seq,reads,&preps){
             dropped+=1; eprintln!("IVANKA_PHASE_GUARD withheld unsupported recombinant candidate ({} nt, support {})",seq.len(),count);
         } else { kept_s.push(seq); kept_c.push(count); }
     }
@@ -23,20 +25,24 @@ pub(crate) fn reject_unsupported_recombinants(seqs:Vec<Vec<u8>>,counts:Vec<usize
     }
     #[test] fn rejects_linked_recombinant_keeps_truth(){ let (chim,truth,reads)=syn(true);
         let quals=highq(&reads);
-        let (s,c)=reject_unsupported_recombinants(vec![chim,truth.clone()],vec![10,9],&reads,&quals); assert_eq!(s,vec![truth]); assert_eq!(c,vec![9]); }
+        let (s,c)=reject_unsupported_recombinants(vec![chim,truth.clone()],vec![10,9],&reads,&quals,0); assert_eq!(s,vec![truth]); assert_eq!(c,vec![9]); }
     #[test] fn unlinked_kept_unknown(){ let (chim,_,reads)=syn(false);
         let quals=highq(&reads);
-        let (s,_)=reject_unsupported_recombinants(vec![chim.clone()],vec![1],&reads,&quals); assert_eq!(s,vec![chim]); }
+        let (s,_)=reject_unsupported_recombinants(vec![chim.clone()],vec![1],&reads,&quals,0); assert_eq!(s,vec![chim]); }
     #[test] fn low_quality_prevents_q15_veto_evidence(){
         let (chim,truth,reads)=syn(true);
         let quals=reads.iter().map(|r|vec![b'!';r.len()]).collect::<Vec<_>>();
-        let (s,_)=reject_unsupported_recombinants(vec![chim.clone(),truth.clone()],vec![10,9],&reads,&quals);
+        let (s,_)=reject_unsupported_recombinants(vec![chim.clone(),truth.clone()],vec![10,9],&reads,&quals,0);
         assert_eq!(s,vec![chim,truth]);
     }
     #[test] fn q15_boundary_allows_valid_evidence(){
         let (chim,truth,reads)=syn(true);
         let quals=reads.iter().map(|r|vec![b'0';r.len()]).collect::<Vec<_>>(); // Phred+33 Q15
-        let (s,_)=reject_unsupported_recombinants(vec![chim,truth.clone()],vec![10,9],&reads,&quals);
+        let (s,_)=reject_unsupported_recombinants(vec![chim,truth.clone()],vec![10,9],&reads,&quals,0);
         assert_eq!(s,vec![truth]);
     }
+    #[test] fn protected_micall_seeds_bypass_de_novo_veto(){ let (chim,truth,reads)=syn(true);
+        let quals=highq(&reads);
+        let (s,c)=reject_unsupported_recombinants(vec![chim.clone(),truth.clone()],vec![10,9],&reads,&quals,1);
+        assert_eq!(s,vec![chim,truth]); assert_eq!(c,vec![10,9]); }
 }

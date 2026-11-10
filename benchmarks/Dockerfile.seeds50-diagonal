@@ -1,0 +1,8 @@
+# Same pinned new MiCall and source-built native50 binary; swap ONLY selector.
+FROM localhost/micall:ivanka-newmicall-reference21-seeds50-v1
+COPY benchmarks/ivanka_postselect_longest.py /usr/local/bin/ivanka
+COPY benchmarks/ivanka_diagonal_selector.py /usr/local/bin/ivanka_diagonal_selector.py
+ENV IVANKA_SELECTOR_MODE=reference21_diagonal
+RUN chmod 755 /usr/local/bin/ivanka && test -x /usr/local/bin/ivanka
+RUN python -m py_compile /usr/local/bin/ivanka /usr/local/bin/ivanka_diagonal_selector.py
+LABEL org.ottojung.ivanka.experiment="reference-consistent-21-mer-diagonal-ranking"

@@ -90,12 +90,44 @@ def native_arguments(arguments):
     return native
 
 
+def small_input_settings(arguments, default_limit):
+    threshold = int(os.environ.get("IVANKA_SMALL_FASTQ_BYTES", "0"))
+    if threshold < 0:
+        raise ValueError("Negative small-input threshold")
+    if threshold == 0:
+        return None, default_limit
+    candidates = []
+    for i, value in enumerate(arguments):
+        if value == "--reads1" and i + 1 < len(arguments):
+            candidates.append(arguments[i + 1])
+        elif value.startswith("--reads1="):
+            candidates.append(value.partition("=")[2])
+    if len(candidates) != 1 or not candidates[0]:
+        raise ValueError("Expected exactly one input read-pair path")
+    size = Path(candidates[0]).stat().st_size
+    if size > threshold:
+        return None, default_limit
+    keep = int(os.environ.get("IVANKA_SMALL_CONTIGS", "4"))
+    primary = int(os.environ.get("IVANKA_SMALL_PRIMARY_SEEDS", "1000"))
+    rescue = int(os.environ.get("IVANKA_SMALL_RESCUE_SEEDS", "400"))
+    if not 1 <= keep <= 1000 or not 1 <= primary <= 1000 or not 1 <= rescue <= 400:
+        raise ValueError("Invalid small-input search parameters")
+    environment = os.environ.copy()
+    environment["IVANKA_BENCH_PRIMARY_SEEDS"] = str(primary)
+    environment["IVANKA_BENCH_RESCUE_SEEDS"] = str(rescue)
+    print("IVANKA_SMALL_INPUT", size, "of", threshold,
+          "primary", primary, "rescue", rescue, "contigs", keep,
+          file=sys.stderr, flush=True)
+    return environment, max(default_limit, keep)
+
+
 def main(arguments):
     limit = int(os.environ.get("IVANKA_POSTSELECT_CONTIGS", "1"))
     if not 1 <= limit <= 1000:
         raise ValueError("IVANKA_POSTSELECT_CONTIGS must be within 1..1000")
     target = output_path(arguments)
-    subprocess.run([ORIGINAL, *native_arguments(arguments)], check=True)
+    native_env, limit = small_input_settings(arguments, limit)
+    subprocess.run([ORIGINAL, *native_arguments(arguments)], check=True, env=native_env)
     original = parse_fasta(target)
     selection = os.environ.get("IVANKA_SELECTOR_MODE", "longest")
     if selection == "longest":
@@ -110,6 +142,18 @@ def main(arguments):
         index = index_references(references, k=21)
         selected, supporting_hits = select_reference_supported(
             original, limit, index, k=21
+        )
+    elif selection == "reference21_diagonal":
+        from ivanka_reference_selector import load_pinned_panel
+        from ivanka_diagonal_selector import (
+            build_position_index, rank_diagonal, preserve_original_order,
+        )
+        ref_path = os.environ["IVANKA_PINNED_SELECTOR_PANEL"]
+        references = load_pinned_panel(ref_path)
+        index = build_position_index(references, k=21)
+        ranking = rank_diagonal(original, index, k=21)
+        selected, supporting_hits = preserve_original_order(
+            original, ranking, limit
         )
     else:
         raise ValueError("Unknown Ivanka post-selector mode")

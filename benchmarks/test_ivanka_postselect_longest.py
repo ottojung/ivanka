@@ -2,10 +2,32 @@ import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import patch
-from ivanka_postselect_longest import output_path, parse_fasta, top_contigs, replace_fasta, native_arguments
+from ivanka_postselect_longest import output_path, parse_fasta, top_contigs, replace_fasta, native_arguments, small_input_settings
 
 
 class LongestPostselectTests(unittest.TestCase):
+    def test_small_input_raises_native_budget_and_keeps_more_contigs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            small = Path(directory) / "reads.fastq"
+            small.write_bytes(b"x" * 80)
+            with patch.dict("os.environ", {
+                    "IVANKA_SMALL_FASTQ_BYTES": "1024",
+                    "IVANKA_SMALL_CONTIGS": "4",
+                    "IVANKA_SMALL_PRIMARY_SEEDS": "1000",
+                    "IVANKA_SMALL_RESCUE_SEEDS": "400"}):
+                env, keep = small_input_settings(["--reads1", str(small)], 1)
+                self.assertEqual(keep, 4)
+                self.assertEqual(env["IVANKA_BENCH_PRIMARY_SEEDS"], "1000")
+                self.assertEqual(env["IVANKA_BENCH_RESCUE_SEEDS"], "400")
+
+    def test_large_input_preserves_fast_defaults(self):
+        with tempfile.TemporaryDirectory() as directory:
+            large = Path(directory) / "reads.fastq"
+            large.write_bytes(b"x" * 100)
+            with patch.dict("os.environ", {"IVANKA_SMALL_FASTQ_BYTES": "60"}):
+                self.assertEqual(small_input_settings(["--reads1", str(large)], 1),
+                                 (None, 1))
+
     def test_optional_native_budget_without_changing_default(self):
         with patch.dict("os.environ", {"IVANKA_NATIVE_MAX_CONTIGS": ""}):
             self.assertEqual(native_arguments(["--reads1", "x"]), ["--reads1", "x"])

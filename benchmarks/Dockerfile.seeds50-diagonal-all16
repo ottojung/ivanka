@@ -1,0 +1,3 @@
+FROM localhost/micall:ivanka-newmicall-seeds50-diagonal-small-v3
+ENV IVANKA_POSTSELECT_CONTIGS=16
+LABEL org.ottojung.ivanka.experiment="coherent-diagonal-native50-retain16"

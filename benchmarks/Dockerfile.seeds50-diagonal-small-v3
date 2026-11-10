@@ -1,0 +1,7 @@
+# Preserve native emitter order, and keep all contigs for tiny amplicons.
+FROM localhost/micall:ivanka-newmicall-seeds50-diagonal-small-v2
+COPY benchmarks/ivanka_postselect_longest.py /usr/local/bin/ivanka
+COPY benchmarks/ivanka_diagonal_selector.py /usr/local/bin/ivanka_diagonal_selector.py
+ENV IVANKA_SMALL_CONTIGS=16
+RUN chmod 755 /usr/local/bin/ivanka && test -x /usr/local/bin/ivanka
+LABEL org.ottojung.ivanka.experiment="coherent-diagonal-ranking-original-order-small-full"

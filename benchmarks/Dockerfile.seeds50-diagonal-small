@@ -1,0 +1,9 @@
+FROM localhost/micall:ivanka-newmicall-seeds50-diagonal-v2
+COPY benchmarks/ivanka_postselect_longest.py /usr/local/bin/ivanka
+ENV IVANKA_SMALL_FASTQ_BYTES=1048576
+ENV IVANKA_SMALL_CONTIGS=4
+ENV IVANKA_SMALL_PRIMARY_SEEDS=1000
+ENV IVANKA_SMALL_RESCUE_SEEDS=400
+RUN chmod 755 /usr/local/bin/ivanka && test -x /usr/local/bin/ivanka
+RUN python -m py_compile /usr/local/bin/ivanka
+LABEL org.ottojung.ivanka.experiment="coherent-diagonal-selection-small-read-adaptation"

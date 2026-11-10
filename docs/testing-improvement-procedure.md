@@ -187,13 +187,14 @@ a unique results root:
 
 ```sh
 PYTHONPATH=benchmarks python3 benchmarks/podman_full_micall.py \
-  --mode both --jobs 10 --sample-time-limit 3600 \
+  --mode both --jobs 10 --parallel-arms --sample-time-limit 1800 \
   --timeout-per-arm 1800 --all-projects --diagnostic-90-floor
 ```
 
-The 3,600-second scheduling envelope is the sum of two independently
-limited arms; it does **not** relax the 1,800-second cap on either arm.
-The independent evaluator rejects any arm exceeding 1,800 seconds.
+Both arms run in parallel so each has the **same** original 1,800-second
+per-sample deadline. At 10 sample workers this can run up to 20 containers
+concurrently; check memory/Podman pressure before final qualification.
+The independent evaluator separately rejects any arm exceeding 1,800 seconds.
 
 The runner writes a per-sample, two-arm `results.jsonl` and a diagnostic
 summary. After all 198 original samples finish, perform **independent,

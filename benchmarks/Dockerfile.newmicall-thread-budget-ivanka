@@ -1,0 +1,8 @@
+# EXPERIMENT ONLY. The same shared MiCall base as the IVA arm.
+# Reuses the pinned 6e4705d Ivanka binary, NOT a different assembler candidate.
+FROM localhost/micall:newmicall-e0073cb5-t2-base
+COPY --from=localhost/micall:ivanka-newmicall-e0073cb5-6e4705d-v2 /usr/local/bin/ivanka /usr/local/bin/ivanka
+COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch-micall-for-ivanka.py
+COPY benchmarks/verify_ivanka_binding.py /tmp/verify-ivanka-binding.py
+RUN python /tmp/patch-micall-for-ivanka.py && python /tmp/verify-ivanka-binding.py && rm /tmp/patch-micall-for-ivanka.py /tmp/verify-ivanka-binding.py
+LABEL org.ottojung.ivanka.experiment="assembler-only-overlay;source-6e4705d;same-MiCall-t2-base"

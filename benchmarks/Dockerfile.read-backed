@@ -16,8 +16,10 @@ ENV IVANKA_BENCH_PRIMARY_SEEDS=${NATIVE_PRIMARY_SEEDS}
 ENV IVANKA_BENCH_RESCUE_SEEDS=${NATIVE_RESCUE_SEEDS}
 ENV IVANKA_POSTSELECT_CONTIGS=${POSTSELECT_CONTIGS}
 ENV IVANKA_SUPPORT_PAIRS=80000
+ENV IVANKA_TRIM_UNSUPPORTED_TERMINI=1
 COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka-native
 COPY benchmarks/ivanka_read_support_selector.py /usr/local/bin/ivanka
+COPY benchmarks/ivanka_trim_unsupported.py /usr/local/bin/ivanka_trim_unsupported.py
 RUN chmod 755 /usr/local/bin/ivanka && python -m py_compile /usr/local/bin/ivanka
 COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_micall_for_ivanka.py
 COPY benchmarks/verify_ivanka_binding.py /tmp/verify_ivanka_binding.py

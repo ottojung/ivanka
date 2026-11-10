@@ -87,7 +87,7 @@ def rank_by_pair_weighted_breadth(entries, coverage, pairs):
                       -pairs[i], -len(entries[i][1]), i))
 
 
-def read_supported_ranking(entries, reads, max_pairs=80000):
+def read_supported_ranking(entries, reads, max_pairs=80000, *, with_depth=False):
     positions = index_kmers(entries)
     depth = [[0] * max(0, len(sequence) - K + 1) for _, sequence in entries]
     pairs = [0] * len(entries)
@@ -110,6 +110,8 @@ def read_supported_ranking(entries, reads, max_pairs=80000):
         raise ValueError("No original paired reads")
     coverage = [sum(value >= 3 for value in depths) for depths in depth]
     rank = rank_by_pair_weighted_breadth(entries, coverage, pairs)
+    if with_depth:
+        return rank, coverage, pairs, depth
     return rank, coverage, pairs
 
 
@@ -136,13 +138,19 @@ def main(args):
     max_pairs = int(os.environ.get("IVANKA_SUPPORT_PAIRS", "80000"))
     if limit < 1 or limit > 1000 or max_pairs < 1 or max_pairs > 1000000:
         raise ValueError("Invalid read-only selection budget")
-    if len(entries) <= limit:
+    trim = os.environ.get("IVANKA_TRIM_UNSUPPORTED_TERMINI", "0") == "1"
+    if len(entries) <= limit and not trim:
         return
-    rank, coverage, pair_counts = read_supported_ranking(
-        entries, (paths["--reads1"], paths["--reads2"]), max_pairs
+    rank, coverage, pair_counts, depth = read_supported_ranking(
+        entries, (paths["--reads1"], paths["--reads2"]), max_pairs,
+        with_depth=True,
     )
     chosen = rank[:limit]
-    write_selected(paths["--output"], [entries[i] for i in chosen])
+    selected = [entries[i] for i in chosen]
+    if trim:
+        from ivanka_trim_unsupported import trim_terminal_unsupported
+        selected = [trim_terminal_unsupported(entries[i], depth[i]) for i in chosen]
+    write_selected(paths["--output"], selected)
     print("IVANKA_READ_BACKED_SELECTION",
           "native", len(entries), "selected", chosen,
           "covered_31mers", [coverage[i] for i in chosen],

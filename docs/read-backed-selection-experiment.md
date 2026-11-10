@@ -52,3 +52,15 @@ positive signed-power alignment and runtime PSI for **all r>=0**.
 References are consumed downstream by MiCall or independent scoring,
 never by Ivanka or this wrapper. Old reference-guided experimental
 results are invalid and are not part of this candidate's evidence.
+
+## Optional read-backed terminal clipping (separate experiment)
+
+The branch experiment/read-trim-unsupported-ends-20261110 optionally
+clips a terminal region only when the remaining contiguous interval has
+at least 500 31-mer positions with support from at least three original
+read pairs each, and at least 85% of its positions are supported. Only
+terminal unsupported spans of 512 or more bases are eligible; 50 bases
+of flank are retained. Internal gaps are never clipped. This is entirely
+computed from the same-sample original paired reads, without knowing any
+viral templates. It is an independent experiment and does not change the
+active 198-sample image.

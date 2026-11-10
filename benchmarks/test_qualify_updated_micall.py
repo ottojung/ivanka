@@ -44,13 +44,14 @@ class UpdatedMiCallQualificationTests(unittest.TestCase):
                         "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
                 }, **arms,
             })
-        return names, records
+        original_evidence = {r["sample"]: dict(r["provenance"]) for r in records}
+        return names, records, original_evidence
 
     def test_all_real_powers_are_positive_when_every_sample_gains(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            names, records = self._build(root)
-            report = verify(records, names, root, IVA_SHA, IVANKA_SHA)
+            names, records, original_evidence = self._build(root)
+            report = verify(records, names, root, IVA_SHA, IVANKA_SHA, original_evidence)
             self.assertEqual(report["valid_pairs"], SAMPLE_COUNT)
             self.assertEqual(report["errors"], [])
             self.assertTrue(report["score_psi"]["positive_all_nonnegative"])
@@ -61,29 +62,39 @@ class UpdatedMiCallQualificationTests(unittest.TestCase):
     def test_fails_closed_on_reused_arm_and_unequal_samples(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            names, records = self._build(root)
+            names, records, original_evidence = self._build(root)
             records[0]["iva_baseline_reused"] = True
-            self.assertFalse(verify(records, names, root, IVA_SHA, IVANKA_SHA)[
+            self.assertFalse(verify(records, names, root, IVA_SHA, IVANKA_SHA, original_evidence)[
                 "real_data_numeric_gate_pass"])
             records[0]["iva_baseline_reused"] = False
             records[1]["best_contig_acceptance"]["ivanka_score"] = 89
-            report = verify(records, names, root, IVA_SHA, IVANKA_SHA)
+            report = verify(records, names, root, IVA_SHA, IVANKA_SHA, original_evidence)
             self.assertFalse(report["real_data_numeric_gate_pass"])
             self.assertIn("alignment_below_90pct_IVA_floor", repr(report["errors"]))
-            self.assertFalse(verify(records[:-1], names, root, IVA_SHA, IVANKA_SHA)[
+            self.assertFalse(verify(records[:-1], names, root, IVA_SHA, IVANKA_SHA, original_evidence)[
                 "real_data_numeric_gate_pass"])
+
+    def test_rejects_forged_original_input_provenance(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            names, records, original_evidence = self._build(root)
+            records[0]["provenance"]["fastq_sha256"] = ["forged"]
+            report = verify(records, names, root, IVA_SHA, IVANKA_SHA,
+                            original_evidence)
+            self.assertFalse(report["real_data_numeric_gate_pass"])
+            self.assertIn("original_fastq_provenance_mismatch", repr(report["errors"]))
 
     def test_rejects_forged_output_or_wall_timeout(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            names, records = self._build(root)
+            names, records, original_evidence = self._build(root)
             records[0]["ivanka"]["container_wall_seconds"] = 1801
-            report = verify(records, names, root, IVA_SHA, IVANKA_SHA)
+            report = verify(records, names, root, IVA_SHA, IVANKA_SHA, original_evidence)
             self.assertFalse(report["real_data_numeric_gate_pass"])
             records[0]["ivanka"]["container_wall_seconds"] = 90
             (Path(records[0]["ivanka"]["artifact_dir"]) / "conseq.csv").write_text(
                 "seed,consensus-percent-cutoff,sequence\nHCV,MAX,FAKE\n")
-            report = verify(records, names, root, IVA_SHA, IVANKA_SHA)
+            report = verify(records, names, root, IVA_SHA, IVANKA_SHA, original_evidence)
             self.assertIn("final_consensus_sha_mismatch", repr(report["errors"]))
 
 

@@ -43,7 +43,9 @@ pub(super) fn write(
             Vec::new(),
         )
     };
-    if let Some(rescue) = rescue {
+    if let Some(rescue) = rescue.and_then(|seq| {
+        crate::assembler::run_seed::phase_veto::vet_rescue(seq, &reads.seqs, &reads.quals)
+    }) {
         // Never exceed the user-requested max-contigs cap. Replace only a
         // non-protected path whose canonical 31-mers remain represented;
         // otherwise withhold the rescue to avoid losing distinct evidence.

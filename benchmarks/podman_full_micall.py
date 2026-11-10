@@ -21,6 +21,7 @@ import time
 from Bio import SeqIO
 from Bio.Align import PairwiseAligner
 from reference_catalog import load_micall_projects
+from diagnostic_metrics import extract as extract_diagnostics
 import milestone198
 from podman_detached_lifecycle import run_detached
 from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
@@ -35,7 +36,9 @@ IVANKA_IMAGE = os.environ.get("IVANKA_IVANKA_IMAGE", "localhost/ivanka-micall-iv
 OUTPUT_NAMES = ("conseq.csv", "conseq_all.csv", "contigs.csv", "unstitched_contigs.csv",
                 "stitched_contigs.csv", "genome_coverage.csv", "genome_concordance.csv",
                 "remap_counts.csv", "coverage_summary.csv", "concordance.csv",
-                "nuc.csv", "amino.csv", "insertions.csv", "coverage_scores.csv")
+                "nuc.csv", "amino.csv", "insertions.csv", "coverage_scores.csv",
+                "multimap_depth.csv", "unique_aligned_fragments.csv",
+                "exact_coverage.csv", "clipping.csv")
 
 
 def sha(path):
@@ -216,6 +219,7 @@ def score_outputs(folder, reference):
                 "unique_reference_positions_ge_10":len(unique_ge_10),
                 "unique_reference_positions_ge_100":len(unique_ge_100),
             },
+            "diagnostics":extract_diagnostics(folder),
             "outputs":result}
 
 def compare_outputs(iva, ivanka):
@@ -1121,6 +1125,12 @@ def _run_main():
             args.sample_time_limit,reference_panel_hash))
         from strict_single_invocation import enforce_single_invocation
         enforce_single_invocation(summary, len(reused))
+    # Diagnostic signed-power comparisons are informational only, and never
+    # affect milestone198_pass or the two qualifying PSI calculations.
+    from diagnostic_psi import compare_records
+    summary["diagnostic_psi"] = compare_records(
+        completed_records,
+        expected_count=len(rows))
     (RESULTS/f"summary-{invocation}.json").write_text(
         json.dumps(summary,indent=2,sort_keys=True))
     if not args.qualify_198:

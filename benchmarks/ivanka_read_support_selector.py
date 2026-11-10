@@ -72,6 +72,13 @@ def paired_reads(paths, limit):
             yield seq1, seq2
 
 
+def rank_by_pair_weighted_breadth(entries, coverage, pairs):
+    """Prioritize long reconstructed spans supported by abundant original pairs."""
+    return sorted(range(len(entries)),
+                  key=lambda i: (-coverage[i] * pairs[i], -coverage[i],
+                                 -pairs[i], -len(entries[i][1]), i))
+
+
 def read_supported_ranking(entries, reads, max_pairs=80000):
     positions = index_kmers(entries)
     depth = [[0] * max(0, len(sequence) - K + 1) for _, sequence in entries]
@@ -94,8 +101,7 @@ def read_supported_ranking(entries, reads, max_pairs=80000):
     if count == 0:
         raise ValueError("No original paired reads")
     coverage = [sum(value >= 3 for value in depths) for depths in depth]
-    rank = sorted(range(len(entries)),
-                  key=lambda i: (-coverage[i], -pairs[i], -len(entries[i][1]), i))
+    rank = rank_by_pair_weighted_breadth(entries, coverage, pairs)
     return rank, coverage, pairs
 
 
@@ -133,6 +139,7 @@ def main(args):
           "native", len(entries), "selected", chosen,
           "covered_31mers", [coverage[i] for i in chosen],
           "supporting_pairs", [pair_counts[i] for i in chosen],
+          "read_support_products", [coverage[i] * pair_counts[i] for i in chosen],
           file=sys.stderr, flush=True)
 
 

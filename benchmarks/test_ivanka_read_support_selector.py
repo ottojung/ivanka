@@ -6,7 +6,7 @@ import unittest
 
 from ivanka_read_support_selector import (
     K, index_kmers, paired_reads, parse_fasta, paths_from_args,
-    read_supported_ranking, write_selected,
+    read_supported_ranking, rank_by_pair_weighted_breadth, write_selected,
 )
 
 
@@ -45,6 +45,21 @@ class ReadSupportSelectionTests(unittest.TestCase):
             self.assertEqual(ranking[0], 1)
             self.assertGreater(coverage[1], coverage[0])
             self.assertGreater(pairs[1], pairs[0])
+
+    def test_pair_abundance_breaks_breadth_only_offtarget_bias(self):
+        entries = [(">long-low-abundance", "A" * 1100),
+                   (">short-dominant", "C" * 820)]
+        rank = rank_by_pair_weighted_breadth(
+            entries, [990, 716], [128, 339]
+        )
+        self.assertEqual(rank, [1, 0])
+
+    def test_broad_supported_assembly_beats_short_high_count(self):
+        entries = [(">full", "A" * 1150), (">short", "C" * 440)]
+        rank = rank_by_pair_weighted_breadth(
+            entries, [1116, 420], [410, 578]
+        )
+        self.assertEqual(rank, [0, 1])
 
     def test_command_required_inputs(self):
         got = paths_from_args(["--reads1", "a", "--reads2", "b", "--output", "c"])

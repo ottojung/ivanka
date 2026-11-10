@@ -154,6 +154,29 @@ PSI(1), PSI(2), largest-magnitude limit, real nonnegative zero status, wins,
 losses, ties, paired count and missing samples. Do not suppress negative
 metrics or select only appealing samples.
 
+## Human-readable, unambiguous milestone report
+
+The independent strict evaluator's output is the only source of a positive
+198-sample numeric gate. Produce a separate human report from the same
+immutable results JSONL, the strict evaluator JSON and optional diagnostic
+PSI. The formatter preserves the complete failure list, ten most harmed
+samples per qualifying metric, each optional metric PSI and missingness,
+physical invocation and per-arm image identifiers:
+
+```sh
+PYTHONPATH=benchmarks python3 benchmarks/report_updated_micall.py \
+  /path/to/results.jsonl \
+  --strict-qualification /path/to/updated-micall-qualification.json \
+  --diagnostic-psi /path/to/diagnostic-psi.json \
+  --output /path/to/updated-micall-report.md
+```
+
+A report without the strict evaluator is labeled NOT ATTESTED even when
+partial PSI is positive. A valid strict verifier response is bound to the
+original results JSONL SHA-256 and cannot be replaced by a subset analysis.
+No reporting utility may promote optional metrics or known-truth synthetic
+controls into the two numerical acceptance criteria.
+
 ## Synthetic FASTQ controls with positive ground truth
 
 ```sh

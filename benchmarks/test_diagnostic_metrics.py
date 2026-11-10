@@ -113,6 +113,41 @@ class DiagnosticMetricsTests(unittest.TestCase):
             self.assertEqual(shifted["values"]["exact_uncovered_bases"], 1)
             self.assertEqual(extract(src)["values"]["exact_uncovered_bases"], 2)
 
+    def test_contig_burden_keeps_biology_distinct_from_runtime_proxies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            write_csv(directory, "contigs.csv", ["ref", "contig"],
+                      [["known", "A"*35], ["unknown-partial", "A"*35],
+                       ["known", "C"*35]])
+            write_csv(directory, "stitched_contigs.csv", ["ref", "contig"],
+                      [["known", "A"*35], ["unknown", "A"*35]])
+            write_csv(directory, "unstitched_contigs.csv", ["ref", "contig"],
+                      [["known", "A"*35], ["unknown", "A"*35],
+                       ["known", "C"*35]])
+            v = extract(directory)["values"]
+            self.assertEqual(v["final_contig_count"], 3)
+            self.assertEqual(v["final_contig_total_bases"], 105)
+            self.assertEqual(v["final_contig_unknown_count"], 1)
+            self.assertEqual(v["final_contig_exact_duplicates"], 1)
+            self.assertAlmostEqual(v["final_contig_31mer_redundancy_fraction"],
+                                   13/15)
+            self.assertEqual(v["stitched_contig_count"], 2)
+            self.assertEqual(v["unstitched_contig_count"], 3)
+            self.assertEqual(DIRECTIONS["final_contig_count"], -1)
+
+    def test_contig_31mer_orientation_and_unknown_bases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            write_csv(directory, "contigs.csv", ["ref", "contig"],
+                      [["known", "ACGT"*9], ["known", "ACGT"*9],
+                       ["known", "N"*40]])
+            result = extract(directory)
+            self.assertIsNotNone(
+                result["values"]["final_contig_31mer_redundancy_fraction"])
+            self.assertEqual(result["context"]["final_contig_valid_31mer_positions"],
+                             12)
+            self.assertEqual(result["values"]["final_contig_count"], 3)
+
     def test_absent_files_are_unavailable_not_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
             actual = extract(tmp)

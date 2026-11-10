@@ -35,6 +35,13 @@ DIRECTIONS = {
     "nuc_q15_covered_fraction": 1,
     "region_concordance_mean": 1,
     "region_concordance_covered_mean": 1,
+    "final_contig_count": -1,
+    "final_contig_total_bases": -1,
+    "final_contig_unknown_count": -1,
+    "final_contig_exact_duplicates": -1,
+    "final_contig_31mer_redundancy_fraction": -1,
+    "stitched_contig_count": -1,
+    "unstitched_contig_count": -1,
 }
 UNITS = {
     "average_read_depth": "coverage per genome_coverage.csv row",
@@ -59,6 +66,13 @@ UNITS = {
     "nuc_q15_covered_fraction": "Q15 covered positions / represented Q15 positions",
     "region_concordance_mean": "unweighted pct_concordance over concordance.csv rows",
     "region_concordance_covered_mean": "unweighted pct_concordance where pct_covered > 0",
+    "final_contig_count": "MiCall final contig rows; fewer is only a runtime burden proxy",
+    "final_contig_total_bases": "sum final contig lengths; smaller means less mapping work, not necessarily better biology",
+    "final_contig_unknown_count": "final contig rows classified as unknown; runtime burden proxy",
+    "final_contig_exact_duplicates": "repeated exact final sequences; redundant mapping hypotheses",
+    "final_contig_31mer_redundancy_fraction": "fraction of valid canonical 31mer positions duplicated across final contigs, computational redundancy only",
+    "stitched_contig_count": "stitched_contigs.csv rows; fewer is only a runtime burden proxy",
+    "unstitched_contig_count": "unstitched_contigs.csv rows; fewer is only a runtime burden proxy",
 }
 
 
@@ -100,6 +114,9 @@ def extract(folder, *, exact_coverage_root=None):
     errors = []
     for filename, func in (
         ("genome_coverage.csv", _genome),
+        ("contigs.csv", _contig_burden),
+        ("stitched_contigs.csv", _stitched_burden),
+        ("unstitched_contigs.csv", _unstitched_burden),
         ("nuc.csv", _soft_clips),
         ("nuc.csv", _nuc_depth),
         ("concordance.csv", _region_concordance),
@@ -205,6 +222,54 @@ def _capped_pairs(folder):
         "multimap_cap_k_values": sorted({k for _, k in warnings}),
         "multimap_capped_pair_count_is_lower_bound": True,
     }
+
+def _contig_burden(rows):
+    count = 0
+    total_bases = 0
+    unknown = 0
+    exact_duplicates = 0
+    sequences = set()
+    valid_kmers = 0
+    revcomplement_table = str.maketrans("ACGT", "TGCA")
+    unique_kmers = set()
+    for row in rows:
+        seq = (row.get("contig") or row.get("sequence") or "").upper()
+        if not seq:
+            continue
+        count += 1
+        total_bases += len(seq)
+        unknown += int("unknown" in (row.get("ref") or "").lower())
+        if seq in sequences:
+            exact_duplicates += 1
+        sequences.add(seq)
+        for pos in range(max(0, len(seq)-30)):
+            kmer = seq[pos:pos+31]
+            if any(base not in "ACGT" for base in kmer):
+                continue
+            valid_kmers += 1
+            reverse = kmer.translate(revcomplement_table)[::-1]
+            unique_kmers.add(min(kmer, reverse))
+    return {
+        "final_contig_count": count if count else None,
+        "final_contig_total_bases": total_bases if count else None,
+        "final_contig_unknown_count": unknown if count else None,
+        "final_contig_exact_duplicates": exact_duplicates if count else None,
+        "final_contig_31mer_redundancy_fraction": (
+            1-len(unique_kmers)/valid_kmers if valid_kmers else None),
+    }, {"final_contig_distinct_sequences": len(sequences),
+        "final_contig_valid_31mer_positions": valid_kmers,
+        "final_contig_distinct_canonical_31mers": len(unique_kmers)}
+
+
+def _stitched_burden(rows):
+    n = sum(1 for row in rows if row.get("contig"))
+    return {"stitched_contig_count": n if n else None}, {}
+
+
+def _unstitched_burden(rows):
+    n = sum(1 for row in rows if row.get("contig"))
+    return {"unstitched_contig_count": n if n else None}, {}
+
 
 def _genome(rows):
     depths = []

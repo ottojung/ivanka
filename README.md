@@ -6,6 +6,8 @@ map reads, merge contigs, or select a reference during assembly.
 
 This is early experimental code. It is **not** validated for clinical use.
 
+Ivanka is licensed under the [GNU Affero General Public License, version 3](LICENSE)
+(`AGPL-3.0-only`).
 
 ## Reference-blind assembly: a hard boundary
 

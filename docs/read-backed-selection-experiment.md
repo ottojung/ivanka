@@ -69,3 +69,17 @@ The first 50-base-flank A/B was NOT acceptable: real HCV S101 scored
 887 against IVA 1158 (required 1042.2), despite running in 98.5s vs
 IVA 345.7s. The conservative 512-base flank is a new proposal that
 requires fresh real full-MiCall validation before any merger.
+
+## Dense read-island extraction (another separate draft experiment)
+
+A candidate may contain multiple distant sequence intervals with meaningful
+original-pair support, separated by a very long region with no observed
+31-mer support. The optional IVANKA_TRIM_SUPPORTED_ISLAND=1 variant first
+applies the conservative 512-base terminal rule. When that rule cannot clip,
+it considers contiguous original-read-supported islands separated by over
+200 unsupported 31-mer positions. The best island has at least 500 positions
+supported by >=3 original pairs and >=85% support inside its own envelope.
+Only the broadest such island is retained, with 512-base terminal flanks.
+This is a speculative, strictly read-derived research experiment that must
+pass physical original-sample MiCall validation; no benchmark reference
+sequence or similarity score enters the selector.

@@ -17,6 +17,7 @@ ENV IVANKA_BENCH_RESCUE_SEEDS=${NATIVE_RESCUE_SEEDS}
 ENV IVANKA_POSTSELECT_CONTIGS=${POSTSELECT_CONTIGS}
 ENV IVANKA_SUPPORT_PAIRS=80000
 ENV IVANKA_TRIM_UNSUPPORTED_TERMINI=1
+ENV IVANKA_TRIM_SUPPORTED_ISLAND=1
 COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka-native
 COPY benchmarks/ivanka_read_support_selector.py /usr/local/bin/ivanka
 COPY benchmarks/ivanka_trim_unsupported.py /usr/local/bin/ivanka_trim_unsupported.py

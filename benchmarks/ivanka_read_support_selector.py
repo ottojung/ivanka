@@ -148,8 +148,11 @@ def main(args):
     chosen = rank[:limit]
     selected = [entries[i] for i in chosen]
     if trim:
-        from ivanka_trim_unsupported import trim_terminal_unsupported
-        selected = [trim_terminal_unsupported(entries[i], depth[i]) for i in chosen]
+        from ivanka_trim_unsupported import (trim_supported_island,
+                                             trim_terminal_unsupported)
+        island = os.environ.get("IVANKA_TRIM_SUPPORTED_ISLAND", "0") == "1"
+        clipping = trim_supported_island if island else trim_terminal_unsupported
+        selected = [clipping(entries[i], depth[i]) for i in chosen]
     write_selected(paths["--output"], selected)
     print("IVANKA_READ_BACKED_SELECTION",
           "native", len(entries), "selected", chosen,

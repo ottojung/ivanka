@@ -69,6 +69,50 @@ class DiagnosticMetricsTests(unittest.TestCase):
             self.assertEqual(result["context"]["exact_coverage_selected_contig"],
                              "long")
 
+    def test_cli_outputs_depth_concordance_and_cap_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_csv(root, "nuc.csv",
+                      ["seed", "region", "refseq.nuc.pos", "q-cutoff", "coverage", "clip"],
+                      [["S", "r1", "1", "15", "10", "3"],
+                       ["S", "r2", "1", "15", "8", "2"],
+                       ["S", "r1", "2", "15", "0", "1"],
+                       ["S", "r1", "2", "30", "999", "0"],
+                       ["T", "r3", "1", "15", "5", "0"]])
+            write_csv(root, "concordance.csv",
+                      ["region", "pct_concordance", "pct_covered"],
+                      [["r1", "90", "70"], ["r2", "0", "0"], ["r3", "100", "95"]])
+            (root / "podman.stderr.log").write_text(
+                '87 pairs reached the Bowtie2 -k 12 reporting limit\n'
+                '87 pairs reached the Bowtie2 -k 12 reporting limit\n'
+                '12 pairs reached the Bowtie2 -k 12 reporting limit\n')
+            r = extract(root)
+            d = r["values"]
+            self.assertEqual(d["nuc_q15_total_depth"], 15)
+            self.assertEqual(d["nuc_q15_mean_depth"], 5)
+            self.assertEqual(d["nuc_q15_positions_covered"], 2)
+            self.assertAlmostEqual(d["nuc_q15_covered_fraction"], 2/3)
+            self.assertAlmostEqual(d["region_concordance_mean"], 190/3)
+            self.assertEqual(d["region_concordance_covered_mean"], 95)
+            self.assertEqual(d["multimap_capped_pairs"], 87)
+            self.assertEqual(r["context"]["multimap_cap_warnings"], 3)
+            self.assertTrue(r["context"]["multimap_capped_pair_count_is_lower_bound"])
+            self.assertIsNone(d["average_read_depth"])
+            self.assertIsNone(d["average_concordance"])
+
+    def test_external_exact_sidecar_does_not_change_micall_arm(self):
+        with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as sidecar:
+            write_csv(Path(src), "exact_coverage.csv",
+                      ["contig", "position", "exact_coverage"],
+                      [["a", "1", "0"], ["a", "2", "0"]])
+            write_csv(Path(sidecar), "exact_coverage.csv",
+                      ["contig", "position", "exact_coverage"],
+                      [["a", "1", "1"], ["a", "2", "0"]])
+            self.assertEqual(extract(src)["values"]["exact_uncovered_bases"], 2)
+            shifted = extract(src, exact_coverage_root=sidecar)
+            self.assertEqual(shifted["values"]["exact_uncovered_bases"], 1)
+            self.assertEqual(extract(src)["values"]["exact_uncovered_bases"], 2)
+
     def test_absent_files_are_unavailable_not_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
             actual = extract(tmp)

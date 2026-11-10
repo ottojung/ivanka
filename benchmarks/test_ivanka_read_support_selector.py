@@ -54,6 +54,15 @@ class ReadSupportSelectionTests(unittest.TestCase):
         )
         self.assertEqual(rank, [1, 0])
 
+    def test_unsupported_long_extension_is_not_dominant(self):
+        # HCV S101-like metrics: long chimeric/repetitive extension has
+        # less read-supported breadth despite more total paired-read hits.
+        entries = [(">long", "A" * 5651), (">short", "C" * 4033)]
+        rank = rank_by_pair_weighted_breadth(
+            entries, [466, 1220], [8416, 3191]
+        )
+        self.assertEqual(rank, [1, 0])
+
     def test_broad_supported_assembly_beats_short_high_count(self):
         entries = [(">full", "A" * 1150), (">short", "C" * 440)]
         rank = rank_by_pair_weighted_breadth(

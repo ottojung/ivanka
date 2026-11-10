@@ -73,10 +73,18 @@ def paired_reads(paths, limit):
 
 
 def rank_by_pair_weighted_breadth(entries, coverage, pairs):
-    """Prioritize long reconstructed spans supported by abundant original pairs."""
+    """Weight supported span and fragment abundance by its observed fraction.
+
+    A long erroneous extension is not a valid dominant assembly just because
+    a smaller supported part of it is abundant. All measurements are from
+    the original paired FASTQ, without any external sequence.
+    """
     return sorted(range(len(entries)),
-                  key=lambda i: (-coverage[i] * pairs[i], -coverage[i],
-                                 -pairs[i], -len(entries[i][1]), i))
+                  key=lambda i: (
+                      -(coverage[i] * coverage[i] * pairs[i]) /
+                      max(1, len(entries[i][1]) - K + 1),
+                      -coverage[i] * pairs[i], -coverage[i],
+                      -pairs[i], -len(entries[i][1]), i))
 
 
 def read_supported_ranking(entries, reads, max_pairs=80000):

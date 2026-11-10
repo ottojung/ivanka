@@ -17,14 +17,15 @@ read pairs; sample every other 31-mer position in each mate. A pair
 supports a candidate if it matches at least two indexed positions.
 Count each matched candidate position at most once per pair.
 
-The first ranking criterion is the **product of the number of candidate
-31-mer positions supported by at least three original pairs and the
-number of original pairs supporting the candidate**. This rewards
-both a long reconstructed span and the abundance of independent
-molecules, rather than selecting a weakly supported long artifact.
-Break ties by supported span, pair count, candidate length, then
-stable source order. Emit one candidate by default to avoid expensive
-MiCall remapping over many competing contigs.
+The first ranking criterion is **(supported 31-mer positions)² ×
+(supporting original pairs) / (total candidate 31-mer positions)**.
+It balances reconstructed span, original-fragment abundance, and
+the fraction of sequence genuinely supported by reads. A long
+extension with little supporting coverage must not dominate merely
+because a short portion has many read matches. Break ties by
+supported span × pair count, supported span, pair count, candidate
+length, then stable source order. Emit one candidate by default to
+avoid expensive MiCall remapping over many competing contigs.
 
 This is a read-evidence heuristic, not a mathematical guarantee of
 global haplotype abundance. It is intended to reject superficially

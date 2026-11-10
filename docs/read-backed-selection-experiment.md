@@ -103,3 +103,7 @@ read-supported long contigs into non-overlapping tiles of at most 2,000 nt,
 retaining every base in original order, without selecting a genomic target.
 It refuses to tile weakly supported segments and leaves other sequences intact.
 The same immutable benchmark and reference-blindness contract apply.
+
+A 60%-of-span minimum resulting tile length prevents tiny fragments,
+while allowing 2,443nt S75-like candidates to be partitioned into
+two complete-coverage tiles of 1,222 and 1,221nt.

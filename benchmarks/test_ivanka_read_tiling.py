@@ -14,9 +14,23 @@ class TilingTests(unittest.TestCase):
         self.assertEqual(len(set(h for h, _ in tiles)), 4)
 
     def test_too_short_remains_untouched(self):
-        seq = "ACGT" * 600
+        seq = "ACGT" * 500
         depth = [8] * (len(seq) - K + 1)
         self.assertEqual(tile_supported_contig((">x", seq), depth),
+                         [(">x", seq)])
+
+    def test_s75_length_can_be_tiled_without_losing_sequence(self):
+        seq = "ACGT" * 610 + "ACG"
+        self.assertEqual(len(seq), 2443)
+        d = [5] * (len(seq) - K + 1)
+        tiles = tile_supported_contig((">S75", seq), d, 2000)
+        self.assertEqual([len(s) for _,s in tiles], [1222, 1221])
+        self.assertEqual("".join(s for _,s in tiles), seq)
+
+    def test_barely_over_span_is_not_split_into_tiny_fragments(self):
+        seq = "A" * 2200
+        d = [4] * (len(seq) - K + 1)
+        self.assertEqual(tile_supported_contig((">x", seq), d, 2000),
                          [(">x", seq)])
 
     def test_rejects_weak_tile_without_partial_output(self):

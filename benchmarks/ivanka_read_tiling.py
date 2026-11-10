@@ -14,10 +14,12 @@ def tile_supported_contig(entry, depth, span=2000, min_coverage=0.8,
         raise ValueError("Invalid tiling limits")
     if len(depth) != max(0, length - K + 1):
         raise ValueError("Read-depth and contig lengths disagree")
-    if length <= span or length < 3 * span // 2:
+    if length <= span:
         return [entry]
     n = ceil(length / span)
-    if n > max_parts:
+    # Prevent very short fragments when a candidate barely exceeds one tile.
+    # Requiring 60% of span still permits 2443nt candidates to split in two.
+    if length // n < 3 * span // 5 or n > max_parts:
         return [entry]
     base, extra = divmod(length, n)
     start = 0

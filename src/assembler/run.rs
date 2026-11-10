@@ -29,7 +29,7 @@ pub(crate) fn run()->Result<(),Box<dyn std::error::Error>> {
     }
     let protected_seed_count=contigs.len();
     assemble_candidates(candidates,&reads,&mut contigs,&mut supporting_counts);
-    let rescue=rescue_short(&a,&b,&reads,max_pairs,&contigs)?;
+    let rescue=rescue_short(&a,&b,&reads,max_pairs,&contigs)?.and_then(|seq|super::run_seed::phase_veto::vet_rescue(seq,&reads.seqs,&reads.quals));
     let (contigs,supporting_counts)=super::run_seed::phase_veto::reject_unsupported_recombinants(contigs,supporting_counts,&reads.seqs,&reads.quals,protected_seed_count);
     eprintln!("Ivanka ranking {} candidates by distinct contributing FASTQ records × contig length; {} MiCall seeds protected",contigs.len(),protected_seed_count);
     let (mut contigs,audit)=if audit_path.is_some() {

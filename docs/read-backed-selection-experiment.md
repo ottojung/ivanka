@@ -83,3 +83,13 @@ Only the broadest such island is retained, with 512-base terminal flanks.
 This is a speculative, strictly read-derived research experiment that must
 pass physical original-sample MiCall validation; no benchmark reference
 sequence or similarity score enters the selector.
+
+## Read-supported maximum-depth window (experimental)
+
+An optional 2,000 nt maximum span is selected by maximizing the sum of
+original read-pair exact-31-mer positional depths over contiguous windows
+(only if at least 80% of starts have three original-pair observations).
+This is strictly reference-blind; the benchmark reference panel and scores
+never influence sequence selection. A window is considered only if the
+conservative supported-island strategy leaves the candidate unchanged.
+This is a runtime hypothesis, not a qualification result.

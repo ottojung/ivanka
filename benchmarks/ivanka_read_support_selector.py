@@ -153,6 +153,12 @@ def main(args):
         island = os.environ.get("IVANKA_TRIM_SUPPORTED_ISLAND", "0") == "1"
         clipping = trim_supported_island if island else trim_terminal_unsupported
         selected = [clipping(entries[i], depth[i]) for i in chosen]
+    span = int(os.environ.get("IVANKA_READ_BACKED_MAX_SPAN", "0"))
+    if span:
+        from ivanka_read_window import dominant_read_window
+        selected = [dominant_read_window(entries[i], depth[i], span)
+                    if entries[i] == result else result
+                    for i, result in zip(chosen, selected)]
     write_selected(paths["--output"], selected)
     print("IVANKA_READ_BACKED_SELECTION",
           "native", len(entries), "selected", chosen,

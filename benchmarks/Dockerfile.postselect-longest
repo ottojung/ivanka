@@ -1,0 +1,9 @@
+# Experiment only: preserve pinned MiCall and native 16-contig Ivanka.
+# Filter *after* assembly rather than reducing the assembler seed search.
+FROM localhost/micall:ivanka-newmicall-e0073cb5-6e4705d-v2
+ARG SELECTED_CONTIGS=1
+ENV IVANKA_POSTSELECT_CONTIGS=${SELECTED_CONTIGS}
+RUN mv /usr/local/bin/ivanka /usr/local/bin/ivanka-native
+COPY benchmarks/ivanka_postselect_longest.py /usr/local/bin/ivanka
+RUN chmod 755 /usr/local/bin/ivanka && python -m py_compile /usr/local/bin/ivanka
+LABEL org.ottojung.ivanka.experiment="postselect-longest-native16"

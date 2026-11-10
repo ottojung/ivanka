@@ -4,6 +4,28 @@
 or MiCall integration change.** Ivanka is primarily a *dominant-sequence
 assembler*, **not an exhaustive viral haplotype reconstruction system**.
 
+## Reference-blindness is part of the definition
+
+Ivanka must not know **any** viral reference sequences. In particular,
+the frozen benchmark panel must never influence assembly, search,
+contig prioritization, pruning, or a post-assembly wrapper. Choosing a
+contig because its 21-mers, alignment, or diagonal matches a known genome
+is prohibited; it is benchmark leakage, not evidence that the candidate
+is the most abundant viral sequence.
+
+The assembly interface receives only paired sequencing reads (and
+parameters that do not encode target sequences). All candidate evidence
+must be computed from those reads. Do not inject seed contigs from a
+different, potentially reference-informed pipeline. MiCall's downstream
+reference-informed mapping/stitching and independent benchmark scoring
+remain allowed, but their outputs cannot feed back into Ivanka's selection.
+
+**Rejected experiments:** reference-21-mer ranking, diagonal reference
+support and adaptive fallback based on reference similarity from
+PRs #202 and #203. Their apparent numerical benefits must never count
+toward qualifying Ivanka. Enforce the boundary in
+`benchmarks/reference_isolation.py` and CI.
+
 ## What success means
 
 For a sample containing several viral populations, the primary product is a

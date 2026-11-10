@@ -1,6 +1,6 @@
 use super::ranking::{select_supported_contigs,select_supported_contigs_with_kmers};
 use super::reads::K;
-    #[test] fn cap_preserves_short_g2p_seed_and_respects_1000(){
+    #[test] fn cap_respects_protected_prefix_and_1000_limit(){
         let seqs=(1..=1200).map(|n|vec![b'A';
         n]).collect::<Vec<_>>();
         let counts=(1..=1200).map(|n|n).collect::<Vec<_>>();

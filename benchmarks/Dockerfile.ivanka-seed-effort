@@ -1,0 +1,15 @@
+# Compile inside the same Debian ABI as the original MiCall images.
+FROM docker.io/library/rust:1.93-bookworm AS ivanka-builder
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY build.rs ./
+COPY source_lints ./source_lints
+RUN cargo build --release --locked
+# Preserve pinned MiCall and the verified cap-one assembler-only adapter.
+FROM localhost/micall:ivanka-newmicall-e0073cb5-6e4705d-cap1-v2
+ARG SEED_EFFORT=20
+ENV IVANKA_SEED_EFFORT=${SEED_EFFORT}
+COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka
+RUN /usr/local/bin/ivanka --help
+LABEL org.ottojung.ivanka.experiment="dominant-contig-one-bounded-seed-search"

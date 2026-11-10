@@ -132,7 +132,7 @@ class DiagnosticMetricsTests(unittest.TestCase):
 class DiagnosticPsiTests(unittest.TestCase):
     def _record(self, name, left, right):
         return {
-            "sample": name, "status": "finished",
+            "sample": name, "status": "finished", "failed": False,
             "iva": {"metrics": {"diagnostics": {"values": left}}},
             "ivanka": {"metrics": {"diagnostics": {"values": right}}},
         }
@@ -169,6 +169,32 @@ class DiagnosticPsiTests(unittest.TestCase):
         ])
         self.assertEqual(report["metrics"]["average_read_depth"]["paired_samples"], 1)
         self.assertEqual(report["metrics"]["average_read_depth"]["missing_samples"], ["B"])
+
+    def test_failed_terminal_with_partial_csvs_is_not_a_psi_observation(self):
+        good = self._record("A", {"average_read_depth": 10},
+                            {"average_read_depth": 11})
+        timed_out = self._record("B", {"average_read_depth": 1},
+                                 {"average_read_depth": 1000})
+        timed_out["status"] = "sample_timeout"
+        timed_out["failed"] = True
+        report = compare_records([good, timed_out], expected_count=2)
+        self.assertEqual(report["samples_seen"], 2)
+        self.assertEqual(report["successful_paired_samples"], 1)
+        self.assertFalse(report["cohort_complete"])
+        self.assertEqual(report["excluded_terminal_samples"], [
+            {"sample": "B", "status": "sample_timeout", "failed": True}])
+        depth = report["metrics"]["average_read_depth"]
+        self.assertEqual(depth["paired_samples"], 1)
+        self.assertEqual(depth["missing_samples"], ["B"])
+        self.assertEqual(depth["psi"]["psi1"], 1.0)
+
+    def test_failed_flag_on_finished_row_is_excluded(self):
+        record = self._record("A", {"soft_clips_count": 100},
+                              {"soft_clips_count": 1})
+        record["failed"] = True
+        report = compare_records([record])
+        self.assertEqual(report["successful_paired_samples"], 0)
+        self.assertIsNone(report["metrics"]["soft_clips_count"]["psi"])
 
     def test_duplicate_samples_are_rejected(self):
         rec = self._record("A", {}, {})

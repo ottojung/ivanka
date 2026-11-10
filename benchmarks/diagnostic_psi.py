@@ -12,14 +12,21 @@ from psi_acceptance import summarize
 
 
 def compare_records(records, expected_count=None):
-    records = list(records)
-    names = [r.get("sample") for r in records]
+    terminal_records = list(records)
+    names = [r.get("sample") for r in terminal_records]
     if None in names or len(set(names)) != len(names):
-        raise ValueError("every paired record needs a unique sample")
+        raise ValueError("every terminal record needs a unique sample")
+    # A failed or timed-out sample may have partial CSVs. Do not treat its
+    # partial measurements as a valid A/B pair, even for non-gating PSI.
+    excluded = [r for r in terminal_records if
+                r.get("status") != "finished" or r.get("failed") is not False]
+    records = [r for r in terminal_records if
+               r.get("status") == "finished" and r.get("failed") is False]
+    excluded_names = [r["sample"] for r in excluded]
     metrics = {}
     for name, direction in DIRECTIONS.items():
         diffs = []
-        missing = []
+        missing = list(excluded_names)
         for record in records:
             iva = record.get("iva", {}).get("metrics", {}).get("diagnostics", {})
             ivanka = record.get("ivanka", {}).get("metrics", {}).get("diagnostics", {})
@@ -47,9 +54,15 @@ def compare_records(records, expected_count=None):
     return {"schema": "ivanka.diagnostic_psi.v1",
             "qualification_effect": "none",
             "qualifying_metrics_unchanged": ["final_max_alignment", "micall_runtime"],
-            "samples_seen": len(records),
+            "samples_seen": len(terminal_records),
+            "successful_paired_samples": len(records),
+            "excluded_terminal_samples": [
+                {"sample": r["sample"], "status": r.get("status"),
+                 "failed": r.get("failed")}
+                for r in excluded],
             "expected_samples": expected_count,
             "cohort_complete": (len(records) == expected_count
+                                and not excluded
                                 if expected_count is not None else None),
             "metrics": metrics}
 

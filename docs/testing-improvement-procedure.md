@@ -129,7 +129,9 @@ Each optional metric gets its own signed difference oriented so improvement
 is positive (Ivanka−IVA for higher-is-better and IVA−Ivanka for lower).
 Analyze with the same all-real-r signed-power PSI method as acceptance, but
 retain the paired count and every missing sample. A diagnostic PSI may be
-negative without failing the release gate.
+negative without failing the release gate. Failed or timed-out terminal
+samples are excluded from valid paired diagnostic PSI observations, while
+their names and failure statuses remain explicitly reported as missing.
 
 The main runner embeds `diagnostic_psi` in its JSON summary. For offline
 read-only recalculation from an existing results.jsonl:

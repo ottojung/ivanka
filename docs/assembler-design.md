@@ -4,8 +4,8 @@ Ivanka is a **reference-free** seed-and-read assembler. MiCall, not Ivanka,
 provides reference assignment, referenceless/reference-informed contig
 stitching, mapping, remapping and final consensus scoring.
 
-**Strict interface:** only original paired reads and read-derived evidence
-may affect Ivanka's contigs. Known genomes, HXB2/HCV templates, the
+**Strict reference boundary:** original paired reads and optional trusted
+`--seeds` FASTA contigs derived from the same sample reads may affect Ivanka's contigs. Known genomes, HXB2/HCV templates, the
 benchmark's 33-reference panel, and alignment scores must not enter the
 assembler, wrapper, candidate ranking or pruning logic. Reference-guided
 21-mer/diagonal selection is explicitly rejected, including indirect

@@ -11,8 +11,8 @@ This is early experimental code. It is **not** validated for clinical use.
 
 **Ivanka and every contig selector in its execution path must be completely
 blind to viral reference sequences, reference alignments and the benchmark's
-33-reference scoring panel.** Ivanka may use only original paired sequencing
-reads and evidence computed from those reads. It may **not** rank or discard
+33-reference scoring panel.** Ivanka may use original paired sequencing reads and optional FASTA seed
+contigs independently derived from those **same sample reads**. It may **not** rank or discard
 contigs based on similarity to HXB2, HCV, subtype templates or any other
 known sequence, even if this improves the benchmark result.
 
@@ -22,8 +22,11 @@ candidate selection. Passing that information back into Ivanka invalidates
 the comparison. The 2026-11-10 reference-21-mer and diagonal-selection
 experiments were rejected and are not valid benchmark evidence.
 
-The Rust `--seeds` auxiliary-FASTA option has been removed: no external
-contig or template file may be supplied to bias native assembly.
+An optional `--seeds seeds.fasta` input can supply **read-derived**
+contigs as assembly starting points. Ivanka extends them using the sample
+reads and reserves up to one-third of its output budget for supplied seeds.
+The caller is responsible for ensuring the FASTA contains sample-read-derived
+contigs, never reference sequences or reference-selected candidates.
 
 The CI guard `python benchmarks/reference_isolation.py` checks this
 boundary, including the MiCall assembler invocation. See

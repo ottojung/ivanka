@@ -36,12 +36,16 @@ class ReferenceIsolationTests(unittest.TestCase):
             "def select(contigs): return sorted(contigs, key=len, reverse=True)"
         ), [])
 
-    def test_rust_has_no_auxiliary_fasta_seed_ingress(self):
+    def test_rust_accepts_read_derived_fasta_seeds(self):
         native = (ROOT / "src/assembler/setup/cli.rs").read_text()
-        self.assertNotIn("--seeds", native)
-        self.assertFalse(list((ROOT / "src/assembler").rglob("*.rs"))
-                         and any("fasta_seeds(" in p.read_text()
-                                 for p in (ROOT / "src/assembler").rglob("*.rs")))
+        self.assertIn('"--seeds"', native)
+        self.assertIn("fasta_seeds(", (ROOT / "src/assembler/reads/input.rs").read_text())
+        self.assertIn("protected_seed_count=contigs.len()",
+                      (ROOT / "src/assembler/run.rs").read_text())
+
+    def test_rejects_known_reference_as_seed_producer(self):
+        source = 'let known = include_str!("hxb2.fasta");'
+        self.assertTrue(assembler_source_errors("src/assembler/run.rs", source))
 
     def test_rejects_reference_inputs_in_rust(self):
         self.assertTrue(assembler_source_errors(
@@ -59,7 +63,7 @@ class ReferenceIsolationTests(unittest.TestCase):
             "Dockerfile", "COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch.py"
         ), [])
 
-    def test_rejects_auxiliary_g2p_input(self):
+    def test_default_adapter_requires_review_before_automatically_forwarding_seeds(self):
         source = (ROOT / "benchmarks/patch_micall_for_ivanka.py").read_text()
         modified = source.replace(
             'subprocess.run(command, check=True, cwd=tmp_dir)',

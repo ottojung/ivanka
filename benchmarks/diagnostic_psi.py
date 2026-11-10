@@ -61,6 +61,8 @@ def main(argv=None):
     p.add_argument("--expected-samples", type=int)
     p.add_argument("--refresh-from-artifacts", action="store_true",
                    help="Read diagnostic CSVs from recorded artifact dirs; no original record edits")
+    p.add_argument("--exact-coverage-sidecars", type=Path,
+                   help="Optional independent sidecars at ROOT/sample/arm/exact_coverage.csv")
     a = p.parse_args(argv)
     with a.results_jsonl.open() as f:
         records = [json.loads(line) for line in f if line.strip()]
@@ -73,9 +75,15 @@ def main(argv=None):
                 instance = record.get(arm, {})
                 root = instance.get("artifact_dir")
                 if root and Path(root).is_dir():
-                    instance.setdefault("metrics", {})["diagnostics"] = extract(root)
+                    overlay = None
+                    if a.exact_coverage_sidecars is not None:
+                        overlay = a.exact_coverage_sidecars / record["sample"] / arm
+                    instance.setdefault("metrics", {})["diagnostics"] = extract(
+                        root, exact_coverage_root=overlay)
     report = compare_records(records, a.expected_samples)
     report["refreshed_from_artifacts"] = a.refresh_from_artifacts
+    report["exact_coverage_sidecars"] = (str(a.exact_coverage_sidecars)
+                                         if a.exact_coverage_sidecars else None)
     report["physical_artifact_integrity_attested"] = False
     formatted = json.dumps(report, indent=2, sort_keys=True, allow_nan=False)
     if a.output:

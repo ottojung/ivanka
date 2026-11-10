@@ -11,7 +11,7 @@ fn long_read_extends_across_ambiguous_suffix_without_losing_its_anchor() {
     let mut read=contig.clone();
     read.extend_from_slice(extension);
     let seqs=vec![read.clone(),rc(&read)];
-    let reads=Reads{index:build_index(&seqs),seqs,
+    let reads=Reads{index:build_index(&seqs),quals:seqs.iter().map(|s|vec![b'I';s.len()]).collect(),seqs,
         max_read_len:read.len(),seed_counts:HashMap::new(),
         overhang_cache:Default::default(),overlength_rejections:Default::default()};
     assert!(contig[contig.len()-250..].windows(K).all(|w|encode(w).is_none()));

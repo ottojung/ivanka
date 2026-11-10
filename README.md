@@ -6,6 +6,24 @@ map reads, merge contigs, or select a reference during assembly.
 
 This is early experimental code. It is **not** validated for clinical use.
 
+
+## Primary objective: recover the dominant viral sequence
+
+**Ivanka is not required to assemble every viral haplotype.** Its primary
+job in MiCall is to reconstruct the **most abundant read-supported viral
+sequence** (or a defensible major consensus where full haplotype phase
+cannot be established). In a mixture with 90% haplotype A and 10%
+haplotype B, recovering A accurately without producing a B contig can
+be a success. More contigs do not necessarily improve the output.
+
+Alternative/minority contigs are optional, **not an exhaustive-recall goal**.
+But Ivanka must not invent read-pair-contradicted recombinants, lose original
+molecule accounting, or corrupt downstream MiCall minority-allele evidence.
+See **[Primary assembly objective](docs/assembly-objective.md)** before
+proposing contig selection, pruning or synthetic tests. The existing
+198-sample alignment/runtime qualification remains unchanged.
+
+
 ## CLI
 
     cargo build --release
@@ -129,10 +147,13 @@ reduce redundant representations or change the post-stitch contigs supplied to
 remapping. The implementation may live in MiCall Python.
 
 **Post-stitch filtering by read support is an idea to test, not a mandated
-algorithm.** It might improve performance but could discard genuine minority
-haplotypes. Do not infer biological validity from contig count or the maximum
-final consensus score alone: check loss of read-supported sequence diversity,
-distinct canonical k-mers, alternative paths and potential chimeras. The
+algorithm.** Missing a low-abundance contig is not intrinsically a failure:
+recovering the dominant supported sequence is the priority, not enumerating
+all haplotypes. Pruning may improve remapping performance, but verify that
+it does not remove the dominant supported output, fabricate recombinants,
+or corrupt downstream minority-allele measurements. Do not infer biological
+validity from contig count, canonical k-mer diversity, or maximum final
+consensus score alone. The
 baseline IVA image and frozen controls remain unchanged; build a traceable
 candidate image and measure whole-pipeline remapping, alignment and runtime
 under the current all-real-exponent score and runtime Psi requirements.

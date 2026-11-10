@@ -30,7 +30,15 @@ must not be reported as passing that narrower experiment.
 
 ## Exploratory approaches
 
-Filtering contigs **after stitching**, perhaps by the number of reads supporting each resulting path, is one possible experiment. It is **not** a prescribed design: selecting only high-support, long or few contigs may discard legitimate minority haplotypes. Alternatives that prevent incorrect joins or compact redundant contigs while retaining supported sequence diversity are equally welcome.
+Filtering contigs **after stitching**, perhaps by the number of original read
+pairs supporting each path, is one possible experiment. It is **not** a
+prescribed design. The [primary objective](assembly-objective.md) is the
+**dominant read-supported viral sequence**, not exhaustive minor-haplotype
+recovery. Removing a legitimate but low-abundance contig can be acceptable
+if it does not remove the dominant assembly, fabricate phase, or damage
+required downstream MiCall allele measurements. Choosing few/long contigs
+blindly is still unsafe; test support-aware selection against the same
+unchanged scientific and runtime acceptance conditions.
 
 ## Non-negotiable evaluation rules
 
@@ -39,7 +47,7 @@ Filtering contigs **after stitching**, perhaps by the number of reads supporting
   (Psi(0)>0 and no nonnegative real zeros, using
   Psi(r) = sum(sign(p_i)*abs(p_i)**r)/198). Exact ties contribute zero at every exponent; checking r=0,1,2 alone is insufficient. No gate is waived for stitcher work.
 - Evaluate full-pipeline time, including stitching, remapping and final consensus. Tests on stitcher output alone are useful but not formal qualification.
-- Compare raw, post-stitch and final consensus outputs. Measure read-supported distinct canonical k-mers, minority variants, phasing where supported, and potential chimeric joins. A good winning MAX contig can hide the loss of other strongly supported paths.
+- Compare raw, post-stitch and final consensus outputs. Measure read-supported distinct canonical k-mers, minority alleles, phasing where supported, and potential chimeric joins. Loss of a minority haplotype *contig* is a diagnostic to investigate for downstream harm, **not a mandatory recall gate**. A good winning MAX score alone does not prove dominant-phase authenticity.
 - Read-record support is not proof of independent molecules or correct haplotype phasing. Do not use arbitrary contig-count limits, unsupported pruning or per-sample hardcoding as an acceptance shortcut.
 - Prefer small representative authentic-sample experiments before another full-198 trial.
 

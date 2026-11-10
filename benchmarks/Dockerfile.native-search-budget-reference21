@@ -1,0 +1,16 @@
+# Research: bounded native search with a pinned common MiCall base.
+# Parent already contains the checksum-pinned 33-reference selector wrapper.
+FROM docker.io/library/rust:1.93-bookworm AS ivanka-builder
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo build --release --locked
+
+FROM localhost/micall:ivanka-newmicall-reference21-pairsfull-v1
+ARG PRIMARY_SEEDS=150
+ARG RESCUE_SEEDS=50
+ENV IVANKA_BENCH_PRIMARY_SEEDS=${PRIMARY_SEEDS}
+ENV IVANKA_BENCH_RESCUE_SEEDS=${RESCUE_SEEDS}
+COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka-native
+RUN /usr/local/bin/ivanka-native --help | grep -- '--max-contigs'
+LABEL org.ottojung.ivanka.experiment="native-bounded-seed-exploration-reference21"

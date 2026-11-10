@@ -25,7 +25,9 @@ class RemapOverlayTests(unittest.TestCase):
             + "            pass\n"
         )
         updated = patched_source(source)
-        self.assertIn("ivanka_conserved_remap import project_remap", updated)
+        self.assertIn("ivanka_conserved_remap import project_exclusive_remap", updated)
+        self.assertIn("ivanka-exclusive-", updated)
+        self.assertIn("ivanka-compatible-", updated)
         self.assertIn("_IvankaPath(with_prefix(self.remap_csv))", updated)
         self.assertIn("_IvankaPath(with_prefix(self.remap_conseq_csv))", updated)
         self.assertIn("with open(_ivanka_remap_path) as remap_csv", updated)
@@ -64,7 +66,11 @@ class RemapOverlayTests(unittest.TestCase):
                   + "        " + INPUT_MARKER + ":\n"
                   + "            self.text = remap_csv.read()\n")
         module = ModuleType("micall.core.ivanka_conserved_remap")
-        module.project_remap = lambda original, reference, output: (original, {})
+        def _exclusive(original, reference, projected, exclusive):
+            # Exclusive consumption: sam2aln must read the original rows only.
+            # The mock writes no hypothesis rows; return the original path.
+            return original, {}
+        module.project_exclusive_remap = _exclusive
         package = ModuleType("micall")
         package.__path__ = []
         core = ModuleType("micall.core")

@@ -203,10 +203,15 @@ fail-closed** verification of the full physical result using:
 ```sh
 PYTHONPATH=benchmarks python3 benchmarks/qualify_updated_micall.py \
   /new-results/results.jsonl --fastq-manifest /original-data/manifest.tsv \
+  --fastq-root /original-data \
   --results-root /new-results --iva-image FULL_64_HEX_BASE_ID \
   --ivanka-image FULL_64_HEX_CANDIDATE_ID \
   --output /new-reports/newmicall-198-qualification.json
 ```
+
+The evaluator independently hashes every original paired FASTQ and HXB2
+reference and requires exact equality with each sample's original runner
+provenance, including project code and the new IVA image ID.
 
 The evaluator verifies the original manifest SHA-256, 198 unique samples,
 one invocation and real arm directories, output checksums, both genuinely

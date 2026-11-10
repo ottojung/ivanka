@@ -2,7 +2,17 @@
 # Filter *after* assembly rather than reducing the assembler seed search.
 FROM localhost/micall:ivanka-newmicall-e0073cb5-6e4705d-v2
 ARG SELECTED_CONTIGS=1
+ARG NATIVE_BUDGET=
+ARG MAX_PAIRS=
 ENV IVANKA_POSTSELECT_CONTIGS=${SELECTED_CONTIGS}
+ENV IVANKA_NATIVE_MAX_CONTIGS=${NATIVE_BUDGET}
+ENV IVANKA_NATIVE_MAX_PAIRS=${MAX_PAIRS}
+ARG SELECTOR_MODE=longest
+ENV IVANKA_SELECTOR_MODE=${SELECTOR_MODE}
+ENV IVANKA_PINNED_SELECTOR_PANEL=/usr/local/share/ivanka/reference-panel-33.json.gz
+RUN mkdir -p /usr/local/share/ivanka
+COPY benchmarks/reference_panel_33_20261110.json.gz /usr/local/share/ivanka/reference-panel-33.json.gz
+COPY benchmarks/ivanka_reference_selector.py /usr/local/bin/ivanka_reference_selector.py
 RUN mv /usr/local/bin/ivanka /usr/local/bin/ivanka-native
 COPY benchmarks/ivanka_postselect_longest.py /usr/local/bin/ivanka
 RUN chmod 755 /usr/local/bin/ivanka && python -m py_compile /usr/local/bin/ivanka

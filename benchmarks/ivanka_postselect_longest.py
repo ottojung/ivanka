@@ -72,18 +72,53 @@ def replace_fasta(path, entries):
             tmp.unlink(missing_ok=True)
 
 
+def native_arguments(arguments):
+    native = list(arguments)
+    for env, flag, upper in (
+        ("IVANKA_NATIVE_MAX_CONTIGS", "--max-contigs", 1000),
+        ("IVANKA_NATIVE_MAX_PAIRS", "--max-pairs", 1_000_000_000),
+    ):
+        value = os.environ.get(env, "")
+        if not value:
+            continue
+        count = int(value)
+        if not 1 <= count <= upper:
+            raise ValueError("Invalid native limit " + env)
+        if any(arg == flag or arg.startswith(flag + "=") for arg in native):
+            raise ValueError("Native limit already specified: " + flag)
+        native.extend([flag, str(count)])
+    return native
+
+
 def main(arguments):
     limit = int(os.environ.get("IVANKA_POSTSELECT_CONTIGS", "1"))
     if not 1 <= limit <= 1000:
         raise ValueError("IVANKA_POSTSELECT_CONTIGS must be within 1..1000")
     target = output_path(arguments)
-    subprocess.run([ORIGINAL, *arguments], check=True)
+    subprocess.run([ORIGINAL, *native_arguments(arguments)], check=True)
     original = parse_fasta(target)
-    selected = top_contigs(original, limit)
+    selection = os.environ.get("IVANKA_SELECTOR_MODE", "longest")
+    if selection == "longest":
+        selected = top_contigs(original, limit)
+        supporting_hits = None
+    elif selection == "reference21":
+        from ivanka_reference_selector import (
+            load_pinned_panel, index_references, select_reference_supported,
+        )
+        ref_path = os.environ["IVANKA_PINNED_SELECTOR_PANEL"]
+        references = load_pinned_panel(ref_path)
+        index = index_references(references, k=21)
+        selected, supporting_hits = select_reference_supported(
+            original, limit, index, k=21
+        )
+    else:
+        raise ValueError("Unknown Ivanka post-selector mode")
     replace_fasta(target, selected)
-    print("IVANKA_POSTSELECT_LONGEST",len(original),
+    print("IVANKA_POSTSELECT",selection,"native",len(original),
           "selected",len(selected),
-          "lengths",[len(s) for _, s in selected],file=sys.stderr,flush=True)
+          "lengths",[len(s) for _, s in selected],
+          "reference_21mer_hits",supporting_hits,
+          file=sys.stderr,flush=True)
 
 
 if __name__ == "__main__":

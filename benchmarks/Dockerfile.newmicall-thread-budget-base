@@ -1,0 +1,9 @@
+# EXPERIMENT ONLY. Same new-MiCall revision as the physical 198 baseline.
+# Build this shared base first; derive BOTH benchmark arms from it.
+FROM localhost/micall:newmicall-e0073cb5-base
+ARG BOWTIE_THREADS=2
+ENV IVANKA_EXPERIMENT_BOWTIE_THREADS=${BOWTIE_THREADS}
+COPY benchmarks/patch_denovo_bowtie_thread_budget.py /tmp/patch-denovo-threads.py
+RUN python /tmp/patch-denovo-threads.py && rm /tmp/patch-denovo-threads.py
+RUN python -c 'from micall.core.denovo_multimap import DENOVO_BOWTIE_THREADS; import os; assert DENOVO_BOWTIE_THREADS == int(os.environ["IVANKA_EXPERIMENT_BOWTIE_THREADS"])'
+LABEL org.ottojung.ivanka.experiment="shared-MiCall-Bowtie2-thread-budget;does-not-change-qualification"

@@ -164,3 +164,155 @@ def project_remap(remap_path, reference_path, output_path):
         "groups": len(groups), "projected_pairs": sum(projected.values()),
         "projected_pairs_per_reference": dict(sorted(projected.items())),
     }
+
+
+def _base_qname(qname):
+    if qname is None:
+        raise ValueError("missing qname")
+    if _TARGET_SUFFIX in qname:
+        base, _, _ = qname.partition(_TARGET_SUFFIX)
+        if not base:
+            raise ValueError("empty base qname before hypothesis marker")
+        return base
+    return qname
+
+
+def require_molecule_conservation(path):
+    """Fail closed unless the remap needs no deduplication.
+
+    Raises ValueError if any hypothesis-suffixed placement row is present.
+    Returns the number of distinct base qnames otherwise. Downstream
+    sam2aln/MAX consumers that must count one observation per molecule call
+    this before counting, or consume derive_exclusive_view output instead.
+    """
+    distinct = set()
+    with Path(path).open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError("missing remap CSV header")
+        if "qname" not in reader.fieldnames:
+            raise ValueError("missing qname column")
+        for row in reader:
+            qname = row["qname"]
+            if _TARGET_SUFFIX in qname:
+                raise ValueError(
+                    "hypothesis-duplicated placement present; "
+                    "use derive_exclusive_view for molecule-conserving counting"
+                )
+            distinct.add(_base_qname(qname))
+    return len(distinct)
+
+
+def derive_exclusive_view(projected_path, exclusive_path):
+    """Write the molecule-conserving exclusive view of a projected remap.
+
+    Keeps exactly the plain-qname (original-placement) rows in file order and
+    drops every hypothesis-suffixed duplicate placement. The input file is
+    never modified; input and output must be separate paths. Returns stats.
+    The exclusive output always passes require_molecule_conservation.
+    """
+    projected_path = Path(projected_path)
+    exclusive_path = Path(exclusive_path)
+    if projected_path.resolve() == exclusive_path.resolve():
+        raise ValueError("projected input and exclusive output must be separate")
+    with projected_path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError("missing remap CSV header")
+        if "qname" not in reader.fieldnames:
+            raise ValueError("missing qname column")
+        fields = reader.fieldnames
+        retained = 0
+        removed = 0
+        exclusive_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w", newline="", dir=exclusive_path.parent,
+            prefix="ivanka-exclusive-", suffix=".csv", delete=False,
+        ) as temp:
+            intermediate = Path(temp.name)
+            writer = csv.DictWriter(temp, fields, lineterminator="\n")
+            try:
+                writer.writeheader()
+                for row in reader:
+                    _base_qname(row["qname"])
+                    if _TARGET_SUFFIX in row["qname"]:
+                        removed += 1
+                        continue
+                    writer.writerow(row)
+                    retained += 1
+            except BaseException:
+                intermediate.unlink(missing_ok=True)
+                raise
+    os.replace(intermediate, exclusive_path)
+    require_molecule_conservation(exclusive_path)
+    return {
+        "retained_original_rows": retained,
+        "removed_hypothesis_rows": removed,
+        "independent_molecules_claimed": False,
+        "biological_safety_claimed": False,
+        "interpretation": (
+            "Exclusive view counts each original base qname once at its "
+            "original placement. Removed rows remain conditional/shared "
+            "observations, not independent molecules."
+        ),
+    }
+
+
+def project_exclusive_remap(remap_path, reference_path, projected_path,
+                            exclusive_path):
+    """Project to an audit file, but return the exclusive view for consumption.
+
+    The original remap is never modified. The projected file (with
+    hypothesis-suffixed duplicate placements) is kept as an audit-only
+    artifact; downstream sam2aln/MAX scoring must consume the returned
+    exclusive path, which contains only original-placement rows and always
+    passes require_molecule_conservation. Returns (exclusive_path, stats).
+    """
+    remap_path = Path(remap_path)
+    projected_path = Path(projected_path)
+    exclusive_path = Path(exclusive_path)
+    if (remap_path.resolve() == projected_path.resolve()
+            or remap_path.resolve() == exclusive_path.resolve()
+            or projected_path.resolve() == exclusive_path.resolve()):
+        raise ValueError("remap, projected, and exclusive paths must be separate")
+    before = remap_path.read_bytes()
+    used, proj_stats = project_remap(remap_path, reference_path, projected_path)
+    if remap_path.read_bytes() != before:
+        raise ValueError("original remap was modified during projection")
+    if used == remap_path:
+        # No compatible groups: nothing was projected; the original itself is
+        # already molecule-conserving. Do not fabricate an audit copy.
+        molecules = require_molecule_conservation(remap_path)
+        stats = dict(proj_stats)
+        stats.update({
+            "audit_projected_path": None,
+            "consumed_exclusive_path": str(remap_path),
+            "exclusive_retained_rows": None,
+            "exclusive_removed_hypothesis_rows": 0,
+            "distinct_base_qnames": molecules,
+            "independent_molecules_claimed": False,
+            "biological_safety_claimed": False,
+        })
+        return remap_path, stats
+    exclusive_stats = derive_exclusive_view(projected_path, exclusive_path)
+    with remap_path.open(newline="") as original, \
+            exclusive_path.open(newline="") as exclusive:
+        original_rows = list(csv.DictReader(original))
+        exclusive_rows = list(csv.DictReader(exclusive))
+        if original_rows != exclusive_rows:
+            raise ValueError(
+                "exclusive view must equal original-placement rows in order"
+            )
+    molecules = require_molecule_conservation(exclusive_path)
+    stats = dict(proj_stats)
+    stats.update({
+        "audit_projected_path": str(projected_path),
+        "consumed_exclusive_path": str(exclusive_path),
+        "exclusive_retained_rows": exclusive_stats["retained_original_rows"],
+        "exclusive_removed_hypothesis_rows":
+            exclusive_stats["removed_hypothesis_rows"],
+        "distinct_base_qnames": molecules,
+        "independent_molecules_claimed": False,
+        "biological_safety_claimed": False,
+    })
+    return exclusive_path, stats

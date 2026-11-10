@@ -14,13 +14,14 @@ LOG_MARKER = "        logger.info('Running sam2aln on %s.', self)"
 INPUT_MARKER = "with open(with_prefix(self.remap_csv)) as remap_csv"
 REPLACEMENT = "with open(_ivanka_remap_path) as remap_csv"
 INJECTION = """        from pathlib import Path as _IvankaPath
-        from micall.core.ivanka_conserved_remap import project_remap as _ivanka_project
+        from micall.core.ivanka_conserved_remap import project_exclusive_remap as _ivanka_project_exclusive
         _original_remap = _IvankaPath(with_prefix(self.remap_csv))
         _remap_reference = _IvankaPath(with_prefix(self.remap_conseq_csv))
-        _candidate_remap = _original_remap.with_name("ivanka-compatible-" + _original_remap.name)
-        _ivanka_remap_path, _projection_info = _ivanka_project(
-            _original_remap, _remap_reference, _candidate_remap)
-        logger.info("Ivanka hypothesis-compatible remap: %s", _projection_info)
+        _candidate_projected = _original_remap.with_name("ivanka-compatible-" + _original_remap.name)
+        _candidate_exclusive = _original_remap.with_name("ivanka-exclusive-" + _original_remap.name)
+        _ivanka_remap_path, _projection_info = _ivanka_project_exclusive(
+            _original_remap, _remap_reference, _candidate_projected, _candidate_exclusive)
+        logger.info("Ivanka hypothesis-compatible remap (exclusive consumption): %s", _projection_info)
 """
 
 

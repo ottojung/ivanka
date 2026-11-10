@@ -59,8 +59,13 @@ The branch experiment/read-trim-unsupported-ends-20261110 optionally
 clips a terminal region only when the remaining contiguous interval has
 at least 500 31-mer positions with support from at least three original
 read pairs each, and at least 85% of its positions are supported. Only
-terminal unsupported spans of 512 or more bases are eligible; 50 bases
+terminal unsupported spans of 512 or more bases are eligible; 512 bases
 of flank are retained. Internal gaps are never clipped. This is entirely
 computed from the same-sample original paired reads, without knowing any
 viral templates. It is an independent experiment and does not change the
 active 198-sample image.
+
+The first 50-base-flank A/B was NOT acceptable: real HCV S101 scored
+887 against IVA 1158 (required 1042.2), despite running in 98.5s vs
+IVA 345.7s. The conservative 512-base flank is a new proposal that
+requires fresh real full-MiCall validation before any merger.

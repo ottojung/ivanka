@@ -3,13 +3,14 @@
 No external viral sequence can enter this algorithm: the depth array is
 computed exclusively by k-mer mapping against the sample's own paired FASTQs.
 Only unambiguous terminal deficits are clipped, never internal gaps.
+A generous 512-base flank protects true amplicon edges with no exact 31-mers.
 """
 
 K = 31
 
 
 def trim_terminal_unsupported(entry, depth, min_sites=500,
-                              min_fraction=0.85, min_tail=512, flank=50):
+                              min_fraction=0.85, min_tail=512, flank=512):
     """Return a candidate with clearly unsupported long terminal spans cut.
 
     Each depth element is the number of independent original read pairs

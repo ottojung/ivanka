@@ -9,13 +9,13 @@ class ReadTrimTests(unittest.TestCase):
         depth = [0]*2800 + [10]*(len(seq)-K+1-2800)
         got = trim_terminal_unsupported((">sample",seq),depth)
         self.assertEqual(got[0],">sample")
-        self.assertEqual(got[1],seq[2750:])
+        self.assertEqual(got[1],seq[2288:])
 
     def test_uncovered_long_suffix(self):
         seq = "CGT"*450 + "A"*2800
         depth = [9]*(1350-K+1) + [0]*(len(seq)-1350)
         got = trim_terminal_unsupported((">sample",seq),depth)
-        self.assertEqual(got[1],seq[:1400])
+        self.assertEqual(got[1],seq[:1862])
 
     def test_sparse_sites_not_clipped(self):
         seq = "A"*4100

@@ -24,6 +24,22 @@ proposing contig selection, pruning or synthetic tests. The existing
 198-sample alignment/runtime qualification remains unchanged.
 
 
+## Current development milestone: benchmark first
+
+**The only pass/fail target during this development stage is the existing
+198-sample MiCall benchmark.** Produce a verified end-to-end run with the
+unchanged 33-reference best-final-MAX alignment scoring, each sample at least
+90% of IVA, the 1,800-second completion limit, and both alignment and runtime
+signed-power Psi(r) strictly positive for every r >= 0. No extra
+minority-haplotype recall, synthetic phase, clinical-release, diagnostic
+metric or contig-count gate may be added to this milestone.
+
+Synthetic tests, haplotype analysis, coverage and genotype diagnostics can
+help explain results, but **must not block benchmark-focused iterations**
+or be presented as additional criteria for benchmark success. Maintain
+honest paired input, image and output provenance; never fabricate or
+relabel results. Clinical/production readiness is a distinct future decision.
+
 ## CLI
 
     cargo build --release

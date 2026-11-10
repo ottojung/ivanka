@@ -66,6 +66,8 @@ Record per sample and per arm:
 | Q15 max / fractional depth totals and means | `multimap_depth.csv` | higher | one original fragment per position; multi-contig sums duplicate hypotheses |
 | unique aligned and mapped fragments | `unique_aligned_fragments.csv`, `remap_counts.csv` | higher | original QNAME counts, **not** hypothesis counts |
 | capped / oversized alignment groups | `remap_counts.csv` | lower | diagnostic only; a capped group need not have missed a best match |
+| final/stitched/unstitched contig counts, unknown contig count, and total assembled bases | `contigs.csv`, `stitched_contigs.csv`, `unstitched_contigs.csv` | lower *as runtime burden only* | a genuine minority haplotype may require extra contigs; never use these as quality or release gates |
+| repeated canonical 31-mer fraction across final contigs | `contigs.csv` | lower *as redundancy only* | overlapping true haplotypes share 31-mers; distinct canonical 31-mers are not proof of original-pair phase |
 | reference positions at depth >=100 | `genome_coverage.csv` | higher | row count, not unique coordinates |
 
 For the actual `micall analyze sample` CLI, the additional

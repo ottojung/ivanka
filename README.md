@@ -40,6 +40,20 @@ The candidate's optional remapping can project one original pair onto several
 compatible contig hypotheses: those projections are correlated and must never
 be counted as new molecules. Scientific release validation remains open.
 
+## Diagnostic metrics and known-truth synthetic controls
+
+The end-to-end benchmark additionally reports separate, *nonqualifying*
+signed-power PSI comparisons for average/total read depth, concordance,
+missing exact-coverage bases, soft clips, Q15 max/fractional multi-mapping
+depth, original fragment counts and capped mapping groups. A missing artifact
+is reported as unavailable, never as zero. Metrics can guide development
+but **cannot** alter the real-data alignment and runtime acceptance criteria.
+
+For reproducible synthetic FASTQs, truth-alignment controls, source
+definitions, an exact_coverage.csv regeneration command, and required
+before/after reports, see [Testing and improvement workflow](
+docs/testing-improvement-procedure.md).
+
 ## Historical HXB2-only benchmark (not current qualification)
 
 The real-data input is kept outside Git at

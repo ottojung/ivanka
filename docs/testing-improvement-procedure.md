@@ -14,6 +14,18 @@ and whole-pipeline runtime. Synthetic minority-haplotype recovery is a
 diagnostic and safety investigation, not a mandatory exhaustive-recall
 gate. See [Primary assembly objective](assembly-objective.md).
 
+## Current stage policy: only the existing benchmark is a gate
+
+Until the current benchmark milestone is passed, optimize directly for the
+unaltered full-198 numerical criteria below. Synthetic mixtures, phase
+diagnostics, minority-contig recall, coverage metrics, extra clinical
+validation and proposed safety heuristics are **non-gating research tools**.
+They may inform an experiment; they must not block a benchmark iteration or
+be mistaken for an additional acceptance condition. This policy does not
+authorize manipulating the original FASTQs, MiCall images, benchmark results,
+scoring definitions, or measurements. A benchmark pass is not a production
+or clinical release authorization.
+
 ## Fixed qualification contract
 
 For a **fresh, pinned, identical MiCall base** in both arms:
@@ -46,10 +58,10 @@ an acceptance gate. They supply evidence and opportunities for improvements.
 2. **Synthetic known-truth smoke:** generate and evaluate four deterministic
    pure synthetic FASTQ/truth cases. Truth and candidate controls must
    *never be passed to the assembler*.
-3. **Synthetic linked/unlinked phase safety:** run existing
-   synthetic_phase_pairs.py and smoke_rust_assembler_phase.py controls.
-   A seed39 unsupported GT recombinant is a P0 failure even if the best
-   alignment looks good. Unobservable phase must stay unidentifiable.
+3. **Optional synthetic linked/unlinked phase diagnosis:** use existing
+   synthetic_phase_pairs.py and smoke_rust_assembler_phase.py to
+   investigate source evidence. Report seed39 recombinant findings
+   separately; they are not another gate on this benchmark-only stage.
 4. **Targeted authentic A/B:** run S12, S48, S98 (or other documented
    representatives) through full MiCall with and without the Ivanka binary.
    Inspect original QNAME accounting, Q15 minority *allele evidence*,

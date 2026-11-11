@@ -27,7 +27,10 @@ fn rejects_non_sibling_imports() {
 #[test]
 fn normal_sibling_imports_are_allowed() {
     let mut issues = Vec::new();
-    imports::check(Path::new("src/assembler/run.rs"),
-                   "use super::reads::{K, Reads};\nuse std::io;\n", &mut issues);
+    imports::check(
+        Path::new("src/assembler/run.rs"),
+        "use super::reads::{K, Reads};\nuse std::io;\n",
+        &mut issues,
+    );
     assert!(issues.is_empty());
 }

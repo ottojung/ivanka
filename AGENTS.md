@@ -4,6 +4,30 @@
 and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 
+## Comments and source readability
+
+Write **useful, timeless comments**. Explain the reason behind a non-obvious
+choice, an invariant, a proof obligation, an ownership boundary, a data contract,
+or a subtle failure mode. Document public interfaces and algorithms whenever
+their behavior or limitations cannot be understood from names and types alone.
+Keep comments concise and accurate; update them whenever the code changes.
+
+Comments describe **the code that exists now**. Never narrate superseded
+implementations, removed features, old workarounds, dates, past incidents,
+temporary migration steps, PRs, or the history of how the code evolved. Do not
+comment out dead code. Avoid comments that merely restate a statement.
+Use Git history and release documents for historical information, not source
+comments. A reader should be able to understand the current code without
+knowing its development history.
+
+Every Rust source file must remain within **50 nonblank, noncomment lines**,
+and every directory under the Rust source and lint trees must have **at most
+10 direct entries**, counting files *and* subdirectories. Keep imports
+confined to sibling modules. All Rust sources must pass **default rustfmt**
+without custom formatting overrides: run `cargo fmt --all -- --check`.
+Refactor code into well-named helpers or coherent modules rather than
+compressing expressions or using comments to evade the limits.
+
 **NON-NEGOTIABLE SCIENTIFIC BOUNDARY: IVANKA IS REFERENCE-BLIND.**
 Never supply a known viral reference genome, alignment panel, HXB2, subtype
 template, benchmark scoring reference, or reference-derived candidate-ranking
@@ -15,23 +39,20 @@ sequences downstream; the independent evaluator may use them solely for
 measuring, **never to steer the candidate**. The optional `--seeds`
 FASTA input is allowed for read-derived sample contigs (including suitable
 G2P-derived contigs), never for reference-derived or reference-selected
-sequences. Callers and benchmark agents must verify seed provenance. The previous
-reference-21-mer and diagonal-ranking experiments (PRs #202 and #203)
-were rejected: their numerical wins are invalid for qualifying the
-assembler. Do not resurrect those branches, images, or algorithms.
+sequences. Callers and benchmark agents must verify seed provenance. Reference-guided 21-mer matching, reference-coordinate diagonal
+ranking, and other reference-conditioned output selection are forbidden,
+regardless of apparent benchmark gains.
 
 **Enforce** this with `python benchmarks/reference_isolation.py` and its
 CI regression tests. This is a validity prerequisite for the existing
 benchmark, not another biological performance metric.
 
-**Current founder-directed development priority (2026-11-10): PASS THE
-EXISTING BENCHMARK FIRST.** The only milestone gates are the original
-physical-198, >=90%-per-sample alignment, no timeouts, and positive
-alignment/runtime Psi(r) for all r>=0. Do not block benchmark optimization
-on minority-haplotype recall, optional synthetic phase checks, diagnostic
-PSI, additional clinical/production signoff or arbitrary contig limits.
-Report such findings separately without turning them into new gates.
-Keep benchmark inputs, image lineage, measurements and scoring authentic.
+**Benchmark-integrity contract.** Qualification uses the authentic
+physical-198 paired inputs, >=90%-per-sample alignment, no timeouts, and
+positive alignment/runtime Psi(r) for every r>=0. Do not silently change
+the acceptance criteria or make distinct biological investigations into
+numerical gates. Keep benchmark inputs, image lineage, measurements and
+scoring authentic.
 
 - The goal is the **dominant read-supported viral sequence / defensible
   major consensus**, **not exhaustive haplotype recovery**. Recovering a

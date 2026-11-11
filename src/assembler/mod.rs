@@ -1,10 +1,11 @@
-mod reads;
 mod extension;
 mod extension_helpers;
 mod ranking;
 mod ranking_score;
-mod setup;
-mod run_seed;
+#[cfg(test)]
+mod ranking_tests;
+mod reads;
 mod run;
-#[cfg(test)] mod ranking_tests;
+mod run_seed;
+mod setup;
 pub(crate) use run::run;

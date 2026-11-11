@@ -8,7 +8,9 @@ pub fn check(root: &Path) {
     let mut violations = Vec::new();
     for area in ["src", "source_lints", "tests", "examples", "benches"] {
         let folder = root.join(area);
-        if folder.is_dir() { tree::visit(&folder, &mut violations); }
+        if folder.is_dir() {
+            tree::visit(&folder, &mut violations);
+        }
     }
     let build = root.join("build.rs");
     if let Ok(source) = std::fs::read_to_string(&build) {
@@ -27,6 +29,6 @@ pub fn check(root: &Path) {
 }
 
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod test_extra;
+#[cfg(test)]
+mod tests;

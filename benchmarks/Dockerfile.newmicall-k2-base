@@ -1,0 +1,8 @@
+# Shared updated-MiCall baseline for matched IVA and Ivanka
+FROM localhost/micall:newmicall-e0073cb5-base
+ARG BOWTIE_K=2
+ENV IVANKA_EXPERIMENT_BOWTIE_K=${BOWTIE_K}
+COPY benchmarks/patch_denovo_mapping_k_experiment.py /tmp/mapping-k.py
+RUN python /tmp/mapping-k.py && rm /tmp/mapping-k.py
+RUN python -c 'from micall.core.denovo_multimap import MAX_DENOVO_ALIGNMENTS; import os; assert MAX_DENOVO_ALIGNMENTS == int(os.environ["IVANKA_EXPERIMENT_BOWTIE_K"])'
+LABEL org.ottojung.ivanka.experiment="shared-updated-micall-bowtie-k2"

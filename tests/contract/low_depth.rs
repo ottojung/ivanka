@@ -1,12 +1,12 @@
 use super::support::Fixture;
 
 #[test]
-fn unseeded_low_depth_reports_warning() {
+fn unseeded_low_depth_succeeds_with_empty_fasta() {
     let case = Fixture::new();
     let result = case.run("a", &["--max-pairs", "1"]);
-    assert!(!result.status.success());
-    assert!(!case.path("output.fasta").exists());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("no supported contigs"));
+    assert!(result.status.success());
+    assert!(case.path("output.fasta").is_file());
+    assert!(case.output().is_empty());
 }
 
 #[test]

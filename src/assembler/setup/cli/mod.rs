@@ -3,19 +3,12 @@ mod finish;
 mod options;
 use options::Args;
 
-// The argument contract is kept as a tuple to leave all callers unchanged.
-pub(crate) type Parsed = (
-    String,
-    String,
-    String,
-    usize,
-    Option<usize>,
-    Option<String>,
-    Option<String>,
-);
+mod config;
+mod help;
+pub(crate) use config::Config;
 /// Parse the fixed CLI contract and validate every optional output path
 /// before loading reads or creating an output file.
-pub(crate) fn parse() -> Result<Parsed, String> {
+pub(crate) fn parse() -> Result<Config, String> {
     let args = std::env::args().collect::<Vec<_>>();
     let mut parsed = Args {
         max: 16,
@@ -37,7 +30,7 @@ pub(crate) fn parse() -> Result<Parsed, String> {
                 i += 2;
             }
             "--help" | "-h" => {
-                println!("ivanka --reads1 R1.fastq.gz --reads2 R2.fastq.gz --output contigs.fasta [--max-contigs 1000] [--max-pairs N] [--seeds seeds.fasta] [--unphased-snv-audit OUTPUT.tsv]");
+                help::show();
                 std::process::exit(0);
             }
             _ => return Err(format!("unknown/incomplete argument: {}", args[i])),

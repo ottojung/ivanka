@@ -10,7 +10,7 @@ This is NOT a global abundance estimate or a full haplotype proof.
 Production MiCall must remain unchanged unless an explicitly experimental
 candidate image installs this module at the remap -> sam2aln boundary.
 """
-from collections import Counter, defaultdict
+from collections import Counter
 import csv
 import os
 from pathlib import Path

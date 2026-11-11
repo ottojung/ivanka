@@ -6,8 +6,10 @@ use super::types::Reads;
 use std::collections::HashMap;
 use std::io;
 
+type LoadedPairs = (Vec<Vec<u8>>, HashMap<u64, u32>, usize);
 mod pairs;
 mod seed_counts;
+mod validate;
 pub(super) use seed_counts::count_sampled_seed_kmers;
 impl Reads {
     pub(crate) fn load(fq1: &str, fq2: &str, max_pairs: Option<usize>) -> io::Result<Self> {

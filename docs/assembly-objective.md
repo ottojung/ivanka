@@ -46,6 +46,17 @@ a **successful assembly**. Assembling B is optional if it is supported and
 helps the actual downstream task; enumerating B and still rarer genomes is
 not a hard acceptance criterion.
 
+## Current implementation and intended direction
+
+Ivanka presently validates paired FASTQ identities and order, but indexes
+the individual reads and reverse complements as independent sequences.
+Native extension support is **not** properly paired fragment support.
+The read-backed MiCall wrapper can rank existing candidate contigs using
+original pair observations, without retroactively making the native
+extension algorithm pair-aware. Future joint-mate placement and
+fragment-level scoring are design objectives, not implemented guarantees;
+they require phase, genotype and complete benchmark verification.
+
 ## Engineering consequences
 
 - **Prefer the dominant, well-supported assembly.** Rank candidates using

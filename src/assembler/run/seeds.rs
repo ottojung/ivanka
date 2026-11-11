@@ -3,7 +3,7 @@ use std::error::Error;
 
 // Caller-supplied seeds must be derived independently from these sample
 // reads. The caller guarantees provenance; Ivanka extends seeds using only
-// original reads, never known viral references or alignment scores.// Caller-supplied seeds are permitted only when derived from the sample reads.
+// original reads, never known viral references or alignment scores.
 pub(super) fn attach(
     seeds_path: Option<&str>,
     reads: &Reads,

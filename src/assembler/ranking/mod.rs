@@ -6,6 +6,7 @@ mod kmer;
 mod redundancy;
 mod report;
 mod selection;
+pub(super) type ContigSelection = (Vec<Vec<u8>>, Vec<(Vec<u8>, usize)>);
 pub(super) use kmer::canonical_kmer;
 pub(super) use selection::select_supported_contigs_with_kmers;
 pub(super) fn select_supported_contigs(

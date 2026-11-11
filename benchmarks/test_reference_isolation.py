@@ -1,5 +1,4 @@
 """Regression tests for reference isolation: deliberately attempt benchmark leakage."""
-import ast
 from pathlib import Path
 import tempfile
 import unittest
@@ -7,6 +6,7 @@ import unittest
 from reference_isolation import (
     ROOT, adapter_contract_errors, assembler_source_errors,
     candidate_source_errors, check_repository, image_recipe_errors,
+    image_script_errors,
 )
 
 
@@ -39,7 +39,6 @@ class ReferenceIsolationTests(unittest.TestCase):
     def test_rust_accepts_read_derived_fasta_seeds(self):
         # These checks follow the module tree rather than assuming one file
         # per operation; the source layout is independent of the contract.
-        import re
         def module_sources(module):
             directory = ROOT / f"src/assembler/{module}"
             files = directory.rglob("*.rs") if directory.is_dir() else [
@@ -90,6 +89,36 @@ class ReferenceIsolationTests(unittest.TestCase):
                 "def choose(c, references): return reference_panel(c)"
             )
             self.assertTrue(check_repository(root))
+
+    def test_unknown_script_copied_into_image_fails_closed(self):
+        for recipe in ("Dockerfile.candidate", "Containerfile.experimental"):
+            with self.subTest(recipe=recipe):
+                self.assertTrue(image_script_errors(
+                    recipe, "COPY benchmarks/mysterious_helper.py /usr/local/bin/ivanka",
+                ))
+
+    def test_broad_copy_and_containerfile_references_are_rejected(self):
+        self.assertTrue(image_script_errors("Containerfile.new", "COPY . /src"))
+        self.assertTrue(image_recipe_errors(
+            "Containerfile.new",
+            "COPY benchmarks/reference_panel_33.json.gz /tmp/panel.gz",
+        ))
+
+    def test_stitcher_patch_is_scanned_even_without_selector_filename(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "benchmarks").mkdir()
+            src = root / "benchmarks/patch_micall_stitcher_kmer_veto.py"
+            src.write_text('def select(contigs): return hxb2(contigs)')
+            recipe = "COPY benchmarks/patch_micall_stitcher_kmer_veto.py /tmp/patch.py"
+            self.assertTrue(image_script_errors("Dockerfile.candidate", recipe, root))
+
+    def test_approved_build_scripts_exist_and_are_scanned(self):
+        recipes = (ROOT / "benchmarks").glob("*")
+        for path in recipes:
+            if path.name.startswith(("Dockerfile", "Containerfile")):
+                with self.subTest(path=path.name):
+                    self.assertEqual(image_script_errors(path.name, path.read_text()), [])
 
     def test_scoring_module_remains_external(self):
         # The evaluator is allowed to load reference panels; the assembler

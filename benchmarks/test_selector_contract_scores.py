@@ -38,7 +38,8 @@ class ReadSupportRankingContract(unittest.TestCase):
             pairs = [rng.randint(0, 1000) for _ in lengths]
             entries = [(str(i), "A"*length) for i,length in enumerate(lengths)]
             actual = rank_by_pair_weighted_breadth(entries, coverage, pairs)
-            score = lambda i: coverage[i]**2*pairs[i]/(lengths[i]-30)
+            def score(i, coverage=coverage, pairs=pairs, lengths=lengths):
+                return coverage[i]**2*pairs[i]/(lengths[i]-30)
             expected = sorted(range(n), key=lambda i: (-score(i),-coverage[i]*pairs[i],
                                                         -coverage[i],-pairs[i],-lengths[i],i))
             self.assertEqual(actual, expected)

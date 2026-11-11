@@ -138,7 +138,7 @@ def render(records, digest, expected=198, strict=None, diagnostics=None):
         lines += [
             "",
             "**Mathematical runtime no-go:** even crediting every remaining",
-            f"not-yet-valid sample as an Ivanka win gives at most",
+            "not-yet-valid sample as an Ivanka win gives at most",
             f"{runtime_wins + maximum_additional_wins} wins against",
             f"{runtime_losses} observed losses, so strict Ψ(0)>0",
             "cannot be reached by this candidate. No new score threshold",

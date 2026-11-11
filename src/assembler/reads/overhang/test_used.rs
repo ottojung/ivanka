@@ -35,7 +35,7 @@ fn terminal_index_dedup_preserves_repetitive_high_depth_overhangs() {
         seqs.push(vec![b'T'; 43]);
     }
     let index = super::build_index(&seqs);
-    let anchor = encode(&vec![b'A'; K]).unwrap();
+    let anchor = encode(&[b'A'; K]).unwrap();
     assert_eq!(index[&anchor].len(), 40_000);
     let reads = Reads {
         seqs,
@@ -45,7 +45,7 @@ fn terminal_index_dedup_preserves_repetitive_high_depth_overhangs() {
         overhang_cache: Default::default(),
         overlength_rejections: Default::default(),
     };
-    let (overhangs, ids) = reads.overhangs_with_ids(&vec![b'A'; K]);
+    let (overhangs, ids) = reads.overhangs_with_ids(&[b'A'; K]);
     assert_eq!(ids.len(), 20_000);
     assert!(overhangs.iter().all(|suffix| suffix == &vec![b'A'; 12]));
 }

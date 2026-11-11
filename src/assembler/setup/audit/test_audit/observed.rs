@@ -6,7 +6,7 @@ fn observed_local_variants_are_unphased_separate_evidence() {
     let count = write_snv_audit(
         &path,
         &[(alt.clone(), 150), (alt.clone(), 140)],
-        &[base.clone()],
+        std::slice::from_ref(&base),
         &counts,
         kmer,
     )

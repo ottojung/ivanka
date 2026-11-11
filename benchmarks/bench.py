@@ -14,7 +14,6 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 
 from acceptance import accept_sample, reference_fidelity, STRUCTURAL_ROLES

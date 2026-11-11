@@ -1,22 +1,25 @@
 use super::{
     append_preserving_diversity, canonical_kmer, select_supported_contigs,
-    select_supported_contigs_with_kmers, write_fasta, write_snv_audit, Reads,
+    select_supported_contigs_with_kmers, write_fasta, write_snv_audit,
 };
 use std::error::Error;
 
 // Selection uses only read-supported contigs. The ordinary FASTA is
 // independent of the optional evidence-only SNV audit, which cannot infer
-// an independent molecule or silently modify the selected contigs.// The evaluator sees only already-assembled contigs and the read-derived audit.
+// an independent molecule or silently modify the selected contigs.
 pub(super) fn write(
     out: &str,
     max: usize,
-    protected_seed_count: usize,
-    reads: &Reads,
     audit_path: Option<&str>,
-    contigs: Vec<Vec<u8>>,
-    supporting_counts: Vec<usize>,
-    rescue: Option<Vec<u8>>,
+    prepared: super::prepare::Prepared,
 ) -> Result<usize, Box<dyn Error>> {
+    let super::prepare::Prepared {
+        reads,
+        contigs,
+        support: supporting_counts,
+        protected: protected_seed_count,
+        rescue,
+    } = prepared;
     let (mut contigs, audit) = if audit_path.is_some() {
         select_supported_contigs_with_kmers(
             contigs,
@@ -37,6 +40,7 @@ pub(super) fn write(
         // otherwise withhold the rescue to avoid losing distinct evidence.
         append_preserving_diversity(&mut contigs, rescue, max, protected_seed_count);
     }
+    super::empty::check(&reads, !contigs.is_empty())?;
     write_fasta(&out, &contigs)?;
     if let Some(path) = audit_path {
         let count = write_snv_audit(&path, &audit, &contigs, &reads.seed_counts, canonical_kmer)?;

@@ -4,8 +4,13 @@ pub(super) fn quality(
     no_extension_support: usize,
     variants: usize,
 ) {
-    eprintln!("IVANKA_QUALITY reported={} kmer_redundant={} no_extension_support={} snv_audit_candidates={}",
-              reported, duplicates, no_extension_support, variants);
+    eprintln!(
+        concat!(
+            "IVANKA_QUALITY reported={} kmer_redundant={} ",
+            "no_extension_support={} snv_audit_candidates={}"
+        ),
+        reported, duplicates, no_extension_support, variants
+    );
 }
 
 // A rejected duplicate may still provide independently observed SNV evidence.
@@ -29,7 +34,7 @@ pub(super) fn finish(
     variants: Vec<(Vec<u8>, usize)>,
     duplicates: usize,
     no_extension_support: usize,
-) -> (Vec<Vec<u8>>, Vec<(Vec<u8>, usize)>) {
+) -> super::ContigSelection {
     quality(
         retained.len(),
         duplicates,

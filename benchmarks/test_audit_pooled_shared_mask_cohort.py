@@ -2,7 +2,6 @@
 import csv
 import json
 import unittest
-from pathlib import Path
 
 from audit_pooled_shared_mask_cohort import audit_cohort
 from test_screen_shared_mask_cohort import DirectCohortScreenTests

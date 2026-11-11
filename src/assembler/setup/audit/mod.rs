@@ -1,5 +1,6 @@
 mod candidate;
 mod fasta;
+mod schema;
 mod writer;
 pub(crate) use fasta::write_fasta;
 pub(crate) use writer::write_snv_audit;

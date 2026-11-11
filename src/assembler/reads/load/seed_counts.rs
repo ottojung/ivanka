@@ -17,7 +17,7 @@ pub(crate) fn count_sampled_seed_kmers(read: &[u8], counts: &mut HashMap<u64, u3
         f = ((f << 2) & ((1u64 << 62) - 1)) | d;
         r = (r >> 2) | ((3 - d) << 60);
         valid += 1;
-        if valid >= K && (i + 1 - K) % 3 == 0 {
+        if valid >= K && (i + 1 - K).is_multiple_of(3) {
             *counts.entry(f.min(r)).or_insert(0) += 1;
         }
     }

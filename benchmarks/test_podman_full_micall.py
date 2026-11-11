@@ -168,7 +168,6 @@ class BenchmarkTests(TestCase):
    with self.assertRaisesRegex(ValueError,"No verified IVA baseline"):
     m.load_iva_baseline("S2",prov)
  def test_readonly_iva_cache_is_relocatable_without_metadata_edits(self):
-  import json
   import shutil
   with TemporaryDirectory() as d:
    source=Path(d)/"source"
@@ -449,7 +448,7 @@ class BenchmarkTests(TestCase):
   with patch.object(m,"baseline_provenance",return_value={"verified":True}), \
        patch.object(m,"save_iva_baseline"), \
        patch.object(m,"run_arm",side_effect=fake_arm) as runner, \
-       patch("reference_panel.panel_acceptance",return_value={"pass":True,"iva_score":100,"ivanka_score":99}) as scorer:
+       patch("reference_panel.panel_acceptance",return_value={"pass":True,"iva_score":100,"ivanka_score":99}):
    result=m.evaluate_sample({"sample":"S","project":"NFLHIVDNA"},args,{"iva":"A","ivanka":"B"},
            {"iva":"hashA","ivanka":"hashB"},"base-id","refhash","ACGT",None,"inv",
            time.monotonic()+5)

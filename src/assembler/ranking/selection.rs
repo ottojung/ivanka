@@ -9,7 +9,7 @@ pub(crate) fn select_supported_contigs_with_kmers(
     n: usize,
     protected: usize,
     sampled: &HashMap<u64, u32>,
-) -> (Vec<Vec<u8>>, Vec<(Vec<u8>, usize)>) {
+) -> super::ContigSelection {
     let candidates = ranked_candidates(seqs, counts, n, protected);
     // Use read support to prioritize assemblies and k-mer novelty to avoid
     // passing hundreds of near-identical contigs into MiCall's stitcher.

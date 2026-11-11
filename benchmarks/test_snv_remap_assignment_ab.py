@@ -82,9 +82,6 @@ class RemapOriginalPairTests(unittest.TestCase):
         self.assertEqual(x["baseline_reference_sequences_absent_in_experimental"],0)
 
     def test_two_primary_mates_on_different_references_are_excluded(self):
-        bad={"qname":"q2","flag":147,"rname":"ref-b",
-             "pos":1,"mapq":60,"cigar":"4M",
-             "rnext":"=","pnext":1,"tlen":4,"seq":"ACGT","qual":"IIII"}
         make(self.c,{"q1":"ref-b","q2":"ref-a"})
         sam=self.c/"scratch"/"remap.csv"
         content=sam.read_text().splitlines()

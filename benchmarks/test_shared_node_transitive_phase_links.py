@@ -1,6 +1,5 @@
 """Tests for transitive observed-phase graph with original pair provenance."""
 import unittest
-from types import SimpleNamespace
 
 from shared_node_transitive_phase_links import audit_transitive_links
 from test_shared_block_phase_links import fixture, pair

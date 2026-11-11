@@ -1,5 +1,4 @@
 """Negative A/B release gate, never a positive phase-safety certificate."""
-import csv
 import tempfile
 import unittest
 from pathlib import Path

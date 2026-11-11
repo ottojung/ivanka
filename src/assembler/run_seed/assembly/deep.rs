@@ -33,9 +33,9 @@ pub(super) fn assemble_deep(
             contigs.push(seq);
             supporting_counts.push(support);
             rescued += 1;
-        }
-        if rescued % 20 == 0 && rescued > 0 {
-            eprintln!("high-depth rescue considered seed support {}", count);
+            if rescued.is_multiple_of(20) {
+                eprintln!("high-depth rescue considered seed support {}", count);
+            }
         }
     }
     eprintln!(

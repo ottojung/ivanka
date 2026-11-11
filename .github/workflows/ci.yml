@@ -27,8 +27,8 @@ jobs:
         run: |
           rustc --test source_lints/mod.rs -o "${RUNNER_TEMP}/ivanka-source-lint-tests"
           "${RUNNER_TEMP}/ivanka-source-lint-tests"
-      - name: Clippy (deny correctness and suspicious lints)
-        run: cargo clippy --locked --all-targets -- -D clippy::correctness -D clippy::suspicious
+      - name: Clippy (deny correctness, suspicious, perf and complexity)
+        run: cargo clippy --locked --all-targets -- -D clippy::correctness -D clippy::suspicious -D clippy::perf -D clippy::complexity
 
   python:
     name: Python tests and lint
@@ -46,5 +46,5 @@ jobs:
           python -m pip install ruff==0.14.4
       - name: Python regression tests (no private data)
         run: python -m unittest discover -s benchmarks -p 'test_*.py' -v
-      - name: Python lint (correctness rules)
-        run: ruff check --select E9,F63,F7,F82 benchmarks
+      - name: Python lint (imports, correctness, closure capture)
+        run: ruff check --select E4,E9,F,B006,B018,B023 benchmarks

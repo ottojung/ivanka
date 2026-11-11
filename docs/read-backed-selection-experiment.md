@@ -1,6 +1,61 @@
 # Read-backed contig selection experiment
 
-**Status:** research candidate, not yet qualified for the 198-sample benchmark.
+**Status:** numerically qualified on the physical 198-sample updated-MiCall
+benchmark (November 11, 2026). The exact passing implementation with
+512-nt overlapping read-backed tiles is merged into `main` via PR #213.
+This is **not** a biological/clinical release authorization.
+
+## Independently verified 198-sample qualification (November 11, 2026)
+
+One immutable fresh *both-arm* physical invocation, `1794394465-579682`,
+evaluated exactly 198 genuine paired FASTQ samples using the same updated
+MiCall base for IVA and Ivanka. No cached IVA runtimes, skipped samples,
+synthetic replacement inputs, reference-derived assembly decisions,
+or reference-based contig selection were used.
+
+- Original FASTQ manifest SHA-256:
+  `4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192`.
+- Frozen IVA image SHA-256:
+  `a5d4923e28f3d7b9725a375d51e34b14986bd29bdab04e8bf8f36f411141b8dd`.
+- Frozen Ivanka image SHA-256:
+  `c7bc9c96c9ce8875308ed9783267dbca86a8191cb862f45be0c1e523872a7660`.
+- Physical `results.jsonl` SHA-256:
+  `c56c7594f06e3fb07f29393904d4ab70ed59337d0933a8e21ab0120ebf6c6449`.
+- Exactly **198/198 valid samples**; zero errors, timeouts or samples below
+  the final MAX alignment floor of 90% of the paired IVA control;
+  1,800-second per-sample cap satisfied.
+- Alignment: 41 wins / 9 losses / 148 ties,
+  `Psi(0)=0.161616`, `Psi(1)=3.585859`, `Psi(2)=193.151515`.
+- In-container runtime: 165 wins / 33 losses, `Psi(0)=0.666667`,
+  `Psi(1)=+27.596477 seconds`, `Psi(2)=2499.527960`.
+
+**Both** signed-power `Psi(r)` functions are strictly positive for
+**every real `r >= 0`**, not merely the displayed evaluation points.
+The independent evaluator `benchmarks/qualify_updated_micall.py` was
+rerun after physical completion against all frozen hashes and reports
+`real_data_numeric_gate_pass=true`, with no errors.
+
+An **independent stronger all-r proof**, based on exact decimal time
+differences, groups nonzero deltas by descending absolute magnitude
+and computes cumulative win-minus-loss counts over each prefix.
+For both metrics, *every* prefix surplus is strictly positive:
+minimum **2** for alignment and **1** for runtime. Abel/summation-by-parts
+therefore proves `sum(sign(delta)*abs(delta)**r)>0` for every
+`r>=0`, without depending on numerical zero-finding.
+
+The evidence is preserved outside this public repository on
+`marceline-dev` under
+`/workspace/ivanka-read-tiling-overlap512-physical198-20261111/`,
+including `qualification-independent-20261111.json` and
+`qualification-independent-prefix-proof-20261111.json`. The passing
+source is `e04eafd`, unchanged in executable-relevant files by the
+AGPLv3-preserving integration PR #213 (main merge `ed4f784`).
+
+Biological phase, minority haplotypes and clinical release readiness are
+independent topics and were **not** added as numerical benchmark gates.
+The known-reference-blindness rule remains mandatory for assembler and
+any output selector. The sections below document the historical
+experiments that led to this passing implementation.
 
 Ivanka's native assembler considers a bounded number of seeds from the
 original paired sequencing reads and emits native FASTA candidates. An

@@ -1,0 +1,8 @@
+# Pinned source image preserves exactly the same Ivanka binary and
+# same MiCall version as the physical-198 baseline. Experiment only.
+FROM localhost/micall:ivanka-newmicall-e0073cb5-6e4705d-v2
+ARG CONTIG_BUDGET=2
+ENV IVANKA_MAX_CONTIGS=${CONTIG_BUDGET}
+COPY benchmarks/patch_pinned_ivanka_contig_budget.py /tmp/limit-contigs.py
+RUN python /tmp/limit-contigs.py && rm /tmp/limit-contigs.py
+LABEL org.ottojung.ivanka.experiment="dominant-contig-limit;benchmark-only"

@@ -1,6 +1,4 @@
-use super::{
-    assemble_candidates, balanced_seed_candidates, empty, rescue_short, seeds, Config, Reads,
-};
+use super::{assemble_candidates, balanced_seed_candidates, rescue_short, seeds, Config, Reads};
 use std::error::Error;
 
 /// The selected candidates still carry their original per-read extension
@@ -34,7 +32,6 @@ pub(super) fn assemble(config: &Config) -> Result<Prepared, Box<dyn Error>> {
         config.max_pairs,
         &contigs,
     )?;
-    empty::check(&reads, !contigs.is_empty() || rescue.is_some())?;
     eprintln!(
         concat!(
             "Ivanka ranking {} candidates by read-support density ",

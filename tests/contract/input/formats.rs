@@ -6,10 +6,9 @@ fn casava_mates_with_matching_ids_are_accepted() {
     let r1 = case.write("r1.fq", b"@id 1:N:0:sample\nACGT\n+\n!!!!\n");
     let r2 = case.write("r2.fq", b"@id 2:N:0:sample\nTGCA\n+\n!!!!\n");
     let result = case.run_paths(&r1, &r2, &[]);
-    assert!(!result.status.success());
-    let error = String::from_utf8_lossy(&result.stderr);
-    assert!(error.contains("no supported contigs"), "{error}");
-    assert!(!error.contains("read-pair IDs"));
+    assert!(result.status.success());
+    assert!(case.output().is_empty());
+    assert!(!String::from_utf8_lossy(&result.stderr).contains("read-pair IDs"));
 }
 
 #[test]
@@ -18,10 +17,9 @@ fn plain_matching_ids_are_accepted() {
     let r1 = case.write("r1.fq", b"@id\nACGT\n+\n!!!!\n");
     let r2 = case.write("r2.fq", b"@id\nTGCA\n+\n!!!!\n");
     let result = case.run_paths(&r1, &r2, &[]);
-    assert!(!result.status.success());
-    let error = String::from_utf8_lossy(&result.stderr);
-    assert!(error.contains("no supported contigs"), "{error}");
-    assert!(!error.contains("read-pair IDs"));
+    assert!(result.status.success());
+    assert!(case.output().is_empty());
+    assert!(!String::from_utf8_lossy(&result.stderr).contains("read-pair IDs"));
 }
 
 #[test]

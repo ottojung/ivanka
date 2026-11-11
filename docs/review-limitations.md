@@ -5,7 +5,7 @@ benchmark pass implies clinical or molecular validity.
 
 | Area | Current behavior | Validation needed before changing it |
 |---|---|---|
-| Low seed depth | Original read-backed seeds need >=15 sampled occurrences of a canonical 31-mer; nonempty inputs that cannot form contigs fail explicitly | Synthetic low-coverage controls plus full MiCall A/B qualification for a lower threshold or adaptive fallback |
+| Low seed depth | Original read-backed seeds need >=15 sampled occurrences of a canonical 31-mer; insufficiently supported reads can yield a successful empty FASTA | Synthetic low-coverage controls plus full MiCall A/B qualification for a lower threshold or adaptive fallback |
 | Contig ranking | Extension-supporting read records per assembled base dominate unless span favourites are reserved; a short fragment can displace a long one | Tests of dominant-contig retention and authentic 198-sample final-MAX score/runtime Psi |
 | Extension ties | A 50/50 A/C/G/T vote is accepted when minimum ratio is 1; lexical base ordering breaks ties | Sequencing-error, mixture and phased controls; genuine benchmark to assess a stricter ratio |
 | Pair evidence | Original read identifiers/order are validated, but native extension indexes mates independently | Deterministic properly paired placement and original-molecule/allele accounting; independent genotype/phase checks |

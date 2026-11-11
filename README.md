@@ -93,10 +93,12 @@ index hits in memory. Set `--max-pairs N` to bound resource use; there is
 no fixed memory ceiling. The first 50,000 pairs supply sampled 31-mer
 seed counts (every third window), and native candidate extension normally
 requires at least 15 occurrences of a seed k-mer. This is a k-mer
-observation threshold, not a universal conversion to read depth. If a
-nonempty input yields no contigs, the CLI now fails with a diagnostic
-instead of silently returning a successful empty FASTA. An intentional
-`--max-pairs 0` with no seeds may still produce an empty output.
+observation threshold, not a universal conversion to read depth.
+**Zero contigs is a valid assembly result**: the CLI exits successfully and
+writes an empty FASTA, including when the input has reads but insufficient
+support for assembly. `--max-pairs 0` can also intentionally produce an
+empty output. Input errors, such as invalid paired FASTQ identifiers or
+reads exceeding the index length limit, still fail explicitly.
 
 ## Current 198-sample qualification (authoritative)
 

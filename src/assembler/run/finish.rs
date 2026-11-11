@@ -40,7 +40,6 @@ pub(super) fn write(
         // otherwise withhold the rescue to avoid losing distinct evidence.
         append_preserving_diversity(&mut contigs, rescue, max, protected_seed_count);
     }
-    super::empty::check(&reads, !contigs.is_empty())?;
     write_fasta(&out, &contigs)?;
     if let Some(path) = audit_path {
         let count = write_snv_audit(&path, &audit, &contigs, &reads.seed_counts, canonical_kmer)?;

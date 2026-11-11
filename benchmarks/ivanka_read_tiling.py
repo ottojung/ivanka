@@ -6,11 +6,12 @@ K = 31
 
 
 def tile_supported_contig(entry, depth, span=2000, min_coverage=0.8,
-                          max_parts=32):
+                          max_parts=32, overlap=0):
     """Partition without overlap using only support from original read pairs."""
     header, sequence = entry
     length = len(sequence)
-    if span < K or span > 100000 or not 0 <= min_coverage <= 1:
+    if (span < K or span > 100000 or not 0 <= min_coverage <= 1 or
+            overlap < 0 or overlap >= span):
         raise ValueError("Invalid tiling limits")
     if len(depth) != max(0, length - K + 1):
         raise ValueError("Read-depth and contig lengths disagree")
@@ -27,12 +28,13 @@ def tile_supported_contig(entry, depth, span=2000, min_coverage=0.8,
     for i in range(n):
         width = base + (i < extra)
         end = start + width
-        positions = depth[start:end - K + 1]
+        tile_end = min(length, end + overlap)
+        positions = depth[start:tile_end - K + 1]
         if (len(positions) < 1 or
                 sum(v >= 3 for v in positions) <
                 min_coverage * len(positions)):
             return [entry]
-        parts.append((header + "_tile" + str(i + 1), sequence[start:end]))
+        parts.append((header + "_tile" + str(i + 1), sequence[start:tile_end]))
         start = end
     assert start == length
     return parts

@@ -50,3 +50,22 @@ class TilingTests(unittest.TestCase):
     def test_mismatched_depth_fails_closed(self):
         with self.assertRaises(ValueError):
             tile_supported_contig((">x", "A"*4000), [1]*10)
+
+    def test_overlap_retains_long_range_context_and_all_bases(self):
+        seq = "ACGT" * 1539 + "AC"
+        d = [5] * (len(seq) - K + 1)
+        parts = tile_supported_contig((">x", seq), d, 2000, overlap=512)
+        self.assertEqual(len(parts), 4)
+        base, extra = divmod(len(seq), len(parts))
+        start = 0
+        for i, (_, part) in enumerate(parts):
+            end = start + base + (i < extra)
+            self.assertEqual(part, seq[start:min(len(seq), end + 512)])
+            start = end
+        self.assertEqual(start, len(seq))
+
+    def test_invalid_overlap_fails_closed(self):
+        seq = "A" * 4000
+        with self.assertRaises(ValueError):
+            tile_supported_contig((">x", seq), [4] * (len(seq)-K+1),
+                                  overlap=2000)

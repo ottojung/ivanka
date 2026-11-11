@@ -161,10 +161,11 @@ def main(args):
                     for i, result in zip(chosen, selected)]
     tile_span = int(os.environ.get("IVANKA_READ_BACKED_TILE_SPAN", "0"))
     if tile_span:
+        tile_overlap = int(os.environ.get("IVANKA_READ_BACKED_TILE_OVERLAP", "0"))
         from ivanka_read_tiling import tile_supported_contig
         selected = [part for i, result in zip(chosen, selected)
                     for part in (tile_supported_contig(entries[i], depth[i],
-                                                     tile_span)
+                                                     tile_span, overlap=tile_overlap)
                                  if entries[i] == result else [result])]
     write_selected(paths["--output"], selected)
     print("IVANKA_READ_BACKED_SELECTION",

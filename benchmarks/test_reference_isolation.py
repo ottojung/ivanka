@@ -37,11 +37,18 @@ class ReferenceIsolationTests(unittest.TestCase):
         ), [])
 
     def test_rust_accepts_read_derived_fasta_seeds(self):
-        native = (ROOT / "src/assembler/setup/cli.rs").read_text()
-        self.assertIn('"--seeds"', native)
-        self.assertIn("fasta_seeds(", (ROOT / "src/assembler/reads/input.rs").read_text())
-        self.assertIn("protected_seed_count=contigs.len()",
-                      (ROOT / "src/assembler/run.rs").read_text())
+        # These checks follow the module tree rather than assuming one file
+        # per operation; the source layout is independent of the contract.
+        import re
+        def module_sources(module):
+            directory = ROOT / f"src/assembler/{module}"
+            files = directory.rglob("*.rs") if directory.is_dir() else [
+                directory.with_suffix(".rs")]
+            return "\n".join(path.read_text() for path in files)
+        self.assertIn('"--seeds"', module_sources("setup/cli"))
+        self.assertIn("fasta_seeds(", module_sources("reads/input"))
+        self.assertRegex(module_sources("run"),
+                         r"protected_seed_count\s*=\s*contigs\.len\(\)")
 
     def test_rejects_known_reference_as_seed_producer(self):
         source = 'let known = include_str!("hxb2.fasta");'

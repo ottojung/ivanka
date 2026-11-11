@@ -1,12 +1,16 @@
 mod dna;
+mod fastq;
+mod index;
 mod input;
-mod types;
 mod load;
 mod overhang;
-mod index;
-mod fastq;
-pub(super) use dna::{K, MAX_EXTENSION, MAX_CONTIG_LENGTH, encode, decode, rc, rolling_canonical_kmers};
-pub(super) use types::Reads;
+mod types;
+pub(super) use dna::{
+    decode, encode, rc, rolling_canonical_kmers, K, MAX_CONTIG_LENGTH, MAX_EXTENSION,
+};
 pub(super) use input::fasta_seeds;
-#[cfg(test)] mod test_input;
-#[cfg(test)] mod test_overhang;
+pub(super) use types::Reads;
+#[cfg(test)]
+mod test_input;
+#[cfg(test)]
+mod test_overhang;

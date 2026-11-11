@@ -1,14 +1,20 @@
 use super::{imports, lines};
 use std::path::Path;
 
+/// Enforce file size, sibling imports, and total direct directory entries
+/// throughout the Rust source tree, including nested modules and tests.
 pub fn visit(path: &Path, issues: &mut Vec<String>) {
-    let mut entries = std::fs::read_dir(path).unwrap_or_else(|e| {
-        panic!("Cannot lint {}: {e}", path.display())
-    }).map(|e| e.unwrap().path()).collect::<Vec<_>>();
+    let mut entries = std::fs::read_dir(path)
+        .unwrap_or_else(|e| panic!("Cannot lint {}: {e}", path.display()))
+        .map(|e| e.unwrap().path())
+        .collect::<Vec<_>>();
     entries.sort();
     if entries.len() > 10 {
-        issues.push(format!("{}: {} direct entries exceeds 10",
-                            path.display(), entries.len()));
+        issues.push(format!(
+            "{}: {} direct entries exceeds 10",
+            path.display(),
+            entries.len()
+        ));
     }
     for entry in entries {
         if entry.is_dir() {

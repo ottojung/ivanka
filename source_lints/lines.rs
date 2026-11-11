@@ -1,3 +1,5 @@
+/// Count lines containing executable Rust, excluding blank and comment-only
+/// lines. A line with code and an inline comment still counts as code.
 pub fn code_lines(source: &str) -> usize {
     let mut in_block = false;
     let mut count = 0;
@@ -16,8 +18,14 @@ pub fn code_lines(source: &str) -> usize {
                     continue;
                 }
             } else if in_string {
-                if bytes[i] == b'"' && !escaped { in_string = false; }
-                if bytes[i] == b'\\' { escaped = !escaped; } else { escaped = false; }
+                if bytes[i] == b'"' && !escaped {
+                    in_string = false;
+                }
+                if bytes[i] == b'\\' {
+                    escaped = !escaped;
+                } else {
+                    escaped = false;
+                }
                 code = true;
             } else if pair == b"//" {
                 break;
@@ -33,7 +41,9 @@ pub fn code_lines(source: &str) -> usize {
             }
             i += 1;
         }
-        if code { count += 1; }
+        if code {
+            count += 1;
+        }
     }
     count
 }

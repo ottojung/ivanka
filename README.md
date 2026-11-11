@@ -94,6 +94,20 @@ runtime use `q_i = IVA_seconds_i - Ivanka_seconds_i`. Separately require
 exact ties contribute zero. Tests only at r=0,1,2 do not establish this.
 The per-sample 90% and runtime requirements remain separate hard gates.
 
+**Latest successful updated-MiCall reference-blind candidate
+(November 11, 2026):** physical invocation `1794394465-579682`
+completed 198/198 authentic paired-sample comparisons with zero failures
+or alignment-floor violations. Alignment `Psi(r)>0` for all `r>=0`
+(41 wins / 9 losses / 148 ties); runtime `Psi(r)>0` for all `r>=0`
+(165 wins / 33 losses, average **27.60 seconds faster** per sample).
+An independent evaluator and a stronger exact-decimal magnitude-prefix
+proof both verify the all-exponent claims. The source of the immutable
+passing image is retained in `main` through merged PR #213, with AGPLv3
+preserved. See [qualification and source provenance](
+docs/read-backed-selection-experiment.md#independently-verified-198-sample-qualification-november-11-2026).
+This newer updated-MiCall physical result is separate from the historical
+cached-IVA qualification described below.
+
 The frozen 198 run passed numerical qualification and subsequent independent
 hash attestation under the current Psi convention. **That is not a proof of
 independent physical molecules or valid full-length HCV haplotype phase.**

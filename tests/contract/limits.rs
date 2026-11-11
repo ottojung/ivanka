@@ -10,15 +10,17 @@ fn max_pairs_zero_stops_before_loading_reads() {
 #[test]
 fn max_pairs_one_does_not_form_a_supported_assembly() {
     let case = Fixture::new();
-    assert!(case.run("a", &["--max-pairs", "1"]).status.success());
-    assert!(case.output().is_empty());
+    let result = case.run("a", &["--max-pairs", "1"]);
+    assert!(!result.status.success());
+    assert!(!case.path("output.fasta").exists());
 }
 
 #[test]
 fn max_pairs_ten_does_not_form_a_supported_assembly() {
     let case = Fixture::new();
-    assert!(case.run("a", &["--max-pairs", "10"]).status.success());
-    assert!(case.output().is_empty());
+    let result = case.run("a", &["--max-pairs", "10"]);
+    assert!(!result.status.success());
+    assert!(!case.path("output.fasta").exists());
 }
 
 #[test]

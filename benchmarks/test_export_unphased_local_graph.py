@@ -1,6 +1,7 @@
-import csv, hashlib, json, tempfile, unittest
+import hashlib
+import tempfile
+import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 import export_unphased_local_graph as g
 from shared_unphased_evidence import build_shared_evidence

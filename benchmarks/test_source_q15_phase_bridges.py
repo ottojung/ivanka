@@ -7,7 +7,7 @@ from pathlib import Path
 from snv_q15_fastq import iter_original_pairs
 from source_q15_phase_bridges import (
     direct_source_links, directly_observed_candidate,
-    local_words, mate_observes)
+    local_words)
 from synthetic_phase_pairs import generate, reverse_complement
 
 
@@ -69,7 +69,6 @@ class BlindedSourcePhaseTests(unittest.TestCase):
         words=[local_words(template,pos) for pos in sites]
         seq1=words[0][template[sites[0]]]
         seq2=words[1][template[sites[1]]]
-        pair=('R1','R2')
         records=[(f'pair{i}',(seq1,'I'*31),(reverse_complement(seq2),'I'*31))
                  for i in range(12)]
         result=direct_source_links(template,sites,records)

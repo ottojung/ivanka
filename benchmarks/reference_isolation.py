@@ -23,6 +23,48 @@ FORBIDDEN_CANDIDATE = re.compile(
     r"\breference[_-]?(?:panel|catalog|genome|fasta)\b|"
     r"\bbuild_position_index\b|\bindex_references\b)"
 )
+# Explicitly reviewed source-to-image paths. Any newly added Python code
+# copied into an Ivanka/MiCall candidate image requires a boundary review,
+# regardless of its filename. The conserved remap experiment is downstream:
+# it uses the produced MiCall remap reference, never as an assembler input.
+IMAGE_SCRIPT_ROLES = {
+    "patch_micall_for_ivanka.py": "candidate",
+    "verify_ivanka_binding.py": "candidate",
+    "ivanka_read_support_selector.py": "candidate",
+    "ivanka_trim_unsupported.py": "candidate",
+    "ivanka_read_window.py": "candidate",
+    "ivanka_read_tiling.py": "candidate",
+    "patch_micall_stitcher_kmer_veto.py": "candidate",
+    "patch_remap_threads.py": "candidate",
+    "patch_micall_conserved_remap.py": "candidate",
+    "conserved_pair_remap.py": "downstream",
+}
+COPY_SCRIPT = re.compile(
+    r"(?im)^\s*(?:COPY|ADD)\s+benchmarks/([^\s]+\.py)\s+[^\n]+"
+)
+COPY_BROAD = re.compile(
+    r"(?im)^\s*(?:COPY|ADD)\s+(?:\.|benchmarks/?)\s+"
+)
+
+
+def image_script_errors(name, contents, root=ROOT):
+    """Fail closed on unreviewed executable sources in candidate images."""
+    errors = []
+    if COPY_BROAD.search(contents):
+        errors.append(f"{name}: broad COPY would bypass assembler-source review")
+    for script in COPY_SCRIPT.findall(contents):
+        role = IMAGE_SCRIPT_ROLES.get(script)
+        if role is None:
+            errors.append(f"{name}: unreviewed image Python script: {script}")
+            continue
+        path = root / "benchmarks" / script
+        if not path.is_file():
+            errors.append(f"{name}: missing copied Python script: {script}")
+        elif role == "candidate":
+            errors.extend(candidate_source_errors(str(path.relative_to(root)), path.read_text()))
+    return errors
+
+
 FORBIDDEN_IMAGE_COPY = re.compile(
     r"(?im)^\s*(?:COPY|ADD)\s+[^\n]*(?:"
     r"reference[_-]?panel|reference[_-]?catalog|"
@@ -99,12 +141,23 @@ def check_repository(root=ROOT):
     for path in sorted((root / "src").rglob("*.rs")):
         text = path.read_text()
         errors += assembler_source_errors(str(path.relative_to(root)), text)
-    for path in sorted((root / "benchmarks").glob("ivanka_*.py")):
-        errors += candidate_source_errors(str(path.relative_to(root)), path.read_text())
-    for path in sorted((root / "benchmarks").glob("*postselect*.py")):
-        errors += candidate_source_errors(str(path.relative_to(root)), path.read_text())
-    for path in sorted((root / "benchmarks").glob("Dockerfile*")):
-        errors += image_recipe_errors(str(path.relative_to(root)), path.read_text())
+    # Candidate selectors are checked even when not currently installed by
+    # an image. Build-time copying is independently reviewed by a fixed list.
+    candidate_paths = set((root / "benchmarks").glob("ivanka_*.py"))
+    candidate_paths.update((root / "benchmarks").glob("*selector*.py"))
+    candidate_paths.update((root / "benchmarks").glob("*postselect*.py"))
+    candidate_paths.update(root / "benchmarks" / name for name, role in
+                           IMAGE_SCRIPT_ROLES.items() if role == "candidate")
+    for path in sorted(candidate_paths):
+        if path.is_file() and not path.name.startswith("test_"):
+            errors += candidate_source_errors(str(path.relative_to(root)), path.read_text())
+    recipes = [p for p in (root / "benchmarks").rglob("*")
+               if p.is_file() and p.name.startswith(("Dockerfile", "Containerfile"))]
+    for path in sorted(recipes):
+        text = path.read_text()
+        name = str(path.relative_to(root))
+        errors += image_recipe_errors(name, text)
+        errors += image_script_errors(name, text, root)
     adapter = root / "benchmarks" / "patch_micall_for_ivanka.py"
     text = adapter.read_text()
     errors += candidate_source_errors(str(adapter.relative_to(root)), text)

@@ -40,7 +40,7 @@ pub(super) fn build_index(seqs: &[Vec<u8>]) -> HashMap<u64, Vec<Hit>> {
         }
         // The terminal anchor may already be on the sampled grid.
         let terminal = seq.len() - K;
-        if terminal % INDEX_STEP != 0 {
+        if !terminal.is_multiple_of(INDEX_STEP) {
             if let Some(kmer) = encode(&seq[terminal..]) {
                 index.entry(kmer).or_default().push(Hit {
                     read: idx as u32,

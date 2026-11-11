@@ -17,7 +17,6 @@ def reference_fidelity(reference_fasta: Path, output_fasta: Path, min_coverage: 
         (x for x in SeqIO.parse(reference_fasta, "fasta") if len(x.seq) >= 2000),
         key=lambda x: len(x.seq), reverse=True,
     )[:3]
-    outputs = [x for x in SeqIO.parse(output_fasta, "fasta") if len(x.seq) >= 600]
     if not targets:
         return {"pass": False, "reason": "no substantial IVA reference molecules", "coverage": []}
     aligner = mappy.Aligner(str(output_fasta), preset="asm5", best_n=25)

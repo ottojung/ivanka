@@ -10,7 +10,7 @@ fn unsupported_single_base_errors_are_not_preserved() {
     assert!(!supported_snv_alternative(
         &changed,
         1,
-        &[original.clone()],
+        std::slice::from_ref(&original),
         &[200],
         &counts,
         encode

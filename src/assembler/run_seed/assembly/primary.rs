@@ -38,7 +38,7 @@ pub(super) fn assemble_primary(
                 supporting_counts.push(support);
             }
         }
-        if attempted % 20 == 0 {
+        if attempted.is_multiple_of(20) {
             eprintln!("tried {} seeds, accepted {}", attempted, contigs.len());
         }
     }

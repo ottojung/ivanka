@@ -1,7 +1,6 @@
 """Strict original-pair Q15 evidence and falsification tests."""
 import hashlib
 import json
-import os
 import random
 import tempfile
 import unittest

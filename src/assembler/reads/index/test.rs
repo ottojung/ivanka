@@ -12,7 +12,7 @@ fn rolling_index_matches_full_windows() {
                     expected.entry(k).or_default().push((0, pos as u16));
                 }
             }
-            if (seq.len() - K) % INDEX_STEP != 0 {
+            if !(seq.len() - K).is_multiple_of(INDEX_STEP) {
                 if let Some(k) = encode(&seq[seq.len() - K..]) {
                     expected
                         .entry(k)

@@ -1,7 +1,5 @@
 """Standalone tests for benchmarks/psi.py (no third-party dependencies)."""
 
-import contextlib
-import io
 import json
 from decimal import Decimal
 import subprocess

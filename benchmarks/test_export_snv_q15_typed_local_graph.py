@@ -351,7 +351,8 @@ class SNVQ15TypedLocalGraphTests(unittest.TestCase):
             n.write_text(json.dumps(synthetic_node, sort_keys=True))
             l.write_text(json.dumps(synthetic_link, sort_keys=True))
             out = root / 'out' / 'test-s48-snv-graph.json'
-            import subprocess, sys
+            import subprocess
+            import sys
             cmd = [sys.executable, 'benchmarks/export_snv_q15_typed_local_graph.py',
                    '--node-report', str(n), '--direct-link-report', str(l),
                    '--sample', '73090AMIDI-MidHCV_S48', '--output', str(out),

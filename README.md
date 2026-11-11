@@ -1,8 +1,9 @@
 # Ivanka (experimental development)
 
 Ivanka is a standalone **Rust** implementation of IVA-style abundant-k-mer
-seeding and iterative bidirectional extension. It deliberately does **not**
-map reads, merge contigs, or select a reference during assembly.
+seeding and iterative bidirectional extension. It indexes single reads and
+their reverse complements, but does **not** align to a viral reference or
+merge assembled contigs.
 
 This is early experimental code. It is **not** validated for clinical use.
 
@@ -30,8 +31,10 @@ reads and reserves up to one-third of its output budget for supplied seeds.
 The caller is responsible for ensuring the FASTA contains sample-read-derived
 contigs, never reference sequences or reference-selected candidates.
 
-The CI guard `python benchmarks/reference_isolation.py` checks this
-boundary, including the MiCall assembler invocation. See
+The CI guard `python benchmarks/reference_isolation.py` checks the Rust
+sources, the pinned MiCall assembler interface, reviewed candidate selectors
+and image build scripts (including Containerfiles). This is defense in depth:
+new adapters and downstream MiCall patches still require human code review. See
 [the assembly objective](docs/assembly-objective.md).
 
 ## Primary objective: recover the dominant viral sequence
@@ -74,11 +77,26 @@ relabel results. Clinical/production readiness is a distinct future decision.
     # Optional: --max-contigs 12 --max-pairs N
 
 Input FASTQ files must contain paired records in matching order. Ivanka now
-checks each original read identifier as it reads the pair and rejects a
-mismatch instead of silently joining unrelated reads. CASAVA mate metadata
-(`1:N:0:...` / `2:N:0:...`), legacy `/1` / `/2` headers, and matching
-plain IDs are accepted. This validates read-pair provenance without mapping
-or altering sequence or quality data.
+checks each original read identifier in order and rejects a mismatch.
+CASAVA mate metadata (`1:N:0:...` / `2:N:0:...`), legacy `/1` /
+`/2` suffixes, matching plain IDs and SRA-style descriptive fields
+(`@SRR123.1 1 length=250`) are accepted. A bare numeric second header
+word is metadata, not a CASAVA mate designation. **Mate relationships are
+validated but are not currently used for joint placement, extension or
+pair-based scoring.** The assembler indexes each read and reverse
+complement independently; this cannot establish long-range molecular phase.
+
+A read longer than 65,535 bases is rejected explicitly because index
+positions are 16-bit. The default `--max-pairs` is **unlimited**:
+the assembler retains the original reads, their reverse complements and
+index hits in memory. Set `--max-pairs N` to bound resource use; there is
+no fixed memory ceiling. The first 50,000 pairs supply sampled 31-mer
+seed counts (every third window), and native candidate extension normally
+requires at least 15 occurrences of a seed k-mer. This is a k-mer
+observation threshold, not a universal conversion to read depth. If a
+nonempty input yields no contigs, the CLI now fails with a diagnostic
+instead of silently returning a successful empty FASTA. An intentional
+`--max-pairs 0` with no seeds may still produce an empty output.
 
 ## Current 198-sample qualification (authoritative)
 
@@ -107,6 +125,11 @@ preserved. See [qualification and source provenance](
 docs/read-backed-selection-experiment.md#independently-verified-198-sample-qualification-november-11-2026).
 This newer updated-MiCall physical result is separate from the historical
 cached-IVA qualification described below.
+
+The all-real-exponent runtime Psi gate is deliberately sensitive to the
+largest absolute runtime regression as r becomes large. One noisy
+container can therefore control tail dominance; repeatability is a
+scientific diagnostic, not permission to weaken or reinterpret the gate.
 
 The frozen 198 run passed numerical qualification and subsequent independent
 hash attestation under the current Psi convention. **That is not a proof of
@@ -151,8 +174,11 @@ prepared inputs, IVA baselines and a private roles.json are outside Git under
 A positive fixed-HXB2 score must reach at least 95% of IVA for each ordinary
 success sample. Nonpositive baseline scores and the mixed/deletion samples
 require separate structural acceptance criteria; do **not** assert alpha PASS
-based on HXB2 scores alone. Neither original human reads nor sample identifiers
-are committed to this public repository.
+based on HXB2 scores alone. Neither original human reads nor identifying sample metadata are
+committed to this public repository. Redacted labels such as `S48`,
+`S12`, and `S98` intentionally appear in diagnostic reports; the
+private mapping between those labels and original sample files is
+kept outside Git.
 
 
 ## Historical HXB2 acceptance gate (not current full-198)
@@ -323,25 +349,50 @@ status. A cached IVA baseline can support Ivanka-only experiments, but cannot
 claim two-arm full-alpha qualification. IVA control preparation has its own
 declared setup budget and does not count as a qualifying run.
 
+For a concise map of the active acceptance scripts versus historical
+experiments, see [benchmark entry points](benchmarks/README.md) and
+[the documentation map](docs/README.md).
+
 ## Contig reporting and read-support ranking
 
-Ivanka does not impose any minimum assembled contig length. It considers up to
-1,000 seed-extension attempts, and the final FASTA includes **at most 1,000
-contigs** (configurable downward with `--max-contigs`). This is a safety cap,
-not a target or a guarantee of 1,000 useful contigs.
+The native assembler attempts at most **1,000 primary** and **400
+supplementary** high-depth seeds by default; experimental environment
+budgets can reduce these limits. It imposes no minimum assembled-contig
+length. Its final FASTA has **at most 1,000 contigs**, but the native
+`--max-contigs` **default is 16**, not 1,000. The default MiCall adapter
+does not pass an override, so native Ivanka starts with this 16-contig
+budget. The passing read-backed image additionally selects its strongest
+read-supported input candidate by default (`IVANKA_POSTSELECT_CONTIGS=1`)
+and may produce multiple overlapping FASTA tiles from that candidate.
+The native cap and the wrapper's selection budget are different controls.
 
-When more candidates exist than the cap, they are ranked by the number of
-distinct input FASTQ read records supporting **chosen sequence extensions**
-multiplied by assembled sequence length; read count and then length break ties.
-Individual observations with identical sequence count separately (multiplicity),
-but a record used repeatedly within a contig contributes only once to its
-support count. Each read remains available to other extensions and contigs.
-No reference-derived or externally supplied seed contigs enter Ivanka;
-the emitted candidates are formed entirely from the paired input reads.
+Native ranking first protects caller-supplied read-derived seed contigs,
+then reserves some high-span favourites **only if the candidate count
+exceeds twice the output cap**. Otherwise it primarily sorts candidates
+by distinct extension-supporting read records **divided by contig
+length** (the ratio is compared exactly without integer truncation);
+total supporting read records and length break later ties. A short,
+high-depth fragment may therefore outrank a longer supported path.
+This is a known quality tradeoff, not an assurance of genome-length
+coverage. The read-backed wrapper independently scores 31-mer breadth
+and original read-pair observations; it must remain reference-blind.
 
-This initial construction-time quality heuristic is *not* a validated
-likelihood or confidence score. Actual full-MiCall comparisons, including
-short regions and variant-rich inputs, remain necessary for qualification.
+Extension support counts oriented *read records*, not independently
+identified molecules or properly placed pairs. Duplicate observations
+with identical sequence can increase support, but reusing the same
+record during one contig's extension adds support only once. At
+`min_ratio=1`, a 50/50 extension vote is accepted and the stable
+A/C/G/T order breaks ties: the chosen base is **not** phasing evidence.
+The overhang cache is bounded to 256 entries and declines to retain
+observations with more than 1,000 overhangs; those dense lookups are
+recomputed. These limits trade peak memory against runtime.
+
+The optional `--seeds` FASTA is allowed **only for independently
+same-sample-read-derived contigs**, as described above. This heuristic
+is not a validated likelihood or confidence score. Changes to ranking,
+tie handling, proper-pair placement, seed thresholds, or cache retention
+require independent end-to-end MiCall comparisons, not just unit tests,
+before any new version can claim the frozen numerical milestone.
 
 ### Rust source structure checks
 

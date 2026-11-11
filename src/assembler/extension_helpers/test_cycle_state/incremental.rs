@@ -7,19 +7,19 @@ fn incremental_cycle_scan_matches_full_rescan() {
         let mut seq = Vec::new();
         let mut tracker = CycleTracker::new();
         let mut found = false;
-        for step in 0..100 {
+        for step in 0u32..100 {
             let mut chunk = vec![b'A'; 80];
             for b in &mut chunk {
                 state ^= state << 13;
                 state ^= state >> 7;
                 state ^= state << 17;
-                *b = if step % 13 == 0 && state % 101 == 0 {
+                *b = if step.is_multiple_of(13) && state.is_multiple_of(101) {
                     b'N'
                 } else {
                     b"ACGT"[(state & 3) as usize]
                 };
             }
-            let prepend = mode == 1 && step % 7 == 0;
+            let prepend = mode == 1 && step.is_multiple_of(7);
             if prepend {
                 chunk.extend_from_slice(&seq);
                 seq = chunk;

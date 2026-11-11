@@ -6,7 +6,7 @@ pub(super) fn parse_pairs(
     fq1: &str,
     fq2: &str,
     max_pairs: Option<usize>,
-) -> io::Result<(Vec<Vec<u8>>, HashMap<u64, u32>, usize)> {
+) -> io::Result<super::LoadedPairs> {
     let mut r1 = FastqSeqReader::new(read_open(fq1)?);
     let mut r2 = FastqSeqReader::new(read_open(fq2)?);
     let mut seqs = Vec::new();
@@ -34,6 +34,7 @@ pub(super) fn parse_pairs(
             ));
         }
         for read in [a, b] {
+            super::validate::indexed_length(&read)?;
             if pairs < 50000 {
                 count_sampled_seed_kmers(&read, &mut seed_counts);
             }
@@ -42,7 +43,7 @@ pub(super) fn parse_pairs(
             seqs.push(reverse);
         }
         pairs += 1;
-        if pairs % 1000000 == 0 {
+        if pairs.is_multiple_of(1000000) {
             eprintln!("loaded {} read pairs", pairs);
         }
     }

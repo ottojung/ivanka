@@ -6,7 +6,7 @@ fn unobserved_and_multi_snv_sequences_never_become_nodes() {
     let count = write_snv_audit(
         &path,
         &[(alt.clone(), 150)],
-        &[base.clone()],
+        std::slice::from_ref(&base),
         &HashMap::new(),
         kmer,
     )

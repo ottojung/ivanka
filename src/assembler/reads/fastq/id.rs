@@ -15,7 +15,12 @@ fn parse_header(h: &str) -> Option<(&str, Option<u8>)> {
     let casava = match words.next() {
         Some(w) if w.starts_with("1:") => Some(1),
         Some(w) if w.starts_with("2:") => Some(2),
-        Some(w) if w.as_bytes().first().is_some_and(u8::is_ascii_digit) => return None,
+        Some(w)
+            if w.split_once(':').is_some()
+                && w.as_bytes().first().is_some_and(u8::is_ascii_digit) =>
+        {
+            return None
+        }
         _ => None,
     };
     if suffix.is_some() && casava.is_some() && suffix != casava {

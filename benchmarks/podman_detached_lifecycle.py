@@ -126,7 +126,7 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
         for attempt in range(4):
             offset = output.tell() if output is not None else None
 
-            def discard_partial_output():
+            def discard_partial_output(offset=offset):
                 if offset is not None:
                     output.seek(offset)
                     output.truncate()

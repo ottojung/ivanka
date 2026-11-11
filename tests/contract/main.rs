@@ -3,6 +3,7 @@ mod flags;
 mod golden;
 mod input;
 mod limits;
+mod low_depth;
 mod mate_errors;
 mod seeds;
 mod support;

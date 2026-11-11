@@ -20,7 +20,7 @@ impl Reads {
             .saturating_sub(self.max_read_len.saturating_sub(1));
         // Two orientations share one bit per original FASTQ read.
         let read_count = self.seqs.len().div_ceil(2);
-        let mut used = vec![0u64; (read_count + 63) / 64];
+        let mut used = vec![0u64; read_count.div_ceil(64)];
         let mut ext = Vec::new();
         let mut ids = Vec::new();
         let mut previous = None;

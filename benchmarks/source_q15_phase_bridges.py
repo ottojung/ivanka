@@ -6,7 +6,6 @@ paired sequences are different evidence classes, never molecule counts.
 """
 from collections import Counter, defaultdict
 
-from snv_q15_fastq import iter_original_pairs
 from snv_q15_evidence import reverse_complement
 
 DNA = 'ACGT'

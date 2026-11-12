@@ -1,6 +1,6 @@
-"""Reference-blind CLI contracts for seven assembler binaries.
+"""Read-derived CLI contracts for seven independently executed assemblers.
 
-Do not pass truth, reference panels, or benchmark scores to any assembler.
+No hidden scoring information or truth may enter any assembler.
 Every result records the actual invocation and executable SHA256.
 """
 import gzip

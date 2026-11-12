@@ -399,6 +399,35 @@ class ExpandedChildEnvironmentTests(unittest.TestCase):
 @unittest.skipUnless(importlib.util.find_spec("Bio"),
                      "Biopython required for independent truth scoring")
 class ExpandedTruthScoringTests(unittest.TestCase):
+    def test_valid_iupac_ambiguities_are_scored_not_rejected(self):
+        from expanded.score import read_fasta, reverse_complement
+        with tempfile.TemporaryDirectory() as root:
+            fasta = Path(root) / "ambiguity.fa"
+            fasta.write_text(">ambiguous\nACGTRYSWKMBDHVN\n")
+            self.assertEqual(read_fasta(fasta)[0], "ACGTRYSWKMBDHVN")
+            for code in "ACGTRYSWKMBDHVN":
+                self.assertEqual(reverse_complement(reverse_complement(code)),
+                                 code)
+            fasta.write_text(">invalid\nACGTZ\n")
+            with self.assertRaises(ValueError):
+                read_fasta(fasta)
+
+    def test_ambiguous_hxb2_fragment_is_scored_not_exact(self):
+        from expanded.score import dominant_truth_score
+        from benchmarks.test_expanded_micall_dominant import HXB2_PREFIX
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            truth = root / "known_hxb2_fragment.fasta"
+            truth.write_text(">hxb2_prefix\n" + HXB2_PREFIX + "\n")
+            contig = root / "ambiguous.fa"
+            contig.write_text(">ambiguous\n" + HXB2_PREFIX[:20]
+                              + "W" + HXB2_PREFIX[21:] + "\n")
+            result = dominant_truth_score(
+                {"nominal_fractions": [1.0]}, truth, contig)
+            self.assertLess(result["score"], 1.0)
+            self.assertGreater(result["score"], 0.9)
+            self.assertFalse(result["dominant_exact"])
+
     def test_truth_scoring_is_separate_and_penalizes_errors(self):
         from expanded.score import dominant_truth_score, read_fasta
         with tempfile.TemporaryDirectory() as folder:

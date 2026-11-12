@@ -43,10 +43,11 @@ invocation contract.
 3. A build/integration guard prevents installing an Ivanka wrapper in place of
    the Rust binary, and rejects benchmark-tuned environment settings or
    additional CLI arguments at the assembler boundary.
-4. The **full** unchanged physical 198-sample MiCall comparison and the
-   separate expanded multi-assembler benchmark run using this same default
-   executable and invocation. Passing unit tests or reproducing a tuned
-   image's settings does **not** establish qualification.
+4. Both mandatory numerical gates must be passed using this identical
+   default executable and invocation: the **full unchanged physical
+   198-sample MiCall/IVA benchmark** and the **expanded 198-real +
+   400-synthetic seven-assembler benchmark**. Passing only one gate,
+   unit tests, or reproducing tuned image settings is **insufficient**.
 5. The default invocation is declared passing only when all required
    per-sample, runtime and alignment Ψ(r) criteria pass; any
    failures remain visible, and original benchmark records are preserved.

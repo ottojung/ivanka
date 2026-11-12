@@ -57,4 +57,7 @@ sample**, all per-sample floors satisfied, and the twelve independent
 competitor-by-cohort comparisons passing **both** strict all-r Ψ criteria.
 The 198-only gate must also independently pass under Intent 005. A failed
 or incomplete seven-way run is a blocker, not a waiver or an opportunity
-to silently downgrade the gate. **No seven-way pass is currently claimed.**
+to silently downgrade the gate. This requirement applies to the exact
+Rust-only direct, empty-environment default MiCall execution stipulated
+by Intents 001 and 002. Benchmark-tuned wrappers and alternative flags
+cannot be accepted. **No seven-way pass is currently claimed.**

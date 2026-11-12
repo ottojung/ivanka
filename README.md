@@ -80,21 +80,30 @@ proposing contig selection, pruning or synthetic tests. The existing
 198-sample alignment/runtime qualification remains unchanged.
 
 
-## Current development milestone: benchmark first
+## Current development milestone: both benchmark gates must pass
 
-**The only pass/fail target during this development stage is the existing
-198-sample MiCall benchmark.** Produce a verified end-to-end run with the
-unchanged 33-reference best-final-MAX alignment scoring, each sample at least
-90% of IVA, the 1,800-second completion limit, and both alignment and runtime
-signed-power Psi(r) strictly positive for every r >= 0. No extra
-minority-haplotype recall, synthetic phase, clinical-release, diagnostic
-metric or contig-count gate may be added to this milestone.
+**Ivanka is not complete until BOTH required numerical gates pass**, under
+the Rust-only, reference-blind, unconfigured MiCall invocation contract:
 
-Synthetic tests, haplotype analysis, coverage and genotype diagnostics can
-help explain results, but **must not block benchmark-focused iterations**
-or be presented as additional criteria for benchmark success. Maintain
-honest paired input, image and output provenance; never fabricate or
-relabel results. Clinical/production readiness is a distinct future decision.
+- **Original physical 198:** 33-reference best-final-MAX alignment,
+  each sample ≥90% of IVA, ≤1,800-second containers, and strictly positive
+  alignment and runtime signed-power Ψ(r) for every real r≥0.
+- **Enhanced seven-assembler benchmark:** the unchanged 198 real samples
+  plus 400 diverse synthetic cases, against IVA, Haploflow, MEGAHIT,
+  ABySS, SPAdes and Velvet. On both cohorts separately, Ivanka must beat
+  **each** competitor on alignment/known-truth and runtime all-r Ψ,
+  meeting the ≥90%-of-best-competitor per-sample alignment floor.
+
+Missing, failed or partial runs cannot qualify. Neither a historical
+IVA-only pass nor a synthetic-only pass suffices. These requirements are
+**active now**, not exploratory or deferred. See
+[the cumulative intent records](docs/intents/README.md).
+
+Other experiments—including minority-haplotype reconstruction, separate
+phase studies, coverage diagnostics and synthetic investigations outside
+the fixed 400-sample cohort—may guide changes without adding further
+performance gates. Preserve paired input and result provenance. A benchmark
+pass is not a separate clinical production authorization.
 
 ## CLI
 

@@ -38,9 +38,10 @@ The executable itself must satisfy [Intent 001](001-rust-only-execution.md).
 Any earlier passing result obtained through a Python-wrapped image remains
 historical evidence, **not proof** that this new invocation passes.
 
-This gate remains independently mandatory even when the
-[expanded multi-assembler gate](006-expanded-qualification.md) is introduced.
-Do not weaken either Ψ criterion or the per-sample floor.
+This gate **and** the [expanded multi-assembler gate](006-expanded-qualification.md)
+are separately mandatory **now** for any completion, benchmark-qualified
+or release claim. A pass here without a passing expanded gate is **not
+completion**. Do not weaken either Ψ criterion or the per-sample floor.
 
 See [the canonical testing procedure](../testing-improvement-procedure.md)
 for unchanged implementation-specific scoring, timing and provenance details.

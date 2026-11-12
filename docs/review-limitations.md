@@ -24,3 +24,22 @@ extension votes, proper pairing, cache policy or seed thresholds must
 be independently qualified as a **new** candidate before it is called
 numerically passing. A pure documentation or input-validation correction
 must not be reported as a newly repeated 198-sample experiment.
+
+
+## Qualification provenance
+
+The frozen 198-sample numeric pass was measured with a Python read-backed
+selector/trim/tile wrapper and 50 primary / 20 supplementary native seeds.
+The Rust CLI alone, with its 1,000/400 defaults, is not the qualified
+execution configuration. The same physical cohort was used to tune
+several heuristic thresholds, so a pass is not evidence of held-out
+generalization. The source- and base-pinned image builder is
+`scripts/build_read_backed_image.sh`. See
+`docs/read-backed-selection-experiment.md` for the complete boundary.
+
+Any new native implementation of the wrapper should be introduced
+behind explicit options with a frozen Python-versus-Rust differential
+harness, a versioned configuration manifest and read-pair accounting
+checks. Only a fresh physical 198-sample MiCall A/B comparison can
+replace the existing numeric qualification, while separate held-out
+cohort evaluation is needed for an unbiased performance claim.

@@ -39,29 +39,54 @@ IMAGE_SCRIPT_ROLES = {
     "patch_micall_conserved_remap.py": "candidate",
     "conserved_pair_remap.py": "downstream",
 }
-COPY_SCRIPT = re.compile(
-    r"(?im)^\s*(?:COPY|ADD)\s+benchmarks/([^\s]+\.py)\s+[^\n]+"
-)
-COPY_BROAD = re.compile(
-    r"(?im)^\s*(?:COPY|ADD)\s+(?:\.|benchmarks/?)\s+"
-)
+COPY_DIRECTIVE = re.compile(r"(?im)^\s*(?:COPY|ADD)\s+([^\n]+)")
+PYTHON_SCRIPT = re.compile(r"\.py$", re.IGNORECASE)
+
+
+def _copied_sources(spec):
+    """Interpret Dockerfile COPY/ADD flags and JSON forms without guessing."""
+    import json
+    import shlex
+    if spec.rstrip().endswith("\\"):
+        raise ValueError("multiline COPY/ADD must be individually reviewed")
+    if spec.lstrip().startswith("["):
+        operands = json.loads(spec)
+    else:
+        operands = shlex.split(spec)
+    flags = []
+    while operands and operands[0].startswith("--"):
+        flags.append(operands.pop(0))
+    if (len(operands) < 2 or
+            any(token.startswith("[") for token in operands)):
+        raise ValueError("COPY/ADD requires individually reviewable operands")
+    if any(flag.startswith("--from=") for flag in flags):
+        return ()
+    return operands[:-1]
 
 
 def image_script_errors(name, contents, root=ROOT):
-    """Fail closed on unreviewed executable sources in candidate images."""
+    """Fail closed for source additions that bypass reviewed code boundaries."""
     errors = []
-    if COPY_BROAD.search(contents):
-        errors.append(f"{name}: broad COPY would bypass assembler-source review")
-    for script in COPY_SCRIPT.findall(contents):
-        role = IMAGE_SCRIPT_ROLES.get(script)
-        if role is None:
-            errors.append(f"{name}: unreviewed image Python script: {script}")
+    for directive in COPY_DIRECTIVE.findall(contents):
+        try:
+            sources = _copied_sources(directive)
+        except (ValueError, TypeError) as exc:
+            errors.append(f"{name}: unreviewable image COPY/ADD: {exc}")
             continue
-        path = root / "benchmarks" / script
-        if not path.is_file():
-            errors.append(f"{name}: missing copied Python script: {script}")
-        elif role == "candidate":
-            errors.extend(candidate_source_errors(str(path.relative_to(root)), path.read_text()))
+        for source in sources:
+            if source in (".", "./", "benchmarks", "benchmarks/"):
+                errors.append(f"{name}: broad COPY would bypass assembler review")
+            if not PYTHON_SCRIPT.search(source):
+                continue
+            path = root / source
+            script = Path(source).name
+            role = IMAGE_SCRIPT_ROLES.get(script) if Path(source).parent == Path("benchmarks") else None
+            if role is None:
+                errors.append(f"{name}: unreviewed image Python script: {source}")
+            elif not path.is_file():
+                errors.append(f"{name}: missing copied Python script: {source}")
+            elif role == "candidate":
+                errors.extend(candidate_source_errors(str(path.relative_to(root)), path.read_text()))
     return errors
 
 

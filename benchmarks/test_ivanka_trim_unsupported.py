@@ -1,6 +1,6 @@
 """Regression tests for optional end-clipping based on original read pairs."""
 import unittest
-from ivanka_trim_unsupported import K, trim_terminal_unsupported
+from ivanka_trim_unsupported import K, trim_terminal_unsupported, trim_supported_island
 
 
 class ReadTrimTests(unittest.TestCase):
@@ -49,3 +49,19 @@ class ReadTrimTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+
+class TrimBoundsTests(unittest.TestCase):
+    def test_prefix_trim_returns_exact_original_depth_offset(self):
+        seq = "A"*2800 + "CGT"*1000
+        depth = [0]*2800 + [10]*(len(seq)-K+1-2800)
+        trimmed, start, end = trim_terminal_unsupported((">x",seq), depth, with_bounds=True)
+        self.assertEqual(trimmed[1], seq[start:end])
+        self.assertEqual((start,end), (2288,len(seq)))
+        self.assertEqual(len(depth[start:end-K+1]), len(trimmed[1])-K+1)
+
+    def test_supported_island_bounds_cover_retained_segment(self):
+        seq = "A"*2800 + "CGT"*1000
+        depth = [0]*2800 + [10]*(len(seq)-K+1-2800)
+        trimmed, start, end = trim_supported_island((">x",seq), depth, with_bounds=True)
+        self.assertEqual(trimmed[1], seq[start:end])

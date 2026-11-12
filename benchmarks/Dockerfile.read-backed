@@ -9,6 +9,7 @@ RUN cargo build --release --locked
 
 # Pin the identical updated-MiCall base used by the frozen IVA control.
 FROM localhost/micall:newmicall-e0073cb5-base
+ARG SOURCE_COMMIT
 ARG NATIVE_PRIMARY_SEEDS=50
 ARG NATIVE_RESCUE_SEEDS=20
 ARG POSTSELECT_CONTIGS=1
@@ -32,3 +33,8 @@ COPY benchmarks/verify_ivanka_binding.py /tmp/verify_ivanka_binding.py
 RUN python /tmp/patch_micall_for_ivanka.py && python /tmp/verify_ivanka_binding.py
 RUN rm /tmp/patch_micall_for_ivanka.py /tmp/verify_ivanka_binding.py
 LABEL org.ottojung.ivanka.experiment="native-read-backed-contig-selection"
+
+
+# The exact committed source used for this candidate is independently audited.
+LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.ivanka.execution="native-fastq-read-backed-selector-trim-island-tile512"

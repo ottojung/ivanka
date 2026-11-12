@@ -1,4 +1,4 @@
-"""Lossless-in-sequence partitioning of long, densely read-supported contigs."""
+"""Read-supported tiling with optional overlapping sequence context."""
 
 from math import ceil
 
@@ -7,7 +7,7 @@ K = 31
 
 def tile_supported_contig(entry, depth, span=2000, min_coverage=0.8,
                           max_parts=32, overlap=0):
-    """Partition without overlap using only support from original read pairs."""
+    """Tile from original-pair support, optionally retaining flank overlap."""
     header, sequence = entry
     length = len(sequence)
     if (span < K or span > 100000 or not 0 <= min_coverage <= 1 or

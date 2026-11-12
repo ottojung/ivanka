@@ -24,7 +24,7 @@ pub(super) fn assemble(config: &Config) -> Result<Prepared, Box<dyn Error>> {
         &mut supporting_counts,
     )?;
     let protected_seed_count = contigs.len();
-    assemble_candidates(candidates, &reads, &mut contigs, &mut supporting_counts);
+    assemble_candidates(candidates, &reads, &mut contigs, &mut supporting_counts)?;
     let rescue = rescue_short(
         &config.reads1,
         &config.reads2,

@@ -355,6 +355,14 @@ For a concise map of the active acceptance scripts versus historical
 experiments, see [benchmark entry points](benchmarks/README.md) and
 [the documentation map](docs/README.md).
 
+**Reproducibility note:** the frozen 198-sample numerical pass covers
+a specific Python read-backed wrapper and native seed budget (50/20),
+not default standalone Rust behavior. The same cohort helped choose
+some experimental thresholds and is not held-out evidence. See
+[the complete image and qualification boundary](
+docs/read-backed-selection-experiment.md#qualification-boundary-and-reproducible-rebuilds)
+and [the pinned read-backed image builder](scripts/build_read_backed_image.sh).
+
 ## Contig reporting and read-support ranking
 
 The native assembler attempts at most **1,000 primary** and **400

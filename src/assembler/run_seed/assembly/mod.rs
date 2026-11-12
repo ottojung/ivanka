@@ -7,8 +7,8 @@ pub(crate) fn assemble_candidates(
     reads: &Reads,
     contigs: &mut Vec<Vec<u8>>,
     supporting_counts: &mut Vec<usize>,
-) {
-    let (primary_limit, rescue_limit) = experiment_budget::limits();
+) -> Result<(), String> {
+    let (primary_limit, rescue_limit) = experiment_budget::limits()?;
     let attempted_seeds =
         primary::assemble_primary(candidates, reads, contigs, supporting_counts, primary_limit);
     deep::assemble_deep(
@@ -18,4 +18,5 @@ pub(crate) fn assemble_candidates(
         rescue_limit,
         &attempted_seeds,
     );
+    Ok(())
 }

@@ -26,8 +26,6 @@ def parse_fasta(path):
             sequence.append(line.strip().upper())
     if header is not None:
         entries.append((header, "".join(sequence)))
-    if not entries:
-        raise ValueError("Native assembler emitted no FASTA entries")
     return entries
 
 
@@ -55,20 +53,60 @@ def index_kmers(entries):
     return {k: v for k, v in positions.items() if len(v) <= 8}
 
 
+def _header_identity(header):
+    """Match native FASTQ's original-mate identity semantics."""
+    words = header[1:].split() if header.startswith("@") else []
+    if not words:
+        raise ValueError("Invalid paired FASTQ header")
+    name, mate = words[0], None
+    if name.endswith(("/1", "/2")):
+        name, mate = name[:-2], int(words[0][-1])
+    if not name:
+        raise ValueError("Empty paired FASTQ identifier")
+    if len(words) > 1:
+        other = words[1]
+        if other.startswith(("1:", "2:")):
+            designator = int(other[0])
+            if mate is not None and mate != designator:
+                raise ValueError("Conflicting paired FASTQ mate designators")
+            mate = designator
+        elif ":" in other and other[0].isdigit():
+            raise ValueError("Invalid paired FASTQ mate metadata")
+    return name, mate
+
+
+def _fastq_record(stream):
+    header = stream.readline()
+    if not header:
+        return None
+    bases, plus, quality = (stream.readline() for _ in range(3))
+    if not bases or not plus.startswith("+") or not quality:
+        raise ValueError("Invalid paired FASTQ record")
+    sequence = bases.rstrip().upper()
+    if len(sequence) != len(quality.rstrip()):
+        raise ValueError("Paired FASTQ bases and qualities differ")
+    if len(sequence) > 65535:
+        raise ValueError("Paired FASTQ read exceeds 65535-base index limit")
+    return _header_identity(header), sequence
+
+
 def paired_reads(paths, limit):
+    """Revalidate each scored pair; this is independent of native validation."""
     def op(path):
         return gzip.open(path, "rt") if str(path).endswith(".gz") else open(path, "rt")
+
     with op(paths[0]) as left, op(paths[1]) as right:
         for _ in range(limit):
-            h1, h2 = left.readline(), right.readline()
-            if not h1 or not h2:
-                if h1 != h2:
-                    raise ValueError("Paired reads have different lengths")
+            first, second = _fastq_record(left), _fastq_record(right)
+            if first is None or second is None:
+                if first != second:
+                    raise ValueError("Paired FASTQ files have different pair counts")
                 return
-            seq1, seq2 = left.readline().strip().upper(), right.readline().strip().upper()
-            for stream in (left, right):
-                stream.readline()
-                stream.readline()
+            (name1, mate1), seq1 = first
+            (name2, mate2), seq2 = second
+            if (name1 != name2 or (mate1 is None) != (mate2 is None)
+                    or mate1 == 2 or mate2 == 1):
+                raise ValueError("Paired FASTQ read-pair identifiers disagree")
             yield seq1, seq2
 
 
@@ -139,6 +177,10 @@ def main(args):
     if limit < 1 or limit > 1000 or max_pairs < 1 or max_pairs > 1000000:
         raise ValueError("Invalid read-only selection budget")
     trim = os.environ.get("IVANKA_TRIM_UNSUPPORTED_TERMINI", "0") == "1"
+    if not entries:
+        # Zero contigs is a valid native result. Preserve the empty FASTA
+        # without rereading FASTQs or inventing read-backed candidates.
+        return
     if len(entries) <= limit and not trim:
         return
     rank, coverage, pair_counts, depth = read_supported_ranking(
@@ -147,26 +189,35 @@ def main(args):
     )
     chosen = rank[:limit]
     selected = [entries[i] for i in chosen]
+    selected_depth = [depth[i] for i in chosen]
     if trim:
         from ivanka_trim_unsupported import (trim_supported_island,
                                              trim_terminal_unsupported)
         island = os.environ.get("IVANKA_TRIM_SUPPORTED_ISLAND", "0") == "1"
         clipping = trim_supported_island if island else trim_terminal_unsupported
-        selected = [clipping(entries[i], depth[i]) for i in chosen]
+        clipped = [clipping(entries[i], depth[i], with_bounds=True)
+                   for i in chosen]
+        selected = [result for result, _, _ in clipped]
+        selected_depth = [depth[i][start:max(start, end - K + 1)]
+                          for i, (_, start, end) in zip(chosen, clipped)]
     span = int(os.environ.get("IVANKA_READ_BACKED_MAX_SPAN", "0"))
     if span:
         from ivanka_read_window import dominant_read_window
-        selected = [dominant_read_window(entries[i], depth[i], span)
-                    if entries[i] == result else result
-                    for i, result in zip(chosen, selected)]
+        selected = [dominant_read_window(result, observed, span)
+                    if result == entries[i] else result
+                    for i, result, observed in zip(chosen, selected, selected_depth)]
+        # A windowed result has no corresponding translated depth slice.
+        # The qualified image sets span=0; other values retain their
+        # existing (non-tiling) behavior until offset-aware windowing exists.
     tile_span = int(os.environ.get("IVANKA_READ_BACKED_TILE_SPAN", "0"))
     if tile_span:
         tile_overlap = int(os.environ.get("IVANKA_READ_BACKED_TILE_OVERLAP", "0"))
         from ivanka_read_tiling import tile_supported_contig
-        selected = [part for i, result in zip(chosen, selected)
-                    for part in (tile_supported_contig(entries[i], depth[i],
-                                                     tile_span, overlap=tile_overlap)
-                                 if entries[i] == result else [result])]
+        selected = [part for i, result, observed in
+                    zip(chosen, selected, selected_depth)
+                    for part in (tile_supported_contig(result, observed, tile_span,
+                                                      overlap=tile_overlap)
+                                 if not span or result == entries[i] else [result])]
     write_selected(paths["--output"], selected)
     print("IVANKA_READ_BACKED_SELECTION",
           "native", len(entries), "selected", chosen,

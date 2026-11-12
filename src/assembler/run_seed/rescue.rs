@@ -31,7 +31,8 @@ pub(crate) fn rescue_short(
         &subset,
         &mut more,
         &mut supports,
-    );
+    )
+    .map_err(std::io::Error::other)?;
     let rescued = best_long(more, supports, contigs).map(|(seq, _)| seq);
     eprintln!(
         "Ivanka high-depth long-contig rescue found {} supported paths",

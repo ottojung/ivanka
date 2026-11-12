@@ -134,8 +134,16 @@ def execute(name, r1, r2, output_dir, binaries, *, threads=2, timeout=1800):
             remaining = timeout - (time.monotonic() - start)
             if remaining <= 0:
                 raise subprocess.TimeoutExpired(argv, timeout)
-            response = subprocess.run(argv, cwd=work, capture_output=True,
-                                      text=True, timeout=remaining, check=False)
+            # MiCall gives the wrapper an empty environment. External tools
+            # may need a fixed executable search path for internal helpers.
+            # Native Ivanka itself must always execute with truly empty env.
+            child_env = {} if name == "ivanka" else {
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+            }
+            response = subprocess.run(
+                argv, cwd=work, capture_output=True, text=True,
+                timeout=remaining, check=False, env=child_env,
+            )
             records.append({"returncode": response.returncode,
                             "stdout_tail": response.stdout[-1000:],
                             "stderr_tail": response.stderr[-2000:]})

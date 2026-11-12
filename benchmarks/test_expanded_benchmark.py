@@ -325,6 +325,30 @@ class ExpandedExecutionTests(unittest.TestCase):
             self.assertIn("no FASTA", missing["error"])
 
 
+class ExpandedChildEnvironmentTests(unittest.TestCase):
+    def test_ivanka_is_empty_and_external_tools_get_path_only(self):
+        from expanded import adapters
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ("ivanka", "abyss"):
+                with self.subTest(assembler=name):
+                    binaries = {name: {program: {"path": "/bin/true"}
+                                       for program in PROGRAMS[name]}}
+                    fake = SimpleNamespace(returncode=8, stdout="", stderr="test")
+                    with patch.object(adapters.subprocess, "run", return_value=fake) as run:
+                        result = adapters.execute(
+                            name, root/"R1.fq", root/"R2.fq",
+                            root/name, binaries, timeout=4,
+                        )
+                    self.assertEqual(result["status"], "failed")
+                    expected = {} if name == "ivanka" else {
+                        "PATH": "/usr/local/bin:/usr/bin:/bin",
+                    }
+                    self.assertEqual(run.call_args.kwargs["env"], expected)
+
+
 @unittest.skipUnless(importlib.util.find_spec("Bio"),
                      "Biopython required for independent truth scoring")
 class ExpandedTruthScoringTests(unittest.TestCase):

@@ -37,18 +37,21 @@ def read_fasta(path):
 
 
 def dominant_truth_score(manifest, truth_path, fasta_path):
-    """Global alignment scores punish fragmentation and long chimeric joins.
+    """Standalone FASTA-to-truth *diagnostic*, never pipeline qualification."""
+    return score_sequences(manifest, truth_path, read_fasta(fasta_path))
 
-    Major = highest nominal generating fraction. An exact 50/50 mixture has
-    no uniquely defined dominant strain, so either equal-frequency truth is
-    acceptable. Minority reconstruction is separately diagnosable.
+
+def score_sequences(manifest, truth_path, assembled):
+    """Score supplied sequences; callers determine whether they are MiCall final.
+
+    Major = highest nominal generating fraction. An exact 50/50 mixture
+    allows either co-dominant genome. Haplotype phase is not inferred.
     """
     try:
         from Bio.Align import PairwiseAligner
     except ImportError as exc:
         raise RuntimeError("Biopython is required for independent truth scoring") from exc
     truth = read_fasta(truth_path)
-    assembled = read_fasta(fasta_path)
     fractions = manifest["nominal_fractions"]
     if len(fractions) != len(truth) or not truth:
         raise ValueError("inconsistent hidden truth or haplotype frequencies")

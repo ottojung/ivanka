@@ -193,6 +193,47 @@ intentionally has no option to reduce cohorts or skip a tool in
 production. The functions support smaller test matrices only through
 explicit Python unit-test parameters.
 
+## Scoring the final MiCall dominant sequence, not assembler FASTA
+
+[Intent 004](../../docs/intents/004-dominant-sequence.md) assigns
+dominant-haplotype recovery to the *complete pipeline*. For the
+synthetic HXB2-derived benchmark, the canonical evaluator must read
+**MiCall's final** `conseq.csv` and `remap_counts.csv` from the
+same completed sample run. The benchmark-only
+`benchmarks.expanded.micall_dominant` module:
+
+1. Requires a final `q-cutoff=15`, `consensus-percent-cutoff=MAX`
+   consensus (not a scratch/unstitched assembler contig).
+2. Selects the dominant MiCall region **before viewing the hidden
+   truth**, by highest `remap-final <region>` read-support count,
+   deterministically records any equal-support ambiguity, and rejects
+   missing/foreign-sample/duplicate support rather than cherry-picking
+   a favorable alignment.
+3. Only **after MiCall has exited** globally aligns the selected
+   final sequence to hidden generating dominant truth in either DNA
+   orientation. Returns `score_origin =
+   micall_final_dominant_truth_v1` and SHA256 provenance for both
+   source CSV files and the selected sequence.
+4. Raises a pipeline-level error on missing/empty final MAX output
+   even if Ivanka itself legitimately exited successfully with
+   an empty FASTA. That is an **integrated pipeline failure**, not
+   a new standalone contig-recovery requirement.
+
+Example of the evaluator API, run only in benchmark infrastructure:
+
+```python
+from benchmarks.expanded.micall_dominant import evaluate_final_dominant
+result = evaluate_final_dominant(
+    hidden_sample_manifest, hidden_truth_fasta, completed_micall_directory)
+```
+
+The standalone assembler-to-truth scorer in `expanded.score` remains
+available for diagnostics and algorithm exploration only. A high
+score from that helper cannot satisfy the strict expanded gate.
+All downstream evaluation must continue to exclude truth from assembler
+and MiCall process mounts/inputs; genuine HXB2 ancestry validation
+and fully integrated real + synthetic runs are still required.
+
 ## Isolated seven-image synthetic diagnostics (not canonical MiCall qualification)
 
 This currently available supplementary runner executes all seven candidates as separate,

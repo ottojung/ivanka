@@ -52,6 +52,14 @@ See [Rust-only execution](docs/intents/001-rust-only-execution.md) and
 [default-invocation parity](docs/intents/002-default-invocation-parity.md)
 for the precise contracts and acceptance evidence.
 
+**These are additions, not substitutes** for Ivanka's
+[complete set of binding intents](docs/intents/README.md): reference-blind
+assembly, the dominant viral sequence, the authentic 198-sample
+≥90%-of-IVA alignment floor, and positive alignment **and runtime Ψ(r) for
+every real r≥0**. The expanded seven-assembler benchmark adds a further
+real-plus-synthetic requirement; neither numerical gate can be waived
+because the Rust-only architecture is completed.
+
 ## Primary objective: recover the dominant viral sequence
 
 **Ivanka is not required to assemble every viral haplotype.** Its primary

@@ -12,7 +12,18 @@ remain reference-blind and prioritize the dominant read-supported path.
   no environment variables or benchmark-only settings; only three input/output
   CLI arguments, identical between MiCall and qualification.
 
-Both are **required but not yet satisfied** by the frozen wrapped image.
+- [Intent 003: reference blindness](intents/003-reference-blindness.md) —
+  no known genomes, panel scores or reference-derived inputs influence Ivanka.
+- [Intent 004: dominant read-supported sequence](intents/004-dominant-sequence.md) —
+  honest dominant consensus and original-pair integrity.
+- [Intent 005: unchanged physical-198 benchmark](intents/005-physical-198-qualification.md) —
+  each sample ≥90% of IVA; strict alignment and runtime Ψ(r)>0 for all r≥0.
+- [Intent 006: expanded seven-assembler benchmark](intents/006-expanded-qualification.md) —
+  additional 198-real + 400-synthetic, six-rival qualification.
+
+[All intents are cumulative](intents/README.md). The original scientific
+and numerical goals remain in force; the newly added Rust-only and default
+invocation requirements have **not yet been satisfied** by the frozen wrapped image.
 
 ## Current implementation and acceptance
 

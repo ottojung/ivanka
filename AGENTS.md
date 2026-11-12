@@ -6,8 +6,13 @@ and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 ## Required execution intents
 
-The following are **non-negotiable target contracts**, not descriptions of
-what the existing qualifying image already implements:
+**All six intent records are cumulative and binding. New requirements do
+not supersede the reference-blindness, dominant-sequence, original 198-sample
+Ψ qualification, provenance, or source-quality requirements.** See
+[the complete intent index](docs/intents/README.md).
+
+The following are **non-negotiable architectural target contracts**, not
+descriptions of what the existing qualifying image already implements:
 
 - **[Intent 001: Rust-only Ivanka execution](docs/intents/001-rust-only-execution.md).**
   All production assembly behavior, including read-backed selection, trimming
@@ -20,11 +25,24 @@ what the existing qualifying image already implements:
   `--reads2`, and `--output` arguments. Never rely on environment
   tuning, wrappers, hidden configuration, or benchmark-only parameters.
 
-**Current status:** the previous passing image contains a Python selector and
-therefore does not meet these intents. Do not claim completion or numerical
-qualification of the target implementation until the direct, Rust-only,
-unconfigured MiCall path is verified by regression tests and the full
-benchmark. Retain frozen historical evidence unchanged.
+- **[Intent 003: reference blindness](docs/intents/003-reference-blindness.md).**
+  No known reference or evaluator score may steer assembly or postselection.
+- **[Intent 004: dominant viral sequence](docs/intents/004-dominant-sequence.md).**
+  Prefer an honest, original-read-supported major consensus, not exhaustive
+  minor-haplotype enumeration or fabricated phase.
+- **[Intent 005: original 198-sample qualification](docs/intents/005-physical-198-qualification.md).**
+  The unchanged ≥90% per-sample alignment floor and strict positive
+  alignment **and runtime Ψ(r) for every real r≥0** remain mandatory.
+- **[Intent 006: expanded seven-way qualification](docs/intents/006-expanded-qualification.md).**
+  Add the 400-synthetic + 198-real six-competitor gate without weakening 005.
+
+**Current status:** the previously passing image contains a Python selector
+and therefore does not satisfy **Intents 001 and 002**; its 198-sample
+numerical result is historical evidence for 005, not a new qualification
+of the required Rust-only invocation. Do not claim that the target
+implementation is complete until the direct, Rust-only, unconfigured MiCall
+path passes its contract tests and all required benchmark gates.
+Retain frozen historical evidence unchanged.
 
 ## Comments and source readability
 

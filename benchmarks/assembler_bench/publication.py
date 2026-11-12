@@ -8,6 +8,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from .public_dominance import enrich
+
 SCHEMA = "ivanka.assembler-bench.public.v1"
 RUN_ID = "alpha3-original-real198-20261112"
 
@@ -126,7 +128,7 @@ def main():
     output = {"schema": SCHEMA, "title": "Ivanka Assembler Bench",
               "expanded_qualification": "incomplete", "runs": reports}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(output, sort_keys=True, indent=2) + "\n")
+    args.output.write_text(json.dumps(enrich(output), sort_keys=True, indent=2) + "\n")
     print("PUBLIC_BENCH_REPORT_WRITTEN", args.output)
 
 

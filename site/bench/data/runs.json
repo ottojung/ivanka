@@ -5,6 +5,197 @@
       "certificate_sha256": "4ce0804e5b7e8f045f1d90d044ed5ad8e2f04321a7f65d5ae27b59ba5cfa7db4",
       "cohort": "real",
       "date": "2026-11-12",
+      "dominance_matrix": {
+        "cohort_eligible": true,
+        "direction": "row-dominates-column",
+        "expected_samples": 198,
+        "interpretation": "all-r positive only; missing data is not a loss",
+        "metrics": {
+          "alignment": {
+            "IVA": {
+              "IVA": {
+                "expected": 198,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "Ivanka": {
+                "expected": 198,
+                "paired": 198,
+                "proof": {
+                  "gains": 9,
+                  "losses": 40,
+                  "positive_all_nonnegative": false,
+                  "psi0": -0.15656565656565657,
+                  "psi1": -3.272727272727273,
+                  "psi2": -173.73737373737373,
+                  "psi_at_positive_infinity": "-inf",
+                  "ties": 149,
+                  "zeros_nonnegative": null
+                },
+                "status": "does-not-dominate"
+              }
+            },
+            "Ivanka": {
+              "IVA": {
+                "expected": 198,
+                "paired": 198,
+                "proof": {
+                  "gains": 40,
+                  "losses": 9,
+                  "positive_all_nonnegative": true,
+                  "psi0": 0.15656565656565657,
+                  "psi1": 3.272727272727273,
+                  "psi2": 173.73737373737373,
+                  "psi_at_positive_infinity": "+inf",
+                  "ties": 149,
+                  "zeros_nonnegative": []
+                },
+                "status": "dominates"
+              },
+              "Ivanka": {
+                "expected": 198,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          },
+          "joint": {
+            "IVA": {
+              "IVA": {
+                "expected": 198,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "Ivanka": {
+                "expected": 198,
+                "paired": 198,
+                "proof": {
+                  "alignment": {
+                    "gains": 9,
+                    "losses": 40,
+                    "positive_all_nonnegative": false,
+                    "psi0": -0.15656565656565657,
+                    "psi1": -3.272727272727273,
+                    "psi2": -173.73737373737373,
+                    "psi_at_positive_infinity": "-inf",
+                    "ties": 149,
+                    "zeros_nonnegative": null
+                  },
+                  "runtime": {
+                    "gains": 23,
+                    "losses": 175,
+                    "positive_all_nonnegative": false,
+                    "psi0": -0.7676767676767676,
+                    "psi1": -44.26979640412626,
+                    "psi2": -6269.954639733785,
+                    "psi_at_positive_infinity": "-inf",
+                    "ties": 0,
+                    "zeros_nonnegative": null
+                  }
+                },
+                "status": "does-not-dominate"
+              }
+            },
+            "Ivanka": {
+              "IVA": {
+                "expected": 198,
+                "paired": 198,
+                "proof": {
+                  "alignment": {
+                    "gains": 40,
+                    "losses": 9,
+                    "positive_all_nonnegative": true,
+                    "psi0": 0.15656565656565657,
+                    "psi1": 3.272727272727273,
+                    "psi2": 173.73737373737373,
+                    "psi_at_positive_infinity": "+inf",
+                    "ties": 149,
+                    "zeros_nonnegative": []
+                  },
+                  "runtime": {
+                    "gains": 175,
+                    "losses": 23,
+                    "positive_all_nonnegative": true,
+                    "psi0": 0.7676767676767676,
+                    "psi1": 44.26979640412626,
+                    "psi2": 6269.954639733785,
+                    "psi_at_positive_infinity": "+inf",
+                    "ties": 0,
+                    "zeros_nonnegative": []
+                  }
+                },
+                "status": "dominates"
+              },
+              "Ivanka": {
+                "expected": 198,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          },
+          "runtime": {
+            "IVA": {
+              "IVA": {
+                "expected": 198,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "Ivanka": {
+                "expected": 198,
+                "paired": 198,
+                "proof": {
+                  "gains": 23,
+                  "losses": 175,
+                  "positive_all_nonnegative": false,
+                  "psi0": -0.7676767676767676,
+                  "psi1": -44.26979640412626,
+                  "psi2": -6269.954639733785,
+                  "psi_at_positive_infinity": "-inf",
+                  "ties": 0,
+                  "zeros_nonnegative": null
+                },
+                "status": "does-not-dominate"
+              }
+            },
+            "Ivanka": {
+              "IVA": {
+                "expected": 198,
+                "paired": 198,
+                "proof": {
+                  "gains": 175,
+                  "losses": 23,
+                  "positive_all_nonnegative": true,
+                  "psi0": 0.7676767676767676,
+                  "psi1": 44.26979640412626,
+                  "psi2": 6269.954639733785,
+                  "psi_at_positive_infinity": "+inf",
+                  "ties": 0,
+                  "zeros_nonnegative": []
+                },
+                "status": "dominates"
+              },
+              "Ivanka": {
+                "expected": 198,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          }
+        },
+        "observed_samples": 198,
+        "qualification_effect": "none",
+        "schema": "assembler-bench.directed-all-r-psi.v1",
+        "tools": [
+          "IVA",
+          "Ivanka"
+        ]
+      },
       "eligible_for_expanded": false,
       "expanded_status": "incomplete",
       "id": "alpha3-original-real198-20261112",
@@ -13,6 +204,10 @@
         "Ivanka": "d1b5cab748055a2332c9220ca58218dad491d82bfa135860d7a8810d10599b2c"
       },
       "manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+      "micall_fork_provenance": {
+        "message": "Old images are not proven to originate from exact ottojung/MiCall fork commits; neither this report nor its visualizations constitute Intent 011-compliant image qualification.",
+        "status": "historical-unverified"
+      },
       "psi": {
         "alignment": {
           "gains": 40,
@@ -2629,6 +2824,1082 @@
       "cohort": "synthetic",
       "date": "2026-11-12",
       "diagnostic_sha256": "4cbd51cd9d7848ff6282f90418f854ec14f629a92fd1fe5fba1f8311a5100994",
+      "dominance_matrix": {
+        "cohort_eligible": false,
+        "direction": "row-dominates-column",
+        "expected_samples": 400,
+        "interpretation": "all-r positive only; missing data is not a loss",
+        "metrics": {
+          "alignment": {
+            "abyss": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "haploflow": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "iva": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "ivanka": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "megahit": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "spades": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "velvet": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          },
+          "joint": {
+            "abyss": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "haploflow": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "iva": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "ivanka": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "megahit": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "spades": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "velvet": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          },
+          "runtime": {
+            "abyss": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "haploflow": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "iva": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "ivanka": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "megahit": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "spades": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "velvet": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          }
+        },
+        "observed_samples": 0,
+        "qualification_effect": "none",
+        "schema": "assembler-bench.directed-all-r-psi.v1",
+        "tools": [
+          "iva",
+          "ivanka",
+          "haploflow",
+          "megahit",
+          "abyss",
+          "spades",
+          "velvet"
+        ]
+      },
       "eligible_for_expanded": false,
       "expanded_status": "incomplete",
       "families": [
@@ -3184,6 +4455,10 @@
         }
       ],
       "id": "legacy-synthetic-v1-20261112",
+      "micall_fork_provenance": {
+        "message": "Old images are not proven to originate from exact ottojung/MiCall fork commits; neither this report nor its visualizations constitute Intent 011-compliant image qualification.",
+        "status": "historical-unverified"
+      },
       "psi": {},
       "sample_count": 400,
       "samples": [],
@@ -3207,6 +4482,1082 @@
       "cohort_manifest_sha256": "964fff8226beef4787226a5542dc2667fff0102bea0b4f4694686b11af1f7f5a",
       "date": "2026-11-12",
       "diagnostic_sha256": "8bbd91ceb63df2a15cee7821883731dee9890eb0885d28139829021feb26dfd5",
+      "dominance_matrix": {
+        "cohort_eligible": false,
+        "direction": "row-dominates-column",
+        "expected_samples": 400,
+        "interpretation": "all-r positive only; missing data is not a loss",
+        "metrics": {
+          "alignment": {
+            "abyss": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "haploflow": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "iva": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "ivanka": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "megahit": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "spades": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "velvet": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          },
+          "joint": {
+            "abyss": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "haploflow": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "iva": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "ivanka": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "megahit": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "spades": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              }
+            },
+            "velvet": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": {
+                  "alignment": null,
+                  "runtime": null
+                },
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          },
+          "runtime": {
+            "abyss": {
+              "abyss": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "haploflow": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "iva": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "ivanka": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "megahit": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "spades": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              }
+            },
+            "velvet": {
+              "abyss": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "haploflow": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "iva": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "ivanka": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "megahit": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "spades": {
+                "expected": 400,
+                "paired": 7,
+                "proof": null,
+                "status": "incomplete"
+              },
+              "velvet": {
+                "expected": 400,
+                "paired": 0,
+                "proof": null,
+                "status": "self"
+              }
+            }
+          }
+        },
+        "observed_samples": 10,
+        "qualification_effect": "none",
+        "schema": "assembler-bench.directed-all-r-psi.v1",
+        "tools": [
+          "ivanka",
+          "iva",
+          "haploflow",
+          "megahit",
+          "abyss",
+          "spades",
+          "velvet"
+        ]
+      },
       "eligible_for_expanded": false,
       "expanded_status": "incomplete",
       "expected_sample_count": 400,
@@ -3253,6 +5604,10 @@
         "megahit": "dbf8fe1306ed904e909f4c5f43f03dbb00796e8933286afad5754ac032776456",
         "spades": "749092932a5aac8e9132f0d98db10f6f868f8f5dbb0161ea00f21fefc714d65f",
         "velvet": "521e6c5620025bbc4b8897d33896d27dcf26ca0acb86b0a542a9c19def9908d7"
+      },
+      "micall_fork_provenance": {
+        "message": "Old images are not proven to originate from exact ottojung/MiCall fork commits; neither this report nor its visualizations constitute Intent 011-compliant image qualification.",
+        "status": "historical-unverified"
       },
       "psi": {},
       "reference_manifest_sha256": "83e904ed0b7ee2f6ee6d43fc87cdb84af703739bce6e6ab43c8c06e4e0d25fd7",

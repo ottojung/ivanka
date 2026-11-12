@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 
 from .publication import SCHEMA
+from .site_validation import check_mapping_snapshot, check_matrices
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -21,7 +22,8 @@ SECRET = re.compile(r"/workspace/|/home/|_R[12]_[0-9]{3}|"
 
 def validate_public_site(site=SITE):
     source = Path(site)
-    required = ("index.html", "style.css", "app.js", "data/runs.json")
+    required = ("index.html", "style.css", "app.js", "data/runs.json",
+                "data/mapping-diagnostics.json")
     if any(not (source / name).is_file() for name in required):
         raise ValueError("incomplete /bench site assets")
     html = (source / "index.html").read_text()
@@ -29,9 +31,15 @@ def validate_public_site(site=SITE):
     for link in ('href="./style.css"', 'src="./app.js"',
                  'id="runSelect"', 'id="resultRows"',
                  'id="comparisonChart"', 'id="evidenceContent"',
-                 'id="detailPanel"'):
+                 'id="detailPanel"', 'id="dominanceMatrix"',
+                 'id="dominanceMetric"', 'id="firstTool"',
+                 'id="diagnosticMatrix"', 'id="diagnosticMetric"'):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
+    if 'fetch("./data/mapping-diagnostics.json"' not in js:
+        raise ValueError("mapping report must be fetched from same origin")
+    if 'function drawDominance()' not in js or 'function drawDiagnostics()' not in js:
+        raise ValueError("public site lacks all-pairs matrix or metric reviewer")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
     if re.search(r"<script[^>]*src=[\"']https?://", html):
@@ -69,6 +77,8 @@ def validate_public_site(site=SITE):
                 raise ValueError("ineligible run falsely presented as passing")
         if run["status"] == "incomplete":
             verify_hxb2_preview(run)
+    check_matrices(report)
+    check_mapping_snapshot(source, report)
     if SECRET.search(json.dumps(report)):
         raise ValueError("private sample path or identifier in public report")
     return len(report["runs"])
@@ -142,7 +152,7 @@ def build(output, site=SITE):
     (destination / "index.html").write_text(
         '<!doctype html><html lang="en"><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<title>Ivanka · Assembler Bench</title>'
+        '<title>Assembler Bench · MiCall comparisons</title>'
         '<meta http-equiv="refresh" content="0;url=./bench/">'
         '<a href="./bench/">Open the Assembler Bench</a></html>')
     print(f"PAGES_BUILD_VERIFIED runs={checked} route=/bench/ path={destination}")

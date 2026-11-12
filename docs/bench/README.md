@@ -97,3 +97,79 @@ GitHub Pages workflow. Do not auto-sync private working directories.
 Check with the publication and HXB2 preview unittest modules, the
 site builder, node --check on site/bench/app.js, and independent page
 access. No partial result can certify either all-r signed-power gate.
+
+## Neutral metrics, CIGAR soft clipping and pairwise PSI
+
+[Intent 009](../intents/009-neutral-metrics-and-pairwise-dominance.md)
+makes Assembler Bench a **general framework for comparing arbitrary
+MiCall-integrated assemblers**, not an Ivanka-only contest. The dashboard
+has a selector for **both** assembler axes and a directed **A×B Ψ matrix**
+covering alignment, runtime and their joint strict all-exponent result.
+A cell is dominant only when its full cohort is present and the independent
+all-r numerical prover certifies strict Ψ(r)>0 for every r≥0.
+Incomplete, ineligible and unresolved relationships are never guessed
+from averages or intermediate Ψ(0/1/2) points. Pairwise ordering is not
+assumed transitive. The original real 198-sample result provides a
+proven 2×2 example, whereas the partial seven-tool HXB2 preview correctly
+has **no certified dominance edges**.
+
+MiCall's existing `nuc.csv` soft-clip aggregate and the **read-alignment
+CIGAR** metrics are different measurements. The instrumented synthetic
+runner now records both for every executed arm, successful or failed:
+mapped/unmapped primary read records, secondary/supplementary placements,
+MAPQ, matched/inserted/deleted bases, soft-clipped reads/events/bases,
+left/right clipping, clipped-read fraction, clipped bases per 1,000 mapped
+read bases, and clip events per 1,000 primary mapped reads. It also retains
+the existing MiCall Q15-depth, breadth, concordance, contig and other
+diagnostics, with explicit source stage and missing denominators.
+The measurements are descriptive, **never replacement numerical gates**.
+
+The published static `mapping-diagnostics.json` contains **one
+independently checked, complete seven-assembler HXB2 clonal example**,
+not the full cohort. Its 23 selected metrics are previewed across all
+seven tools; source SAM hashes, known timing/score/image identities, and
+the actual hidden-truth validation are checked before export. All
+original read identifiers, FASTQs, local paths, per-read alignment
+records and patient data stay off Pages. The data remain clearly
+`INCOMPLETE` with respect to the 400-case and 598-case requirements.
+Historical physical-198 data without retained SAMs are **unavailable**,
+not imputed to zero.
+
+The private benchmark host can prepare the versioned public artifacts:
+
+```sh
+PYTHONPATH=benchmarks python -m benchmarks.assembler_bench.publication \
+  --real-jsonl /private/physical198/results.jsonl \
+  --certificate /private/physical198/qualification-independent.json \
+  --synthetic-jsonl /private/legacy400/orientation-corrected-diagnostics.jsonl \
+  --output /tmp/bench-original-public.json
+
+PYTHONPATH=benchmarks python -m benchmarks.assembler_bench.public_dominance \
+  /tmp/bench-original-public.json --output site/bench/data/runs.json
+
+PYTHONPATH=benchmarks python -m benchmarks.assembler_bench.public_metrics \
+  /private/hxb2-micall-run/clonal-s000 \
+  --public-json site/bench/data/runs.json \
+  --out site/bench/data/mapping-diagnostics.json
+```
+
+The production public `site_build` validator independently recomputes
+the pairwise Ψ matrix, checks all seven per-tool soft-clip counts against
+their denominators, rejects falsified density/proof statuses and any
+sensitive path or identifier, and checks relative Pages asset links.
+
+## Fork-only MiCall source and build provenance
+
+[Intent 010](../intents/010-upstream-micall-read-only.md) permanently
+prohibits any push, branch/tag write or pull request to
+`github.com/cfe-lab/MiCall`. Read-only upstream research is fine.
+[Intent 011](../intents/011-ottojung-micall-fork-provenance.md) requires
+all actual assembler integrations and every MiCall runtime image
+to come from **`github.com/ottojung/MiCall` at exact immutable commits**,
+with public links to those full fork SHAs.
+The current published images **do not yet have verified fork-build
+attestations**, so the dashboard explicitly labels them historical
+or unverified. The fork guard rejects upstream/unknown write targets
+and moving branch/invalid commit URLs. Existing historical numeric
+results are preserved but do not satisfy the new image provenance
+condition until a genuinely fork-built, requalified run exists.

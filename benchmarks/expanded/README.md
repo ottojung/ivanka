@@ -363,3 +363,29 @@ all samples rather than tuned by the sample's truth. The five upstream
 assembler image source recipes are in `benchmarks/expanded/images/`.
 These options were fixed during interface validation, before any
 seven-way cohort comparison or selection on score outcomes.
+
+## Read-supported whole-seed MiCall score (v2)
+
+For a full-genome synthetic generating truth, an isolated **project-region**
+consensus in MiCall's `conseq.csv` can be only a few dozen bases long;
+this is not its finalized full-seed sequence. The canonical global
+known-truth metric first chooses the final dominant region using
+`remap_counts.csv` **original read-support evidence, without loading the
+hidden truth**, then retrieves the corresponding finalized, whole-seed
+Q15 MAX consensus from `conseq_all.csv`, requiring a unique matching
+sample and seed. Only after this selection is frozen does an independent
+evaluator read the hidden truth and compute the global dominant score.
+
+The method is versioned
+`micall_final_dominant_whole_seed_truth_v2`; the strict seven-way gate
+rejects earlier region-only `v1` measurements and any assembler FASTA
+scores as qualification evidence. A candidate may emit short or empty
+FASTA: the metric scores what the **whole MiCall pipeline** actually
+reports, never imposes a standalone contig-length gate on Ivanka.
+
+No known-reference sequence, benchmark truth or external evaluator score
+is used to choose MiCall's source contigs or the dominant output. A
+read-supported but incorrect, rotated or chimeric whole-seed consensus
+must still score poorly against the original linear truth, even if its
+individual short windows match: evaluator corrections must not reward
+unsupported rearrangements.

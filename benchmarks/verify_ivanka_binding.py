@@ -1,5 +1,8 @@
-"""Fail closed unless MiCall's real assembler subprocess invokes Ivanka."""
+"""Audit the exact MiCall subprocess and the pinned assembler implementation."""
 import ast
+import hashlib
+import stat
+import sys
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -66,14 +69,58 @@ def verify_source(source):
         raise ValueError("MiCall assembler command may not be mutated")
 
 
+EXTERNAL = ("haploflow", "megahit", "abyss", "spades", "velvet")
+
+
+def verify_competitor_source(tool, configured, entrypoint, helpers,
+                             expected_entrypoint_sha, expected_helpers_sha):
+    """A competitor adapter is permitted ONLY for an explicitly selected arm."""
+    if tool not in EXTERNAL or configured != tool:
+        raise ValueError("wrong external assembler integration binding")
+    for source, expected in ((entrypoint, expected_entrypoint_sha),
+                             (helpers, expected_helpers_sha)):
+        if (len(expected) != 64 or
+                hashlib.sha256(source).hexdigest() != expected):
+            raise ValueError("competitor image source digest mismatch")
+    if not entrypoint.startswith(b"#!/opt/venv/bin/python"):
+        raise ValueError("competitor entry point is not the reviewed adapter")
+    tree = ast.parse(entrypoint)
+    flags = [node.args[0].value for node in ast.walk(tree)
+             if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Attribute)
+             and node.func.attr == "add_argument"
+             and node.args and isinstance(node.args[0], ast.Constant)]
+    if set(flags) != {"--reads1", "--reads2", "--output"}:
+        raise ValueError("competitor adapter accepts unexpected parameters")
+
+
+def verify_competitor_files(tool, expected_entrypoint_sha, expected_helpers_sha):
+    root = Path("/usr/local/bin")
+    entrypoint = root / "ivanka"
+    helpers = root / "adapters.py"
+    if not (entrypoint.is_file() and
+            (entrypoint.stat().st_mode & stat.S_IXUSR)):
+        raise ValueError("missing executable external adapter")
+    configured = Path("/etc/ivanka-expanded-tool").read_text().strip()
+    verify_competitor_source(
+        tool, configured, entrypoint.read_bytes(), helpers.read_bytes(),
+        expected_entrypoint_sha, expected_helpers_sha)
+
+
 def main():
     module = find_spec("micall.core.denovo")
     if module is None or module.origin is None:
         raise SystemExit("MiCall denovo module missing")
     verify_source(Path(module.origin).read_text())
-    path = Path("/usr/local/bin/ivanka")
-    if not path.is_file() or path.open("rb").read(4) != b"\x7fELF":
-        raise SystemExit("Ivanka entry point must be the native Rust ELF binary")
+    args = sys.argv[1:]
+    if not args:
+        path = Path("/usr/local/bin/ivanka")
+        if not path.is_file() or path.open("rb").read(4) != b"\x7fELF":
+            raise SystemExit("Ivanka entry point must be the native Rust ELF binary")
+    elif len(args) == 4 and args[0] == "--competitor":
+        verify_competitor_files(args[1], args[2], args[3])
+    else:
+        raise SystemExit("unexpected candidate verification mode")
 
 
 if __name__ == "__main__":

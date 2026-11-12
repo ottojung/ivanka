@@ -77,6 +77,8 @@ def run(dataset, results, images, *, jobs=10, runner=None):
                 "--timeout-per-arm", str(MAX_SECONDS),
                 "--sample-time-limit", str(MAX_SECONDS),
                 "--diagnostic-90-floor"]
+        if name != "ivanka":
+            argv.extend(["--candidate-assembler", name])
         with (folder / "runner.log").open("x") as stream:
             completed = subprocess.run(
                 argv, cwd=runner.parent.parent, env=env,

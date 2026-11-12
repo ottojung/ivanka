@@ -1,0 +1,68 @@
+name: Assembler Bench Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/bench/**"
+      - "benchmarks/assembler_bench/**"
+      - "benchmarks/test_assembler_bench_publication.py"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "site/bench/**"
+      - "benchmarks/assembler_bench/**"
+      - "benchmarks/test_assembler_bench_publication.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: assembler-bench-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate public data and build /bench
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Verify public reporting schema and privacy invariants
+        env:
+          PYTHONPATH: benchmarks
+        run: python -m unittest -v benchmarks.test_assembler_bench_publication
+      - name: Build reproducible project-path static site
+        run: python -m benchmarks.assembler_bench.site_build --output _site
+      - name: Confirm expected project subpath and no Jekyll rewriting
+        run: |
+          test -f _site/.nojekyll
+          test -f _site/bench/index.html
+          test -f _site/bench/data/runs.json
+          test -f _site/bench/app.js
+          test -f _site/bench/style.css
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    name: Publish verified /bench/ on GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

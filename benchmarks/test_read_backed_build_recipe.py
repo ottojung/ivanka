@@ -7,21 +7,30 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class ReadBackedBuildRecipeTests(unittest.TestCase):
-    def test_current_container_has_explicit_qualified_configuration(self):
+    def test_default_execution_requires_no_benchmark_environment(self):
         recipe = (ROOT / "benchmarks/Dockerfile.read-backed").read_text()
+        self.assertNotIn("ENV IVANKA_", recipe)
+        self.assertNotIn("ARG NATIVE_PRIMARY_SEEDS", recipe)
+        self.assertNotIn("ARG NATIVE_RESCUE_SEEDS", recipe)
+        self.assertNotIn("ARG POSTSELECT_CONTIGS", recipe)
+        self.assertIn(
+            'org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"', recipe,
+        )
+
+    def test_qualified_selection_defaults_are_in_code(self):
+        rust = (ROOT / "src/assembler/run_seed/assembly/experiment_budget.rs").read_text()
+        selector = (ROOT / "benchmarks/ivanka_read_support_selector.py").read_text()
+        self.assertIn('validate(primary.as_deref(), 50,', rust)
+        self.assertIn('validate(rescue.as_deref(), 20,', rust)
         for setting in (
-            "IVANKA_BENCH_PRIMARY_SEEDS=${NATIVE_PRIMARY_SEEDS}",
-            "IVANKA_BENCH_RESCUE_SEEDS=${NATIVE_RESCUE_SEEDS}",
-            "ARG NATIVE_PRIMARY_SEEDS=50",
-            "ARG NATIVE_RESCUE_SEEDS=20",
-            "ARG POSTSELECT_CONTIGS=1",
-            "IVANKA_READ_BACKED_TILE_SPAN=2000",
-            "IVANKA_READ_BACKED_TILE_OVERLAP=512",
-            "IVANKA_TRIM_SUPPORTED_ISLAND=1",
-            'org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"',
+            'os.environ.get("IVANKA_POSTSELECT_CONTIGS", "1")',
+            'os.environ.get("IVANKA_SUPPORT_PAIRS", "80000")',
+            'os.environ.get("IVANKA_TRIM_UNSUPPORTED_TERMINI", "1")',
+            'os.environ.get("IVANKA_TRIM_SUPPORTED_ISLAND", "1")',
+            'os.environ.get("IVANKA_READ_BACKED_TILE_SPAN", "2000")',
+            'os.environ.get("IVANKA_READ_BACKED_TILE_OVERLAP", "512")',
         ):
-            with self.subTest(setting=setting):
-                self.assertIn(setting, recipe)
+            self.assertIn(setting, selector)
 
     def test_build_script_pins_base_and_source(self):
         script = ROOT / "scripts/build_read_backed_image.sh"

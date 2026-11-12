@@ -30,8 +30,9 @@ must not be reported as a newly repeated 198-sample experiment.
 
 The frozen 198-sample numeric pass was measured with a Python read-backed
 selector/trim/tile wrapper and 50 primary / 20 supplementary native seeds.
-The Rust CLI alone, with its 1,000/400 defaults, is not the qualified
-execution configuration. The same physical cohort was used to tune
+The Rust CLI now defaults to the same 50/20 seed budgets, but without
+the read-backed selector, trimming and tiling it is still not the fully
+qualified execution configuration. The same physical cohort was used to tune
 several heuristic thresholds, so a pass is not evidence of held-out
 generalization. The source- and base-pinned image builder is
 `scripts/build_read_backed_image.sh`. See

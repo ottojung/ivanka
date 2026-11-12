@@ -157,20 +157,12 @@ class TrimmedTilingIntegrationTests(unittest.TestCase):
             def native(command, check):
                 output.write_text(">sample\n" + sequence + "\n")
             args = ["--reads1", "r1", "--reads2", "r2", "--output", str(output)]
-            settings = {
-                "IVANKA_TRIM_UNSUPPORTED_TERMINI": "1",
-                "IVANKA_TRIM_SUPPORTED_ISLAND": "1",
-                "IVANKA_READ_BACKED_TILE_SPAN": "2000",
-                "IVANKA_READ_BACKED_TILE_OVERLAP": "512",
-                "IVANKA_READ_BACKED_MAX_SPAN": "0",
-                "IVANKA_POSTSELECT_CONTIGS": "1",
-            }
             def observed_tiling(entry, observed, span, overlap):
                 self.assertEqual(entry[1], sequence[2288:])
                 self.assertEqual(observed, depth[2288:])
                 self.assertEqual((span, overlap), (2000, 512))
                 return [(entry[0] + "_tile1", entry[1])]
-            with (patch.dict(os.environ, settings),
+            with (patch.dict(os.environ, {}, clear=True),
                   patch("ivanka_read_support_selector.subprocess.run", side_effect=native),
                   patch("ivanka_read_support_selector.read_supported_ranking",
                         return_value=([0],[len(depth)-2800],[100],[depth])),

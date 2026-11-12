@@ -8,7 +8,8 @@ import unittest
 
 from expanded.adapters import (ASSEMBLERS, PROGRAMS, binary_hash,
                                interleave_fastq, require_programs, steps)
-from expanded.gate import BASELINES, summarize_gate
+from expanded.gate import (BASELINES, SCORE_ORIGINS, TIMING_ORIGIN,
+                           TRUTH_SCHEMA, summarize_gate)
 from expanded.synthetic import FAMILIES, generate_case, generate_cohort
 
 
@@ -148,9 +149,17 @@ class ExpandedGateTests(unittest.TestCase):
                 "status": "success", "sha256": "a"*64,
                 "seconds": 1 if tool == "ivanka" else 2,
                 "score": 120 if tool == "ivanka" else 100,
+                "score_origin": SCORE_ORIGINS[cohort],
+                "timing_origin": TIMING_ORIGIN,
             }
+        provenance = ({
+            "schema": TRUTH_SCHEMA, "valid": True,
+            "cohort_sha256": "c"*64,
+            "verification_sha256": "d"*64,
+        } if cohort == "synthetic" else None)
         return {"id": name, "cohort": cohort, "family": family,
-                "input_sha256": "b"*64, "results": results}
+                "input_sha256": "b"*64, "truth_validation": provenance,
+                "results": results}
 
     def cases(self):
         return [self.sample("real-1", "real"),
@@ -182,6 +191,48 @@ class ExpandedGateTests(unittest.TestCase):
                 rows[1]["results"]["ivanka"]["score"] = 80
             with self.subTest(mutation=mutation):
                 self.assertFalse(self.qualified(rows)["pass"])
+
+    def test_raw_contigs_cannot_certify_pipeline_dominant_recovery(self):
+        rows = self.cases()
+        for tool in ASSEMBLERS:
+            rows[1]["results"][tool]["score_origin"] = "assembler_fasta_diagnostic_v1"
+        result = self.qualified(rows)
+        self.assertFalse(result["pass"])
+        self.assertIn("clonal-1:not_final_MiCall_output_or_timing",
+                      result["errors"])
+
+    def test_micall_pipeline_timing_is_required_on_both_cohorts(self):
+        rows = self.cases()
+        rows[0]["results"]["ivanka"]["timing_origin"] = "standalone_wall"
+        result = self.qualified(rows)
+        self.assertFalse(result["pass"])
+        self.assertIn("real-1:not_final_MiCall_output_or_timing",
+                      result["errors"])
+
+    def test_hxb2_truth_requires_independent_validator_attestation(self):
+        for mutation in ("missing", "invalid", "wrong_schema", "digest"):
+            rows = self.cases()
+            proof = rows[1]["truth_validation"]
+            if mutation == "missing":
+                del rows[1]["truth_validation"]
+            elif mutation == "invalid":
+                proof["valid"] = False
+            elif mutation == "wrong_schema":
+                proof["schema"] = "generic_random_acgt_v1"
+            else:
+                proof["verification_sha256"] = "bad"
+            with self.subTest(mutation=mutation):
+                result = self.qualified(rows)
+                self.assertFalse(result["pass"])
+                self.assertIn("clonal-1:missing_verified_HXB2_truth",
+                              result["errors"])
+
+    def test_honest_empty_ivanka_contigs_do_not_imply_pipeline_failure(self):
+        rows = self.cases()
+        rows[1]["results"]["ivanka"]["contig_count"] = 0
+        # The final MiCall dominant score remains valid; component
+        # contig count is not an independent biological acceptance gate.
+        self.assertTrue(self.qualified(rows)["pass"])
 
     def test_missing_real_or_synthetic_family_is_never_a_pass(self):
         self.assertFalse(self.qualified(self.cases()[:1])["pass"])

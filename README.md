@@ -80,22 +80,38 @@ generic-random 400-case synthetic dataset is historical diagnostic evidence,
 [Assembler Bench](docs/intents/007-assembler-bench.md) and
 [HXB2 synthetic truth](docs/intents/008-hxb2-synthetic-truth.md).
 
-## Primary objective: recover the dominant viral sequence
+## Pipeline objective: enable dominant recovery in MiCall
 
-**Ivanka is not required to assemble every viral haplotype.** Its primary
-job in MiCall is to reconstruct the **most abundant read-supported viral
-sequence** (or a defensible major consensus where full haplotype phase
-cannot be established). In a mixture with 90% haplotype A and 10%
-haplotype B, recovering A accurately without producing a B contig can
-be a success. More contigs do not necessarily improve the output.
+**Ivanka by itself is not required to reconstruct any viral haplotype.**
+That means not just that recovering *every* haplotype is unnecessary:
+even reconstructing **one complete haplotype, including the dominant
+one, is not an independent requirement on the Ivanka Rust assembler**.
 
-Alternative/minority contigs are optional, **not an exhaustive-recall goal**.
-But Ivanka must not invent read-pair-contradicted recombinants, lose original
-molecule accounting, or corrupt downstream MiCall minority-allele evidence.
-See **[Primary assembly objective](docs/assembly-objective.md)** before
-proposing contig selection, pruning or synthetic tests. The existing
-198-sample alignment/runtime qualification remains unchanged.
+Ivanka contributes honest read-derived intermediate assembly evidence to
+MiCall. It may produce fragments, overlapping candidates, several
+contigs, or a legitimately empty FASTA. These are **not** automatically
+claims of physical full-length viral haplotypes. It is the **integrated
+MiCall pipeline** that must recover the **most abundant identifiable
+haplotype**, or report a defensible predominant consensus with phase
+uncertainty when the original reads cannot resolve a physical haplotype.
 
+For a 90% haplotype A / 10% haplotype B mixture, **MiCall's final
+sequence** should recover A where supported; Ivanka need not emit a
+complete A contig, a B contig, or any complete reconstruction. There is
+no exhaustive minority-haplotype recall requirement. Ivanka must still
+respect original pairs, avoid fabricating recombinants and preserve
+MiCall's downstream variant/genotype evidence.
+
+**Only the final MiCall output can satisfy the mandatory biological
+benchmark gates.** Alignments of raw Ivanka FASTA to synthetic truth,
+full-length contig scores, and tile/reconstruction statistics are useful
+*diagnostics*, not standalone qualification criteria. An allowed empty
+assembler output does not excuse an unsuccessful MiCall pipeline.
+
+See [Intent 004](docs/intents/004-dominant-sequence.md) and the
+[pipeline-level assembly objective](docs/assembly-objective.md).
+The existing strict physical-198 and expanded 598-sample Ψ requirements,
+reference isolation, and direct Rust execution rules remain binding.
 
 ## Current development milestone: both benchmark gates must pass
 
@@ -109,9 +125,10 @@ the Rust-only, reference-blind, unconfigured MiCall invocation contract:
   plus 400 diverse synthetic cases **generated only from the permitted
   HXB2/subtype-recombinant truths** under Intent 008, against IVA,
   Haploflow, MEGAHIT, ABySS, SPAdes and Velvet. On both cohorts
-  separately, Ivanka must beat **each** competitor on alignment/known-truth
-  and runtime all-r Ψ, meeting the ≥90%-of-best-competitor per-sample
-  alignment floor; its integrated MiCall results must be published
+  separately, **MiCall with Ivanka** must beat MiCall with **each** competitor
+  on final-output alignment/known-truth and runtime all-r Ψ, meeting
+  the ≥90%-of-best-competitor per-sample final alignment floor; its
+  integrated MiCall results must be published
   under `/bench/` as required by Intent 007.
 
 Missing, failed or partial runs cannot qualify. Neither a historical

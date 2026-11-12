@@ -42,18 +42,34 @@ and must never be accessible to any assembler.
 
 ## Strict qualification
 
+**Benchmark the entire MiCall pipeline**, holding MiCall processing
+constant while changing only the integrated assembler. The final
+dominant MiCall sequence/consensus is what the alignment or hidden
+known-truth score measures. Ivanka's raw contigs may be incomplete,
+overlapping or empty; **there is no independent assembler-only
+haplotype recovery, full-length global-alignment or contig-count gate**
+under [Intent 004](004-dominant-sequence.md). In particular, synthetic
+truth scoring of the best standalone assembler contig is only a
+diagnostic and is **ineligible** for the qualifying synthetic cohort.
+A successful zero-contig assembler invocation still leads to pipeline
+failure if the full MiCall result cannot meet the mandatory gates.
+
 For **each** of the six alternatives, and **separately** on the real and
 synthetic cohorts:
 
-1. Ivanka's alignment/known-truth **signed-power Ψ(r)>0 for every real r≥0**.
-2. Ivanka's measured **runtime signed-power Ψ(r)>0 for every real r≥0**.
-3. For **each sample**, Ivanka achieves at least **90% of the highest
-   competitor alignment/known-truth score**, not merely 90% of IVA.
+1. The final **MiCall-with-Ivanka** alignment/known-truth
+   **signed-power Ψ(r)>0 for every real r≥0**.
+2. The full **MiCall-with-Ivanka** measured runtime
+   **signed-power Ψ(r)>0 for every real r≥0**.
+3. For **each sample**, MiCall with Ivanka achieves at least **90%
+   of the highest final MiCall score obtained with a competitor**,
+   not merely 90% of IVA. This is not a contig completeness threshold.
 4. No missing executables, samples, frozen truth, incomplete outputs,
    unaccounted failure, substituted timings, timeout or missing hashes
    may be counted as an Ivanka win. Record tool-specific results honestly.
-5. Keep the real MiCall/MAX and synthetic known-truth scores **separate**;
-   never pool them into a single incompatible Ψ.
+5. Keep real MiCall/MAX and synthetic **final-MiCall-dominant-output**
+   known-truth scores **separate**; never pool incompatible Ψ scores,
+   or substitute standalone assembler FASTA for a final pipeline result.
 
 Prespecify tool versions, thread and memory budgets, container digests,
 read inputs and evaluation definitions. Apply the same MiCall infrastructure

@@ -8,6 +8,16 @@ grandfathered into the new HXB2/recombinant truth requirement.
 The canonical future comparison must be run through the public
 MiCall-integrated Assembler Bench (Intent 007) and reviewed at `/bench/`.
 
+**Interpretation after clarification of Intent 004:** These are
+**standalone assembler-to-truth diagnostic scores**, not measurements
+of final dominant-haplotype recovery by MiCall. Ivanka has **no
+independent obligation to reconstruct a haplotype**, so the quoted
+349/400 raw-contig floor misses are **not pipeline acceptance failures**.
+The relevant question is how MiCall uses those contigs to recover the
+most abundant identifiable haplotype. A preliminary whole-contig
+retention gain against isolated truth is not sufficient evidence for
+a change if it degrades final MiCall output.
+
 **Evidence status: exploratory only — the seven-way gate has NOT passed.**
 This report preserves an initial full 400-case run and an independent
 biologically correct rescoring of all retained outputs. The old runner

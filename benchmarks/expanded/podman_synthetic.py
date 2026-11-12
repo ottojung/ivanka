@@ -45,6 +45,8 @@ def attempt(case_dir, output_dir, name, image, manifest, timeout=1800):
     argv, fasta = commands(name, image, output_dir, case_dir)
     start = time.monotonic()
     record = {"status": "failed", "sha256": image, "score": 0.0,
+              "score_origin": "assembler_fasta_diagnostic_v1",
+              "timing_origin": "standalone_container_wall_v1",
               "seconds": None, "argv": argv, "output": str(fasta)}
     try:
         result = subprocess.run(argv, capture_output=True, text=True,
@@ -146,7 +148,9 @@ def main():
     print("SYNTHETIC_ATTEMPTED",
           run(args.cohort, args.out, images,
               jobs=args.jobs, timeout=args.timeout, limit=args.limit))
-    print("A partial run NEVER qualifies the expanded benchmark.")
+    print("STANDALONE DIAGNOSTICS ONLY: even a complete run cannot qualify "
+          "the MiCall pipeline-level benchmark. HXB2 truth and MiCall "
+          "final-output scores are mandatory.")
 
 
 if __name__ == "__main__":

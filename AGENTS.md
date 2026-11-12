@@ -1,6 +1,6 @@
 # Ivanka contributor and agent orientation
 
-**Start with [README: Primary objective](README.md#primary-objective-recover-the-dominant-viral-sequence)
+**Start with [README: Pipeline objective](README.md#pipeline-objective-enable-dominant-recovery-in-micall)
 and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 
@@ -27,9 +27,13 @@ descriptions of what the existing qualifying image already implements:
 
 - **[Intent 003: reference blindness](docs/intents/003-reference-blindness.md).**
   No known reference or evaluator score may steer assembly or postselection.
-- **[Intent 004: dominant viral sequence](docs/intents/004-dominant-sequence.md).**
-  Prefer an honest, original-read-supported major consensus, not exhaustive
-  minor-haplotype enumeration or fabricated phase.
+- **[Intent 004: dominant haplotype is a pipeline goal](docs/intents/004-dominant-sequence.md).**
+  Ivanka alone need not reconstruct **any** haplotype, not even the dominant
+  one. It supplies honest read-derived intermediate evidence, including
+  valid partial or empty FASTA. **MiCall with Ivanka integrated** must recover
+  the most abundant identifiable viral haplotype. Do not add standalone
+  contig completeness, full-length reconstruction, or minority recall gates;
+  do not fabricate phase or corrupt original-pair evidence.
 - **[Intent 005: original 198-sample qualification](docs/intents/005-physical-198-qualification.md).**
   The unchanged ≥90% per-sample alignment floor and strict positive
   alignment **and runtime Ψ(r) for every real r≥0** remain mandatory.
@@ -48,16 +52,15 @@ descriptions of what the existing qualifying image already implements:
   generated random A/C/G/T genome truths; the existing generic-random
   400-case cohort is historical and ineligible for qualification.
 
-**Current status:** the previously passing image contains a Python selector
-and therefore does not satisfy **Intents 001 and 002**; its 198-sample
-numerical result is historical evidence for 005, not a new qualification
-of the required Rust-only invocation. Do not claim that the target
-implementation is complete until the direct, Rust-only, unconfigured MiCall
-path passes its contract tests and all required benchmark gates.
-Retain frozen historical evidence unchanged. The direct Rust implementation
-is present as a new candidate: its executable, exact MiCall argv and empty
-environment must be independently verified, and the original and expanded
-numeric gates must pass before claiming the new candidate qualified.
+**Current status:** the older Python-wrapped passing image is
+historical and does not comply with Intents 001/002. The tagged
+`v0.1.0-alpha.3` version implements direct Rust assembly and has
+independently passed the original physical 198-sample gate under the
+empty-environment, three-argument MiCall invocation. The mandatory
+expanded HXB2-derived seven-way benchmark and public `/bench/` site
+remain incomplete. Preserve all historical evidence and do not claim
+full qualification. **Intent 004 is end-to-end:** an isolated Ivanka
+contig-to-truth score cannot establish success or failure.
 
 ## Comments and source readability
 
@@ -119,23 +122,31 @@ other assemblers (≥90% of the best rival per sample, both strict all-r Ψ
 gates separately per competitor and cohort). Partial, missing, failed or
 unrun comparisons never qualify. Do not silently change acceptance criteria
 or turn separate exploratory diagnostics into additional requirements.
-Keep inputs, image lineage, measurements and scoring authentic. The canonical
+Keep inputs, image lineage, measurements and scoring authentic. Raw assembler FASTA-to-truth scores
+are **diagnostics only**; the mandatory seven-way synthetic alignment gate
+must score MiCall's **final dominant result** after each assembler is
+integrated, not the assembler's most truth-like contig. The canonical
 source-pinned Assembler Bench must also publish privacy-safe, useful
 side-by-side result reports on Ivanka GitHub Pages under `/bench/`.
 Only the newly required HXB2-derived synthetic-truth cohort can satisfy
 the expanded numerical gate; never grandfather results from generic
 random-genome tests.
 
-- The goal is the **dominant read-supported viral sequence / defensible
-  major consensus**, **not exhaustive haplotype recovery**. Recovering a
-  minor haplotype contig is optional; missing one is not automatically a bug.
+- **The biological goal belongs to MiCall as a whole:** with Ivanka
+  integrated, the pipeline must recover the **most abundant identifiable
+  haplotype** (or honestly report a predominant consensus with uncertain
+  phase). **Ivanka alone is not required to reconstruct any haplotype**,
+  complete or partial. Its FASTA can be empty or contain fragments;
+  minority-haplotype reconstruction is never an independent gate.
 - Never emit a directly contradicted recombinant as a known haplotype.
   Unknown pair phase does not establish a physical viral genome.
 - Original read-pair attribution and MiCall's downstream minority-allele
   reporting still matter. Do not confuse optional minority *contigs*
   with optional preservation of original *molecular evidence*.
-- A lower contig burden can be beneficial if the dominant reconstruction,
-  source phase and required MiCall outputs remain defensible.
+- A lower contig burden can be beneficial if the **MiCall final dominant
+  result**, source-phase evidence, and required downstream outputs remain
+  defensible. Optimize end-to-end behavior, not standalone contig-to-truth
+  alignment, length, or apparently complete haplotype assembly.
 - Follow [docs/testing-improvement-procedure.md](docs/testing-improvement-procedure.md)
   for the unchanged physical-198, reference-panel, 90%-floor, runtime
   and all-real-exponent Psi qualification. Do not relax those gates.

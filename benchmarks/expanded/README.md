@@ -42,9 +42,10 @@ the 598 cases and all seven tools must be accounted for; incomplete runs
   failures, partial cohorts, missing binary hashes and timed-out runs
   **cannot be converted into Ivanka wins**.
 - **New gate:** for **each of the six rivals**, separately on the 198 real
-  and 400 synthetic samples, require both signed-power alignment/known-truth
-  Ψ(r)>0 and runtime Ψ(r)>0 for **every real r>=0**. Additionally, Ivanka
-  must score at least 90% of the **best rival** on each individual sample.
+  and 400 synthetic samples, require both **final MiCall** signed-power
+  alignment/known-truth Ψ(r)>0 and full-pipeline runtime Ψ(r)>0 for
+  **every real r>=0**. Additionally, **MiCall with Ivanka** must score
+  at least 90% of **MiCall with the best rival** on each sample.
   There is no pooling of incompatible real-MiCall MAX and synthetic-global
   scores. Reports must expose individual families and failure reasons.
   Strict all-r testing uses the existing `benchmarks/psi_acceptance.py`.
@@ -178,7 +179,14 @@ python3 -m benchmarks.expanded.combine \
 ```
 
 The combine command **returns nonzero** until all 598 cases and all seven
-assemblies per case satisfy every criterion. Passing a local combine step
+assemblies per case satisfy every criterion. The strict v2
+gate requires a score-origin attestation for every tool: the original
+real MAX metric must be extracted from final MiCall output and the
+synthetic known-truth score must come from MiCall's final dominant
+sequence. Standalone contig-to-truth scores and standalone runtime are
+explicitly marked diagnostic and **rejected even if numerically superior**.
+The synthetic cohort additionally needs independent HXB2 ancestry
+validation; old random-genome cohort scores remain ineligible. Passing a local combine step
 alone is still insufficient: independently verify HXB2 truth ancestry,
 MiCall integration and public `/bench/` publication under Intents 007/008. The strict evaluator
 intentionally has no option to reduce cohorts or skip a tool in
@@ -205,12 +213,21 @@ python3 -m benchmarks.expanded.podman_synthetic \
 Each image is pinned by its immutable full ID, the source manifest SHA256
 is checked, both input reads are mounted **read-only**, and the original
 genome/hidden-truth directory is **not mounted**. Only once the assembler
-exits does the benchmark-only Python evaluator score its FASTA. In
-particular, the known-truth global-alignment metric must evaluate **both
-DNA strand orientations**; a reverse-complemented reconstructed genome is
+exits does the benchmark-only Python **diagnostic** evaluator score
+its raw FASTA. This is not a MiCall pipeline result and cannot satisfy
+the mandatory synthetic qualification. In particular, the standalone
+known-truth global-alignment diagnostic must evaluate **both DNA strand
+orientations**; a reverse-complemented reconstructed genome is
 scientifically identical. Recorded `seconds` excludes truth-scoring time
 but includes container startup and adapter input preprocessing. The real
 cohort separately uses in-container MiCall monotonic timing.
+
+The resulting matrix declares `score_origin =
+assembler_fasta_diagnostic_v1` and a standalone timing origin. The
+strict combined gate rejects these stage labels. The next canonical
+Assembler Bench must run **MiCall** on synthetic reads and score
+its final dominant consensus, withholding truth from the pipeline
+until its output is frozen.
 
 The optional `--limit` is for development smoke tests only; the
 unmodified fail-closed gate still requires exactly 400 synthetic cases,

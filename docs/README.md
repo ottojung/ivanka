@@ -19,7 +19,7 @@ remain reference-blind and prioritize the dominant read-supported path.
 - [Intent 005: unchanged physical-198 benchmark](intents/005-physical-198-qualification.md) —
   each sample ≥90% of IVA; strict alignment and runtime Ψ(r)>0 for all r≥0.
 - [Intent 006: expanded seven-assembler benchmark](intents/006-expanded-qualification.md) —
-  additional 198-real + 400-synthetic, six-rival qualification.
+  mandatory 198-real + 400-synthetic, six-rival completion gate (not yet passed).
 
 [All intents are cumulative](intents/README.md). The original scientific
 and numerical goals remain in force; the newly added Rust-only and default

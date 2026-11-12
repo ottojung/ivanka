@@ -34,7 +34,8 @@ descriptions of what the existing qualifying image already implements:
   The unchanged ≥90% per-sample alignment floor and strict positive
   alignment **and runtime Ψ(r) for every real r≥0** remain mandatory.
 - **[Intent 006: expanded seven-way qualification](docs/intents/006-expanded-qualification.md).**
-  Add the 400-synthetic + 198-real six-competitor gate without weakening 005.
+  **Require a passing** 400-synthetic + 198-real, seven-assembler gate
+  before any completion or release claim; never weaken 005.
 
 **Current status:** the previously passing image contains a Python selector
 and therefore does not satisfy **Intents 001 and 002**; its 198-sample

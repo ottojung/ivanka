@@ -91,7 +91,11 @@ def select_final_dominant(folder):
     if counts[winner[key]] == 0:
         raise ValueError("no read-supported final dominant consensus")
     sequence = winner["sequence"].strip().upper()
-    if not sequence or set(sequence) - set("ACGTRYSWKMBDHVN"):
+    # MiCall uses X for an unresolved (not observed) nucleotide. It is
+    # valid output evidence, not an A/C/G/T claim: the independent global
+    # aligner scores each X as a mismatch to a known genomic truth base.
+    # Do not silently discard an otherwise read-supported final consensus.
+    if not sequence or set(sequence) - set("ACGTRYSWKMBDHVNX"):
         raise ValueError("invalid final MiCall nucleotide consensus")
     return {
         "sequence": sequence,

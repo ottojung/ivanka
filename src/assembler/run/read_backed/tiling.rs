@@ -7,7 +7,7 @@ pub(super) fn partition(header: &str, sequence: &[u8], depth: &[u32]) -> Vec<Ent
     const OVERLAP: usize = 512;
     let intact = || vec![(header.to_owned(), sequence.to_vec())];
     let len = sequence.len();
-    if len <= SPAN {
+    if len <= SPAN || uniformly_supported(depth) {
         return intact();
     }
     let count = len.div_ceil(SPAN);
@@ -34,4 +34,13 @@ pub(super) fn partition(header: &str, sequence: &[u8], depth: &[u32]) -> Vec<Ent
         start = end;
     }
     parts
+}
+
+/// A continuous read-supported source contig is a stronger assembly result
+/// than any of its overlapping presentation tiles. Require both broad and
+/// uninterrupted original-pair evidence before withholding tiling.
+fn uniformly_supported(depth: &[u32]) -> bool {
+    !depth.is_empty()
+        && depth.iter().filter(|&&count| count >= 3).count() * 100 >= depth.len() * 95
+        && depth.split(|&count| count >= 3).all(|gap| gap.len() < 100)
 }

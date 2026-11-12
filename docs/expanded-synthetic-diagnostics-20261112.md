@@ -1,5 +1,13 @@
 # Expanded synthetic benchmark: initial 400-case retrospective
 
+**Historical-only notice (Intent 008):** This cohort generated
+**generic random A/C/G/T genomic truths**, which are now forbidden for
+active biological synthetic tests or the mandatory enhanced qualification.
+Preserve the original results only as diagnostics; they cannot be
+grandfathered into the new HXB2/recombinant truth requirement.
+The canonical future comparison must be run through the public
+MiCall-integrated Assembler Bench (Intent 007) and reviewed at `/bench/`.
+
 **Evidence status: exploratory only — the seven-way gate has NOT passed.**
 This report preserves an initial full 400-case run and an independent
 biologically correct rescoring of all retained outputs. The old runner

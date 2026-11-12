@@ -69,6 +69,17 @@ Until Ivanka passes the full seven-assembler benchmark on all 598 samples
 with both strict all-r Ψ gates per competitor and cohort, the expanded
 qualification is **NOT PASSED**, regardless of previous IVA-only results.
 
+**Public Assembler Bench is also mandatory:** all assemblers must be tested
+as integrated into MiCall, with useful, independently verifiable comparisons
+published on Ivanka's GitHub Pages site under `/bench/`. Synthetic
+biological truth must come **only** from HXB2, random HXB2/other-HIV-subtype
+recombinants, and optional uniformly random substitutions up to 5%;
+**generic random A/C/G/T truth genomes are prohibited**. The previous
+generic-random 400-case synthetic dataset is historical diagnostic evidence,
+**not eligible** for expanded benchmark qualification. See
+[Assembler Bench](docs/intents/007-assembler-bench.md) and
+[HXB2 synthetic truth](docs/intents/008-hxb2-synthetic-truth.md).
+
 ## Primary objective: recover the dominant viral sequence
 
 **Ivanka is not required to assemble every viral haplotype.** Its primary
@@ -95,10 +106,13 @@ the Rust-only, reference-blind, unconfigured MiCall invocation contract:
   each sample ≥90% of IVA, ≤1,800-second containers, and strictly positive
   alignment and runtime signed-power Ψ(r) for every real r≥0.
 - **Enhanced seven-assembler benchmark:** the unchanged 198 real samples
-  plus 400 diverse synthetic cases, against IVA, Haploflow, MEGAHIT,
-  ABySS, SPAdes and Velvet. On both cohorts separately, Ivanka must beat
-  **each** competitor on alignment/known-truth and runtime all-r Ψ,
-  meeting the ≥90%-of-best-competitor per-sample alignment floor.
+  plus 400 diverse synthetic cases **generated only from the permitted
+  HXB2/subtype-recombinant truths** under Intent 008, against IVA,
+  Haploflow, MEGAHIT, ABySS, SPAdes and Velvet. On both cohorts
+  separately, Ivanka must beat **each** competitor on alignment/known-truth
+  and runtime all-r Ψ, meeting the ≥90%-of-best-competitor per-sample
+  alignment floor; its integrated MiCall results must be published
+  under `/bench/` as required by Intent 007.
 
 Missing, failed or partial runs cannot qualify. Neither a historical
 IVA-only pass nor a synthetic-only pass suffices. These requirements are
@@ -108,7 +122,8 @@ IVA-only pass nor a synthetic-only pass suffices. These requirements are
 Other experiments—including minority-haplotype reconstruction, separate
 phase studies, coverage diagnostics and synthetic investigations outside
 the fixed 400-sample cohort—may guide changes without adding further
-performance gates. Preserve paired input and result provenance. A benchmark
+performance gates; **their biological synthetic truths must still satisfy
+Intent 008**. Preserve paired input and result provenance. A benchmark
 pass is not a separate clinical production authorization.
 
 ## CLI
@@ -410,10 +425,10 @@ docs/read-backed-selection-experiment.md#qualification-boundary-and-reproducible
 and [the source-pinned image builder](scripts/build_read_backed_image.sh).
 
 **Required new benchmark (NOT YET PASSED):** The
-[expanded seven-assembler suite](benchmarks/expanded/README.md) includes
-400 heterogeneous synthetic cases beside the 198 real samples and will
-require Ivanka to beat IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet
-individually. The suite is **not yet qualified**; source-pinned competitor
+[expanded seven-assembler suite](benchmarks/expanded/README.md) requires
+400 HXB2-derived synthetic cases beside the 198 real samples and requires
+Ivanka to beat IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet
+individually, through the public MiCall Assembler Bench. The suite is **not yet qualified**; source-pinned competitor
 images and a complete physical run are still required. See the
 [Ivanka–IVA algorithmic review](docs/assembler-comparison-20261112.md).
 

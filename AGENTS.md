@@ -6,7 +6,7 @@ and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 ## Required execution intents
 
-**All six intent records are cumulative and binding. New requirements do
+**All eight intent records are cumulative and binding. New requirements do
 not supersede the reference-blindness, dominant-sequence, original 198-sample
 Ψ qualification, provenance, or source-quality requirements.** See
 [the complete intent index](docs/intents/README.md).
@@ -36,6 +36,17 @@ descriptions of what the existing qualifying image already implements:
 - **[Intent 006: expanded seven-way qualification](docs/intents/006-expanded-qualification.md).**
   **Require a passing** 400-synthetic + 198-real, seven-assembler gate
   before any completion or release claim; never weaken 005.
+- **[Intent 007: public MiCall Assembler Bench](docs/intents/007-assembler-bench.md).**
+  All assemblers must be benchmarked as genuinely integrated into MiCall.
+  Preserve individual outcomes, provenance, failures, and both Ψ gates.
+  Publish easily reviewable results via Ivanka's GitHub Pages at `/bench/`;
+  local JSON-only comparisons do not satisfy the infrastructure intent.
+- **[Intent 008: HXB2-derived synthetic truth](docs/intents/008-hxb2-synthetic-truth.md).**
+  All new synthetic biological genome truths must be HXB2, random
+  homologous HXB2/other-HIV-subtype recombinants, or those with at most
+  **5% uniformly random, non-targeted substitutions**. No arbitrarily
+  generated random A/C/G/T genome truths; the existing generic-random
+  400-case cohort is historical and ineligible for qualification.
 
 **Current status:** the previously passing image contains a Python selector
 and therefore does not satisfy **Intents 001 and 002**; its 198-sample
@@ -91,6 +102,15 @@ regardless of apparent benchmark gains.
 CI regression tests. This is a validity prerequisite for the existing
 benchmark, not another biological performance metric.
 
+The HXB2/subtype reference inputs explicitly required by Intent 008 belong
+**exclusively to the benchmark's synthetic-truth generator and independent
+post-assembly evaluator**. This permission does **not** relax the absolute
+ban on HXB2, subtype templates, benchmark truth, ancestry coordinates,
+or reference-conditioned output selection entering any assembler. Keep
+truth out of every candidate container/mount/CLI/environment. Clustered
+**read errors** may be studied, but **truth mutations** must be uniformly
+sampled at ≤5%, not intentionally clustered.
+
 **Benchmark-integrity contract.** Both independently mandatory gates must
 pass: the original authentic physical-198 IVA comparison (≥90% alignment
 per sample, no timeouts, positive alignment and runtime Ψ(r) for every real
@@ -99,7 +119,12 @@ other assemblers (≥90% of the best rival per sample, both strict all-r Ψ
 gates separately per competitor and cohort). Partial, missing, failed or
 unrun comparisons never qualify. Do not silently change acceptance criteria
 or turn separate exploratory diagnostics into additional requirements.
-Keep inputs, image lineage, measurements and scoring authentic.
+Keep inputs, image lineage, measurements and scoring authentic. The canonical
+source-pinned Assembler Bench must also publish privacy-safe, useful
+side-by-side result reports on Ivanka GitHub Pages under `/bench/`.
+Only the newly required HXB2-derived synthetic-truth cohort can satisfy
+the expanded numerical gate; never grandfather results from generic
+random-genome tests.
 
 - The goal is the **dominant read-supported viral sequence / defensible
   major consensus**, **not exhaustive haplotype recovery**. Recovering a

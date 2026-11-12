@@ -23,10 +23,13 @@ for exact inputs, image hashes and all-real-exponent acceptance semantics.
 
 ## Production path versus experiments
 
-`Dockerfile.read-backed`, `ivanka_read_support_selector.py`, the
-`ivanka_read_*.py` modules and `patch_micall_for_ivanka.py` describe the
-qualified read-backed execution path. The native Rust assembler itself has
-no access to viral reference sequences.
+The default Ivanka production execution path is the **native Rust ELF**
+invoked directly by MiCall with an empty child environment and only the
+three necessary paired-read/output arguments. The old
+`ivanka_read_support_selector.py`, `ivanka_read_*.py` modules and other
+Python postselection scripts are **historical benchmarking evidence, not
+runtime dependencies**. The native Rust assembler has no access to viral
+reference sequences, including those used by the HXB2 synthetic generator.
 
 Files named for SNV, Q15, phase, conserved-pair remapping, shared masks,
 synthetic truth, and the various `Dockerfile.*-experiment` stages are
@@ -41,17 +44,29 @@ De-identified labels such as `S48` may be printed in research reports;
 raw FASTQs and the private label-to-source mapping remain outside Git.
 
 
-## Expanded seven-assembler benchmark (new, not yet qualified)
+## Mandatory Assembler Bench and HXB2-derived synthetic truth
 
-The [expanded benchmark](expanded/README.md) adds 400 reproducible synthetic
-paired-FASTQ scenarios and separate real/synthetic pairwise all-r PSI
-comparisons against IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet. It
-fails closed on missing tools, samples, versions and runtime/quality results.
-It is an additional future gate, **not** a retroactive replacement of the
-frozen 198-sample result. The [implementation-based explanation of Ivanka
-versus IVA](../docs/assembler-comparison-20261112.md) identifies possible
-causes and mandatory ablation experiments.
+[Intent 007](../docs/intents/007-assembler-bench.md) requires a reusable,
+MiCall-integrated multi-assembler benchmark and a useful public results
+interface on Ivanka GitHub Pages under `/bench/`. The reports must
+include source/output provenance, failures, per-sample detail, per-cohort
+and per-tool comparison, and independent all-r alignment/runtime Ψ evidence.
 
+[Intent 008](../docs/intents/008-hxb2-synthetic-truth.md) restricts
+**all active synthetic biological truth** to HXB2, random homologous
+HXB2/other-HIV-subtype recombinants, and optional ≤5% uniformly
+random, non-purposefully-clustered substitutions. The previous generic
+random A/C/G/T generator and 400-case cohort are **historical-only**;
+a qualifying replacement is not yet ready. No truth/reference information
+is allowed to reach any competing assembler.
+
+The [expanded benchmark](expanded/README.md) requires 198 original real
+and 400 newly HXB2-derived synthetic cases, independently comparing
+Ivanka with IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet.
+It is an **immediate additional gate**, not a replacement for the
+original authentic 198-sample IVA criterion. The project is not
+complete or fully qualified until both gates pass and the Pages
+review interface is published.
 
 ## Retained artifacts (no persistent MiCall scratch)
 

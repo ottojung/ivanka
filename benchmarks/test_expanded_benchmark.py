@@ -207,10 +207,6 @@ class ExpandedGateTests(unittest.TestCase):
         self.assertFalse(result["comparisons"]["real"]["megahit"]["pass"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ExpandedPhysicalMatrixTests(unittest.TestCase):
     def test_read_only_real_matrix_includes_weak_clean_competitors(self):
         from expanded.real_matrix import join_real_runs
@@ -374,6 +370,12 @@ class ExpandedTruthScoringTests(unittest.TestCase):
             nothing = dominant_truth_score(meta, truth, empty)
             self.assertEqual(perfect_result["score"], 1)
             self.assertTrue(perfect_result["dominant_exact"])
+            from expanded.score import reverse_complement
+            reverse = root / "reverse.fa"
+            reverse.write_text(">reverse\n" + reverse_complement(reference) + "\n")
+            reversed_result = dominant_truth_score(meta, truth, reverse)
+            self.assertEqual(reversed_result["score"], perfect_result["score"])
+            self.assertTrue(reversed_result["dominant_exact"])
             self.assertLess(damaged["score"], 1)
             self.assertEqual(nothing["score"], 0)
             self.assertFalse(nothing["dominant_exact"])
@@ -431,3 +433,8 @@ class ExpandedToolProfileTests(unittest.TestCase):
                     self.assertIn("j=2", words)
                 else:
                     self.assertEqual(words[words.index("--phred-offset")+1], "33")
+
+
+
+if __name__ == "__main__":
+    unittest.main()

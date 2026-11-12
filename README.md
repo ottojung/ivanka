@@ -368,6 +368,14 @@ evidence. See [the complete qualification boundary](
 docs/read-backed-selection-experiment.md#qualification-boundary-and-reproducible-rebuilds)
 and [the source-pinned image builder](scripts/build_read_backed_image.sh).
 
+**New benchmark under development:** The
+[expanded seven-assembler suite](benchmarks/expanded/README.md) includes
+400 heterogeneous synthetic cases beside the 198 real samples and will
+require Ivanka to beat IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet
+individually. The suite is **not yet qualified**; source-pinned competitor
+images and a complete physical run are still required. See the
+[Ivanka–IVA algorithmic review](docs/assembler-comparison-20261112.md).
+
 ## Contig reporting and read-support ranking
 
 The native assembler attempts at most **50 primary** and **20

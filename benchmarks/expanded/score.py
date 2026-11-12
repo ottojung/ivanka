@@ -6,7 +6,10 @@ assembler commands nor container mounts contain the truth or its path.
 from pathlib import Path
 import zlib  # noqa: F401  # Load libz before NumPy-backed alignment libraries.
 
-_REVERSE = str.maketrans("ACGTN", "TGCAN")
+# All legal IUPAC DNA ambiguity codes are valid assembled nucleotides.
+# An ambiguous code remains a mismatch to a known A/C/G/T truth base.
+_DNA = "ACGTRYSWKMBDHVN"
+_REVERSE = str.maketrans(_DNA, "TGCAYRSWMKVHDBN")
 
 
 def reverse_complement(seq):
@@ -31,7 +34,7 @@ def read_fasta(path):
                 fragment.append(line)
     if seen:
         sequences.append("".join(fragment).upper())
-    if any(not c or set(c) - set("ACGTN") for c in sequences):
+    if any(not c or set(c) - set(_DNA) for c in sequences):
         raise ValueError("invalid FASTA assembled sequence")
     return sequences
 

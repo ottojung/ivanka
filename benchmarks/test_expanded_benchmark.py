@@ -399,6 +399,35 @@ class ExpandedChildEnvironmentTests(unittest.TestCase):
 @unittest.skipUnless(importlib.util.find_spec("Bio"),
                      "Biopython required for independent truth scoring")
 class ExpandedTruthScoringTests(unittest.TestCase):
+    def test_valid_iupac_ambiguities_are_scored_not_rejected(self):
+        from expanded.score import read_fasta, reverse_complement
+        with tempfile.TemporaryDirectory() as root:
+            fasta = Path(root) / "ambiguity.fa"
+            fasta.write_text(">ambiguous\nACGTRYSWKMBDHVN\n")
+            self.assertEqual(read_fasta(fasta)[0], "ACGTRYSWKMBDHVN")
+            for code in "ACGTRYSWKMBDHVN":
+                self.assertEqual(reverse_complement(reverse_complement(code)),
+                                 code)
+            fasta.write_text(">invalid\nACGTZ\n")
+            with self.assertRaises(ValueError):
+                read_fasta(fasta)
+
+    def test_ambiguous_contig_is_valid_but_not_exact(self):
+        from expanded.score import dominant_truth_score, read_fasta
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            meta = generate_case(root, "clonal", 3, pairs=50)
+            case = root / "clonal-s003"
+            truth = case / meta["hidden_truth_file"]
+            bases = list(read_fasta(truth)[0])
+            bases[100] = "W"
+            contig = root / "ambiguity.fa"
+            contig.write_text(">ambiguous\n" + "".join(bases) + "\n")
+            result = dominant_truth_score(meta, truth, contig)
+            self.assertLess(result["score"], 1.0)
+            self.assertGreater(result["score"], 0.9)
+            self.assertFalse(result["dominant_exact"])
+
     def test_truth_scoring_is_separate_and_penalizes_errors(self):
         from expanded.score import dominant_truth_score, read_fasta
         with tempfile.TemporaryDirectory() as folder:

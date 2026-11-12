@@ -3,8 +3,9 @@
 **These requirements are conjunctive: satisfying one never waives any other.**
 A release or benchmark result is not a valid completion claim unless it
 meets every applicable architectural, scientific, and numerical requirement.
-The new Rust-only and default-invocation requirements **add to** the original
-objectives and gates; they do not replace or loosen them.
+The Rust-only, default-invocation, and expanded seven-way benchmark
+requirements **all apply now**; they do not replace or loosen the original
+objectives and gates. The seven-way gate is not optional or deferred.
 
 | Intent | Binding requirement | Status |
 |---|---|---|
@@ -13,7 +14,7 @@ objectives and gates; they do not replace or loosen them.
 | [003 — reference blindness and evidence](003-reference-blindness.md) | No known/reference-derived genomes, reference panel, or scoring feedback influence assembly or contig selection | Binding now; continue enforcing |
 | [004 — dominant read-supported consensus](004-dominant-sequence.md) | Prioritize defensible dominant sequence and original read-pair integrity; no invented phase or mandatory exhaustive minor haplotypes | Binding now; continue enforcing |
 | [005 — authentic 198-sample qualification](005-physical-198-qualification.md) | ≥90% IVA per sample, no failures/timeouts, positive alignment and runtime signed-power Ψ(r) for every real r≥0 with genuine pinned MiCall inputs | Binding now; the previous passing *wrapped* image is historical, not a pass for 001/002 |
-| [006 — expanded seven-assembler qualification](006-expanded-qualification.md) | 198 original real + 400 diverse synthetic samples; compare Ivanka against all six competitors with strict, separate, all-r alignment and runtime gates | Additional, future qualification; not yet passed |
+| [006 — expanded seven-assembler qualification](006-expanded-qualification.md) | 198 original real + 400 diverse synthetic samples; beat all six competitors with strict, separate, all-r alignment and runtime gates | **Required now for completion/release; not yet passed** |
 
 ## Rules for changes and claims
 

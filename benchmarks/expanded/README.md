@@ -16,6 +16,16 @@ its final independent qualification remain incomplete. The
 Assembler Bench Pages report exists at `/bench/` for verified
 historical real-run evidence; no synthetic PASS is claimed.
 
+**MiCall source requirement:** Every assembler's MiCall integration
+and all MiCall benchmark containers must be committed, built and pinned
+to exact revisions of [`ottojung/MiCall`](https://github.com/ottojung/MiCall)
+([Intent 011](../../docs/intents/011-ottojung-micall-fork-provenance.md)).
+The upstream `cfe-lab/MiCall` must never receive pushes or PRs
+([Intent 010](../../docs/intents/010-upstream-micall-read-only.md)).
+The current images must be audited/migrated before full qualification;
+their historical results must not be rebranded as fork-built evidence.
+The public `/bench/` pages must link to exact full fork commit SHAs.
+
 **This benchmark is required now for Ivanka completion and future releases.**
 It is an additional strict qualification, **not** a replacement for the
 original 198-sample IVA comparison or its all-r Ψ conditions. Every one of

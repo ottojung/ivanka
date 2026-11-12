@@ -98,3 +98,16 @@ file and only removes `scratch` beneath known run/sample/assembler folders.
 Scientific output hashes in existing result JSONL can be checked against the
 promoted permanent files after cleanup. A conflict in an alternate preserved
 artifact is an error, not a reason to overwrite data.
+
+
+## Canonical MiCall fork and upstream write safety
+
+**`github.com/cfe-lab/MiCall` is read-only. Never push commits, tags,
+branches or PRs to that repository.** All assembler integrations must
+live in [`github.com/ottojung/MiCall`](https://github.com/ottojung/MiCall)
+and all MiCall runtime images must be built from **exact immutable fork
+commits**, with full fork/source/container provenance and matching public
+links. Historical images assembled with local MiCall patch scripts
+are not accepted as compliant without reconstruction from the fork.
+See [Intents 010](../docs/intents/010-upstream-micall-read-only.md)
+and [011](../docs/intents/011-ottojung-micall-fork-provenance.md).

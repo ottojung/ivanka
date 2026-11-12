@@ -2,9 +2,11 @@
 
 **Status: required infrastructure and publication contract; not yet satisfied.**
 
-An **Assembler Bench** must exist as the canonical, reusable infrastructure
-for running, comparing, and reviewing **multiple assemblers as actually
-integrated into MiCall**. It is not a one-off Ivanka-versus-IVA script, an
+An **Assembler Bench** must exist as a **general-purpose, assembler-neutral**
+framework for running, comparing, and judging **arbitrary assemblers as
+actually integrated into MiCall**. Ivanka has no privileged comparison role:
+all pairs and all diagnostics must be browsable, not only Ivanka-versus-IVA
+or Ivanka-versus-everyone. It is not a one-off Ivanka-versus-IVA script, an
 unreviewable JSON dump, or a suite of standalone assembler invocations
 that bypasses the MiCall pipeline. Adding an assembler must be an ordinary,
 documented adapter operation rather than a bespoke benchmark rewrite.
@@ -15,6 +17,11 @@ documented adapter operation rather than a bespoke benchmark rewrite.
    same pinned MiCall source/base, original paired reads, downstream stages,
    resource limits, and evaluation rules. Verify the assembler executable,
    version, immutable source/image identity, CLI, and effective environment.
+   All MiCall integrations and runtime images **must come from exact
+   committed revisions of [`ottojung/MiCall`](https://github.com/ottojung/MiCall)**;
+   no runtime monkeypatching of MiCall or images built from upstream
+   `cfe-lab/MiCall`. See [Intent 011](011-ottojung-micall-fork-provenance.md)
+   and its mandatory [upstream read-only policy](010-upstream-micall-read-only.md).
    For Ivanka, preserve [Intents 001](001-rust-only-execution.md) and
    [002](002-default-invocation-parity.md): its Rust ELF is called directly
    by MiCall, with an empty child environment and exactly three necessary
@@ -68,12 +75,23 @@ The Pages UI must provide at least:
 - Useful **filters and drill-down** by assembler, project, synthetic
   mechanism, sample, run, and failure class, with sortable per-sample
   comparisons and a clearly identified worst-regression view.
+- A directed **all-assembler × all-assembler Ψ-dominance matrix** for
+  alignment and MiCall runtime (and their joint verdict), per cohort,
+  with clear proof, counterexample, unknown and incomplete states, as
+  specified in [Intent 009](009-neutral-metrics-and-pairwise-dominance.md).
+  Also display **clipped-read/base/event counts and normalized soft-clip
+  densities**, mapping support, depth, concordance, assembly structure,
+  resource use and failure/timeout diagnostics for every available tool.
 - Explicit independent **Ψ(r) all-nonnegative-exponent verdicts** for
   alignment and runtime, per competitor and cohort, including evidence
   certificates, zero/minimum diagnostics or counterexamples. Include the
   original 198-only IVA gate separately from the mandatory expanded gate.
-- Readable provenance and navigable links to source commits, immutable run
-  manifests, independently verified results, methods, and versioned code.
+- Readable provenance and navigable links to **exact immutable fork
+  MiCall commits** under `https://github.com/ottojung/MiCall/tree/<SHA>`,
+  including each assembler integration and shared MiCall baseline, as
+  required by [Intent 011](011-ottojung-micall-fork-provenance.md);
+  immutable run manifests, independently verified results, methods, and
+  versioned code.
   The page should show when data is missing or a run is not qualified.
 
 Build and publish this site **automatically and reproducibly** from verified,

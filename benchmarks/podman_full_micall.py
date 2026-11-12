@@ -99,9 +99,14 @@ def verify_identical_micall_base(iva_image, ivanka_image):
         raise ValueError("Ivanka image does not derive from the selected IVA MiCall base image")
 
 
-def verify_ivanka_image_binding(image):
-    """One container startup verifies AST binding, cache key, both reads and binary."""
+def verify_ivanka_image_binding(image, *, competitor=None):
+    """Verify the native Rust ELF or an explicitly pinned competitor adapter."""
     verifier = Path(__file__).with_name("verify_ivanka_binding.py").read_text()
+    extra = []
+    if competitor is not None:
+        from expanded.verify_binding import source_hashes
+        hashes = source_hashes(competitor)
+        extra = ["--competitor", competitor, hashes[0], hashes[1]]
     if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
         # Use the same serialized lifecycle for the image verifier and
         # MiCall itself. Plain podman run --rm can deadlock on SQLite
@@ -110,7 +115,7 @@ def verify_ivanka_image_binding(image):
                 f"{hashlib.sha256(image.encode()).hexdigest()[:8]}")
         command = ["podman", "run", "--rm", "--pull=never", "--name", name,
                    "--timeout", "178", "--stop-timeout", "2",
-                   "--entrypoint", "python", image, "-c", verifier]
+                   "--entrypoint", "python", image, "-c", verifier] + extra
         with tempfile.TemporaryFile(mode="w+t") as stdout, tempfile.TemporaryFile(
                 mode="w+t") as stderr:
             result = run_detached(command, stdout, stderr, remaining=180)
@@ -130,7 +135,7 @@ def verify_ivanka_image_binding(image):
         return
     try:
         subprocess.run(["podman", "run", "--rm", "--pull=never", "--entrypoint",
-                        "python", image, "-c", verifier],
+                        "python", image, "-c", verifier] + extra,
                        check=True, capture_output=True, text=True, timeout=180)
     except subprocess.TimeoutExpired as exc:
         raise ValueError("Timed out waiting for Ivanka image binding verification") from exc
@@ -145,7 +150,11 @@ def verify_execution_image_binding(args, checked, images):
     qualification argument validation. Image IDs remain pinned independently.
     """
     if "ivanka" in checked and not args.cache_status:
-        verify_ivanka_image_binding(images["ivanka"])
+        selected = getattr(args, "candidate_assembler", None)
+        if selected is None:
+            verify_ivanka_image_binding(images["ivanka"])
+        else:
+            verify_ivanka_image_binding(images["ivanka"], competitor=selected)
 
 
 def score_outputs(folder, reference):
@@ -885,6 +894,9 @@ def _run_main():
     parser.add_argument("--qualify",action="store_true", help="Strict 18-sample IVA-eligible alpha run requiring pinned manifest and IVA eligibility evidence")
     parser.add_argument("--qualify-198",action="store_true",
                         help="Strict 198-sample alignment and runtime signed-power PSI milestone")
+    parser.add_argument("--candidate-assembler",
+                        choices=("haploflow","megahit","abyss","spades","velvet"),
+                        help="Only in expanded MiCall comparison: verify a pinned external adapter, never a native Ivanka substitute")
     parser.add_argument("--diagnostic-90-floor", action="store_true",
                         help="Use the strict milestone's 90%% score floor for selected-sample diagnostics; NOT formal 198 qualification")
     parser.add_argument("--diagnose-project-reference",action="store_true",
@@ -907,6 +919,10 @@ def _run_main():
         if args.qualify_198 else None)
     if args.jobs<1 or not 1<=args.sample_time_limit<=1800 or args.timeout_per_arm<1:
         parser.error("jobs and arm timeout must be positive; sample limit must be 1..1800 seconds")
+    if args.candidate_assembler and (
+            args.mode != "both" or args.qualify or args.qualify_198
+            or args.cache_status or args.import_iva_from or args.resume_from):
+        parser.error("external adapter is only allowed in a fresh expanded comparison")
     images={"iva":IVA_IMAGE,"ivanka":IVANKA_IMAGE}
     checked={}
     for arm,img in images.items():

@@ -448,3 +448,30 @@ from **benchmark qualified**. Any failed/empty/ambiguous tool arm
 remains fail-closed. The mandatory original 198-real plus full
 400-synthetic all-r Ψ gate remains unchanged; neither the v4 depth
 change nor resumability constitutes a PASS.
+
+## External-assembler binding in the physical 198-sample runner
+
+The fresh full-MiCall real-data runner distinguishes **two audited
+executable classes**. Ordinary Ivanka must remain the exact native Rust
+ELF with empty child environment and only `--reads1`, `--reads2`,
+`--output`; the native verification mode is **unchanged**.
+
+The five other external assemblers use a source-pinned Python adapter
+installed at the same MiCall entry point **only inside their explicitly
+labeled competitor images**. `run_real.py` supplies
+`--candidate-assembler NAME` **to the benchmark runner**, never to the
+assembler. That benchmark-only mode requires all of the following:
+the immutable image ID and common MiCall layers; the matching
+`/etc/ivanka-expanded-tool` name; byte-identical SHA256 of both
+reviewed `micall_entrypoint.py` and `adapters.py`; precisely three
+necessary CLI arguments; and the same MiCall AST-enforced
+`subprocess.run(..., env={})` execution. No references, arbitrary
+settings, opt-in Ivanka tuning, or replacement of the native Ivanka
+ELF are permitted. The mode is rejected by the original
+18/198-sample Ivanka qualification and cached-control paths.
+
+This fix enables valid external competitors to pass their actual
+MiCall integration verification without weakening the Rust-only
+contract. It does **not** automatically qualify any tool's real-data
+scores or runtimes; all 198 × 7 complete physical runs and the
+all-r Ψ gates remain mandatory.

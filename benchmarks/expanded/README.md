@@ -213,7 +213,12 @@ timestamped execution records are never rewritten.
    and independently validate genotype/minority effects before clinical use.
 
 `docs/assembler-comparison-20261112.md` explains the observed
-Ivanka-versus-IVA strengths and testable weaknesses. Running a few smoke
+Ivanka-versus-IVA strengths and testable weaknesses.
+[The first 400-case synthetic retrospective](
+../../docs/expanded-synthetic-diagnostics-20261112.md) summarizes the
+mechanism-stratified outputs, real fail-closed competitor issues and the
+candidate whole-contig retention rationale. It is diagnostic evidence,
+**not** a passing seven-way qualification. Running a few smoke
 tests does not qualify Ivanka against six assemblers.
 
 

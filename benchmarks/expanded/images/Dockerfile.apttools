@@ -1,0 +1,7 @@
+# Each contestant inherits the exact unchanged updated-MiCall base.
+FROM localhost/micall:newmicall-e0073cb5-base
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      megahit=1.2.9-4 abyss=2.3.5+dfsg-2 \
+      spades=3.15.5+dfsg-2 velvet=1.2.10+dfsg1-8 \
+    && rm -rf /var/lib/apt/lists/*

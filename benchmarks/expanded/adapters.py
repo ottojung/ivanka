@@ -92,19 +92,21 @@ def steps(name, r1, r2, work, binaries, *, threads=2, insert_size=270):
         interleave_fastq(r1, r2, single)
         out = work / "haploflow" / "contigs.fa"
         return [[exe("haploflow"), "--read-file", str(single),
-                 "--out", str(work / "haploflow"), "--filter", "100"]], out
+                 "--out", str(work / "haploflow"), "--filter", "100",
+                 "--strict", "0"]], out
     if name == "megahit":
         out = work / "megahit" / "final.contigs.fa"
         return [[exe("megahit"), "-1", str(r1), "-2", str(r2),
                  "-t", str(threads), "-o", str(work / "megahit")]], out
     if name == "abyss":
         out = work / "assembly-contigs.fa"
-        return [[exe("abyss-pe"), "k=41", "name=assembly",
-                 f"in={r1} {r2}"]], out
+        return [[exe("abyss-pe"), "k=41", "B=128M", "j=2",
+                 "name=assembly", f"in={r1} {r2}"]], out
     if name == "spades":
         out = work / "spades" / "contigs.fasta"
         return [[exe("spades.py"), "-1", str(r1), "-2", str(r2),
-                 "-t", str(threads), "-o", str(work / "spades")]], out
+                 "--phred-offset", "33", "-t", str(threads),
+                 "-o", str(work / "spades")]], out
     out = work / "velvet" / "contigs.fa"
     return [[exe("velveth"), str(work / "velvet"), "31", "-fastq.gz",
              "-shortPaired", "-separate", str(r1), str(r2)],

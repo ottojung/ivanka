@@ -356,3 +356,27 @@ class ExpandedRetrospectiveTests(unittest.TestCase):
         self.assertNotIn("private-sample-0",
                          json.dumps(result))
         self.assertFalse(analyze(records[:1], expected=2)["complete"])
+
+
+class ExpandedToolProfileTests(unittest.TestCase):
+    def test_profiles_are_fixed_not_tuned_from_sample_truth(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            r1, r2 = root / "r1.fq.gz", root / "r2.fq.gz"
+            r1.write_bytes(b"")
+            r2.write_bytes(b"")
+            tools = {"haploflow", "abyss", "spades"}
+            for name in tools:
+                binaries = {name: {binary: {"path": f"/usr/bin/{binary}"}
+                                   for binary in PROGRAMS[name]}}
+                work = root / name
+                work.mkdir()
+                cmd, _ = steps(name, r1, r2, work, binaries)
+                words = cmd[0]
+                if name == "haploflow":
+                    self.assertEqual(words[words.index("--strict")+1], "0")
+                elif name == "abyss":
+                    self.assertIn("B=128M", words)
+                    self.assertIn("j=2", words)
+                else:
+                    self.assertEqual(words[words.index("--phred-offset")+1], "33")

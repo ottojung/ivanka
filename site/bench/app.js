@@ -9,7 +9,16 @@ const state = {data:null,run:null,metric:"score",tool:null,sort:"id",reverse:fal
 
 function currentRows() {
   let result;
-  if (state.run.cohort === "real") {
+  if (state.run.hxb2_truth_verified === true) {
+    result = state.run.samples.map((s) => {
+      const ivanka=s[state.metric].ivanka, rival=s[state.metric][state.tool];
+      const failed=s.failures.includes("ivanka")||s.failures.includes(state.tool)||
+        !Number.isFinite(ivanka)||!Number.isFinite(rival);
+      return {id:s.alias,ivanka,rival,
+        delta:failed?NaN:(state.metric==="score"?ivanka-rival:rival-ivanka),
+        failed,detail:s};
+    });
+  } else if (state.run.cohort === "real") {
     result = state.run.samples.map((s) => {
       const ivanka = s[state.metric].Ivanka, rival = s[state.metric][state.tool];
       return {id:s.alias,ivanka,rival,delta:state.metric === "score" ? ivanka-rival : rival-ivanka,
@@ -23,8 +32,12 @@ function currentRows() {
     }));
   }
   const query=el("search").value.trim().toLowerCase(), outcome=el("outcomeFilter").value;
-  result = result.filter((r) => r.id.toLowerCase().includes(query) &&
-    (outcome === "all" || outcome === classify(r)));
+  result = result.filter((r) => (
+    r.id.toLowerCase().includes(query) ||
+    (r.detail.family||"").toLowerCase().includes(query)
+  ) &&
+    (outcome === "all" || (outcome === "floor"
+      ? r.detail.floor_ok === false : outcome === classify(r))));
   result.sort((a,b) => {
     const order=state.sort==="id" ? a.id.localeCompare(b.id) : a[state.sort]-b[state.sort];
     return state.reverse ? -order : order;
@@ -55,14 +68,27 @@ function syncUrl() {
 function drawOverview() {
   const run=state.run;
   el("runSelect").value=run.id;
-  el("runCohort").textContent=run.cohort==="real"?"Real · MiCall":"Synthetic · diagnostic";
+  el("runCohort").textContent=run.cohort==="real"?"Real · MiCall":
+    run.hxb2_truth_verified?"HXB2 · MiCall":"Synthetic · historical";
   el("runStatus").textContent=run.status==="passed-original-only"
-    ?"Original PASS · expanded incomplete":"Ineligible · historical only";
+    ?"Original PASS · expanded incomplete":
+    run.hxb2_truth_verified?"HXB2 source verified · NOT QUALIFIED":
+    "Ineligible · historical only";
   el("runStatus").className=run.status==="passed-original-only"?"status-pass":"status-no";
   el("runDate").textContent=run.date;
   el("runDescription").textContent=run.status_reason;
-  el("globalNotice").textContent="Expanded qualification: INCOMPLETE. The old 400-case random-genome cohort is ineligible under Intent 008. The original 198-real IVA gate separately passed.";
-  if(run.cohort==="real") {
+  el("globalNotice").textContent=run.hxb2_truth_verified
+    ?"Expanded qualification: INCOMPLETE. These are real MiCall measurements from an HXB2-validated cohort, but the full 400-synthetic and 198-real seven-way all-exponent Ψ gates remain unproven."
+    :"Expanded qualification: INCOMPLETE. The old random-genome cohort is ineligible under Intent 008. The original 198-real IVA gate separately passed.";
+  if(run.hxb2_truth_verified) {
+    const fails=run.samples.reduce((count,s)=>count+s.failures.length,0);
+    const floor=run.samples.filter(s=>s.floor_ok===false).length;
+    el("metricCards").innerHTML=card("HXB2 cases verified",run.sample_count+" / "+
+      run.expected_sample_count,"Real seven-way MiCall pipeline")+
+      card("Assembler arms failed",String(fails),"Failures are not Ivanka wins")+
+      card("90% floor failures",String(floor),"Only complete seven-arm cases counted")+
+      card("Expanded Ψ verdict","INCOMPLETE","Original and expanded gates remain binding");
+  } else if(run.cohort==="real") {
     const wins=run.samples.filter((s)=>s.seconds.Ivanka<s.seconds.IVA).length;
     el("metricCards").innerHTML=card("Physical MiCall cases","198 / 198","Independently verified original reads")+
       card("Runtime wins",wins+" / 198","Ivanka faster than IVA")+
@@ -81,14 +107,20 @@ function drawCompare() {
   const run=state.run;
   el("scoreView").classList.toggle("active",state.metric==="score");
   el("timeView").classList.toggle("active",state.metric==="seconds");
-  if(run.cohort==="synthetic" && state.metric==="seconds") {
+  if(run.cohort==="synthetic" &&
+      !run.hxb2_truth_verified && state.metric==="seconds") {
     el("comparisonContext").textContent="Historical synthetic runtimes are invalid.";
     el("comparisonChart").innerHTML='<p class="hint">No valid runtime comparison. The exploratory runner included truth-scoring time in reported durations.</p>';
     return;
   }
   const values=run.tools.map((tool)=>{
     let value=0,failures=0;
-    if(run.cohort==="real") {
+    if(run.hxb2_truth_verified) {
+      const good=run.samples.filter(s=>Number.isFinite(s[state.metric][tool]));
+      value=good.length?
+        good.reduce((sum,s)=>sum+s[state.metric][tool],0)/good.length:0;
+      failures=run.samples.length-good.length;
+    } else if(run.cohort==="real") {
       value=run.samples.reduce((sum,s)=>sum+s[state.metric][tool],0)/run.samples.length;
     } else {
       value=run.families.reduce((sum,f)=>sum+f.scores[tool],0)/run.families.length;
@@ -107,13 +139,25 @@ function drawCompare() {
   ).join("")+'<p class="plot-caption">'+(state.metric==="score"
     ?'Real scores: MiCall final MAX points. Synthetic scores: global similarity fraction. Do not pool these scales.'
     :'Mean monotonic MiCall runtime in seconds; lower is better.')+'</p>';
-  el("comparisonContext").textContent=run.cohort==="real"
+  el("comparisonContext").textContent=run.hxb2_truth_verified
+    ?"HXB2 reference-validated MiCall output; partial sample means only, with missing arms explicitly excluded. No all-r Ψ verdict is implied."
+    :run.cohort==="real"
     ?"Original 198-sample IVA-only comparison; expanded six-rival real comparison remains incomplete."
     :"Historical known-truth synthetic diagnostics; disallowed genomic-truth cohort.";
 }
 
 function drawEvidence() {
   const run=state.run;
+  if(run.hxb2_truth_verified) {
+    el("evidenceContent").innerHTML='<article class="evidence-card"><h3>HXB2 verified biological source</h3>'+
+      '<div class="verdict no">INCOMPLETE · no numerical qualification</div><p class="hint">'+
+      run.sample_count+' of 400 synthetic cases have completed the genuine MiCall pipeline. '+
+      'Every original genomic truth derives from pinned HXB2/subtype reference ancestry; '+
+      'no truth was mounted into an assembler container. The required strict '+
+      'alignment and runtime Ψ(r) &gt; 0 for all real r ≥ 0 remain unverified for this '+
+      'cohort and for the full seven-way 198-real comparison. Failed arms block acceptance.</p></article>';
+    return;
+  }
   if(run.cohort!=="real") {
     el("evidenceContent").innerHTML='<article class="evidence-card"><h3>Historical synthetic dataset</h3>'+
       '<div class="verdict no">NOT QUALIFIED</div><p class="hint">The random nucleotide truth, failed tools and invalid runtimes make this an exploratory diagnostic, not a scientific benchmark pass.</p></article>';
@@ -145,7 +189,8 @@ function drawTable() {
       '<td class="'+tone+'">'+outcome+'</td></tr>';
   }).join("")||'<tr><td colspan="5">No matching cases.</td></tr>';
   el("resultCount").textContent=rows.length+" visible of "+
-    (state.run.cohort==="real"?state.run.samples.length:state.run.families.length);
+    (state.run.cohort==="real" || state.run.hxb2_truth_verified
+      ?state.run.samples.length:state.run.families.length);
   el("resultsTable").querySelectorAll("tr[data-alias]").forEach((node)=>{
     const show=()=>showDetail(rows.find((r)=>r.id===node.dataset.alias));
     node.addEventListener("click",show);
@@ -159,7 +204,14 @@ function showDetail(row) {
   if(!row)return;
   const x=row.detail;
   let detail;
-  if(state.run.cohort==="real") {
+  if(state.run.hxb2_truth_verified) {
+    detail='<p>HXB2-derived family: '+esc(x.family)+'. Ivanka '+fmt(x.score.ivanka,4)+
+      ' global score, '+fmt(x.seconds.ivanka,2)+' MiCall seconds. '+
+      esc(names[state.tool]||state.tool)+' '+fmt(x.score[state.tool],4)+
+      ' global score, '+fmt(x.seconds[state.tool],2)+' MiCall seconds.</p>'+
+      '<p>Failed assembler arms: '+(x.failures.length?esc(x.failures.join(", ")):"none")+
+      '. All cases here are still unqualified until the complete seven-way gate passes.</p>';
+  } else if(state.run.cohort==="real") {
     detail='<p>Ivanka: '+fmt(x.score.Ivanka,3)+' points, '+fmt(x.seconds.Ivanka,3)+' s. '+
       'IVA: '+fmt(x.score.IVA,3)+' points, '+fmt(x.seconds.IVA,3)+' s.</p>'+
       '<p>90% floor: '+(x.floor_ok?"PASS":"FAIL")+'. Sample alias is not a source file name or patient identifier.</p>';
@@ -175,8 +227,12 @@ function drawProvenance() {
   const r=state.run;
   const fields=[["Run",r.id],["Source commit",r.source_commit],
     ["Samples",String(r.sample_count)],["Expanded eligibility",r.eligible_for_expanded?"Eligible":"Not eligible"]];
-  for(const [label,key] of [["Manifest SHA256","manifest_sha256"],["Result SHA256","results_sha256"],
-    ["Independent certificate SHA256","certificate_sha256"],["Diagnostic SHA256","diagnostic_sha256"]]){
+  for(const [label,key] of [["Manifest SHA256","manifest_sha256"],
+    ["HXB2 cohort SHA256","cohort_manifest_sha256"],
+    ["Benchmark source manifest SHA256","source_manifest_sha256"],
+    ["Result SHA256","results_sha256"],
+    ["Independent certificate SHA256","certificate_sha256"],
+    ["Diagnostic SHA256","diagnostic_sha256"]]){
     if(r[key])fields.push([label,r[key]]);
   }
   for(const [tool,ref] of Object.entries(r.images||{})) {

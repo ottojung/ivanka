@@ -11,6 +11,7 @@ from benchmarks.expanded.micall_checkpoint import existing_case, identity
 from benchmarks.expanded.micall_dominant import SCORE_ORIGIN
 from benchmarks.expanded.micall_synthetic_constants import TIMING_ORIGIN
 from .publication import SCHEMA
+from .public_dominance import enrich
 
 COHORT_SHA = "964fff8226beef4787226a5542dc2667fff0102bea0b4f4694686b11af1f7f5a"
 COHORT_FILE = (Path(__file__).resolve().parents[1] / "expanded/references"
@@ -60,6 +61,17 @@ def checked_run(directory):
             or any(sha(base / name) != sources[name]
                    for name in required_sources)):
         raise ValueError("benchmark source SHA attestation mismatch")
+    # New instrumented manifests bind optional diagnostic source to its
+    # archived metrics; old historical snapshots lack this instrument.
+    extra = manifest.get("diagnostic_sources_sha256")
+    if extra is not None:
+        source_root = Path(__file__).resolve().parents[1]
+        expected = {"sam_metrics.py": source_root / "assembler_bench/sam_metrics.py",
+                    "diagnostic_metrics.py": source_root / "diagnostic_metrics.py"}
+        if (set(extra) != set(expected)
+                or any(sha(path) != extra[name]
+                       for name, path in expected.items())):
+            raise ValueError("MiCall diagnostic source attestation mismatch")
     images = manifest.get("images")
     if (not isinstance(images, dict) or set(images) != set(ASSEMBLERS)
             or any(type(x) is not str or len(x) != 64
@@ -180,6 +192,7 @@ def main():
             run["id"] == report["id"] for run in public["runs"]):
         raise ValueError("duplicate/unsupported public benchmark snapshot")
     public["runs"].append(report)
+    public = enrich(public)
     temporary = target.with_suffix(".json.pending")
     with temporary.open("x") as stream:
         json.dump(public, stream, sort_keys=True, indent=2)

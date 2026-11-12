@@ -63,6 +63,80 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsafe"):
                 validate_public_site(copy_site)
 
+    def test_directed_all_tool_dominance_matrix_is_fail_closed(self):
+        real = next(r for r in self.root["runs"] if r["cohort"]=="real")
+        grid = real["dominance_matrix"]["metrics"]
+        for name in ("alignment", "runtime", "joint"):
+            self.assertEqual(grid[name]["Ivanka"]["IVA"]["status"],
+                             "dominates")
+            self.assertEqual(grid[name]["IVA"]["Ivanka"]["status"],
+                             "does-not-dominate")
+            self.assertEqual(grid[name]["IVA"]["IVA"]["status"], "self")
+        self.assertEqual(grid["alignment"]["Ivanka"]["IVA"]["proof"]
+                         ["zeros_nonnegative"], [])
+        for run in self.root["runs"]:
+            matrix = run["dominance_matrix"]
+            self.assertEqual(matrix["tools"], run["tools"])
+            if run["cohort"]=="synthetic":
+                for metric in ("alignment", "runtime", "joint"):
+                    for a in run["tools"]:
+                        for b in run["tools"]:
+                            expected = "self" if a==b else "incomplete"
+                            self.assertEqual(matrix["metrics"][metric][a][b]
+                                             ["status"], expected)
+            self.assertEqual(run["micall_fork_provenance"]["status"],
+                             "historical-unverified")
+
+    def test_seven_tool_soft_clip_counts_and_densities_are_reviewable(self):
+        source = SITE / "data/mapping-diagnostics.json"
+        report = json.loads(source.read_text())
+        self.assertEqual(report["status"], "INCOMPLETE")
+        self.assertEqual(report["expected_cases"], 400)
+        self.assertEqual(report["cases_measured"], 1)
+        self.assertEqual(len(report["tools"]), 7)
+        for name,tool in report["tools"].items():
+            with self.subTest(tool=name):
+                v,den = tool["values"],tool["denominators"]
+                self.assertEqual(tool["status"],"measured")
+                self.assertGreater(den["mapped_primary_records"],0)
+                self.assertAlmostEqual(
+                    v["clipped_read_fraction"],
+                    v["soft_clipped_reads"]/den["mapped_primary_records"])
+                self.assertAlmostEqual(
+                    v["soft_clipped_bases_per_1000_read_bases"],
+                    1000*v["soft_clipped_bases"]/
+                    den["mapped_primary_read_bases"])
+                self.assertIsNotNone(v["nuc_soft_clips_count"])
+                self.assertIn("source_sha256",tool)
+        page=(SITE/"index.html").read_text()
+        js=(SITE/"app.js").read_text()
+        for text in ('id="dominanceMatrix"', 'id="diagnosticMatrix"',
+                     'id="firstTool"'):
+            self.assertIn(text,page)
+        self.assertIn("function drawDominance()",js)
+        self.assertIn("function drawDiagnostics()",js)
+        self.assertNotIn('Ivanka wins</option>',page)
+
+    def test_tampering_with_matrix_or_density_fails_publication(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            copy_site=Path(tmp)/"site"
+            shutil.copytree(SITE,copy_site)
+            data=copy.deepcopy(self.root)
+            data["runs"][0]["dominance_matrix"]["metrics"]["joint"][
+                "IVA"]["Ivanka"]["status"]="dominates"
+            (copy_site/"data/runs.json").write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError,"pairwise"):
+                validate_public_site(copy_site)
+            (copy_site/"data/runs.json").write_text(json.dumps(self.root))
+            metrics=json.loads((copy_site/"data/mapping-diagnostics.json").read_text())
+            metrics["tools"]["iva"]["values"][
+                "soft_clipped_bases_per_1000_read_bases"]=0
+            (copy_site/"data/mapping-diagnostics.json").write_text(
+                json.dumps(metrics))
+            with self.assertRaisesRegex(ValueError,"density"):
+                validate_public_site(copy_site)
+
     def test_github_project_subpath_and_build(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "_site"
@@ -71,6 +145,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             self.assertTrue((path / "bench/app.js").is_file())
             self.assertTrue((path / "bench/style.css").is_file())
             self.assertTrue((path / "bench/data/runs.json").is_file())
+            self.assertTrue((path / "bench/data/mapping-diagnostics.json").is_file())
             self.assertIn('href="./bench/"', (path / "index.html").read_text())
             self.assertIn('fetch("./data/runs.json"',
                           (path / "bench/app.js").read_text())

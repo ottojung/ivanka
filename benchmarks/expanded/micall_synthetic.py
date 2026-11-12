@@ -13,6 +13,7 @@ import subprocess
 import time
 
 from benchmarks.podman_detached_lifecycle import run_detached
+from benchmarks.assembler_bench.sam_metrics import public_diagnostics
 from benchmarks.podman_full_micall import verify_ivanka_image_binding
 from .adapters import ASSEMBLERS
 from .hxb2_cohort import attestation
@@ -90,6 +91,9 @@ def attempt(case, destination, name, image, timeout):
             subprocess.TimeoutExpired) as exc:
         record["error"] = f"{type(exc).__name__}: {exc}"
     record["total_wall_seconds"] = round(time.monotonic() - started, 6)
+    # All outcomes retain available downstream diagnostics. Partial/failed
+    # artifacts do not turn into successful comparisons.
+    record["diagnostics"] = public_diagnostics(destination)
     (destination / "execution.json").write_text(
         json.dumps(record, sort_keys=True, indent=2) + "\n")
     return record
@@ -222,6 +226,12 @@ def run_manifest(proof, images, limit):
         "network": "none", "timer": TIMING_ORIGIN,
         "score": SCORE_ORIGIN,
         "instrumentation_sha256": digest(TIMER),
+        "diagnostic_sources_sha256": {
+            "sam_metrics.py": digest(
+                root.parent / "assembler_bench/sam_metrics.py"),
+            "diagnostic_metrics.py": digest(
+                root.parent / "diagnostic_metrics.py"),
+        },
         "benchmark_sources_sha256": {name: digest(root / name)
                                      for name in sources},
     }

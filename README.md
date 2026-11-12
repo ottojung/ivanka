@@ -37,6 +37,21 @@ and image build scripts (including Containerfiles). This is defense in depth:
 new adapters and downstream MiCall patches still require human code review. See
 [the assembly objective](docs/assembly-objective.md).
 
+## Required deployment intent (not yet implemented)
+
+Ivanka's final production integration must be **Rust only**: MiCall must
+invoke the Rust `ivanka` executable directly, with no Python selector,
+trimmer, tiler or wrapper. Benchmarking and testing tools may use Python;
+no Python component may participate in normal Ivanka assembly.
+
+The same direct executable, default behavior, **empty child environment**,
+and exactly `--reads1`, `--reads2`, `--output` arguments
+must be used by both MiCall and the benchmark. The previously qualified
+wrapped image is historical evidence and **does not satisfy this intent**.
+See [Rust-only execution](docs/intents/001-rust-only-execution.md) and
+[default-invocation parity](docs/intents/002-default-invocation-parity.md)
+for the precise contracts and acceptance evidence.
+
 ## Primary objective: recover the dominant viral sequence
 
 **Ivanka is not required to assemble every viral haplotype.** Its primary

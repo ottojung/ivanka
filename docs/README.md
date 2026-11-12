@@ -4,6 +4,16 @@ Start with the [project README](../README.md) and the
 [primary assembly objective](assembly-objective.md). The assembly must
 remain reference-blind and prioritize the dominant read-supported path.
 
+## Binding target execution intents
+
+- [Intent 001: Rust-only Ivanka execution](intents/001-rust-only-execution.md) —
+  native assembly, selection, trimming and tiling; MiCall invokes Rust directly.
+- [Intent 002: default, identical invocation](intents/002-default-invocation-parity.md) —
+  no environment variables or benchmark-only settings; only three input/output
+  CLI arguments, identical between MiCall and qualification.
+
+Both are **required but not yet satisfied** by the frozen wrapped image.
+
 ## Current implementation and acceptance
 
 - [Passing alpha release](releases/v0.1.0-alpha.2.md) — exact provenance

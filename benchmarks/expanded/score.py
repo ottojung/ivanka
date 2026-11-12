@@ -4,6 +4,13 @@ This module runs ONLY after all assembly processes have exited. Neither
 assembler commands nor container mounts contain the truth or its path.
 """
 from pathlib import Path
+import zlib  # noqa: F401  # Load libz before NumPy-backed alignment libraries.
+
+_REVERSE = str.maketrans("ACGTN", "TGCAN")
+
+
+def reverse_complement(seq):
+    return seq.translate(_REVERSE)[::-1]
 
 
 def read_fasta(path):
@@ -57,12 +64,18 @@ def dominant_truth_score(manifest, truth_path, fasta_path):
     aligner.mismatch_score = -1
     aligner.open_gap_score = -2
     aligner.extend_gap_score = -1
-    scores = [(aligner.score(ref, contig) / len(ref), len(contig))
+    # A DNA assembler's orientation is arbitrary: reversing a contig
+    # changes neither the reconstructed genome nor its biological validity.
+    scores = [(max(aligner.score(ref, contig),
+                   aligner.score(ref, reverse_complement(contig))) / len(ref),
+               len(contig))
               for ref in majors for contig in assembled]
     best, length = max(scores, key=lambda item: (item[0], -abs(item[1]-len(majors[0]))))
     return {
         "score": round(max(0.0, min(1.0, best)), 8),
-        "dominant_exact": any(seq in assembled for seq in majors),
+        "dominant_exact": any(
+            seq in assembled or reverse_complement(seq) in assembled
+            for seq in majors),
         "contig_count": len(assembled), "best_contig_length": length,
         "longest_contig_length": max(map(len, assembled)),
     }

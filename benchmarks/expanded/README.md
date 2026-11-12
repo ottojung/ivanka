@@ -51,12 +51,18 @@ an incomplete comparison, not rewarded with a fictitious score.
 `inverted_repeat`, `overlapping_mates`, `long_inserts`,
 `discordant_pairs`, `complex_mixture`.
 
-A full 400-case v1 cohort was generated on billy-dev at
+A full 400-case v1 cohort was regenerated on `marceline-dev` at
 `/workspace/ivanka-expanded-synthetic-v1-20261112`; its
 `cohort.json` SHA-256 is
 `dbcd7a1328e3e84c1a82d1fed7677fcbcd5e02a9a4efe230be79bc9efb372491`.
-This checks the generator itself; none of the 2,800 seven-tool synthetic
-assembly runs has yet been executed.
+This checks the generator independently on two hosts. A first
+400 × 7 *exploratory* run has now executed on `marceline-dev`, but it is
+**NOT qualified**: some competitor executions failed, the original scorer
+evaluated only one arbitrary DNA strand, and the runner included evaluator
+time in apparent assembler runtimes. Those original results are preserved
+for audit, not silently counted as valid. Both defects were fixed in the
+versioned scorer and isolated runner described below. A new complete run
+must be executed and pass every gate.
 
 The model includes correlated errors, read-cycle-specific errors,
 homopolymer one-base insertions/deletions, hard coverage gaps, technical
@@ -122,7 +128,8 @@ hidden-truth scorer. Tools are **not** silently installed and no fake
 results are used. This local runner is a *development harness*; formal
 cross-platform qualification must isolate each assembler in its own
 source- and binary-pinned container with only the reads mounted, not the
-truth. At present, those full seven container images are **not** built.
+truth. These seven source-labeled containers are built and smoke-tested on
+`marceline-dev`; their immutable IDs must be pinned for every formal run.
 
 For the real cohort, build six independently pinned compatible MiCall
 candidate images, including the direct default Rust-only Ivanka.
@@ -151,11 +158,50 @@ intentionally has no option to reduce cohorts or skip a tool in
 production. The functions support smaller test matrices only through
 explicit Python unit-test parameters.
 
+## Isolated seven-image synthetic benchmark (preferred)
+
+The mandatory synthetic path executes all seven candidates as separate,
+source-labeled images descended from the identical updated-MiCall base,
+never gives a container access to its hidden reference truth, and records
+the exact image ID and command for each run. Native Ivanka uses the exact
+ordinary three arguments with Podman's `--unsetenv-all`; no
+`IVANKA_*` environment variable, wrapper, or optional CLI flag exists
+inside that assembly call.
+
+```sh
+python3 -m benchmarks.expanded.podman_synthetic \
+  --cohort /data/expanded-synthetic \
+  --images /results/seven-image-pins.json \
+  --out /results/synthetic-isolated --jobs 10 --timeout 1800
+```
+
+Each image is pinned by its immutable full ID, the source manifest SHA256
+is checked, both input reads are mounted **read-only**, and the original
+genome/hidden-truth directory is **not mounted**. Only once the assembler
+exits does the benchmark-only Python evaluator score its FASTA. In
+particular, the known-truth global-alignment metric must evaluate **both
+DNA strand orientations**; a reverse-complemented reconstructed genome is
+scientifically identical. Recorded `seconds` excludes truth-scoring time
+but includes container startup and adapter input preprocessing. The real
+cohort separately uses in-container MiCall monotonic timing.
+
+The optional `--limit` is for development smoke tests only; the
+unmodified fail-closed gate still requires exactly 400 synthetic cases,
+all 198 real cases, and all seven tools in every case. Failed tools are
+recorded as incomplete comparisons—not converted to zero-score victories
+for Ivanka. Every output FASTA and tool image ID is retained for independent
+rescoring and reproducibility.
+
+The first exploratory all-tools run is retained on `marceline-dev` at
+`/workspace/ivanka-expanded-podman-full400-20261112`; its
+`orientation-corrected-diagnostics.jsonl` independently rescores the
+recorded FASTAs but is **not a qualified timed result**. The original
+timestamped execution records are never rewritten.
+
 ## Hard limits and next steps
 
-1. Pin and build all five newly requested external assembler executables
-   (plus baseline IVA and packaged Ivanka) and prove all seven images bind
-   to the same updated MiCall; do not assume external software is installed.
+1. Keep all seven source-attested images pinned to the exact updated-MiCall
+   base and verify executable hashes before qualification.
 2. Install these wrappers in genuine isolated containers and freeze immutable
    image SHA256s, CPU/memory limits, tool versions and profiles.
 3. Run A/B on 198 real samples plus 400 synthetic, recording per-arm

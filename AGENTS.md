@@ -6,7 +6,7 @@ and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 ## Required execution intents
 
-**All eight intent records are cumulative and binding. New requirements do
+**All eleven intent records are cumulative and binding. New requirements do
 not supersede the reference-blindness, dominant-sequence, original 198-sample
 Ψ qualification, provenance, or source-quality requirements.** See
 [the complete intent index](docs/intents/README.md).
@@ -51,6 +51,24 @@ descriptions of what the existing qualifying image already implements:
   **5% uniformly random, non-targeted substitutions**. No arbitrarily
   generated random A/C/G/T genome truths; the existing generic-random
   400-case cohort is historical and ineligible for qualification.
+- **[Intent 009: neutral assembler diagnostics and Ψ matrix](docs/intents/009-neutral-metrics-and-pairwise-dominance.md).**
+  Bench all assemblers as equal first-class candidates. Extract and
+  publish mapped-read soft-clip events, bases, read fraction and densities,
+  coverage, mapping/contig/resource/failure diagnostics with denominators
+  and explicit missingness. Provide an all-vs-all, all-r Ψ-dominance
+  matrix with evidence, incomplete/unresolved states, and no claimed
+  transitivity or privileged Ivanka baseline. These new measurements are
+  diagnostics, not replacements for the original alignment/runtime gates.
+- **[Intent 010: upstream MiCall is read-only](docs/intents/010-upstream-micall-read-only.md).**
+  **NEVER push anything to or create a PR for `github.com/cfe-lab/MiCall`**,
+  by Git, GitHub API, tooling, CI, or delegated agents. Read/fetch is fine.
+  Double-check both Git remote push destination and PR base before writes.
+- **[Intent 011: MiCall fork is canonical](docs/intents/011-ottojung-micall-fork-provenance.md).**
+  Integrate all assemblers inside `github.com/ottojung/MiCall`. **Build
+  every MiCall candidate/base container from exact fork commits**,
+  without runtime source patching; every public reproducibility link
+  must target the fork with its full immutable commit SHA.
+
 
 **Current status:** the older Python-wrapped passing image is
 historical and does not comply with Intents 001/002. The tagged

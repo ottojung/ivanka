@@ -30,7 +30,16 @@ must recover the most abundant identifiable haplotype.
   only HXB2 or random HXB2/other-subtype recombinants with optional ≤5%
   uniformly random mutations; no generic random A/C/G/T genomic truths.
 
-[All eight intents are cumulative](intents/README.md). The original
+- [Intent 009: neutral diagnostic metrics and all-pairs Ψ](intents/009-neutral-metrics-and-pairwise-dominance.md) —
+  clipped-read and CIGAR-base densities, extensive downstream MiCall
+  metrics for every tool, and an assembler-neutral Ψ-dominance matrix.
+- [Intent 010: upstream MiCall is read-only](intents/010-upstream-micall-read-only.md) —
+  never push to or create PRs for `cfe-lab/MiCall`.
+- [Intent 011: fork-only MiCall images and reproducibility](intents/011-ottojung-micall-fork-provenance.md) —
+  all assembler integrations and MiCall container builds come from exact
+  `ottojung/MiCall` commits, linked on the public Bench.
+
+[All eleven intents are cumulative](intents/README.md). The original
 scientific and numerical gates remain in force. The tagged native Rust
 alpha.3 passed the original physical-198 gate, but the mandatory
 seven-assembler benchmark, new HXB2 synthetic cohort, and published

@@ -42,6 +42,15 @@ IMAGE_SCRIPT_ROLES = {
 COPY_DIRECTIVE = re.compile(r"(?im)^\s*(?:COPY|ADD)\s+([^\n]+)")
 PYTHON_SCRIPT = re.compile(r"\.py$", re.IGNORECASE)
 
+EXTERNAL_TOOL_IMAGE_SCRIPTS = frozenset({
+    "benchmarks/expanded/adapters.py",
+    "benchmarks/expanded/micall_entrypoint.py",
+})
+EXTERNAL_TOOL_IMAGE_RECIPES = frozenset({
+    "benchmarks/expanded/images/Dockerfile.adapter",
+    "benchmarks/expanded/images/Dockerfile.haploflow",
+})
+
 
 def _copied_sources(spec):
     """Interpret Dockerfile COPY/ADD flags and JSON forms without guessing."""
@@ -85,6 +94,11 @@ def image_script_errors(name, contents, root=ROOT):
             path = root / source
             script = Path(source).name
             role = IMAGE_SCRIPT_ROLES.get(script) if Path(source).parent == Path("benchmarks") else None
+            if source in EXTERNAL_TOOL_IMAGE_SCRIPTS:
+                if name in EXTERNAL_TOOL_IMAGE_RECIPES:
+                    role = "candidate"
+                else:
+                    errors.append(f"{name}: external comparator script outside reviewed image: {source}")
             if role is None:
                 errors.append(f"{name}: unreviewed image Python script: {source}")
             elif not path.is_file():

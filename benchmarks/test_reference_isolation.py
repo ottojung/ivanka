@@ -90,6 +90,17 @@ class ReferenceIsolationTests(unittest.TestCase):
             )
             self.assertTrue(check_repository(root))
 
+    def test_reviewed_external_assembler_scripts_are_scoped_to_competitor_images(self):
+        for recipe in ("benchmarks/expanded/images/Dockerfile.adapter",
+                       "benchmarks/expanded/images/Dockerfile.haploflow"):
+            with self.subTest(recipe=recipe):
+                self.assertEqual(image_script_errors(
+                    recipe, (ROOT / recipe).read_text(), ROOT), [])
+        for script in ("adapters.py", "micall_entrypoint.py"):
+            text = f"COPY benchmarks/expanded/{script} /usr/local/bin/{script}"
+            self.assertTrue(image_script_errors(
+                "benchmarks/Dockerfile.read-backed", text, ROOT))
+
     def test_direct_rust_image_rejects_historical_python_selector(self):
         for script in ("ivanka_read_support_selector.py",
                        "ivanka_trim_unsupported.py",

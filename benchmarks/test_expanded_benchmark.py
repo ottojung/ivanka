@@ -267,6 +267,33 @@ class ExpandedPhysicalMatrixTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify_images({"iva": "a"*64})
 
+    def test_real_gate_only_accepts_rust_direct_ivanka_image(self):
+        from expanded import run_real
+        from unittest.mock import patch
+        images = {tool: f"{i+1:064x}" for i, tool in enumerate(ASSEMBLERS)}
+        images["iva"] = run_real.IVA_BASE
+        image_info = {name: {
+            "org.ottojung.expanded.assembler": name,
+        } for name in ASSEMBLERS if name != "iva"}
+        image_info["ivanka"] = {
+            "org.ottojung.ivanka.execution": "rust-direct-default-read-backed-tile512",
+        }
+        def inspect(image, template):
+            if template == "{{.Id}}":
+                return image
+            if template == "{{json .RootFS.Layers}}":
+                return json.dumps(["same-base-layer"])
+            name = next(name for name, value in images.items() if value == image)
+            return json.dumps(image_info.get(name, {}))
+        with patch.object(run_real, "inspect", side_effect=inspect):
+            run_real.verify_images(images)
+            image_info["ivanka"]["org.ottojung.ivanka.execution"] = (
+                "native-fastq-read-backed-selector-trim-island-tile512"
+            )
+            with self.assertRaisesRegex(ValueError, "direct Rust"):
+                run_real.verify_images(images)
+
+
 
 class ExpandedExecutionTests(unittest.TestCase):
     def test_actual_fake_cli_executable_and_output_checks(self):
@@ -296,6 +323,30 @@ class ExpandedExecutionTests(unittest.TestCase):
                               bins, timeout=5)
             self.assertEqual(missing["status"], "failed")
             self.assertIn("no FASTA", missing["error"])
+
+
+class ExpandedChildEnvironmentTests(unittest.TestCase):
+    def test_ivanka_is_empty_and_external_tools_get_path_only(self):
+        from expanded import adapters
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name in ("ivanka", "abyss"):
+                with self.subTest(assembler=name):
+                    binaries = {name: {program: {"path": "/bin/true"}
+                                       for program in PROGRAMS[name]}}
+                    fake = SimpleNamespace(returncode=8, stdout="", stderr="test")
+                    with patch.object(adapters.subprocess, "run", return_value=fake) as run:
+                        result = adapters.execute(
+                            name, root/"R1.fq", root/"R2.fq",
+                            root/name, binaries, timeout=4,
+                        )
+                    self.assertEqual(result["status"], "failed")
+                    expected = {} if name == "ivanka" else {
+                        "PATH": "/usr/local/bin:/usr/bin:/bin",
+                    }
+                    self.assertEqual(run.call_args.kwargs["env"], expected)
 
 
 @unittest.skipUnless(importlib.util.find_spec("Bio"),
@@ -356,3 +407,27 @@ class ExpandedRetrospectiveTests(unittest.TestCase):
         self.assertNotIn("private-sample-0",
                          json.dumps(result))
         self.assertFalse(analyze(records[:1], expected=2)["complete"])
+
+
+class ExpandedToolProfileTests(unittest.TestCase):
+    def test_profiles_are_fixed_not_tuned_from_sample_truth(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            r1, r2 = root / "r1.fq.gz", root / "r2.fq.gz"
+            r1.write_bytes(b"")
+            r2.write_bytes(b"")
+            tools = {"haploflow", "abyss", "spades"}
+            for name in tools:
+                binaries = {name: {binary: {"path": f"/usr/bin/{binary}"}
+                                   for binary in PROGRAMS[name]}}
+                work = root / name
+                work.mkdir()
+                cmd, _ = steps(name, r1, r2, work, binaries)
+                words = cmd[0]
+                if name == "haploflow":
+                    self.assertEqual(words[words.index("--strict")+1], "0")
+                elif name == "abyss":
+                    self.assertIn("B=128M", words)
+                    self.assertIn("j=2", words)
+                else:
+                    self.assertEqual(words[words.index("--phred-offset")+1], "33")

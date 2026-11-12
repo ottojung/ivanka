@@ -1,3 +1,4 @@
+#!/opt/venv/bin/python
 """Common paired FASTQ CLI for competitor tools inside pinned MiCall images.
 
 The image build installs a reviewed tool name in /etc/ivanka-expanded-tool
@@ -28,6 +29,8 @@ def run_tool(tool, reads1, reads2, output):
         run = execute(tool, reads1, reads2, Path(work)/"assembler",
                       binaries, threads=2, timeout=1780)
         if run["status"] != "success":
+            print("COMPETITOR_FAILURE_AUDIT",
+                  json.dumps(run, sort_keys=True), file=sys.stderr)
             raise RuntimeError("competitor failed: " + str(run.get("error")))
         shutil.copyfile(run["fasta"], output)
         print("EXPANDED_MICALL_ASSEMBLER", tool, "tool_sha256",

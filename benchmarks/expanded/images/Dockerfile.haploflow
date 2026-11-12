@@ -1,0 +1,24 @@
+# Pin upstream Bioconda executable by immutable OCI manifest digest.
+FROM quay.io/biocontainers/haploflow@sha256:eaf03733093a99a290d6b30af3a4b95543d9accfe63ff37851a0e5de6c02396d AS haplo
+FROM localhost/micall:newmicall-e0073cb5-base
+ARG SOURCE_COMMIT
+COPY --from=haplo /usr/local/bin/haploflow /usr/local/bin/haploflow
+COPY --from=haplo /usr/local/lib/libboost_filesystem.so.1.85.0 /usr/local/lib/libboost_filesystem.so.1.85.0
+COPY --from=haplo /usr/local/lib/libboost_program_options.so.1.85.0 /usr/local/lib/libboost_program_options.so.1.85.0
+COPY --from=haplo /usr/local/lib/libstdc++.so.6.0.33 /usr/local/lib/libstdc++.so.6.0.33
+COPY --from=haplo /usr/local/lib/libgcc_s.so.1 /usr/local/lib/libgcc_s.so.1
+RUN ln -s libstdc++.so.6.0.33 /usr/local/lib/libstdc++.so.6 && \
+    ln -s /usr/local/bin/haploflow /usr/bin/haploflow && \
+    /usr/local/bin/haploflow --help >/dev/null 2>&1
+RUN echo haploflow > /etc/ivanka-expanded-tool
+COPY benchmarks/expanded/adapters.py /usr/local/bin/adapters.py
+COPY benchmarks/expanded/micall_entrypoint.py /usr/local/bin/ivanka
+COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_micall_for_ivanka.py
+RUN /opt/venv/bin/python /tmp/patch_micall_for_ivanka.py && \
+    /opt/venv/bin/python -m py_compile /usr/local/bin/ivanka /usr/local/bin/adapters.py && \
+    chmod 755 /usr/local/bin/ivanka && \
+    rm -f /tmp/patch_micall_for_ivanka.py
+LABEL org.ottojung.expanded.assembler="haploflow"
+LABEL org.ottojung.expanded.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.expanded.micall-base="sha256:a5d4923e28f3d7b9725a375d51e34b14986bd29bdab04e8bf8f36f411141b8dd"
+LABEL org.ottojung.expanded.haploflow-upstream="sha256:eaf03733093a99a290d6b30af3a4b95543d9accfe63ff37851a0e5de6c02396d"

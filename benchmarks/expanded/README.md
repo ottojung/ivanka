@@ -73,10 +73,10 @@ bias should later be added, and untouched cases locked for validation.
 |---|---|---|
 | Ivanka | **target:** direct Rust binary, empty environment, `ivanka --reads1 R1 --reads2 R2 --output F` | `F` |
 | IVA | `iva -f R1 -r R2 -t 2 out` | `out/contigs.fasta` |
-| Haploflow | `haploflow --read-file BOTH.fastq --out out --filter 100` | `out/contigs.fa` |
+| Haploflow | `haploflow --read-file BOTH.fastq --out out --filter 100 --strict 0` | `out/contigs.fa` |
 | MEGAHIT | `megahit -1 R1 -2 R2 -t 2 -o out` | `out/final.contigs.fa` |
-| ABySS | `abyss-pe k=41 name=assembly in='R1 R2'` | `assembly-contigs.fa` |
-| SPAdes | `spades.py -1 R1 -2 R2 -t 2 -o out` | `out/contigs.fasta` |
+| ABySS | `abyss-pe k=41 B=128M j=2 name=assembly in='R1 R2'` | `assembly-contigs.fa` |
+| SPAdes | `spades.py -1 R1 -2 R2 --phred-offset 33 -t 2 -o out` | `out/contigs.fasta` |
 | Velvet | `velveth out 31 -fastq.gz -shortPaired -separate R1 R2`; `velvetg out -ins_length 270 -exp_cov auto` | `out/contigs.fa` |
 
 Haploflow accepts one FASTQ; the adapter **interleaves both original
@@ -208,3 +208,17 @@ It randomizes the order of the six full runs, but cannot alone eliminate
 cross-run host interference. An improved design should interleave tool
 executions by sample under identical resource constraints, with repeated
 timing trials and an independent confirmation of hardware comparability.
+
+## Validated external tool requirements
+
+The official Debian 12 ABySS package requires a Bloom-filter memory budget
+(`B=128M`) or MPI process count; the memory-efficient Bloom option is
+selected consistently for every sample, together with two threads. SPAdes'
+automatic PHRED offset detection cannot disambiguate constant high-quality
+synthetic FASTQ records, so `--phred-offset 33` declares the known FASTQ
+encoding for **all** samples. Haploflow's `--strict 0` enables recovery
+of lower-abundance viral strains, as documented upstream; it is fixed for
+all samples rather than tuned by the sample's truth. The five upstream
+assembler image source recipes are in `benchmarks/expanded/images/`.
+These options were fixed during interface validation, before any
+seven-way cohort comparison or selection on score outcomes.

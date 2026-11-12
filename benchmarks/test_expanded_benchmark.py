@@ -61,7 +61,7 @@ class ExpandedSyntheticTests(unittest.TestCase):
         from expanded.synthetic import rc
         with tempfile.TemporaryDirectory() as temp:
             normal = generate_case(temp, "clonal", 12, pairs=300)
-            biased = generate_case(temp, "strand_bias", 12, pairs=300)
+            generate_case(temp, "strand_bias", 12, pairs=300)
             def reverse_fraction(family):
                 source = Path(temp) / f"{family}-s012"
                 truth = (source / "hidden-truth/haplotypes.fasta").read_text().splitlines()[1]

@@ -24,6 +24,7 @@ from reference_catalog import load_micall_projects
 from diagnostic_metrics import extract as extract_diagnostics
 import milestone198
 from podman_detached_lifecycle import run_detached
+from retained_artifacts import retain_arm
 from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
                                   authenticated_postrun_cleanup, startup_database_lock,
                                   no_micall_output, podman_attempt_diagnostics)
@@ -639,8 +640,15 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
     # partial MiCall outputs happen to exist. Attempting to score them can
     # raise a secondary "Missing contigs" error and erase Podman's real
     # startup/cleanup diagnostics from the per-sample result.
-    if exitcode == 0:
-        result["metrics"] = score_outputs(folder, reference)
+    try:
+        if exitcode == 0:
+            result["metrics"] = score_outputs(folder, reference)
+    finally:
+        # MiCall writes final outputs into scratch with --keep_scratch.
+        # Promote final scientific data before removing bulky intermediate
+        # SAM, FASTQ, index and mapping-stage files. Never touch JSONL,
+        # timings, podman logs, or the other assembler's artifacts.
+        result["artifact_retention"] = retain_arm(folder)
     if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
         result["podman_lifecycle"] = "serialized_detached_v1"
     if start_retries:

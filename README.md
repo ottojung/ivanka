@@ -218,7 +218,11 @@ be counted as new molecules. Scientific release validation remains open.
 The end-to-end benchmark additionally reports separate, *nonqualifying*
 signed-power PSI comparisons for average/total read depth, concordance,
 missing exact-coverage bases, soft clips, Q15 max/fractional multi-mapping
-depth, original fragment counts and capped mapping groups. A missing artifact
+depth, original fragment counts and capped mapping groups. Exact coverage
+must include both MiCall's **full-span exact read matches** and its
+**interior-only exact matching depth** (default 70-base trim on each
+read end), as separately defined in
+[Intent 014](docs/intents/014-exact-read-coverage.md). A missing artifact
 is reported as unavailable, never as zero. Metrics can guide development
 but **cannot** alter the real-data alignment and runtime acceptance criteria.
 

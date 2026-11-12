@@ -6,7 +6,7 @@ and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 ## Required execution intents
 
-**All eleven intent records are cumulative and binding. New requirements do
+**All fifteen intent records are cumulative and binding. New requirements do
 not supersede the reference-blindness, dominant-sequence, original 198-sample
 Ψ qualification, provenance, or source-quality requirements.** See
 [the complete intent index](docs/intents/README.md).
@@ -51,14 +51,11 @@ descriptions of what the existing qualifying image already implements:
   **5% uniformly random, non-targeted substitutions**. No arbitrarily
   generated random A/C/G/T genome truths; the existing generic-random
   400-case cohort is historical and ineligible for qualification.
-- **[Intent 009: neutral assembler diagnostics and Ψ matrix](docs/intents/009-neutral-metrics-and-pairwise-dominance.md).**
-  Bench all assemblers as equal first-class candidates. Extract and
-  publish mapped-read soft-clip events, bases, read fraction and densities,
-  coverage, mapping/contig/resource/failure diagnostics with denominators
-  and explicit missingness. Provide an all-vs-all, all-r Ψ-dominance
-  matrix with evidence, incomplete/unresolved states, and no claimed
-  transitivity or privileged Ivanka baseline. These new measurements are
-  diagnostics, not replacements for the original alignment/runtime gates.
+- **[Intent 009: assembler-neutral evaluation](docs/intents/009-neutral-metrics-and-pairwise-dominance.md).**
+  Assembler Bench is a general, tool-neutral MiCall evaluation framework,
+  not an Ivanka showcase. All comparisons, plots and result views support
+  any tested pair and all contenders equally. Detailed requirements are
+  separated into independent Intents 012–015.
 - **[Intent 010: upstream MiCall is read-only](docs/intents/010-upstream-micall-read-only.md).**
   **NEVER push anything to or create a PR for `github.com/cfe-lab/MiCall`**,
   by Git, GitHub API, tooling, CI, or delegated agents. Read/fetch is fine.
@@ -68,6 +65,24 @@ descriptions of what the existing qualifying image already implements:
   every MiCall candidate/base container from exact fork commits**,
   without runtime source patching; every public reproducibility link
   must target the fork with its full immutable commit SHA.
+- **[Intent 012: comprehensive diagnostics](docs/intents/012-assembler-diagnostic-metrics.md).**
+  All assemblers must have comparable final MiCall quality, mapping,
+  coverage/depth, contig structure, runtime/resource and failure metrics,
+  with exact units, provenance, denominators and missing-data semantics.
+- **[Intent 013: CIGAR soft clipping](docs/intents/013-alignment-soft-clipping.md).**
+  Per MiCall mapping stage, count clipped primary reads, events and
+  bases plus left/right counts and normalized densities. Keep
+  `nuc.csv` clip aggregates separate from actual CIGAR clips.
+- **[Intent 014: exact read coverage](docs/intents/014-exact-read-coverage.md).**
+  Reproduce both MiCall `exact_coverage` and
+  `exact_coverage_overlapped` per-base perfect-read-match tracks,
+  default 70-base excluded ends, on a consistently selected final MAX
+  consensus, for every assembler. Publish distributions and zero breadth.
+- **[Intent 015: all-pairs Ψ dominance](docs/intents/015-pairwise-psi-dominance.md).**
+  Display a directed all-assembler Ψ dominance matrix for alignment,
+  runtime and joint evidence, proven for all r≥0 or transparently
+  marked disproven, incomplete or unresolved. Never presume
+  transitivity or an Ivanka-first baseline.
 
 
 **Current status:** the older Python-wrapped passing image is

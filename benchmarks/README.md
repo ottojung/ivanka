@@ -111,3 +111,20 @@ links. Historical images assembled with local MiCall patch scripts
 are not accepted as compliant without reconstruction from the fork.
 See [Intents 010](../docs/intents/010-upstream-micall-read-only.md)
 and [011](../docs/intents/011-ottojung-micall-fork-provenance.md).
+
+
+## General-purpose assembler diagnostics and dominance
+
+The public [Assembler Bench](../docs/intents/007-assembler-bench.md)
+must be neutral across all tools. The former combined Intent 009 is
+split into independent and cumulative contracts:
+[009 — tool neutrality](../docs/intents/009-neutral-metrics-and-pairwise-dominance.md),
+[012 — diagnostic catalog](../docs/intents/012-assembler-diagnostic-metrics.md),
+[013 — CIGAR clipping](../docs/intents/013-alignment-soft-clipping.md),
+[014 — MiCall exact read coverage](../docs/intents/014-exact-read-coverage.md),
+and [015 — all-pairs signed-power Ψ](../docs/intents/015-pairwise-psi-dominance.md).
+Exact coverage counts only full-length perfect read placements; the
+full-span and end-trimmed per-base tracks must be exposed separately.
+Missing historical diagnostic artifacts remain unavailable, not zeros.
+All measurements are diagnostics unless the unchanged numerical
+qualification intents explicitly say otherwise.

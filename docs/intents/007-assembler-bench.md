@@ -75,13 +75,21 @@ The Pages UI must provide at least:
 - Useful **filters and drill-down** by assembler, project, synthetic
   mechanism, sample, run, and failure class, with sortable per-sample
   comparisons and a clearly identified worst-regression view.
-- A directed **all-assembler × all-assembler Ψ-dominance matrix** for
-  alignment and MiCall runtime (and their joint verdict), per cohort,
-  with clear proof, counterexample, unknown and incomplete states, as
-  specified in [Intent 009](009-neutral-metrics-and-pairwise-dominance.md).
-  Also display **clipped-read/base/event counts and normalized soft-clip
-  densities**, mapping support, depth, concordance, assembly structure,
-  resource use and failure/timeout diagnostics for every available tool.
+- A directed **all-assembler × all-assembler Ψ-dominance matrix**
+  for alignment and MiCall runtime (and their joint verdict), per cohort,
+  with independently checked proof, counterexample, unresolved and
+  incomplete states, as required by
+  [Intent 015](015-pairwise-psi-dominance.md).
+- **Per-assembler diagnostic charts and review** for final MiCall
+  consensus and alignment, mapped depth, read support, contig structure,
+  resources and failures under [Intent 012](012-assembler-diagnostic-metrics.md);
+  **CIGAR-derived soft-clipped read/event/base counts and normalized
+  densities** under [Intent 013](013-alignment-soft-clipping.md); and
+  **both exact-read-coverage tracks**, uncovered fractions and
+  distributions under [Intent 014](014-exact-read-coverage.md).
+  Present everything in the [assembler-neutral framework](
+  009-neutral-metrics-and-pairwise-dominance.md), without a privileged
+  Ivanka baseline.
 - Explicit independent **Ψ(r) all-nonnegative-exponent verdicts** for
   alignment and runtime, per competitor and cohort, including evidence
   certificates, zero/minimum diagnostics or counterexamples. Include the

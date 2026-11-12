@@ -57,8 +57,11 @@ for the precise contracts and acceptance evidence.
 assembly, the dominant viral sequence, the authentic 198-sample
 ≥90%-of-IVA alignment floor, and positive alignment **and runtime Ψ(r) for
 every real r≥0**. The expanded seven-assembler benchmark adds a further
-real-plus-synthetic requirement; neither numerical gate can be waived
-because the Rust-only architecture is completed.
+real-plus-synthetic **mandatory completion gate**, effective now; neither
+numerical gate can be waived because the Rust-only architecture is completed.
+Until Ivanka passes the full seven-assembler benchmark on all 598 samples
+with both strict all-r Ψ gates per competitor and cohort, the expanded
+qualification is **NOT PASSED**, regardless of previous IVA-only results.
 
 ## Primary objective: recover the dominant viral sequence
 
@@ -391,7 +394,7 @@ evidence. See [the complete qualification boundary](
 docs/read-backed-selection-experiment.md#qualification-boundary-and-reproducible-rebuilds)
 and [the source-pinned image builder](scripts/build_read_backed_image.sh).
 
-**New benchmark under development:** The
+**Required new benchmark (NOT YET PASSED):** The
 [expanded seven-assembler suite](benchmarks/expanded/README.md) includes
 400 heterogeneous synthetic cases beside the 198 real samples and will
 require Ivanka to beat IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet

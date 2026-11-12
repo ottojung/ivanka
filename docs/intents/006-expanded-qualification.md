@@ -1,10 +1,12 @@
 # Intent 006: Beat the additional assemblers on real and synthetic data
 
-**Status: additional, future numerical gate; no seven-way pass claimed.**
+**Status: REQUIRED completion and release gate, effective immediately; not yet passed.**
 
-The enhanced benchmark **adds to**, and does not replace,
-[Intent 005](005-physical-198-qualification.md). Continue requiring the
-original authentic 198-sample IVA comparison and its strict criteria.
+The enhanced benchmark is **mandatory for all future claims that Ivanka
+is finished, benchmark-qualified, or ready for release**. It **adds to**,
+and does not replace, [Intent 005](005-physical-198-qualification.md).
+The original authentic 198-sample IVA gate and its strict criteria remain
+independently binding. A prior IVA-only pass is no longer sufficient.
 
 ## Required comparison
 
@@ -48,5 +50,11 @@ Retain the original reference-blindness and dominant-consensus objectives.
 
 The detailed current proposal and its implementation status are in
 [the expanded benchmark README](../../benchmarks/expanded/README.md).
-**This is a binding target for future qualification, not an assertion
-that all competing tools have been run or beaten.**
+**Completion predicate:** The canonical expanded-gate result must certify
+**598/598 distinct samples** (198 unchanged real plus 400 predeclared
+synthetic), with an attributable outcome for **all seven assemblers per
+sample**, all per-sample floors satisfied, and the twelve independent
+competitor-by-cohort comparisons passing **both** strict all-r Ψ criteria.
+The 198-only gate must also independently pass under Intent 005. A failed
+or incomplete seven-way run is a blocker, not a waiver or an opportunity
+to silently downgrade the gate. **No seven-way pass is currently claimed.**

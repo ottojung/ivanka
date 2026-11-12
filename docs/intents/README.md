@@ -17,7 +17,7 @@ seven-way gate is not optional or deferred.
 | [005 — authentic 198-sample qualification](005-physical-198-qualification.md) | ≥90% IVA per sample, no failures/timeouts, positive alignment and runtime signed-power Ψ(r) for every real r≥0 with genuine pinned MiCall inputs | Binding now; the previous passing *wrapped* image is historical, not a pass for 001/002 |
 | [006 — expanded seven-assembler qualification](006-expanded-qualification.md) | 198 original real + 400 diverse synthetic samples; beat all six competitors with strict, separate, all-r alignment and runtime gates | **Required now for completion/release; not yet passed** |
 | [007 — public MiCall Assembler Bench](007-assembler-bench.md) | Reusable MiCall-integrated multi-assembler testing, independent review, versioned results publicly navigable on Ivanka GitHub Pages under `/bench/` | **Required; not yet built/published** |
-| [008 — HXB2-derived synthetic truth](008-hxb2-synthetic-truth.md) | HXB2 or random HXB2/other-HIV-subtype recombinants, optionally ≤5% uniformly random noncluster-targeted substitutions; no random A/C/G/T truth | **Required; current legacy synthetic cohort ineligible** |
+| [008 — HXB2-derived synthetic truth](008-hxb2-synthetic-truth.md) | HXB2 or random HXB2/other-HIV-subtype recombinants, optionally ≤5% uniformly random noncluster-targeted substitutions; no random A/C/G/T truth | **HXB2 generator and 400-case cohort implemented; full enhanced gate remains unpassed** |
 
 ## Rules for changes and claims
 

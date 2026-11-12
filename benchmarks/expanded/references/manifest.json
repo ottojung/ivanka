@@ -1,0 +1,26 @@
+{
+  "accessions": {
+    "K03455.1": {
+      "origin": "https://www.ncbi.nlm.nih.gov/nuccore/K03455.1",
+      "sha256": "47158f89c4c96bbe6690d1b5808b18cbd5768156042c07487c5d8c07ac3d554d",
+      "subtype": "B"
+    },
+    "MH705157.1": {
+      "origin": "https://www.ncbi.nlm.nih.gov/nuccore/MH705157.1",
+      "sha256": "69ffcc27d7f25a0575f6aeaeac9d1e11c36daf745dfc4790756334fa2e86a4b4",
+      "subtype": "A"
+    },
+    "U46016.1": {
+      "origin": "https://www.ncbi.nlm.nih.gov/nuccore/U46016.1",
+      "sha256": "a6f5564d41d8d22b159b5242969f7e133a6d9577be2d325fb7f479a59aabaaae",
+      "subtype": "C"
+    }
+  },
+  "alignment": {
+    "file": "hxb2-subtypes-aligned.fasta",
+    "method": "Biopython PairwiseAligner global, pairwise onto HXB2, union gaps; +2/-1 gap-open -7 extend -1",
+    "sha256": "2975b20cd0798e7110f570ab67b761a2cc4f596b1e7b638e91308721c9daa191"
+  },
+  "schema": "ivanka.hxb2.reference_panel.v1",
+  "source": "NCBI GenBank nucleotide, unmodified fasta as retrieved 2026-11-12"
+}

@@ -3,8 +3,10 @@
 **Status:** public, privacy-safe report implementation for the original
 198-sample MiCall benchmark and the disqualified historical synthetic
 diagnostic. The **expanded seven-way gate is not qualified**. The new
-HXB2-derived synthetic cohort and integrated seven-assembler comparisons
-remain mandatory work under Intents 006–008.
+HXB2-derived 400-case cohort is now generated with pinned, replayable
+ancestry; integrated seven-assembler MiCall execution, validated numeric
+gates and a public result for this cohort remain mandatory work under
+Intents 006–008.
 
 ## Source-of-truth and safety
 

@@ -1,0 +1,77 @@
+"""Create or verify an HXB2-anchored 25-family viral benchmark cohort."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+from .hxb2_truth import haplotypes, validate, references
+from .synthetic import FAMILIES, generate_cohort, fingerprint
+
+
+def verify_cohort(directory, *, expected=400):
+    directory = Path(directory)
+    manifest = json.loads((directory / "cohort.json").read_text())
+    if (manifest.get("schema") != "ivanka.expanded.cohort.hxb2.v1"
+            or len(manifest["cases"]) != expected
+            or manifest.get("samples") != expected
+            or set(manifest["families"]) != set(FAMILIES)
+            or len({x["id"] for x in manifest["cases"]}) != expected):
+        raise ValueError("wrong HXB2 synthetic cohort schema or count")
+    for row in manifest["cases"]:
+        case = directory / row["id"]
+        if not validate(case):
+            raise ValueError("invalid HXB2 truth")
+        actual = json.loads((case / "manifest.json").read_text())["sha256"]
+        if actual != row["sha256"]:
+            raise ValueError("case provenance does not match cohort")
+    return fingerprint(directory / "cohort.json")
+
+
+def attestation(directory, *, expected=400):
+    """Provide a deterministic digest of a fully replay-validated cohort."""
+    digest = verify_cohort(directory, expected=expected)
+    panel = fingerprint(Path(__file__).parent / "references/manifest.json")
+    material = (digest + panel + "ivanka.expanded.hxb2_ancestry.v1").encode()
+    return {
+        "schema": "ivanka.hxb2_truth_validation.v1",
+        "valid": True, "samples_validated": expected,
+        "cohort_sha256": digest,
+        "reference_manifest_sha256": panel,
+        "verification_sha256": hashlib.sha256(material).hexdigest(),
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("directory", type=Path)
+    parser.add_argument("--seeds", type=int, default=16)
+    parser.add_argument("--pairs", type=int, default=900)
+    parser.add_argument("--verify-only", action="store_true")
+    parser.add_argument("--certificate", type=Path,
+                        help="write a strict independent validation attestation")
+    args = parser.parse_args()
+    if args.verify_only:
+        proof = attestation(args.directory, expected=25 * args.seeds)
+        if args.certificate:
+            with args.certificate.open("x") as output:
+                json.dump(proof, output, sort_keys=True, indent=2)
+                output.write("\n")
+        print("HXB2_COHORT_VALIDATED", 25 * args.seeds,
+              proof["cohort_sha256"])
+        return
+    if args.seeds not in range(1, 129) or args.pairs < 20:
+        parser.error("seeds must be 1..128 and pairs at least 20")
+    references()
+    manifest = generate_cohort(args.directory, args.seeds, args.pairs,
+                               truth_model=haplotypes)
+    proof = attestation(args.directory, expected=manifest["samples"])
+    if args.certificate:
+        with args.certificate.open("x") as output:
+            json.dump(proof, output, sort_keys=True, indent=2)
+            output.write("\n")
+    print("HXB2_COHORT_CREATED_AND_VALIDATED", manifest["samples"],
+          proof["cohort_sha256"])
+
+
+if __name__ == "__main__":
+    main()

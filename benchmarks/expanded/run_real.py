@@ -41,11 +41,12 @@ def verify_images(images):
         if name == "iva":
             continue
         labels = json.loads(inspect(image, "{{json .Config.Labels}}"))
-        label = labels.get("org.ottojung.expanded.assembler")
-        # The first-party Ivanka image predates this new suite's label.
-        if label != name and not (name == "ivanka"
-              and labels.get("org.ottojung.ivanka.execution")
-                  == "native-fastq-read-backed-selector-trim-island-tile512"):
+        if name == "ivanka":
+            if labels.get("org.ottojung.ivanka.execution") != (
+                "rust-direct-default-read-backed-tile512"
+            ):
+                raise ValueError("the Ivanka image must execute direct Rust")
+        elif labels.get("org.ottojung.expanded.assembler") != name:
             raise ValueError(f"{name}: image lacks verified tool-binding label")
 
 

@@ -267,6 +267,33 @@ class ExpandedPhysicalMatrixTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify_images({"iva": "a"*64})
 
+    def test_real_gate_only_accepts_rust_direct_ivanka_image(self):
+        from expanded import run_real
+        from unittest.mock import patch
+        images = {tool: f"{i+1:064x}" for i, tool in enumerate(ASSEMBLERS)}
+        images["iva"] = run_real.IVA_BASE
+        image_info = {name: {
+            "org.ottojung.expanded.assembler": name,
+        } for name in ASSEMBLERS if name != "iva"}
+        image_info["ivanka"] = {
+            "org.ottojung.ivanka.execution": "rust-direct-default-read-backed-tile512",
+        }
+        def inspect(image, template):
+            if template == "{{.Id}}":
+                return image
+            if template == "{{json .RootFS.Layers}}":
+                return json.dumps(["same-base-layer"])
+            name = next(name for name, value in images.items() if value == image)
+            return json.dumps(image_info.get(name, {}))
+        with patch.object(run_real, "inspect", side_effect=inspect):
+            run_real.verify_images(images)
+            image_info["ivanka"]["org.ottojung.ivanka.execution"] = (
+                "native-fastq-read-backed-selector-trim-island-tile512"
+            )
+            with self.assertRaisesRegex(ValueError, "direct Rust"):
+                run_real.verify_images(images)
+
+
 
 class ExpandedExecutionTests(unittest.TestCase):
     def test_actual_fake_cli_executable_and_output_checks(self):

@@ -25,7 +25,7 @@ fn rejects_flag_without_argument() {
 }
 
 #[test]
-fn invalid_seed_budget_is_an_error_not_a_panic() {
+fn environment_seed_budget_cannot_tune_the_assembler() {
     let case = Fixture::new();
     let result = super::super::support::command()
         .env("IVANKA_BENCH_PRIMARY_SEEDS", "not-a-number")
@@ -37,8 +37,10 @@ fn invalid_seed_budget_is_an_error_not_a_panic() {
         .arg(case.path("out.fasta"))
         .output()
         .unwrap();
-    assert!(!result.status.success());
+    assert!(result.status.success());
     let stderr = String::from_utf8_lossy(&result.stderr);
-    assert!(stderr.contains("IVANKA_BENCH_PRIMARY_SEEDS"), "{stderr}");
-    assert!(!stderr.contains("panicked"), "{stderr}");
+    assert!(
+        stderr.contains("IVANKA_SEED_BUDGET primary=50 rescue=20"),
+        "{stderr}"
+    );
 }

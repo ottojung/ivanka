@@ -1,6 +1,6 @@
 # Intent 002: Default Ivanka invocation is identical in MiCall and benchmarks
 
-**Status: required target; not yet proven by the complete benchmark.**
+**Status: direct default implementation and invocation checks available; full qualification pending.**
 
 ## Contract
 
@@ -54,11 +54,12 @@ invocation contract.
 
 ## Scope and transition
 
-Current Ivanka has native budget/environment overrides and the packaged
-MiCall candidate still routes assembly through a Python selector. These
-exist for historical experiments but **do not meet this intent**. Remove
-runtime dependence on their tuning mechanisms and qualify the Rust-only
-implementation before claiming this contract is satisfied. Do not alter the
+The native Rust candidate uses built-in 50/20 seed budgets and read-backed
+postselection with no environment-controlled algorithm. MiCall launches
+the Rust ELF by absolute path, with `env={}` and only the three reviewed
+arguments. Historical wrapped images do **not** meet this intent;
+implementation tests and byte-identical output parity cannot substitute
+for the still-required physical and expanded numerical qualification. Do not alter the
 previously passing release or re-label its results as proof of the new default.
 
 See [Intent 001](001-rust-only-execution.md) for the Rust-only execution

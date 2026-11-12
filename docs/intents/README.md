@@ -9,8 +9,8 @@ objectives and gates. The seven-way gate is not optional or deferred.
 
 | Intent | Binding requirement | Status |
 |---|---|---|
-| [001 — Rust-only production execution](001-rust-only-execution.md) | The entire read-to-FASTA implementation is Rust; MiCall directly invokes its binary | Required; not yet satisfied |
-| [002 — unconfigured, identical invocation](002-default-invocation-parity.md) | Empty child environment, exactly `--reads1`, `--reads2`, `--output`, built-in defaults, same execution under MiCall and the benchmark | Required; not yet satisfied |
+| [001 — Rust-only production execution](001-rust-only-execution.md) | The entire read-to-FASTA implementation is Rust; MiCall directly invokes its binary | Required; implemented in candidate, qualification pending |
+| [002 — unconfigured, identical invocation](002-default-invocation-parity.md) | Empty child environment, exactly `--reads1`, `--reads2`, `--output`, built-in defaults, same execution under MiCall and the benchmark | Required; implemented in candidate, qualification pending |
 | [003 — reference blindness and evidence](003-reference-blindness.md) | No known/reference-derived genomes, reference panel, or scoring feedback influence assembly or contig selection | Binding now; continue enforcing |
 | [004 — dominant read-supported consensus](004-dominant-sequence.md) | Prioritize defensible dominant sequence and original read-pair integrity; no invented phase or mandatory exhaustive minor haplotypes | Binding now; continue enforcing |
 | [005 — authentic 198-sample qualification](005-physical-198-qualification.md) | ≥90% IVA per sample, no failures/timeouts, positive alignment and runtime signed-power Ψ(r) for every real r≥0 with genuine pinned MiCall inputs | Binding now; the previous passing *wrapped* image is historical, not a pass for 001/002 |

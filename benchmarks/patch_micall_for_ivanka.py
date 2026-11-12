@@ -31,10 +31,10 @@ def run_subprocess(fastq1: Path, fastq2: Path, merged_contigs_csv: Optional[Path
         shutil.rmtree(existing, ignore_errors=True)
     tmp_dir = Path(mkdtemp(dir=work_dir, prefix="assembly_"))
     output = tmp_dir / "ivanka_contigs.fasta"
-    command = ["ivanka", "--reads1", str(fastq1),
+    command = ["/usr/local/bin/ivanka", "--reads1", str(fastq1),
                "--reads2", str(fastq2), "--output", str(output)]
     logger.info("Running Ivanka using paired reads only.")
-    subprocess.run(command, check=True, cwd=tmp_dir)
+    subprocess.run(command, check=True, cwd=tmp_dir, env={})
     if not output.is_file():
         raise RuntimeError("Ivanka returned success but wrote no FASTA")
     return output

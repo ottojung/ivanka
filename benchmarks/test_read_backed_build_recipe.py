@@ -1,5 +1,7 @@
 """The frozen run's container settings must be explicit and reviewable."""
 from pathlib import Path
+import os
+import tempfile
 import subprocess
 import unittest
 
@@ -17,20 +19,18 @@ class ReadBackedBuildRecipeTests(unittest.TestCase):
             'org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"', recipe,
         )
 
-    def test_qualified_selection_defaults_are_in_code(self):
-        rust = (ROOT / "src/assembler/run_seed/assembly/experiment_budget.rs").read_text()
-        selector = (ROOT / "benchmarks/ivanka_read_support_selector.py").read_text()
-        self.assertIn('validate(primary.as_deref(), 50,', rust)
-        self.assertIn('validate(rescue.as_deref(), 20,', rust)
-        for setting in (
-            'os.environ.get("IVANKA_POSTSELECT_CONTIGS", "1")',
-            'os.environ.get("IVANKA_SUPPORT_PAIRS", "80000")',
-            'os.environ.get("IVANKA_TRIM_UNSUPPORTED_TERMINI", "1")',
-            'os.environ.get("IVANKA_TRIM_SUPPORTED_ISLAND", "1")',
-            'os.environ.get("IVANKA_READ_BACKED_TILE_SPAN", "2000")',
-            'os.environ.get("IVANKA_READ_BACKED_TILE_OVERLAP", "512")',
-        ):
-            self.assertIn(setting, selector)
+    def test_rust_default_executes_read_backed_selection(self):
+        budget = (ROOT / "src/assembler/run_seed/assembly/experiment_budget.rs").read_text()
+        finish = (ROOT / "src/assembler/run/write_results.rs").read_text()
+        selector = (ROOT / "src/assembler/run/read_backed/mod.rs").read_text()
+        recipe = (ROOT / "benchmarks/Dockerfile.read-backed").read_text()
+        self.assertIn("let limits = (50, 20);", budget)
+        self.assertNotIn("std::env", budget)
+        self.assertIn("read_backed::write(out, contigs, reads)", finish)
+        self.assertIn("tiling::partition", selector)
+        self.assertIn("/usr/local/bin/ivanka", recipe)
+        self.assertNotIn("/usr/local/bin/ivanka-native", recipe)
+        self.assertNotIn("COPY benchmarks/ivanka_read_support_selector.py", recipe)
 
     def test_build_script_pins_base_and_source(self):
         script = ROOT / "scripts/build_read_backed_image.sh"
@@ -44,9 +44,17 @@ class ReadBackedBuildRecipeTests(unittest.TestCase):
 
     def test_wrong_source_tag_is_rejected_before_any_build(self):
         script = ROOT / "scripts/build_read_backed_image.sh"
-        proc = subprocess.run(
-            ["sh", str(script), "localhost/micall:ivanka-read-backed-bad"],
-            text=True, capture_output=True, check=False,
-        )
+        with tempfile.TemporaryDirectory() as folder:
+            # The test must not depend on a Git worktree mounted into a
+            # container at the original absolute host path.
+            fake_git = Path(folder) / "git"
+            fake_git.write_text("#!/bin/sh\necho 123456789abc123456789abc123456789abc12345678\n")
+            fake_git.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = folder + os.pathsep + environment.get("PATH", "")
+            proc = subprocess.run(
+                ["sh", str(script), "localhost/micall:ivanka-read-backed-bad"],
+                env=environment, text=True, capture_output=True, check=False,
+            )
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("Image tag must start", proc.stderr)

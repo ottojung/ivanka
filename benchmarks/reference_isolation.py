@@ -78,6 +78,10 @@ def image_script_errors(name, contents, root=ROOT):
                 errors.append(f"{name}: broad COPY would bypass assembler review")
             if not PYTHON_SCRIPT.search(source):
                 continue
+            if (Path(name).name == "Dockerfile.read-backed"
+                    and Path(source).name not in (
+                        "patch_micall_for_ivanka.py", "verify_ivanka_binding.py")):
+                errors.append(f"{name}: Rust Ivanka image cannot ship a Python selector: {source}")
             path = root / source
             script = Path(source).name
             role = IMAGE_SCRIPT_ROLES.get(script) if Path(source).parent == Path("benchmarks") else None
@@ -99,6 +103,8 @@ FORBIDDEN_IMAGE_COPY = re.compile(
 
 
 def assembler_source_errors(name, contents):
+    if re.search(r"(?:std::env::|env::)var(?:_os)?\s*\(", contents):
+        return [f"{name}: runtime environment tuning is forbidden"]
     found = FORBIDDEN_ASSEMBLER.search(contents)
     return [f"{name}: assembler may not use known references ({found.group()})"] if found else []
 
@@ -156,8 +162,33 @@ def adapter_contract_errors(source):
         return ["Assembler command no longer has a statically inspectable interface"]
     tokens = [elt.value for elt in calls[0].value.elts
               if isinstance(elt, ast.Constant) and isinstance(elt.value, str)]
-    if tokens != ["ivanka", "--reads1", "--reads2", "--output"]:
+    if tokens != ["/usr/local/bin/ivanka", "--reads1", "--reads2", "--output"]:
         return [f"Assembler receives unexpected input parameters: {tokens}"]
+    runs = [node for node in ast.walk(function)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "subprocess"
+            and node.func.attr == "run"]
+    if len(runs) != 1:
+        return ["Exactly one direct Ivanka subprocess required"]
+    environments = [kw.value for kw in runs[0].keywords if kw.arg == "env"]
+    if len(environments) != 1 or not isinstance(environments[0], ast.Dict) or environments[0].keys:
+        return ["Ivanka must launch with an empty child environment"]
+    if not runs[0].args or not isinstance(runs[0].args[0], ast.Name) or runs[0].args[0].id != "command":
+        return ["Ivanka subprocess must execute the exact reviewed command"]
+    writes = [n for n in ast.walk(function)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+              and isinstance(n.func.value, ast.Name)
+              and n.func.value.id == "command"
+              and n.func.attr in ("append", "extend", "insert", "pop", "remove")]
+    writes += [n for n in ast.walk(function)
+               if isinstance(n, (ast.AugAssign, ast.Assign)) and
+               any(isinstance(t, ast.Name) and t.id == "command"
+                   for t in ([n.target] if isinstance(n, ast.AugAssign) else n.targets))
+               and n not in calls]
+    if writes:
+        return ["Ivanka command is mutated after its reviewed definition"]
     return []
 
 

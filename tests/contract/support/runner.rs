@@ -3,15 +3,17 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 pub fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(name)
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    if name.ends_with("_expected.fa") || name.ends_with("_default_read_backed.fa") {
+        root.join("expected").join(name)
+    } else {
+        root.join(name)
+    }
 }
 
 pub fn command() -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_ivanka"));
-    cmd.env("IVANKA_BENCH_PRIMARY_SEEDS", "6")
-        .env("IVANKA_BENCH_RESCUE_SEEDS", "3");
+    cmd.env_clear();
     cmd
 }
 

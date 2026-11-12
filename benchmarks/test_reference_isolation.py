@@ -72,9 +72,9 @@ class ReferenceIsolationTests(unittest.TestCase):
     def test_default_adapter_requires_review_before_automatically_forwarding_seeds(self):
         source = (ROOT / "benchmarks/patch_micall_for_ivanka.py").read_text()
         modified = source.replace(
-            'subprocess.run(command, check=True, cwd=tmp_dir)',
+            'subprocess.run(command, check=True, cwd=tmp_dir, env={})',
             'command.extend(["--seeds", str(merged_contigs_csv)])\n'
-            '    subprocess.run(command, check=True, cwd=tmp_dir)',
+            '    subprocess.run(command, check=True, cwd=tmp_dir, env={})',
         )
         self.assertTrue(adapter_contract_errors(modified))
 
@@ -89,6 +89,18 @@ class ReferenceIsolationTests(unittest.TestCase):
                 "def choose(c, references): return reference_panel(c)"
             )
             self.assertTrue(check_repository(root))
+
+    def test_direct_rust_image_rejects_historical_python_selector(self):
+        for script in ("ivanka_read_support_selector.py",
+                       "ivanka_trim_unsupported.py",
+                       "ivanka_read_tiling.py"):
+            recipe = f"COPY benchmarks/{script} /usr/local/bin/{script}"
+            self.assertTrue(image_script_errors(
+                "benchmarks/Dockerfile.read-backed", recipe, ROOT))
+
+    def test_rust_env_tuning_is_forbidden(self):
+        self.assertTrue(assembler_source_errors(
+            "src/assembler/some_module.rs", 'let n = std::env::var("IVANKA_BUDGET");'))
 
     def test_unknown_script_copied_into_image_fails_closed(self):
         for recipe in ("Dockerfile.candidate", "Containerfile.experimental"):

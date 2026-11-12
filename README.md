@@ -37,6 +37,38 @@ and image build scripts (including Containerfiles). This is defense in depth:
 new adapters and downstream MiCall patches still require human code review. See
 [the assembly objective](docs/assembly-objective.md).
 
+## Required deployment intent (Rust implementation available; qualification pending)
+
+The standard `ivanka` executable now implements original-read-backed
+selection, trimming and tiling in **Rust**. MiCall launches this Rust
+executable directly, without Python selector, trimmer, tiler or wrapper.
+Python remains confined to MiCall itself and benchmark/testing tools;
+no Python component participates in Ivanka's assembly logic.
+
+MiCall passes an **empty Ivanka child environment** and exactly
+`--reads1`, `--reads2`, `--output`, using the same default
+executable and algorithm as the benchmark. The old Python-wrapped
+passing image is historical evidence, **not qualification** for the new
+Rust-only execution path. The new candidate requires fresh physical
+and expanded benchmark results before any completion claim.
+A complete, byte-identical [198-real-sample Rust-versus-wrapper
+output parity report](docs/rust-direct-output-parity.md) records
+implementation equivalence, not an independent numerical benchmark pass.
+See [Rust-only execution](docs/intents/001-rust-only-execution.md) and
+[default-invocation parity](docs/intents/002-default-invocation-parity.md)
+for the precise contracts and acceptance evidence.
+
+**These are additions, not substitutes** for Ivanka's
+[complete set of binding intents](docs/intents/README.md): reference-blind
+assembly, the dominant viral sequence, the authentic 198-sample
+≥90%-of-IVA alignment floor, and positive alignment **and runtime Ψ(r) for
+every real r≥0**. The expanded seven-assembler benchmark adds a further
+real-plus-synthetic **mandatory completion gate**, effective now; neither
+numerical gate can be waived because the Rust-only architecture is completed.
+Until Ivanka passes the full seven-assembler benchmark on all 598 samples
+with both strict all-r Ψ gates per competitor and cohort, the expanded
+qualification is **NOT PASSED**, regardless of previous IVA-only results.
+
 ## Primary objective: recover the dominant viral sequence
 
 **Ivanka is not required to assemble every viral haplotype.** Its primary
@@ -54,21 +86,30 @@ proposing contig selection, pruning or synthetic tests. The existing
 198-sample alignment/runtime qualification remains unchanged.
 
 
-## Current development milestone: benchmark first
+## Current development milestone: both benchmark gates must pass
 
-**The only pass/fail target during this development stage is the existing
-198-sample MiCall benchmark.** Produce a verified end-to-end run with the
-unchanged 33-reference best-final-MAX alignment scoring, each sample at least
-90% of IVA, the 1,800-second completion limit, and both alignment and runtime
-signed-power Psi(r) strictly positive for every r >= 0. No extra
-minority-haplotype recall, synthetic phase, clinical-release, diagnostic
-metric or contig-count gate may be added to this milestone.
+**Ivanka is not complete until BOTH required numerical gates pass**, under
+the Rust-only, reference-blind, unconfigured MiCall invocation contract:
 
-Synthetic tests, haplotype analysis, coverage and genotype diagnostics can
-help explain results, but **must not block benchmark-focused iterations**
-or be presented as additional criteria for benchmark success. Maintain
-honest paired input, image and output provenance; never fabricate or
-relabel results. Clinical/production readiness is a distinct future decision.
+- **Original physical 198:** 33-reference best-final-MAX alignment,
+  each sample ≥90% of IVA, ≤1,800-second containers, and strictly positive
+  alignment and runtime signed-power Ψ(r) for every real r≥0.
+- **Enhanced seven-assembler benchmark:** the unchanged 198 real samples
+  plus 400 diverse synthetic cases, against IVA, Haploflow, MEGAHIT,
+  ABySS, SPAdes and Velvet. On both cohorts separately, Ivanka must beat
+  **each** competitor on alignment/known-truth and runtime all-r Ψ,
+  meeting the ≥90%-of-best-competitor per-sample alignment floor.
+
+Missing, failed or partial runs cannot qualify. Neither a historical
+IVA-only pass nor a synthetic-only pass suffices. These requirements are
+**active now**, not exploratory or deferred. See
+[the cumulative intent records](docs/intents/README.md).
+
+Other experiments—including minority-haplotype reconstruction, separate
+phase studies, coverage diagnostics and synthetic investigations outside
+the fixed 400-sample cohort—may guide changes without adding further
+performance gates. Preserve paired input and result provenance. A benchmark
+pass is not a separate clinical production authorization.
 
 ## CLI
 
@@ -368,7 +409,7 @@ evidence. See [the complete qualification boundary](
 docs/read-backed-selection-experiment.md#qualification-boundary-and-reproducible-rebuilds)
 and [the source-pinned image builder](scripts/build_read_backed_image.sh).
 
-**New benchmark under development:** The
+**Required new benchmark (NOT YET PASSED):** The
 [expanded seven-assembler suite](benchmarks/expanded/README.md) includes
 400 heterogeneous synthetic cases beside the 198 real samples and will
 require Ivanka to beat IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet

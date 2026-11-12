@@ -1,8 +1,10 @@
-# Expanded seven-assembler benchmark — draft v2
+# Expanded seven-assembler benchmark — mandatory v2 acceptance gate
 
-**A separate, stricter future acceptance gate.** The existing frozen
-198-sample IVA comparison is immutable historical evidence, not secretly
-replaced by this proposal. **No seven-way pass has yet been established.**
+**This benchmark is required now for Ivanka completion and future releases.**
+It is an additional strict qualification, **not** a replacement for the
+original 198-sample IVA comparison or its all-r Ψ conditions. Every one of
+the 598 cases and all seven tools must be accounted for; incomplete runs
+**do not pass**. **No seven-way pass has yet been established.**
 
 ## Scope and acceptance
 
@@ -69,7 +71,7 @@ bias should later be added, and untouched cases locked for validation.
 
 | Tool | Input CLI | Expected output |
 |---|---|---|
-| Ivanka | packaged default `ivanka --reads1 R1 --reads2 R2 --output F` | `F` |
+| Ivanka | **target:** direct Rust binary, empty environment, `ivanka --reads1 R1 --reads2 R2 --output F` | `F` |
 | IVA | `iva -f R1 -r R2 -t 2 out` | `out/contigs.fasta` |
 | Haploflow | `haploflow --read-file BOTH.fastq --out out --filter 100 --strict 0` | `out/contigs.fa` |
 | MEGAHIT | `megahit -1 R1 -2 R2 -t 2 -o out` | `out/final.contigs.fa` |
@@ -100,8 +102,11 @@ python3 -m benchmarks.expanded.synthetic /data/expanded-synthetic --seeds 16 --p
 ```
 
 Pin every installed assembler executable and check the resulting hashes into
-a frozen run manifest (do not substitute the native Rust-only binary for
-the **packaged read-backed Ivanka entry point**):
+a frozen run manifest. **Qualification requires the default Rust-only
+Ivanka binary invoked directly by MiCall**; the historical packaged Python
+read-backed wrapper is not eligible. The existing local harness remains
+exploratory until its Ivanka executable identity and MiCall child environment
+are verified against Intents 001 and 002:
 
 ```sh
 python3 -m benchmarks.expanded.pin_tools --out /results/binary-pins.json
@@ -120,8 +125,8 @@ source- and binary-pinned container with only the reads mounted, not the
 truth. At present, those full seven container images are **not** built.
 
 For the real cohort, build six independently pinned compatible MiCall
-candidate images (including packaged default Ivanka). They must all share
-the exact updated-MiCall base and implement the same paired-input
+candidate images, including the direct default Rust-only Ivanka.
+They must all share the exact updated-MiCall base and implement the same paired-input
 contract. Record the full image IDs in a seven-key JSON manifest, then
 use `python3 -m benchmarks.expanded.run_real --images IMAGES.json
 --data /data/original-198 --out /results/real-raw --jobs 10`.
@@ -189,7 +194,9 @@ A competitor container must contain both
 exactly one of `haploflow`, `megahit`, `abyss`, `spades`, `velvet`.
 The matching binaries and libraries must be installed in the immutable
 image, and `org.ottojung.expanded.assembler` must identify that tool.
-The separate ordinary Ivanka image is **not** replaced with this adapter.
+The direct Rust Ivanka executable **must not** be replaced by this
+Python adapter; it exists solely for the six external competitors in the
+benchmark infrastructure. Any wrapper-based Ivanka result is unqualified.
 
 Future image recipes must explicitly extend the fail-closed reviewed-source
 list in `reference_isolation.py`; the old guard refuses unreviewed Python

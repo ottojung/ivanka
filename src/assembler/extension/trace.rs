@@ -1,6 +1,6 @@
 use super::summarize;
 pub(super) fn stalled(seq: &[u8], right_reads: &[Vec<u8>], left_reads: &[Vec<u8>]) {
-    if std::env::var_os("IVANKA_TRACE_EXTENSIONS").is_some() {
+    if cfg!(debug_assertions) {
         eprintln!(
             concat!(
                 "EXTENSION_STOP length={} right_reads={} right_bases={:?} ",

@@ -51,3 +51,35 @@ It is an additional future gate, **not** a retroactive replacement of the
 frozen 198-sample result. The [implementation-based explanation of Ivanka
 versus IVA](../docs/assembler-comparison-20261112.md) identifies possible
 causes and mandatory ablation experiments.
+
+
+## Retained artifacts (no persistent MiCall scratch)
+
+Each MiCall arm runs with `--keep_scratch` only so the native MiCall final
+CSV and FASTA products are available for verification. Once MiCall stops and
+`score_outputs` has extracted every reported metric, `retained_artifacts.py`
+**moves** final CSVs (including `nuc.csv`, `conseq.csv`, coverage and contig
+reports), terminal genome FASTAs, coverage plots and final coverage map
+folders into the arm's permanent output directory. It then removes the
+entire `scratch/` tree, including very large read-level `remap.csv`,
+`aligned.csv`, SAM/Bowtie indexes, temporary FASTQs and intermediate files.
+Any differing pre-existing final CSV is preserved *alongside* the original
+as `scratch_<filename>`; the final file is never overwritten. Failed arms
+retain Podman stderr/stdout, in-container timing and recorded diagnostics;
+all results JSONL, summaries, immutable qualifications and input manifests
+remain untouched. This cleanup happens outside the measured container
+runtime, and does not affect reference-blind assembly or the scoring rules.
+
+Historical result artifacts (but not source workspaces or original FASTQs)
+can be cleaned with a dry-run preview followed by explicit application:
+
+```sh
+python3 benchmarks/retained_artifacts.py --workspace /workspace
+python3 benchmarks/retained_artifacts.py --workspace /workspace --apply
+```
+
+The scanner only finds directories containing a `results.jsonl` evidence
+file and only removes `scratch` beneath known run/sample/assembler folders.
+Scientific output hashes in existing result JSONL can be checked against the
+promoted permanent files after cleanup. A conflict in an alternate preserved
+artifact is an error, not a reason to overwrite data.

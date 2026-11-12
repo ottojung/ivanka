@@ -1,6 +1,6 @@
 use super::{
     append_preserving_diversity, canonical_kmer, select_supported_contigs,
-    select_supported_contigs_with_kmers, write_fasta, write_snv_audit,
+    select_supported_contigs_with_kmers, write_snv_audit,
 };
 use std::error::Error;
 
@@ -11,6 +11,7 @@ pub(super) fn write(
     out: &str,
     max: usize,
     audit_path: Option<&str>,
+    standard: bool,
     prepared: super::prepare::Prepared,
 ) -> Result<usize, Box<dyn Error>> {
     let super::prepare::Prepared {
@@ -40,7 +41,7 @@ pub(super) fn write(
         // otherwise withhold the rescue to avoid losing distinct evidence.
         append_preserving_diversity(&mut contigs, rescue, max, protected_seed_count);
     }
-    write_fasta(&out, &contigs)?;
+    let count = super::write_results::write(out, &contigs, &reads, standard)?;
     if let Some(path) = audit_path {
         let count = write_snv_audit(&path, &audit, &contigs, &reads.seed_counts, canonical_kmer)?;
         eprintln!(
@@ -48,5 +49,5 @@ pub(super) fn write(
             count
         );
     }
-    Ok(contigs.len())
+    Ok(count)
 }

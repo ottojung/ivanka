@@ -16,13 +16,17 @@ from benchmarks.podman_detached_lifecycle import run_detached
 from benchmarks.podman_full_micall import verify_ivanka_image_binding
 from .adapters import ASSEMBLERS
 from .hxb2_cohort import attestation
+from .micall_checkpoint import (
+    digest, existing_case, identity, preserve_interrupted, write_case,
+)
 from .micall_dominant import SCORE_ORIGIN, evaluate_final_dominant
+from .micall_synthetic_constants import TIMING_ORIGIN
+from .micall_lock import exclusive_lock
 from .run_real import verify_images
 from .run_synthetic import cohort_rows
 
 MAX_SECONDS = 1800
 TIMER = Path(__file__).resolve().parents[1] / "inside_container_timing.py"
-TIMING_ORIGIN = "micall_in_container_monotonic_v1"
 
 
 def command(name, image, case_dir, output_dir, identifier, timeout):
@@ -91,39 +95,42 @@ def attempt(case, destination, name, image, timeout):
     return record
 
 
-def run_case(case, root, images, proof, timeout):
+def run_case(case, root, images, proof, timeout, *, resume=False):
     identifier, directory, manifest = case
     destination = root / identifier
+    fields = identity(identifier, manifest, proof)
+    if resume:
+        reused = existing_case(destination, fields, images)
+        if reused is not None:
+            return reused
+        preserve_interrupted(root, identifier)
     destination.mkdir(exist_ok=False)
     ordering = list(ASSEMBLERS)
     random.Random(int.from_bytes(
         hashlib.sha256(identifier.encode()).digest()[:8], "big")
     ).shuffle(ordering)
-    row = {
-        "id": identifier, "cohort": "synthetic",
-        "family": manifest["family"], "truth_validation": proof,
-        "input_sha256": hashlib.sha256(
-            (manifest["sha256"]["reads/R1.fastq.gz"] +
-             manifest["sha256"]["reads/R2.fastq.gz"]).encode()
-        ).hexdigest(),
-        "execution_order": ordering,
-        "results": {},
-    }
+    row = {**fields, "execution_order": ordering, "results": {}}
     for name in ordering:
         row["results"][name] = attempt(
             (directory, manifest), destination / name, name,
             images[name], timeout)
-    (destination / "matrix.json").write_text(
-        json.dumps(row, sort_keys=True) + "\n")
+    write_case(destination, row)
     return row
 
 
-def run(data, output, images, *, jobs=5, timeout=MAX_SECONDS, limit=None):
+def run(data, output, images, *, jobs=5, timeout=MAX_SECONDS,
+        limit=None, resume=False):
+    """Hold the same crash-safe lock throughout preflight and execution."""
+    with exclusive_lock(output):
+        return _run(data, output, images, jobs=jobs, timeout=timeout,
+                    limit=limit, resume=resume)
+
+
+def _run(data, output, images, *, jobs=5, timeout=MAX_SECONDS,
+         limit=None, resume=False):
     if jobs not in range(1, 11) or timeout not in range(1, MAX_SECONDS + 1):
         raise ValueError("invalid concurrency or sample lifetime")
     verify_images(images)
-    # Verify the *installed* MiCall subprocess executable, exact argv
-    # and empty Rust child env before any synthetic tool may execute.
     verify_ivanka_image_binding(images["ivanka"])
     proof = attestation(data, expected=400)
     cohort = list(cohort_rows(data))
@@ -134,27 +141,90 @@ def run(data, output, images, *, jobs=5, timeout=MAX_SECONDS, limit=None):
             raise ValueError("invalid development limit")
         cohort = cohort[:limit]
     output = Path(output).resolve()
-    output.mkdir(parents=True, exist_ok=False)
-    (output / "run_manifest.json").write_text(json.dumps({
-        "schema": "ivanka.expanded.micall_synthetic.v1",
-        "status": "INCOMPLETE", "qualified": False,
-        "source_truth": proof, "images": images,
-        "limit": limit, "expected": 400,
-        "threads_per_arm": 2, "memory_limit": "4g",
-        "network": "none", "timer": TIMING_ORIGIN,
-        "score": SCORE_ORIGIN,
-    }, sort_keys=True, indent=2)+"\n")
-    with (output / "results.jsonl").open("x", buffering=1) as stream:
+    expected = run_manifest(proof, images, limit)
+    manifest_path = output / "run_manifest.json"
+    if resume:
+        if not manifest_path.is_file():
+            raise ValueError("resume requires a frozen original run manifest")
+        if json.loads(manifest_path.read_text()) != expected:
+            raise ValueError("resume manifest/image/cohort/code mismatch")
+    else:
+        output.mkdir(parents=True, exist_ok=False)
+        manifest_path.write_text(json.dumps(expected, sort_keys=True,
+                                            indent=2)+"\n")
+    committed = []
+    if resume:
+        for case in cohort:
+            identifier, _, case_manifest = case
+            row = existing_case(output / identifier,
+                                identity(identifier, case_manifest, proof),
+                                images)
+            if row is not None:
+                committed.append(row)
+        prior = output / "results.jsonl"
+        history = output / "resume_history.jsonl"
+        with history.open("a") as stream:
+            stream.write(json.dumps({
+                "prior_results_sha256": digest(prior) if prior.exists() else None,
+                "recovered_cases": len(committed),
+                "source_manifest_sha256": digest(manifest_path),
+            }, sort_keys=True)+"\n")
+        recovered = output / "results.recovered.partial"
+        with recovered.open("x") as stream:
+            for row in sorted(committed, key=lambda row: row["id"]):
+                stream.write(json.dumps(row, sort_keys=True)+"\n")
+        recovered.replace(prior)
+    completed = {row["id"] for row in committed}
+    with (output / "results.jsonl").open("a" if resume else "x",
+                                         buffering=1) as stream:
         with ThreadPoolExecutor(max_workers=jobs) as pool:
+            pending = [case for case in cohort if case[0] not in completed]
             futures = [pool.submit(run_case, case, output, images,
-                                   proof, timeout) for case in cohort]
+                                   proof, timeout, resume=resume)
+                       for case in pending]
             for future in as_completed(futures):
                 row = future.result()
                 stream.write(json.dumps(row, sort_keys=True)+"\n")
                 print("MICALL_SYNTHETIC_CASE", row["id"], "failures",
                       [name for name, result in row["results"].items()
                        if result["status"] != "success"], flush=True)
+    final = output / "results.jsonl"
+    completed_rows = [json.loads(line) for line in final.read_text().splitlines()
+                      if line.strip()]
+    if (len(completed_rows) != len(cohort)
+            or len({row["id"] for row in completed_rows}) != len(cohort)):
+        raise ValueError("incomplete/duplicate checkpointed synthetic matrix")
+    (output / "attempt_completion.json").write_text(json.dumps({
+        "schema": "ivanka.micall_synthetic_attempt.v1",
+        "status": "ATTEMPTED_NOT_QUALIFIED",
+        "cases_attempted": len(cohort), "tools_per_case": len(ASSEMBLERS),
+        "result_sha256": digest(final), "source_manifest_sha256": digest(manifest_path),
+        "failed_assembler_arms": sum(
+            value["status"] != "success" for row in completed_rows
+            for value in row["results"].values()),
+    }, sort_keys=True, indent=2)+"\n")
     return len(cohort)
+
+
+def run_manifest(proof, images, limit):
+    """Pin all scoring, wrapper and timing sources across restarts."""
+    root = Path(__file__).resolve().parent
+    sources = ("micall_synthetic.py", "micall_checkpoint.py",
+               "micall_synthetic_constants.py", "micall_lock.py",
+               "micall_dominant.py",
+               "score.py", "adapters.py", "hxb2_cohort.py")
+    return {
+        "schema": "ivanka.expanded.micall_synthetic.v2",
+        "status": "INCOMPLETE", "qualified": False,
+        "source_truth": proof, "images": images,
+        "limit": limit, "expected": 400,
+        "threads_per_arm": 2, "memory_limit": "4g",
+        "network": "none", "timer": TIMING_ORIGIN,
+        "score": SCORE_ORIGIN,
+        "instrumentation_sha256": digest(TIMER),
+        "benchmark_sources_sha256": {name: digest(root / name)
+                                     for name in sources},
+    }
 
 
 def main():
@@ -166,6 +236,8 @@ def main():
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--limit", type=int,
                         help="development smoke only, never qualifies")
+    parser.add_argument("--resume", action="store_true",
+                        help="verify and reuse only complete immutable cases")
     args = parser.parse_args()
     images = json.loads(args.images.read_text())
     print("INTEGRATED_MICALL_SYNTHETIC_ATTEMPTED",

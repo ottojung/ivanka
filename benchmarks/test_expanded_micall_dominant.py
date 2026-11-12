@@ -49,6 +49,49 @@ class MiCallFinalDominantTests(unittest.TestCase):
             self.assertEqual(len(selected["conseq_csv_sha256"]), 64)
             self.assertEqual(len(selected["remap_counts_sha256"]), 64)
 
+    def test_full_seed_conseq_all_uses_real_final_remap_support(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            write(root, {"seed-strong": 100, "seed-weak": 4}, {})
+            with (root / "conseq_all.csv").open("w", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=(
+                    "sample", "seed", "region", "q-cutoff",
+                    "consensus-percent-cutoff", "sequence"))
+                writer.writeheader()
+                for seed, seq in (("seed-strong", HXB2_PREFIX),
+                                  ("seed-weak", "C"*len(HXB2_PREFIX))):
+                    writer.writerow({"sample": "test", "seed": seed,
+                                     "region": "", "q-cutoff": 15,
+                                     "consensus-percent-cutoff": "MAX",
+                                     "sequence": seq})
+            selected = select_final_dominant(root)
+            self.assertEqual(selected["region"], "seed-strong")
+            self.assertEqual(selected["source_output"], "conseq_all.csv")
+            self.assertEqual(selected["support"], 100)
+            self.assertEqual(selected["sequence"], HXB2_PREFIX)
+
+    def test_nonremapped_final_seed_is_not_a_false_dominant_genome(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            write(root, {"observed": 100}, {})
+            with (root / "conseq_all.csv").open("w", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=(
+                    "sample", "seed", "region", "q-cutoff",
+                    "consensus-percent-cutoff", "sequence"))
+                writer.writeheader()
+                for seed in ("observed", "unattributed"):
+                    writer.writerow({"sample": "test", "seed": seed,
+                                     "region": "", "q-cutoff": 15,
+                                     "consensus-percent-cutoff": "MAX",
+                                     "sequence": HXB2_PREFIX})
+            result = select_final_dominant(root)
+            self.assertEqual(result["region"], "observed")
+            self.assertEqual(result["unattributed_final_candidates"], 1)
+            (root / "remap_counts.csv").write_text(
+                "sample,type,count\ntest,raw,100\n")
+            with self.assertRaisesRegex(ValueError, "read-support"):
+                select_final_dominant(root)
+
     def test_final_micall_dominant_can_be_scored_after_completion(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -61,7 +104,7 @@ class MiCallFinalDominantTests(unittest.TestCase):
             self.assertTrue(report["dominant_exact"])
             self.assertEqual(report["source"]["region"], "main")
             self.assertEqual(report["score_origin"],
-                             "micall_final_dominant_truth_v1")
+                             "micall_final_dominant_truth_v2")
 
     def test_empty_micall_output_fails_even_if_assembler_exited_zero(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -88,8 +88,10 @@ class ExpandedSyntheticTests(unittest.TestCase):
                     self.assertEqual(len(first), 4 * spec["pairs"])
                     self.assertEqual(len(first), len(second))
                     for i in range(0, len(first), 4):
-                        self.assertEqual(first[i].split("/")[0],
-                                         second[i].split("/")[0])
+                        self.assertEqual(first[i].split()[0],
+                                         second[i].split()[0])
+                        self.assertTrue(first[i].endswith(" 1:N:0:1\n"))
+                        self.assertTrue(second[i].endswith(" 2:N:0:1\n"))
                         for stream in (first, second):
                             self.assertEqual(len(stream[i+1].strip()), 150)
                             self.assertEqual(len(stream[i+3].strip()), 150)
@@ -132,7 +134,7 @@ class ExpandedAdapterTests(unittest.TestCase):
                              case / "reads/R2.fastq.gz", merged)
             text = merged.read_text()
             self.assertEqual(text.count("\n+\n"), 2*spec["pairs"])
-            self.assertTrue(text.startswith("@synthetic:clonal:0:00000000/1"))
+            self.assertTrue(text.startswith("@synthetic:clonal:0:00000000 1:N:0:1"))
 
     def test_missing_binary_fails_before_comparison(self):
         with self.assertRaises(FileNotFoundError):

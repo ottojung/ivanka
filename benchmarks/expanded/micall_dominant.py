@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .score import score_sequences
 
-SCORE_ORIGIN = "micall_final_dominant_truth_v1"
+SCORE_ORIGIN = "micall_final_dominant_truth_v2"
 
 
 def digest(path):
@@ -17,11 +17,25 @@ def digest(path):
 
 
 def final_rows(folder):
-    """Only final post-MiCall consensus sequences are eligible."""
+    """Prefer final full-length seed consensus over per-gene reporting rows."""
     folder = Path(folder)
+    full = folder / "conseq_all.csv"
+    if full.is_file():
+        with full.open(newline="") as source:
+            rows = list(csv.DictReader(source))
+        chosen = [r for r in rows if r.get("q-cutoff") == "15"
+                  and r.get("consensus-percent-cutoff") == "MAX"
+                  and not r.get("region") and r.get("seed")
+                  and r.get("sequence", "").strip()]
+        if chosen:
+            if (len({r.get("sample") for r in chosen}) != 1
+                    or len({r["seed"] for r in chosen}) != len(chosen)):
+                raise ValueError("duplicate or cross-sample final MAX seed")
+            return chosen, digest(full), "seed"
+    # Older MiCall methods publish only regional final MAX consensus.
     path = folder / "conseq.csv"
     if not path.is_file():
-        raise ValueError("missing final MiCall conseq.csv")
+        raise ValueError("missing final MiCall MAX consensus output")
     with path.open(newline="") as source:
         rows = list(csv.DictReader(source))
     chosen = [r for r in rows if r.get("q-cutoff") == "15"
@@ -33,8 +47,7 @@ def final_rows(folder):
         raise ValueError("final MiCall results have inconsistent sample IDs")
     if len({r.get("region") for r in chosen}) != len(chosen):
         raise ValueError("duplicate final MAX region")
-    return chosen, digest(path)
-
+    return chosen, digest(path), "region"
 
 def final_counts(folder, sample):
     """Use this sample's final remap, never intermediate assignments."""
@@ -65,24 +78,30 @@ def final_counts(folder, sample):
 
 
 def select_final_dominant(folder):
-    rows, csv_hash = final_rows(folder)
+    rows, csv_hash, key = final_rows(folder)
     counts, counts_hash = final_counts(folder, rows[0]["sample"])
-    if any(r["region"] not in counts for r in rows):
+    unattributed = [r for r in rows if r[key] not in counts]
+    if key == "region" and unattributed:
         raise ValueError("final consensus lacks original-read support provenance")
-    ranked = sorted(rows, key=lambda r: (-counts[r["region"]], r["region"]))
+    supported = [r for r in rows if r[key] in counts]
+    if not supported:
+        raise ValueError("final consensus lacks original-read support provenance")
+    ranked = sorted(supported, key=lambda r: (-counts[r[key]], r[key]))
     winner = ranked[0]
-    if counts[winner["region"]] == 0:
+    if counts[winner[key]] == 0:
         raise ValueError("no read-supported final dominant consensus")
     sequence = winner["sequence"].strip().upper()
     if not sequence or set(sequence) - set("ACGTRYSWKMBDHVN"):
         raise ValueError("invalid final MiCall nucleotide consensus")
     return {
         "sequence": sequence,
-        "region": winner["region"],
-        "support": counts[winner["region"]],
+        "region": winner[key],
+        "support": counts[winner[key]],
+        "source_output": ("conseq_all.csv" if key == "seed" else "conseq.csv"),
         "equal_support_ambiguous": (len(ranked) > 1 and
-                                    counts[ranked[1]["region"]] == counts[winner["region"]]),
+                                    counts[ranked[1][key]] == counts[winner[key]]),
         "final_max_regions": len(ranked),
+        "unattributed_final_candidates": len(unattributed),
         "conseq_csv_sha256": csv_hash,
         "remap_counts_sha256": counts_hash,
         "sequence_sha256": hashlib.sha256(sequence.encode()).hexdigest(),

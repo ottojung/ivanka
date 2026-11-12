@@ -63,3 +63,23 @@ mandatory seven-tool MiCall benchmark has been executed or passed.
 **This proves source-eligibility, not superior assembly.** Full
 MiCall-integrated seven-assembler 598-case evaluation and
 independently positive all-exponent alignment/runtime Ψ remain mandatory.
+
+
+## New v3 MiCall-compatible input format
+
+The v2 source-correct synthetic truth used old single-token FASTQ
+identifiers, which MiCall's `fastq_g2p` parser rejects before assembly.
+For canonical integrated benchmarking, use the separately committed
+`hxb2-400-v3-micall-cohort.json` manifest and
+`hxb2-400-v3-micall-validation.json` attestation. The v3 data regenerate
+the same real HXB2-derived genomes and read behaviors using
+two-token Illumina CASAVA paired read identifiers
+(`@... 1:N:0:1` / `@... 2:N:0:1`), with no alteration of
+biological truth or mutation positions.
+
+Pinned v3 `cohort.json` SHA-256:
+`a390ba4ecec60e2dcf2af8d7a933d7c399e401e5a44a42ac7adf868f2b341113`.
+Historical v2 results and identities remain intact and are not
+rewritten or upgraded. Every canonical run verifies each FASTQ
+descriptor, both mate IDs, full hidden HXB2 ancestry and output SHA256
+before any assembler starts.

@@ -4,6 +4,28 @@
 and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 
+## Required execution intents
+
+The following are **non-negotiable target contracts**, not descriptions of
+what the existing qualifying image already implements:
+
+- **[Intent 001: Rust-only Ivanka execution](docs/intents/001-rust-only-execution.md).**
+  All production assembly behavior, including read-backed selection, trimming
+  and tiling, belongs inside the Rust executable. MiCall invokes that binary
+  directly. Python is restricted to benchmark/test generation, execution,
+  scoring, and analysis—not Ivanka's production assembly path.
+- **[Intent 002: default direct invocation parity](docs/intents/002-default-invocation-parity.md).**
+  MiCall and benchmark runs must use the **same Rust executable and defaults**,
+  with an **empty Ivanka child environment** and only `--reads1`,
+  `--reads2`, and `--output` arguments. Never rely on environment
+  tuning, wrappers, hidden configuration, or benchmark-only parameters.
+
+**Current status:** the previous passing image contains a Python selector and
+therefore does not meet these intents. Do not claim completion or numerical
+qualification of the target implementation until the direct, Rust-only,
+unconfigured MiCall path is verified by regression tests and the full
+benchmark. Retain frozen historical evidence unchanged.
+
 ## Comments and source readability
 
 Write **useful, timeless comments**. Explain the reason behind a non-obvious

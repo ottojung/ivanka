@@ -74,9 +74,13 @@ def generate_case(root, case, *, pairs=PAIRS):
         raise FileExistsError(f"refusing to overwrite {root}")
     root.mkdir(parents=True)
     rng = random.Random(spec["seed"])
-    major = "".join(rng.choice(DNA) for _ in range(LENGTH))
-    minor_sites = [210, 380, 760, 940]
-    minor = _mutate_sites(major, minor_sites, rng)
+    from expanded.hxb2_truth import haplotypes as source_truth
+    # These older scientific smoke fixtures also obey Intent 008.
+    # Full-length, real HXB2 ancestry; no purposefully targeted variants.
+    major, _, _, major_proof = source_truth("clonal", spec["seed"])
+    variants, _, _, minor_proof = source_truth("minority_5pct", spec["seed"])
+    major, minor = major[0], variants[1]
+    minor_sites = []
     genomes = [("true_major", major)]
     if spec["minor_fraction"]:
         genomes.append(("true_minor", minor))
@@ -85,7 +89,7 @@ def generate_case(root, case, *, pairs=PAIRS):
     wrong = []
     for name, seq in genomes:
         excluded = set(minor_sites)
-        candidates = [pos for pos in range(30, LENGTH-30) if pos not in excluded]
+        candidates = [pos for pos in range(30, len(seq)-30) if pos not in excluded]
         edits = rng.sample(candidates, 18)
         wrong.append((name + "_mutated", _mutate_sites(seq, edits, rng)))
     first, second = [], []
@@ -95,7 +99,7 @@ def generate_case(root, case, *, pairs=PAIRS):
                  and rng.random() < spec["minor_fraction"] else "true_major")
         sources[which] += 1
         genome = minor if which == "true_minor" else major
-        start = rng.randrange(LENGTH - FRAGMENT_LENGTH + 1)
+        start = rng.randrange(len(genome) - FRAGMENT_LENGTH + 1)
         r1 = genome[start:start+READ_LENGTH]
         r2 = reverse_complement(genome[
             start+FRAGMENT_LENGTH-READ_LENGTH:start+FRAGMENT_LENGTH])
@@ -124,7 +128,8 @@ def generate_case(root, case, *, pairs=PAIRS):
         "pairs": pairs,
         "read_length": READ_LENGTH,
         "fragment_length": FRAGMENT_LENGTH,
-        "genome_length": LENGTH,
+        "genome_length": len(major),
+        "hxb2_ancestry": {"major": major_proof, "minor": minor_proof},
         "error_rate": spec["error_rate"],
         "minor_fraction_nominal": spec["minor_fraction"],
         "sampled_haplotype_pair_counts": sources,

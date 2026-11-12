@@ -10,6 +10,7 @@ from pathlib import Path
 import random
 
 from .adapters import ASSEMBLERS, execute, require_programs
+from .hxb2_cohort import attestation
 from .score import dominant_truth_score
 from .synthetic import fingerprint
 
@@ -17,8 +18,9 @@ from .synthetic import fingerprint
 def cohort_rows(cohort_root):
     root = Path(cohort_root).resolve()
     cohort = json.loads((root / "cohort.json").read_text())
-    if cohort.get("schema") != "ivanka.expanded.cohort.v1":
-        raise ValueError("invalid cohort manifest")
+    if cohort.get("schema") != "ivanka.expanded.cohort.hxb2.v1":
+        raise ValueError("legacy random or invalid HXB2 synthetic cohort")
+    from .hxb2_truth import validate
     if cohort["samples"] != len(cohort["cases"]):
         raise ValueError("cohort manifest is incomplete")
     for entry in cohort["cases"]:
@@ -26,8 +28,10 @@ def cohort_rows(cohort_root):
         if not directory.is_dir() or directory.parent != root:
             raise ValueError("unsafe or missing synthetic case directory")
         manifest = json.loads((directory / "manifest.json").read_text())
-        if manifest.get("schema") != "ivanka.expanded.synthetic.v1":
-            raise ValueError("invalid synthetic sample manifest")
+        if manifest.get("schema") != "ivanka.expanded.synthetic.hxb2.v1":
+            raise ValueError("non-HXB2 synthetic sample manifest")
+        if not validate(directory):
+            raise ValueError("unverified HXB2 source ancestry")
         if manifest["sha256"] != entry["sha256"]:
             raise ValueError("cohort and per-case hashes disagree")
         for file_name, digest in manifest["sha256"].items():
@@ -38,6 +42,7 @@ def cohort_rows(cohort_root):
 
 
 def run(cohort_root, results_root, binary_spec, *, threads=2, timeout=1800):
+    truth_proof = attestation(cohort_root, expected=400)
     binaries = require_programs(paths=binary_spec["paths"])
     if binaries != binary_spec["binary_provenance"]:
         raise ValueError("binary sha256 mismatch; repin the complete tool suite")
@@ -49,7 +54,11 @@ def run(cohort_root, results_root, binary_spec, *, threads=2, timeout=1800):
         for case_id, directory, manifest in cohort_rows(cohort_root):
             row = {"id": case_id, "cohort": "synthetic",
                    "family": manifest["family"],
-                   "input_sha256": manifest["sha256"]["reads/R1.fastq.gz"],
+                   "truth_validation": truth_proof,
+                   "input_sha256": hashlib.sha256(
+                       (manifest["sha256"]["reads/R1.fastq.gz"] +
+                        manifest["sha256"]["reads/R2.fastq.gz"]).encode()
+                   ).hexdigest(),
                    "results": {}}
             r1 = directory / manifest["read_files"][0]
             r2 = directory / manifest["read_files"][1]

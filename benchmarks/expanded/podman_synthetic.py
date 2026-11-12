@@ -13,6 +13,7 @@ import subprocess
 import time
 
 from .adapters import ASSEMBLERS
+from .hxb2_cohort import attestation
 from .run_real import verify_images
 from .score import dominant_truth_score
 from .run_synthetic import cohort_rows
@@ -104,6 +105,7 @@ def run(cohort, output, images, *, jobs=5, timeout=1800, limit=None):
     verify_images(images)
     all_cases = list(cohort_rows(cohort))
     manifest = json.loads((Path(cohort) / "cohort.json").read_text())
+    truth_proof = attestation(cohort, expected=400)
     if len(all_cases) != 400 or manifest.get("samples") != 400:
         raise ValueError("the frozen synthetic cohort must have exactly 400 samples")
     if limit is not None:
@@ -118,6 +120,7 @@ def run(cohort, output, images, *, jobs=5, timeout=1800, limit=None):
         "images": images, "threads_per_assembler": 2,
         "memory_limit": "4g", "network": "none",
         "sample_limit": limit, "expected": 400,
+        "truth_validation": truth_proof,
     }, sort_keys=True, indent=2) + "\n")
     with (output / "results.jsonl").open("x", buffering=1) as stream:
         with ThreadPoolExecutor(max_workers=jobs) as workers:
@@ -125,6 +128,7 @@ def run(cohort, output, images, *, jobs=5, timeout=1800, limit=None):
                        for case in all_cases]
             for future in as_completed(futures):
                 row = future.result()
+                row["truth_validation"] = truth_proof
                 stream.write(json.dumps(row, sort_keys=True) + "\n")
                 done = sum(1 for _ in output.glob("*/matrix.json"))
                 print("SYNTHETIC_CASE_DONE", done, "/", len(all_cases),

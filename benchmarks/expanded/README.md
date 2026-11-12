@@ -10,8 +10,11 @@ HXB2/other-HIV-subtype homologous recombinants**, optionally with
 ≤5% uniformly random, untargeted substitutions. **Generic random
 A/C/G/T genomes are forbidden.** The present v1 generator and its
 400-case dataset do not satisfy this rule and are **historical
-diagnostics only**. A new ancestry-verified HXB2 cohort, MiCall-integrated
-synthetic runner and Pages report are **not yet implemented**.
+diagnostics only**. The HXB2 source-pinned, ancestry-verified 400-case cohort is now
+generated. The **full MiCall-integrated synthetic comparison** and
+its final independent qualification remain incomplete. The
+Assembler Bench Pages report exists at `/bench/` for verified
+historical real-run evidence; no synthetic PASS is claimed.
 
 **This benchmark is required now for Ivanka completion and future releases.**
 It is an additional strict qualification, **not** a replacement for the
@@ -77,8 +80,18 @@ The old **ineligible** generic-random v1 cohort is preserved at
 SHA-256 `dbcd7a1328e3e84c1a82d1fed7677fcbcd5e02a9a4efe230be79bc9efb372491`.
 It was used for 400 × 7 exploratory diagnostics, not qualification.
 Do not regenerate it for active tests or promote its scores into a
-passing benchmark. The mandatory HXB2-derived replacement cohort
-has **not yet been generated**.
+passing benchmark. The replacement HXB2-derived 400-case cohort has been generated and
+independently replay-validated. Its current fixed v2 manifest and
+attestation are committed under
+`benchmarks/expanded/references/hxb2-400-v2-{cohort,validation}.json`,
+with cohort SHA-256
+`314e9b67429b332a900ec98829144d3b065d6473733eefaf9337a89e17ce3ea6`
+and verification SHA-256
+`7d21ff441b2a0297baecb830ad6e67421e72d878e4398dc4a79acc3b932c2cb3`.
+The private working copies of the **synthetic** FASTQs and hidden truth are
+on `marceline-dev` under
+`/workspace/ivanka-hxb2-qualified400-v2-20261112`.
+This cohort has **not** passed a seven-assembler integrated MiCall run.
 
 The model includes correlated errors, read-cycle-specific errors,
 homopolymer one-base insertions/deletions, hard coverage gaps, technical

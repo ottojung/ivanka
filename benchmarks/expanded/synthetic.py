@@ -1,7 +1,7 @@
-"""Deterministic, heterogeneous synthetic viral paired-read experiments.
+"""Synthetic viral reads; all active biological truth is HXB2-derived.
 
-Every genome is independently synthesized, never a known reference.
 Only reads/ is accessible to assemblers; hidden-truth/ is scorer-only.
+The old arbitrary-random recipe is retained only for historical audit.
 """
 import argparse
 import gzip
@@ -44,6 +44,7 @@ def pick_alt(base, rng):
 
 
 def template(rng, family, length=2600):
+    # Legacy v1 reproduction only; not called by active HXB2-derived tests.
     seq = "".join(rng.choices(DNA, k=length))
     if family == "gc_dropout":
         seq = ("".join(rng.choices("AT", k=950)) +
@@ -96,6 +97,14 @@ def read_errors(sequence, family, rng, *, mate, start):
             probability = 0.82
         if rng.random() < probability:
             bases[i] = pick_alt(base, rng)
+    if family == "tandem_repeat" and rng.random() < 0.12:
+        # Read-level duplicate tract, never a fabricated repeat in truth.
+        at = rng.randrange(40, len(bases)-35)
+        bases[at:at+28] = bases[at-28:at]
+    if family == "inverted_repeat" and rng.random() < 0.12:
+        # A library chimeric inversion artifact, not a truth-level inversion.
+        at = rng.randrange(12, len(bases)-48)
+        bases[at:at+32] = list(rc("".join(bases[at:at+32])))
     if family == "homopolymer_slippage":
         sites = [i for i in range(4, len(bases)-2)
                  if len(set(bases[i-4:i+2])) == 1]
@@ -158,7 +167,8 @@ def _write_gzip(path, records):
                 output.writelines(records)
 
 
-def generate_case(root, family, seed, pairs=900):
+def generate_case(root, family, seed, pairs=900, *,
+                  truth_model=None, historical_random=False):
     if family not in FAMILIES or not isinstance(seed, int) or seed < 0:
         raise ValueError("invalid synthetic case")
     if pairs < 20:
@@ -172,8 +182,17 @@ def generate_case(root, family, seed, pairs=900):
     truth_dir.mkdir()
     rng = random.Random(int.from_bytes(
         hashlib.sha256(f"expanded-v1:{family}:{seed}".encode()).digest()[:8], "big"))
-    genomes, fractions = haplotypes(rng, family)
-    decoy = template(rng, "clonal")
+    if truth_model is None and not historical_random:
+        from .hxb2_truth import haplotypes as truth_model
+    if historical_random:
+        if truth_model is not None:
+            raise ValueError("cannot mix HXB2 and legacy truth generators")
+        # Historical-only v1 reproduction; never qualified under Intent 008.
+        genomes, fractions = haplotypes(rng, family)
+        decoy = template(rng, "clonal")
+        ancestry = None
+    else:
+        genomes, fractions, decoy, ancestry = truth_model(family, seed)
     reusable = [(rng.randrange(len(genomes[0])-FRAGMENT+1), FRAGMENT)
                 for _ in range(13)] if family == "pcr_jackpot" else []
     total = max(20, pairs//4) if family == "low_depth" else (
@@ -218,13 +237,16 @@ def generate_case(root, family, seed, pairs=900):
     truth.write_text("".join(
         f">haplotype_{i+1}\n{genome}\n" for i, genome in enumerate(genomes)))
     data = {
-        "schema": "ivanka.expanded.synthetic.v1", "family": family, "seed": seed,
+        "schema": ("ivanka.expanded.synthetic.hxb2.v1" if ancestry is not None
+                   else "ivanka.expanded.synthetic.v1"),
+        "family": family, "seed": seed,
         "pairs": total, "read_length": READ_LENGTH, "haplotype_count": len(genomes),
         "nominal_fractions": fractions, "sampled_haplotype_pairs": counts,
         "unique_fragment_coordinates": len(starts), "chimeric_mates": chimeras,
         "contamination_pairs": contaminants, "truth_is_evaluation_only": True,
         "read_files": ["reads/R1.fastq.gz", "reads/R2.fastq.gz"],
         "hidden_truth_file": "hidden-truth/haplotypes.fasta",
+        **({"hxb2_ancestry": ancestry} if ancestry is not None else {}),
         "sha256": {str(path.relative_to(case)): fingerprint(path)
                    for path in (fq1, fq2, truth)},
     }
@@ -232,14 +254,21 @@ def generate_case(root, family, seed, pairs=900):
     return data
 
 
-def generate_cohort(root, seeds=16, pairs=900):
+def generate_cohort(root, seeds=16, pairs=900, *,
+                    truth_model=None, historical_random=False):
     root = Path(root)
     if root.exists() and any(root.iterdir()):
         raise FileExistsError(f"refusing nonempty cohort {root}")
     root.mkdir(parents=True, exist_ok=True)
-    records = [generate_case(root, family, seed, pairs)
+    if truth_model is None and not historical_random:
+        from .hxb2_truth import haplotypes as truth_model
+    records = [generate_case(root, family, seed, pairs,
+                             truth_model=truth_model,
+                             historical_random=historical_random)
                for family in FAMILIES for seed in range(seeds)]
-    manifest = {"schema": "ivanka.expanded.cohort.v1", "families": list(FAMILIES),
+    manifest = {"schema": ("ivanka.expanded.cohort.v1"
+                           if historical_random else "ivanka.expanded.cohort.hxb2.v1"),
+                "families": list(FAMILIES),
                 "seeds_per_family": seeds, "samples": len(records),
                 "cases": [{"id": f"{x['family']}-s{x['seed']:03d}",
                            "sha256": x["sha256"]} for x in records]}
@@ -254,10 +283,13 @@ def main():
     parser.add_argument("out", type=Path)
     parser.add_argument("--seeds", type=int, default=16)
     parser.add_argument("--pairs", type=int, default=900)
+    parser.add_argument("--historical-random-only", action="store_true",
+                        help="reproduce ineligible v1 diagnostics; never qualify")
     args = parser.parse_args()
     if not (1 <= args.seeds <= 128):
         parser.error("--seeds must be 1..128")
-    cohort = generate_cohort(args.out, args.seeds, args.pairs)
+    cohort = generate_cohort(args.out, args.seeds, args.pairs,
+                             historical_random=args.historical_random_only)
     print(json.dumps({"samples": cohort["samples"],
                       "families": len(cohort["families"])}, sort_keys=True))
 

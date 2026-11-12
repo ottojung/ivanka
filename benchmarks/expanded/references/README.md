@@ -83,3 +83,44 @@ Historical v2 results and identities remain intact and are not
 rewritten or upgraded. Every canonical run verifies each FASTQ
 descriptor, both mate IDs, full hidden HXB2 ancestry and output SHA256
 before any assembler starts.
+
+## V4: HXB2 truth-identical, higher-coverage MiCall integration cohort
+
+The November 12 v4 generated cohort provides **all 400 original
+25 × 16 HXB2-derived biological truths** with additional original
+paired-read observations per sample. The truth FASTAs, the complete
+recombinant ancestry records and the mixture fractions are
+**byte-identical to all 400 corresponding v3 cases**. There is no
+truth tuning, mutation re-clustering, changed parental segment, or
+different family selection.
+
+- Pinned source-input manifest:
+  `hxb2-400-v4-micall-high-depth-cohort.json`, SHA256
+  `964fff8226beef4787226a5542dc2667fff0102bea0b4f4694686b11af1f7f5a`.
+- Independent full HXB2 ancestry/CASAVA paired-read validation:
+  `hxb2-400-v4-micall-high-depth-validation.json`, all **400/400**
+  cases verified. Source template manifest is unchanged.
+- Reproduction: `python3 -m benchmarks.expanded.hxb2_cohort
+  /data/hxb2-v4 --seeds 16 --pairs 10000 --certificate /data/v4-proof.json`.
+- Deterministic read sampling: **10,000 pairs per ordinary case**;
+  the preexisting low-depth and ultra-deep read mechanism families
+  yield **2,500** and **30,000** pairs respectively. The diverse
+  read-level error mechanisms remain the same. HXB2 truth remains
+  inaccessible to every assembler under Intents 003 and 008.
+- Original generated FASTQ/hidden truth artifacts live on
+  `marceline-dev` at
+  `/workspace/ivanka-hxb2-depth10000-400-20261112/`.
+  The repository pins full per-case SHA256 identities without
+  committing hundreds of megabytes of reads.
+
+**Rationale and fairness:** A preliminary seven-arm MiCall test on the
+v3 **900-pair** clonal case revealed IVA completed without any
+read-supported final remap (honest failed arm); the corresponding
+**10,000-pair** clonal case allowed all seven MiCall integrations
+to complete and produce read-supported dominant consensuses.
+The change applies **identically to every assembler**, not through
+Ivanka-only settings or a reference-conditioned source. Preserve the
+v3 data and failures as historical diagnostics. This single-case
+confirmation does **not** prove any seven-way dominance, all-r Ψ
+acceptance, or guaranteed success on other v4 families. A completely
+fresh, source-pinned v4 run and independent gate must establish that.

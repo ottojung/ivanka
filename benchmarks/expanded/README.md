@@ -411,3 +411,40 @@ all samples rather than tuned by the sample's truth. The five upstream
 assembler image source recipes are in `benchmarks/expanded/images/`.
 These options were fixed during interface validation, before any
 seven-way cohort comparison or selection on score outcomes.
+
+## Resumable HXB2 v4 full-MiCall seven-way attempt
+
+To avoid losing verified work to container or host interruptions, the
+integrated MiCall synthetic runner supports **`--resume`**.
+Each complete per-sample matrix is committed atomically, and reuse
+requires the same validated HXB2 cohort, the same seven immutable
+images, exact runner/evaluator/timer source hashes, and matching
+MiCall output/result hashes. A partial case is moved to an
+`_interrupted/` archive; it is rerun from scratch with all
+earlier output retained for audit. The resumed JSONL is rebuilt from
+verified per-case records and has no duplicates. Reusing corrupt,
+changed or mismatched evidence is a hard failure.
+
+The HXB2 **v4** pinned manifest
+(`references/hxb2-400-v4-micall-high-depth-cohort.json`)
+uses the same 400 hidden HIV truths and ancestry as v3, but
+10,000 paired reads for ordinary cases instead of 900. See
+[the reference provenance and depth comparison](references/README.md).
+The v3 cohort remains immutable and its low-depth missing-tool
+outcomes are not silently discarded.
+
+```sh
+python3 -m benchmarks.expanded.micall_synthetic \
+  --data /workspace/ivanka-hxb2-depth10000-400-20261112 \
+  --images /workspace/ivanka-expanded-image-pins-whole-20261112.json \
+  --out /workspace/ivanka-hxb2-seven-way-400-full-20261112 \
+  --jobs 10 --timeout 1800
+# After a verified interruption: rerun the identical command with --resume.
+```
+
+A `run_manifest.json` identifies immutable inputs and instrumentation;
+`attempt_completion.json` distinguishes **all cases attempted**
+from **benchmark qualified**. Any failed/empty/ambiguous tool arm
+remains fail-closed. The mandatory original 198-real plus full
+400-synthetic all-r Ψ gate remains unchanged; neither the v4 depth
+change nor resumability constitutes a PASS.

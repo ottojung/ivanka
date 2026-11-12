@@ -106,6 +106,29 @@ class MiCallFinalDominantTests(unittest.TestCase):
             self.assertEqual(report["score_origin"],
                              "micall_final_dominant_truth_v2")
 
+    def test_micall_masked_unknown_positions_are_penalized_not_discarded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            masked = HXB2_PREFIX[:15] + "X"*8 + HXB2_PREFIX[23:]
+            write(root, {"main": 84}, {"main": masked})
+            selection = select_final_dominant(root)
+            self.assertEqual(selection["sequence"], masked)
+            self.assertEqual(selection["support"], 84)
+            truth = root / "truth.fasta"
+            truth.write_text(">HXB2-prefix\n" + HXB2_PREFIX + "\n")
+            result = evaluate_final_dominant(
+                {"nominal_fractions": [1.0]}, truth, root)
+            self.assertGreater(result["score"], 0)
+            self.assertLess(result["score"], 1)
+            self.assertFalse(result["dominant_exact"])
+            self.assertEqual(result["source"]["support"], 84)
+
+    def test_truly_illegal_micall_consensus_symbols_are_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, {"main": 84}, {"main": HXB2_PREFIX + "Z"})
+            with self.assertRaisesRegex(ValueError, "invalid final MiCall"):
+                select_final_dominant(folder)
+
     def test_empty_micall_output_fails_even_if_assembler_exited_zero(self):
         with tempfile.TemporaryDirectory() as folder:
             write(folder, {"main": 0}, {"main": ""})

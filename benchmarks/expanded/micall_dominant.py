@@ -74,7 +74,7 @@ def select_final_dominant(folder):
     if counts[winner["region"]] == 0:
         raise ValueError("no read-supported final dominant consensus")
     sequence = winner["sequence"].strip().upper()
-    if not sequence or set(sequence) - set("ACGTRYSWKMBDHVN"):
+    if not sequence or set(sequence) - set("ACGTRYSWKMBDHVNX"):
         raise ValueError("invalid final MiCall nucleotide consensus")
     return {
         "sequence": sequence,

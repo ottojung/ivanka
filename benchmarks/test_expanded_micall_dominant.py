@@ -49,6 +49,20 @@ class MiCallFinalDominantTests(unittest.TestCase):
             self.assertEqual(len(selected["conseq_csv_sha256"]), 64)
             self.assertEqual(len(selected["remap_counts_sha256"]), 64)
 
+    def test_unresolved_micall_x_stays_valid_but_not_perfect(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            write(root, {"main": 44},
+                  {"main": HXB2_PREFIX[:18] + "xX" + HXB2_PREFIX[20:]})
+            selected = select_final_dominant(root)
+            self.assertIn("XX", selected["sequence"])
+            truth = root / "known-hxb2-fragment.fasta"
+            truth.write_text(">HXB2_prefix\n" + HXB2_PREFIX + "\n")
+            report = evaluate_final_dominant(
+                {"nominal_fractions": [1.0]}, truth, root)
+            self.assertLess(report["score"], 1.0)
+            self.assertFalse(report["dominant_exact"])
+
     def test_final_micall_dominant_can_be_scored_after_completion(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

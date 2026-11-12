@@ -363,3 +363,29 @@ all samples rather than tuned by the sample's truth. The five upstream
 assembler image source recipes are in `benchmarks/expanded/images/`.
 These options were fixed during interface validation, before any
 seven-way cohort comparison or selection on score outcomes.
+
+## MiCall-integrated synthetic execution (experimental)
+
+`benchmarks.expanded.micall_synthetic` is the reproducible runner for the
+full MiCall synthetic path. Unlike standalone `podman_synthetic`, all seven
+source-pinned assembler images are invoked through exactly the same MiCall
+`analyze sample --denovo` command. The assembler still sees only the two
+read-only paired FASTQs; hidden generating truth is mounted in **no**
+container. An independent post-run evaluator selects MiCall's dominant final
+Q15 MAX consensus using **MiCall's final read-support counts before viewing
+truth**, via `expanded.micall_dominant`. The old practice of choosing the
+best truth-aligned contig or region is prohibited.
+
+Preflight rejects legacy v1 cohorts, invalid case source hashes, missing
+full 25-family/16-seed roster, and FASTQs that MiCall cannot parse. In
+particular, MiCall requires **paired CASAVA headers** with a space-delimited
+read-number field; `@example/1` and `@example/2` headers alone do not work.
+The assembler runtime is obtained from an in-container monotonic MiCall
+clock, never substituted by the outer Podman wall time or contaminated by
+post-run scoring. Incomplete/nonzero/error samples remain explicit failures.
+
+The runner remains an **experimental, nonqualifying path** until the v2
+HXB2-derived cohort is generated and independently validated, the required
+per-sample validation certificate is attached to the strict gate, and
+all 400 × 7 runs are executed successfully. The public `/bench/` site must
+show the actual verified results before full completion can be claimed.

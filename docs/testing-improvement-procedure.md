@@ -132,6 +132,7 @@ Record per sample and per arm:
 | average concordance | `genome_coverage.csv` concordance column | higher | unweighted row mean; excludes unknown contigs |
 | missing perfect coverage bases | `exact_coverage.csv` exact_coverage==0 | lower | longest MAX sequence, exact read match |
 | missing perfect coverage fraction | same | lower | normalize by length of longest MAX sequence |
+| interior exact-match depth / zero fraction | `exact_coverage_overlapped` | diagnostic only | exclude 70 bases **per read end** by default; reads ≤140 nt contribute no interior bases; distinct from full-span coverage |
 | soft clips count | `nuc.csv` clip | lower | sum maximum per (seed,refseq.nuc.pos), as Kive |
 | Q15 max / fractional depth totals and means | `multimap_depth.csv` | higher | one original fragment per position; multi-contig sums duplicate hypotheses |
 | unique aligned and mapped fragments | `unique_aligned_fragments.csv`, `remap_counts.csv` | higher | original QNAME counts, **not** hypothesis counts |
@@ -169,6 +170,16 @@ and source FASTQ/contig provenance alongside a scalar.
 
 ### Producing exact coverage (independent of mapped depth)
 
+**Binding source and publication contract:**
+[Intent 014 — exact read coverage](intents/014-exact-read-coverage.md).
+MiCall's algorithm counts only full-length exact read placements on both
+strands. Its `exact_coverage` track credits the entire matched read,
+whereas `exact_coverage_overlapped` credits only the inner positions
+after excluding `overlap_size` bases from **each** end (default 70).
+Each exact placement is counted, so multi-mapped reads can be counted
+more than once. These are not Bowtie2 depth, clipped-base estimates, or
+unique original-molecule counts.
+
 `micall/utils/analyze_kive_batches/calculate_exact_coverage_file.py` calls
 MiCall's `exact_coverage.calculate_exact_coverage` and counts zero-coverage
 positions for the **longest** final consensus. The script below reproduces
@@ -197,6 +208,12 @@ The input is `conseq.csv` with final MAX rows, **not** an assembled-contig
 FASTA and not `multimap_depth.csv`. Do not infer exact coverage from average
 Bowtie2 depth. On missing originals or failure, record `null` plus the
 error instead of pretending zero uncovered positions.
+**Existing sidecar limitation:** `produce_exact_coverage.py` currently
+writes only `exact_coverage` (the full-read track), not
+`exact_coverage_overlapped`. Intent 014 requires a later implementation
+to preserve and publish both tracks for every assembler, with explicit
+zero-coverage denominators and source hashes. Historical missing
+interior tracks are `unavailable`, never inferred or silently replaced.
 
 ### PSI for *every* optional scalar
 

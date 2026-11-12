@@ -4,8 +4,8 @@
 A release or benchmark result is not a valid completion claim unless it
 meets every applicable architectural, scientific, and numerical requirement.
 The Rust-only, default-invocation, enhanced benchmark, public Assembler
-Bench, HXB2-derived synthetic-truth, tool-neutral metrics, and fork-only
-MiCall source requirements **all apply now**;
+Bench, HXB2-derived synthetic-truth, tool-neutral evaluation, comprehensive diagnostics, soft clipping,
+exact coverage, all-pairs Ψ, and fork-only MiCall source requirements **all apply now**;
 they do not replace or loosen the original objectives and gates. The
 seven-way gate is not optional or deferred.
 
@@ -19,9 +19,13 @@ seven-way gate is not optional or deferred.
 | [006 — expanded seven-assembler qualification](006-expanded-qualification.md) | 198 original real + 400 diverse synthetic samples; beat all six competitors with strict, separate, all-r alignment and runtime gates | **Required now for completion/release; not yet passed** |
 | [007 — public MiCall Assembler Bench](007-assembler-bench.md) | Reusable MiCall-integrated multi-assembler testing, independent review, versioned results publicly navigable on Ivanka GitHub Pages under `/bench/` | **Required; not yet built/published** |
 | [008 — HXB2-derived synthetic truth](008-hxb2-synthetic-truth.md) | HXB2 or random HXB2/other-HIV-subtype recombinants, optionally ≤5% uniformly random noncluster-targeted substitutions; no random A/C/G/T truth | **HXB2 generator and 400-case cohort implemented; full enhanced gate remains unpassed** |
-| [009 — neutral diagnostics and all-pairs Ψ](009-neutral-metrics-and-pairwise-dominance.md) | Tool-neutral Assembler Bench, comprehensive per-arm alignment/read-support/soft-clip metrics and densities, directed all-pairs all-r Ψ dominance matrix and public views | **Required; implementation in progress** |
+| [009 — assembler-neutral framework](009-neutral-metrics-and-pairwise-dominance.md) | General evaluation and presentation contract for any MiCall-integrated assembler; no privileged Ivanka baseline; delegates specialist requirements to 012–015 | **Required; neutral UI work incomplete** |
 | [010 — cfe-lab/MiCall read-only](010-upstream-micall-read-only.md) | Never push anything or create/modify PRs on `cfe-lab/MiCall`; allow fetch/read only, guard all push/PR destinations | **Binding immediately** |
 | [011 — fork MiCall integrations and builds](011-ottojung-micall-fork-provenance.md) | All assembler integrations and MiCall runtime images built from exact commits of `ottojung/MiCall`; commit-bound provenance and public source links | **Required; image/fork migration unverified** |
+| [012 — comprehensive assembler diagnostics](012-assembler-diagnostic-metrics.md) | Final MiCall quality, depth/read-support, mapping, contig structure, runtime/resources, errors, provenance and comparable missingness for every tool | **Required; full publication incomplete** |
+| [013 — SAM/CIGAR soft clipping](013-alignment-soft-clipping.md) | Clipped reads, events, bases, left/right clips, counts and densities; distinct from `nuc.csv` clips | **Required; all-tool capture/public presentation incomplete** |
+| [014 — exact read coverage](014-exact-read-coverage.md) | Two distinct per-base exact-read-match coverage tracks, full-span and 70-base-end-trimmed; distributions, zero breadth and provenance | **Required; current sidecars expose only full-span counts** |
+| [015 — directed all-pairs Ψ](015-pairwise-psi-dominance.md) | Proof-backed all-r alignment/runtime/joint dominance matrix with incomplete, disproven, unresolved and self states | **Required; complete public matrix pending** |
 
 ## Rules for changes and claims
 
@@ -55,6 +59,12 @@ seven-way gate is not optional or deferred.
 - **MiCall images must originate from the fork.** Build from
   exact committed `ottojung/MiCall` revisions, not ad hoc runtime
   patching; the public Bench must link to precise fork commits.
+- **Metric contracts are independent and cumulative.** Intent 009 now
+  covers the tool-neutral interface; 012 covers general diagnostics,
+  013 CIGAR clipping, 014 exact perfect-read coverage and 015 directed
+  signed-power Ψ dominance. No requirement was removed by splitting
+  the old combined document; all four specialized measurements/visuals
+  are mandatory for the public Bench.
 - **Keep existing contributor safeguards.** The timeless-comment rule,
   50 nonblank noncomment Rust lines per file, at most 10 entries per Rust
   directory, sibling-only imports, default rustfmt, stricter CI lints,

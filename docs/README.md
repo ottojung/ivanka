@@ -30,16 +30,28 @@ must recover the most abundant identifiable haplotype.
   only HXB2 or random HXB2/other-subtype recombinants with optional ≤5%
   uniformly random mutations; no generic random A/C/G/T genomic truths.
 
-- [Intent 009: neutral diagnostic metrics and all-pairs Ψ](intents/009-neutral-metrics-and-pairwise-dominance.md) —
-  clipped-read and CIGAR-base densities, extensive downstream MiCall
-  metrics for every tool, and an assembler-neutral Ψ-dominance matrix.
+- [Intent 009: general assembler-neutral evaluation](intents/009-neutral-metrics-and-pairwise-dominance.md) —
+  tool-neutral scientific presentation, comparisons and drill-down;
+  detailed metric and matrix requirements now have separate intents.
 - [Intent 010: upstream MiCall is read-only](intents/010-upstream-micall-read-only.md) —
   never push to or create PRs for `cfe-lab/MiCall`.
 - [Intent 011: fork-only MiCall images and reproducibility](intents/011-ottojung-micall-fork-provenance.md) —
   all assembler integrations and MiCall container builds come from exact
   `ottojung/MiCall` commits, linked on the public Bench.
+- [Intent 012: comprehensive assembler diagnostics](intents/012-assembler-diagnostic-metrics.md) —
+  comparable final MiCall quality, read support, depth, contig structure,
+  runtime, resources, failure and provenance measurements for every tool.
+- [Intent 013: soft-clip counts and densities](intents/013-alignment-soft-clipping.md) —
+  CIGAR read/event/base counts with explicit denominators, distinct
+  from MiCall per-position clipping aggregates.
+- [Intent 014: exact read coverage](intents/014-exact-read-coverage.md) —
+  full-span and inner-read exact-match per-base support using the pinned
+  MiCall implementation; coverage distributions and uncovered fractions.
+- [Intent 015: all-pairs Ψ dominance matrix](intents/015-pairwise-psi-dominance.md) —
+  strict signed-power all-r, directional comparisons for any tool pair
+  with proof, counterexample and missingness states.
 
-[All eleven intents are cumulative](intents/README.md). The original
+[All fifteen intents are cumulative](intents/README.md). The original
 scientific and numerical gates remain in force. The tagged native Rust
 alpha.3 passed the original physical-198 gate, but the mandatory
 seven-assembler benchmark, new HXB2 synthetic cohort, and published

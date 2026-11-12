@@ -43,7 +43,10 @@ numerical result is historical evidence for 005, not a new qualification
 of the required Rust-only invocation. Do not claim that the target
 implementation is complete until the direct, Rust-only, unconfigured MiCall
 path passes its contract tests and all required benchmark gates.
-Retain frozen historical evidence unchanged.
+Retain frozen historical evidence unchanged. The direct Rust implementation
+is present as a new candidate: its executable, exact MiCall argv and empty
+environment must be independently verified, and the original and expanded
+numeric gates must pass before claiming the new candidate qualified.
 
 ## Comments and source readability
 

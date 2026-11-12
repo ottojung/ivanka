@@ -214,22 +214,21 @@ must pass a separate Python-vs-Rust parity suite and original-pair
 validation before replacing the qualified wrapper.
 
 
-## Default settings policy (current main)
+## Default direct Rust execution
 
-The default packaged `/usr/local/bin/ivanka` performs native assembly,
-read-backed selection, supported-island trimming and overlapping tiling.
-Normal use requires **no** `IVANKA_*` environment configuration. Its
-native seed budgets are 50 primary / 20 rescue in the Rust defaults,
-and the Python read-backed selector defaults to the same candidate
-selection, original-pair sampling and tile parameters used by the
-previously passing image. The Dockerfile deliberately sets no
-benchmark-specific `ENV` or parameter-selection build arguments.
+The default `target/release/ivanka` Rust binary performs assembly,
+original-read-backed candidate ranking, selection, supported-island
+trimming and overlapping tiling. The MiCall image installs that ELF at
+`/usr/local/bin/ivanka`; MiCall calls it directly with an empty child
+environment and exactly `--reads1`, `--reads2`, `--output`.
+All necessary search and selection budgets are compiled-in defaults.
+No Python selector or `IVANKA_*` tuning is involved in the production
+assembly path. Python remains available for independent benchmarking
+and legacy differential comparisons, never candidate selection in MiCall.
 
-The standalone Rust `target/release/ivanka` still implements native
-assembly only and **must not** be advertised as independently passing
-the full benchmark until the read-backed pipeline has been ported and
-independently qualified. Experimental environment overrides are
-backward-compatible diagnostic inputs, not a requirement for normal use.
-The source-commit-qualified image must undergo the *fresh* physical
-198-sample gate to establish its own passing status; code default
-parity is not a substitute for measurement.
+The frozen passing `v0.1.0-alpha.2` image and its Python wrapper remain
+**historical numerical evidence**, not proof of the new Rust default
+passing. Reproduction of the assembled FASTAs provides a strong
+implementation parity check, but a **fresh, source-pinned physical
+198-sample MiCall A/B run and the mandatory expanded seven-way gate**
+are necessary for full qualification.

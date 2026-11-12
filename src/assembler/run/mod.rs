@@ -1,6 +1,8 @@
 mod finish;
 mod prepare;
+mod read_backed;
 mod seeds;
+mod write_results;
 use super::extension::extend;
 use super::ranking::{
     canonical_kmer, select_supported_contigs, select_supported_contigs_with_kmers,
@@ -15,10 +17,15 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = parse().map_err(io::Error::other)?;
     let now = Instant::now();
     let prepared = prepare::assemble(&config)?;
+    let standard = config.max_pairs.is_none()
+        && config.max_contigs == 16
+        && config.seeds.is_none()
+        && config.audit.is_none();
     let written = finish::write(
         &config.output,
         config.max_contigs,
         config.audit.as_deref(),
+        standard,
         prepared,
     )?;
     eprintln!(

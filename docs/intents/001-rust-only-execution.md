@@ -1,6 +1,6 @@
 # Intent 001: Ivanka executes entirely in Rust
 
-**Status: required target; not yet implemented.**
+**Status: direct-Rust implementation available; independent full qualification pending.**
 
 ## Contract
 
@@ -38,11 +38,14 @@ Ivanka Python wrapper.
 
 ## Scope and transition
 
-The existing frozen passing image uses a Python read-backed selector and is
-**historical evidence, not compliance with this intent**. Moving the selector
-into Rust is pending; do not present the old wrapped image as satisfying this
-contract. Preserve frozen evidence while implementing and qualifying the
-Rust-only direct integration. No reference sequences or evaluation scores may
+The original frozen passing image uses a Python read-backed selector and
+is **historical evidence, not compliance with this intent**. The new
+default Rust candidate performs ranking, supported-island trimming and
+overlapping tiling inside the binary; its MiCall image installs the same
+ELF as `/usr/local/bin/ivanka`. A new genuine full MiCall/IVA benchmark
+and the expanded seven-assembler gate are still required. Keep the
+historical evidence immutable and do not equate implementation parity
+alone with full numerical qualification. No reference sequences or evaluation scores may
 enter Ivanka; the separate reference-blindness rule remains absolute.
 
 See [Intent 002](002-default-invocation-parity.md) for the required invocation

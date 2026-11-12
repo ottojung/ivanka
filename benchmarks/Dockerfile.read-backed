@@ -1,4 +1,4 @@
-# Read-only candidate selection from the sample's own paired FASTQs.
+# The default Rust binary assembles and ranks from original paired reads.
 FROM docker.io/library/rust:1.93-bookworm AS ivanka-builder
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
@@ -12,19 +12,15 @@ FROM localhost/micall:newmicall-e0073cb5-base
 ARG SOURCE_COMMIT
 # Qualified selection and assembly limits are built into Ivanka defaults.
 # This image needs no IVANKA_* environment variables or build arguments.
-COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka-native
-COPY benchmarks/ivanka_read_support_selector.py /usr/local/bin/ivanka
-COPY benchmarks/ivanka_trim_unsupported.py /usr/local/bin/ivanka_trim_unsupported.py
-COPY benchmarks/ivanka_read_window.py /usr/local/bin/ivanka_read_window.py
-COPY benchmarks/ivanka_read_tiling.py /usr/local/bin/ivanka_read_tiling.py
-RUN chmod 755 /usr/local/bin/ivanka && python -m py_compile /usr/local/bin/ivanka
+COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka
+RUN test "$(head -c 4 /usr/local/bin/ivanka | od -An -tx1 | tr -d ' \n')" = 7f454c46
 COPY benchmarks/patch_micall_for_ivanka.py /tmp/patch_micall_for_ivanka.py
 COPY benchmarks/verify_ivanka_binding.py /tmp/verify_ivanka_binding.py
 RUN python /tmp/patch_micall_for_ivanka.py && python /tmp/verify_ivanka_binding.py
 RUN rm /tmp/patch_micall_for_ivanka.py /tmp/verify_ivanka_binding.py
-LABEL org.ottojung.ivanka.experiment="native-read-backed-contig-selection"
+LABEL org.ottojung.ivanka.experiment="direct-rust-read-backed"
 
 
 # The exact committed source used for this candidate is independently audited.
 LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
-LABEL org.ottojung.ivanka.execution="native-fastq-read-backed-selector-trim-island-tile512"
+LABEL org.ottojung.ivanka.execution="rust-direct-default-read-backed-tile512"

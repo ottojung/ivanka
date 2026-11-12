@@ -37,17 +37,23 @@ and image build scripts (including Containerfiles). This is defense in depth:
 new adapters and downstream MiCall patches still require human code review. See
 [the assembly objective](docs/assembly-objective.md).
 
-## Required deployment intent (not yet implemented)
+## Required deployment intent (Rust implementation available; qualification pending)
 
-Ivanka's final production integration must be **Rust only**: MiCall must
-invoke the Rust `ivanka` executable directly, with no Python selector,
-trimmer, tiler or wrapper. Benchmarking and testing tools may use Python;
-no Python component may participate in normal Ivanka assembly.
+The standard `ivanka` executable now implements original-read-backed
+selection, trimming and tiling in **Rust**. MiCall launches this Rust
+executable directly, without Python selector, trimmer, tiler or wrapper.
+Python remains confined to MiCall itself and benchmark/testing tools;
+no Python component participates in Ivanka's assembly logic.
 
-The same direct executable, default behavior, **empty child environment**,
-and exactly `--reads1`, `--reads2`, `--output` arguments
-must be used by both MiCall and the benchmark. The previously qualified
-wrapped image is historical evidence and **does not satisfy this intent**.
+MiCall passes an **empty Ivanka child environment** and exactly
+`--reads1`, `--reads2`, `--output`, using the same default
+executable and algorithm as the benchmark. The old Python-wrapped
+passing image is historical evidence, **not qualification** for the new
+Rust-only execution path. The new candidate requires fresh physical
+and expanded benchmark results before any completion claim.
+A complete, byte-identical [198-real-sample Rust-versus-wrapper
+output parity report](docs/rust-direct-output-parity.md) records
+implementation equivalence, not an independent numerical benchmark pass.
 See [Rust-only execution](docs/intents/001-rust-only-execution.md) and
 [default-invocation parity](docs/intents/002-default-invocation-parity.md)
 for the precise contracts and acceptance evidence.

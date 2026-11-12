@@ -12,7 +12,7 @@ benchmark pass implies clinical or molecular validity.
 | Resource bounds | Read pairs are unlimited by default and stored with reverse complements and index hits; `--max-pairs` can bound input | Stress tests and measured memory budgets for any streaming or memory-limit redesign |
 | Index width | Sparse hit offsets are `u16`; reads above 65,535 bases now error rather than disappearing | Explicit long-read representation and correctness tests before widening |
 | Overhang cache | Up to 256 entries; observations with over 1,000 overhangs are recomputed | High-depth benchmark and bounded-byte caching with exact-output tests |
-| Read-backed wrapper | Native default output cap 16, wrapper post-selection default 1 source candidate, possibly several overlapping tiles | Same source/read evidence, fragment-depth and downstream performance checks |
+| Read-backed selection | Default Rust output starts from up to 16 native contigs, selects one source candidate using original pairs, then may emit overlapping tiles | Same source/read evidence, fragment-depth and downstream performance checks |
 
 The high-exponent runtime Psi condition is exact but sensitive to the
 largest absolute regression. A noisy container may control tail
@@ -30,17 +30,16 @@ must not be reported as a newly repeated 198-sample experiment.
 
 The frozen 198-sample numeric pass was measured with a Python read-backed
 selector/trim/tile wrapper and 50 primary / 20 supplementary native seeds.
-The Rust CLI now defaults to the same 50/20 seed budgets, but without
-the read-backed selector, trimming and tiling it is still not the fully
-qualified execution configuration. The same physical cohort was used to tune
+The default Rust executable now implements the same read-backed
+selector, trimming and tiling internally. This is a new candidate and
+does not inherit numerical qualification from the wrapped image. The same physical cohort was used to tune
 several heuristic thresholds, so a pass is not evidence of held-out
 generalization. The source- and base-pinned image builder is
 `scripts/build_read_backed_image.sh`. See
 `docs/read-backed-selection-experiment.md` for the complete boundary.
 
-Any new native implementation of the wrapper should be introduced
-behind explicit options with a frozen Python-versus-Rust differential
-harness, a versioned configuration manifest and read-pair accounting
-checks. Only a fresh physical 198-sample MiCall A/B comparison can
+The direct Rust default must use a frozen Python-versus-Rust
+differential harness and original-pair accounting checks, **without**
+benchmark-only flags or environment tuning. Only a fresh physical 198-sample MiCall A/B comparison can
 replace the existing numeric qualification, while separate held-out
 cohort evaluation is needed for an unbiased performance claim.

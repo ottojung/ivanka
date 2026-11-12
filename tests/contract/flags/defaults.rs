@@ -5,8 +5,7 @@ use std::process::Command;
 fn native_seed_limits_default_without_environment() {
     let case = Fixture::new();
     let output = Command::new(env!("CARGO_BIN_EXE_ivanka"))
-        .env_remove("IVANKA_BENCH_PRIMARY_SEEDS")
-        .env_remove("IVANKA_BENCH_RESCUE_SEEDS")
+        .env_clear()
         .arg("--reads1")
         .arg(fixture("a_R1.fastq"))
         .arg("--reads2")

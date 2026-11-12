@@ -39,3 +39,15 @@ code in a candidate container.
 **Privacy:** only synthetic test data is checked into the repository.
 De-identified labels such as `S48` may be printed in research reports;
 raw FASTQs and the private label-to-source mapping remain outside Git.
+
+
+## Expanded seven-assembler benchmark (new, not yet qualified)
+
+The [expanded benchmark](expanded/README.md) adds 400 reproducible synthetic
+paired-FASTQ scenarios and separate real/synthetic pairwise all-r PSI
+comparisons against IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet. It
+fails closed on missing tools, samples, versions and runtime/quality results.
+It is an additional future gate, **not** a retroactive replacement of the
+frozen 198-sample result. The [implementation-based explanation of Ivanka
+versus IVA](../docs/assembler-comparison-20261112.md) identifies possible
+causes and mandatory ablation experiments.

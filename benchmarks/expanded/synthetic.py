@@ -228,8 +228,10 @@ def generate_case(root, family, seed, pairs=900, *,
             # A shared technical tail can falsely join unrelated templates.
             r1, r2 = r1[:-18] + "AGATCGGAAGAGCACACG", r2[:-18] + "AGATCGGAAGAGCACACG"
         name = f"synthetic:{family}:{seed}:{i:08d}"
-        first.append(f"@{name}/1\n{r1}\n+\n{q1}\n")
-        second.append(f"@{name}/2\n{r2}\n+\n{q2}\n")
+        # MiCall fastq_g2p parses the Illumina CASAVA read descriptor as
+        # a separate whitespace-delimited token; no wrapper rewrites reads.
+        first.append(f"@{name} 1:N:0:1\n{r1}\n+\n{q1}\n")
+        second.append(f"@{name} 2:N:0:1\n{r2}\n+\n{q2}\n")
     fq1, fq2 = read_dir / "R1.fastq.gz", read_dir / "R2.fastq.gz"
     truth = truth_dir / "haplotypes.fasta"
     _write_gzip(fq1, first)

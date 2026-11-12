@@ -17,10 +17,25 @@ def verify_cohort(directory, *, expected=400):
             or set(manifest["families"]) != set(FAMILIES)
             or len({x["id"] for x in manifest["cases"]}) != expected):
         raise ValueError("wrong HXB2 synthetic cohort schema or count")
+    import gzip
     for row in manifest["cases"]:
         case = directory / row["id"]
         if not validate(case):
             raise ValueError("invalid HXB2 truth")
+        reads = []
+        for mate in (1, 2):
+            with gzip.open(case / f"reads/R{mate}.fastq.gz", "rt") as file:
+                headers = [line.strip() for i, line in enumerate(file)
+                           if i % 4 == 0]
+            if any(not header.startswith("@synthetic:")
+                   or not header.endswith(f" {mate}:N:0:1")
+                   for header in headers):
+                raise ValueError("FASTQ headers incompatible with actual MiCall")
+            reads.append(headers)
+        if len(reads[0]) != len(reads[1]) or any(
+                a.split()[0] != b.split()[0]
+                for a, b in zip(*reads)):
+            raise ValueError("paired-read identity mismatch")
         actual = json.loads((case / "manifest.json").read_text())["sha256"]
         if actual != row["sha256"]:
             raise ValueError("case provenance does not match cohort")

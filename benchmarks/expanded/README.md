@@ -198,6 +198,41 @@ real MAX metric must be extracted from final MiCall output and the
 synthetic known-truth score must come from MiCall's final dominant
 sequence. Standalone contig-to-truth scores and standalone runtime are
 explicitly marked diagnostic and **rejected even if numerically superior**.
+The actively eligible synthetic cohort has a **MiCall-compatible,
+Illumina-style paired FASTQ header** with a separate read descriptor:
+`@synthetic:family:seed:fragment 1:N:0:1` and `2:N:0:1`.
+The v2 HXB2 cohort has valid biology but historical one-token FASTQ
+headers; it cannot be substituted for the new **v3** source-attested
+MiCall-integrated benchmark. The v3 source manifest and independent
+attestation are pinned in
+`benchmarks/expanded/references/hxb2-400-v3-micall-{cohort,validation}.json`,
+with SHA-256 of `cohort.json`:
+`a390ba4ecec60e2dcf2af8d7a933d7c399e401e5a44a42ac7adf868f2b341113`.
+
+The corrected **synthetic MiCall-integrated runner** invokes each of the
+seven pinned candidate images through the identical full
+`micall analyze sample` downstream pipeline, mounts **only** its
+paired FASTQs and output folder, and records the authenticated in-container
+monotonic MiCall runtime. Final known-truth scoring selects the
+highest read-supported **final full-seed MAX consensus** in MiCall
+`conseq_all.csv` using the `remap-final` counts and *never* the truth
+to choose between outputs. Its score origin is
+`micall_final_dominant_truth_v2`, separate from standalone raw-contig
+diagnostics. If final support is missing or source/binary proof drifts,
+the run fails closed. Example:
+
+```sh
+python3 -m benchmarks.expanded.micall_synthetic \
+  --data /data/hxb2-micall-400 \
+  --images /results/seven-full-image-ids.json \
+  --out /results/integrated-synthetic --jobs 10 --timeout 1800
+```
+
+`--limit 1` is a diagnostic development smoke **only**, never a
+passing 400-case run. The complete seven-way MiCall result, both
+cohort-stratified strict all-r Ψ metrics and the public Pages report
+are still unqualified.
+
 The synthetic cohort additionally needs independent HXB2 ancestry
 validation; old random-genome cohort scores remain ineligible. Passing a local combine step
 alone is still insufficient: independently verify HXB2 truth ancestry,
@@ -225,7 +260,7 @@ same completed sample run. The benchmark-only
 3. Only **after MiCall has exited** globally aligns the selected
    final sequence to hidden generating dominant truth in either DNA
    orientation. Returns `score_origin =
-   micall_final_dominant_truth_v1` and SHA256 provenance for both
+   micall_final_dominant_truth_v2` and SHA256 provenance for both
    source CSV files and the selected sequence.
 4. Raises a pipeline-level error on missing/empty final MAX output
    even if Ivanka itself legitimately exited successfully with

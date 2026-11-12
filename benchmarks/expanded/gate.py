@@ -21,7 +21,7 @@ MAX_WALL = 1800
 # The gate scores downstream MiCall output, never the assembler's FASTA.
 SCORE_ORIGINS = {
     "real": "micall_final_max_reference_panel_v1",
-    "synthetic": "micall_final_dominant_truth_v1",
+    "synthetic": "micall_final_dominant_truth_v2",
 }
 TIMING_ORIGIN = "micall_in_container_monotonic_v1"
 TRUTH_SCHEMA = "ivanka.hxb2_truth_validation.v1"

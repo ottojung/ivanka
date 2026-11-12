@@ -97,6 +97,36 @@ class ReferenceIsolationTests(unittest.TestCase):
                     recipe, "COPY benchmarks/mysterious_helper.py /usr/local/bin/ivanka",
                 ))
 
+    def test_copy_flags_and_json_form_are_reviewed(self):
+        for recipe in (
+            "COPY --chown=123 benchmarks/unreviewed.py /tmp/source.py",
+            "COPY --chmod=755 --chown=123 benchmarks/unreviewed.py /tmp/source.py",
+            'COPY ["benchmarks/unreviewed.py", "/tmp/source.py"]',
+            "ADD --chown=123 benchmarks/unreviewed.py /tmp/source.py",
+        ):
+            with self.subTest(recipe=recipe):
+                self.assertTrue(image_script_errors("Containerfile.test", recipe))
+
+    def test_unreviewable_copy_variants_fail_closed(self):
+        for recipe in (
+            'COPY --chown=100 ["benchmarks/evil.py", "/tmp/evil.py"]',
+            "COPY benchmarks/evil.py \\",
+        ):
+            with self.subTest(recipe=recipe):
+                self.assertTrue(image_script_errors("Containerfile.test", recipe))
+
+    def test_copy_flags_do_not_hide_known_candidate_leak(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "benchmarks").mkdir()
+            script = root / "benchmarks/ivanka_read_support_selector.py"
+            script.write_text("score = alignment_score(reference)")
+            self.assertTrue(image_script_errors(
+                "Dockerfile",
+                "COPY --chown=100 benchmarks/ivanka_read_support_selector.py /tmp/selector.py",
+                root,
+            ))
+
     def test_broad_copy_and_containerfile_references_are_rejected(self):
         self.assertTrue(image_script_errors("Containerfile.new", "COPY . /src"))
         self.assertTrue(image_recipe_errors(

@@ -154,7 +154,8 @@ This is a runtime hypothesis, not a qualification result.
 A densest standalone 2 kb window failed S65 alignment (830 vs IVA1292),
 although it eliminated the runtime gap. To avoid dropping distant viral
 sequence, an optional distinct experimental mode divides uniformly
-read-supported long contigs into non-overlapping tiles of at most 2,000 nt,
+read-supported long contigs into tiles with an original-core span of
+at most 2,000 nt and **512 nt of retained downstream overlap**,
 retaining every base in original order, without selecting a genomic target.
 It refuses to tile weakly supported segments and leaves other sequences intact.
 The same immutable benchmark and reference-blindness contract apply.
@@ -162,3 +163,52 @@ The same immutable benchmark and reference-blindness contract apply.
 A 60%-of-span minimum resulting tile length prevents tiny fragments,
 while allowing 2,443nt S75-like candidates to be partitioned into
 two complete-coverage tiles of 1,222 and 1,221nt.
+
+
+## Qualification boundary and reproducible rebuilds
+
+The numerical pass belongs to the **entire read-backed image**, not the
+standalone Rust binary. In particular, the passing container sets
+`IVANKA_BENCH_PRIMARY_SEEDS=50` and `IVANKA_BENCH_RESCUE_SEEDS=20`;
+uses the Rust default `--max-contigs=16`; and executes
+`/usr/local/bin/ivanka` as a Python read-backed wrapper around
+`/usr/local/bin/ivanka-native`. It scores original paired reads (up to
+80,000), selects one supported source contig, retains a supported island
+with a 512-nt flank, and attempts 2,000-nt-core/512-nt-overlap tiling.
+The wrapper may decline tiling if any proposed tile lacks >=80%
+original-pair support, including after terminal clipping.
+
+To build a **new** source-authenticated candidate from a clean commit,
+use `scripts/build_read_backed_image.sh
+localhost/micall:ivanka-read-backed-$(git rev-parse --short=12 HEAD)`.
+The script rejects uncommitted build inputs, enforces the existing
+benchmark exclusivity lock, pins the updated-MiCall base to
+`a5d4923e28f3d7b9725a375d51e34b14986bd29bdab04e8bf8f36f411141b8dd`,
+avoids pulling mutable base layers, and verifies a source-commit label.
+The historical successful image remains identified by
+`c7bc9c96c9ce8875308ed9783267dbca86a8191cb862f45be0c1e523872a7660`.
+Building from a different commit produces a **different candidate**,
+not a reproduction of the original output or numerical qualification.
+
+The source used for the original physical run is recorded as `e04eafd`,
+and the resulting release is `v0.1.0-alpha.2`. Subsequent Rust
+refactoring and input-handling changes passed independent tests, but
+the unchanged physical 198-sample experiment has **not** been rerun for
+current HEAD. Also, the 198 real samples were used both in experimental
+configuration selection (including S101's clipping flank, S65's window
+and S75's tiling threshold) and for numerical qualification. Thus
+198/198 is a reproducible **development-cohort** result, **not**
+held-out evidence or a clinical validation. Never substitute repeated
+tuning on that cohort for independent held-out confirmation.
+
+The wrapper's empty FASTA is now a valid output, consistent with the
+native binary. The wrapper also validates FASTQ structure and pairing
+when re-reading sampled support pairs. Trimmed contigs retain their
+original positional read-depth slices, so they can be considered for
+tiling instead of being silently bypassed. These are **new execution
+changes** relative to the frozen passing image; they require a fresh
+full physical A/B benchmark to establish numerical equivalence or
+improvement. The 50-code-line/default-rustfmt limits stay in force;
+moving the read-backed candidate ranking and tiling into native Rust
+must pass a separate Python-vs-Rust parity suite and original-pair
+validation before replacing the qualified wrapper.

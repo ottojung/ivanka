@@ -412,18 +412,18 @@ class ExpandedTruthScoringTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 read_fasta(fasta)
 
-    def test_ambiguous_contig_is_valid_but_not_exact(self):
-        from expanded.score import dominant_truth_score, read_fasta
+    def test_ambiguous_hxb2_fragment_is_scored_not_exact(self):
+        from expanded.score import dominant_truth_score
+        from benchmarks.test_expanded_micall_dominant import HXB2_PREFIX
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            meta = generate_case(root, "clonal", 3, pairs=50)
-            case = root / "clonal-s003"
-            truth = case / meta["hidden_truth_file"]
-            bases = list(read_fasta(truth)[0])
-            bases[100] = "W"
-            contig = root / "ambiguity.fa"
-            contig.write_text(">ambiguous\n" + "".join(bases) + "\n")
-            result = dominant_truth_score(meta, truth, contig)
+            truth = root / "known_hxb2_fragment.fasta"
+            truth.write_text(">hxb2_prefix\n" + HXB2_PREFIX + "\n")
+            contig = root / "ambiguous.fa"
+            contig.write_text(">ambiguous\n" + HXB2_PREFIX[:20]
+                              + "W" + HXB2_PREFIX[21:] + "\n")
+            result = dominant_truth_score(
+                {"nominal_fractions": [1.0]}, truth, contig)
             self.assertLess(result["score"], 1.0)
             self.assertGreater(result["score"], 0.9)
             self.assertFalse(result["dominant_exact"])

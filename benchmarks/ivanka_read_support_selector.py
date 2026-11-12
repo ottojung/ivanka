@@ -176,7 +176,7 @@ def main(args):
     max_pairs = int(os.environ.get("IVANKA_SUPPORT_PAIRS", "80000"))
     if limit < 1 or limit > 1000 or max_pairs < 1 or max_pairs > 1000000:
         raise ValueError("Invalid read-only selection budget")
-    trim = os.environ.get("IVANKA_TRIM_UNSUPPORTED_TERMINI", "0") == "1"
+    trim = os.environ.get("IVANKA_TRIM_UNSUPPORTED_TERMINI", "1") == "1"
     if not entries:
         # Zero contigs is a valid native result. Preserve the empty FASTA
         # without rereading FASTQs or inventing read-backed candidates.
@@ -193,7 +193,7 @@ def main(args):
     if trim:
         from ivanka_trim_unsupported import (trim_supported_island,
                                              trim_terminal_unsupported)
-        island = os.environ.get("IVANKA_TRIM_SUPPORTED_ISLAND", "0") == "1"
+        island = os.environ.get("IVANKA_TRIM_SUPPORTED_ISLAND", "1") == "1"
         clipping = trim_supported_island if island else trim_terminal_unsupported
         clipped = [clipping(entries[i], depth[i], with_bounds=True)
                    for i in chosen]
@@ -209,9 +209,9 @@ def main(args):
         # A windowed result has no corresponding translated depth slice.
         # The qualified image sets span=0; other values retain their
         # existing (non-tiling) behavior until offset-aware windowing exists.
-    tile_span = int(os.environ.get("IVANKA_READ_BACKED_TILE_SPAN", "0"))
+    tile_span = int(os.environ.get("IVANKA_READ_BACKED_TILE_SPAN", "2000"))
     if tile_span:
-        tile_overlap = int(os.environ.get("IVANKA_READ_BACKED_TILE_OVERLAP", "0"))
+        tile_overlap = int(os.environ.get("IVANKA_READ_BACKED_TILE_OVERLAP", "512"))
         from ivanka_read_tiling import tile_supported_contig
         selected = [part for i, result, observed in
                     zip(chosen, selected, selected_depth)

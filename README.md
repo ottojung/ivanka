@@ -355,25 +355,30 @@ For a concise map of the active acceptance scripts versus historical
 experiments, see [benchmark entry points](benchmarks/README.md) and
 [the documentation map](docs/README.md).
 
-**Reproducibility note:** the frozen 198-sample numerical pass covers
-a specific Python read-backed wrapper and native seed budget (50/20),
-not default standalone Rust behavior. The same cohort helped choose
-some experimental thresholds and is not held-out evidence. See
-[the complete image and qualification boundary](
+**Default benchmark configuration:** the standard packaged MiCall
+`ivanka` command now uses 50 primary / 20 supplementary native seed
+attempts and the complete original-read-backed selector, trimming and
+512-nt overlapping tiling, without special environment settings.
+The earlier 198-sample pass used the same algorithm with those options
+supplied by the image environment. The standalone Rust executable
+still does not implement read-backed post-selection: it is **not yet
+independently qualified** as the complete benchmark pipeline.
+The cohort also informed parameter tuning, so it is not held-out
+evidence. See [the complete qualification boundary](
 docs/read-backed-selection-experiment.md#qualification-boundary-and-reproducible-rebuilds)
-and [the pinned read-backed image builder](scripts/build_read_backed_image.sh).
+and [the source-pinned image builder](scripts/build_read_backed_image.sh).
 
 ## Contig reporting and read-support ranking
 
-The native assembler attempts at most **1,000 primary** and **400
-supplementary** high-depth seeds by default; experimental environment
-budgets can reduce these limits. It imposes no minimum assembled-contig
+The native assembler attempts at most **50 primary** and **20
+supplementary** high-depth seeds by default; diagnostic overrides
+can reduce these limits but are not part of normal operation. It imposes no minimum assembled-contig
 length. Its final FASTA has **at most 1,000 contigs**, but the native
 `--max-contigs` **default is 16**, not 1,000. The default MiCall adapter
 does not pass an override, so native Ivanka starts with this 16-contig
-budget. The passing read-backed image additionally selects its strongest
-read-supported input candidate by default (`IVANKA_POSTSELECT_CONTIGS=1`)
-and may produce multiple overlapping FASTA tiles from that candidate.
+budget. The read-backed image additionally selects its strongest
+read-supported source candidate by default (one candidate, without
+environment configuration) and may produce overlapping FASTA tiles.
 The native cap and the wrapper's selection budget are different controls.
 
 Native ranking first protects caller-supplied read-derived seed contigs,

@@ -10,18 +10,8 @@ RUN cargo build --release --locked
 # Pin the identical updated-MiCall base used by the frozen IVA control.
 FROM localhost/micall:newmicall-e0073cb5-base
 ARG SOURCE_COMMIT
-ARG NATIVE_PRIMARY_SEEDS=50
-ARG NATIVE_RESCUE_SEEDS=20
-ARG POSTSELECT_CONTIGS=1
-ENV IVANKA_BENCH_PRIMARY_SEEDS=${NATIVE_PRIMARY_SEEDS}
-ENV IVANKA_BENCH_RESCUE_SEEDS=${NATIVE_RESCUE_SEEDS}
-ENV IVANKA_POSTSELECT_CONTIGS=${POSTSELECT_CONTIGS}
-ENV IVANKA_SUPPORT_PAIRS=80000
-ENV IVANKA_TRIM_UNSUPPORTED_TERMINI=1
-ENV IVANKA_TRIM_SUPPORTED_ISLAND=1
-ENV IVANKA_READ_BACKED_MAX_SPAN=0
-ENV IVANKA_READ_BACKED_TILE_SPAN=2000
-ENV IVANKA_READ_BACKED_TILE_OVERLAP=512
+# Qualified selection and assembly limits are built into Ivanka defaults.
+# This image needs no IVANKA_* environment variables or build arguments.
 COPY --from=ivanka-builder /src/target/release/ivanka /usr/local/bin/ivanka-native
 COPY benchmarks/ivanka_read_support_selector.py /usr/local/bin/ivanka
 COPY benchmarks/ivanka_trim_unsupported.py /usr/local/bin/ivanka_trim_unsupported.py

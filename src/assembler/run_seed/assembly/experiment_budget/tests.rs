@@ -1,13 +1,13 @@
 use super::validate;
 #[test]
-fn absent_preserves_original_limits() {
-    assert_eq!(validate(None, 1000, "primary").unwrap(), 1000);
-    assert_eq!(validate(None, 400, "rescue").unwrap(), 400);
+fn absent_uses_ordinary_search_limits() {
+    assert_eq!(validate(None, 50, "primary").unwrap(), 50);
+    assert_eq!(validate(None, 20, "rescue").unwrap(), 20);
 }
 #[test]
 fn positive_budget_accepted() {
-    assert_eq!(validate(Some("100"), 1000, "primary").unwrap(), 100);
-    assert_eq!(validate(Some("1"), 400, "rescue").unwrap(), 1);
+    assert_eq!(validate(Some("40"), 50, "primary").unwrap(), 40);
+    assert_eq!(validate(Some("1"), 20, "rescue").unwrap(), 1);
 }
 #[test]
 fn zero_rejected() {

@@ -90,14 +90,14 @@ sequences, including indirectly through sample-specific lookup tables.
 
 ## Native search budget
 
-The separate Rust experiment permits optional environment settings
-`IVANKA_BENCH_PRIMARY_SEEDS` and `IVANKA_BENCH_RESCUE_SEEDS`.
-With no settings, the original 1,000 primary and 400 supplementary
-attempts are preserved. The experimental MiCall image uses 50 and 20
-respectively to cut assembly time while keeping the original native
-`--max-contigs=16` search. Its optional `--seeds` FASTA inputs remain
-valid **only** when the caller has verified derivation solely from that
-sample's sequencing reads.
+Native Ivanka now uses **50 primary and 20 supplementary seed
+attempts as ordinary defaults**, with no benchmark environment
+configuration. Diagnostic `IVANKA_BENCH_PRIMARY_SEEDS` and
+`IVANKA_BENCH_RESCUE_SEEDS` overrides can reduce the limits but are
+not required by the standard executable or container. The native
+`--max-contigs=16` default is unchanged. Optional `--seeds` FASTA
+inputs remain valid **only** when the caller has independently verified
+derivation solely from that sample's sequencing reads.
 
 The independent benchmark still applies the unchanged 198 original
 paired FASTQs, the frozen 33-reference FINAL-MAX alignment evaluator,
@@ -212,3 +212,24 @@ improvement. The 50-code-line/default-rustfmt limits stay in force;
 moving the read-backed candidate ranking and tiling into native Rust
 must pass a separate Python-vs-Rust parity suite and original-pair
 validation before replacing the qualified wrapper.
+
+
+## Default settings policy (current main)
+
+The default packaged `/usr/local/bin/ivanka` performs native assembly,
+read-backed selection, supported-island trimming and overlapping tiling.
+Normal use requires **no** `IVANKA_*` environment configuration. Its
+native seed budgets are 50 primary / 20 rescue in the Rust defaults,
+and the Python read-backed selector defaults to the same candidate
+selection, original-pair sampling and tile parameters used by the
+previously passing image. The Dockerfile deliberately sets no
+benchmark-specific `ENV` or parameter-selection build arguments.
+
+The standalone Rust `target/release/ivanka` still implements native
+assembly only and **must not** be advertised as independently passing
+the full benchmark until the read-backed pipeline has been ported and
+independently qualified. Experimental environment overrides are
+backward-compatible diagnostic inputs, not a requirement for normal use.
+The source-commit-qualified image must undergo the *fresh* physical
+198-sample gate to establish its own passing status; code default
+parity is not a substitute for measurement.

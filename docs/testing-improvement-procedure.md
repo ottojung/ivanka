@@ -5,14 +5,16 @@ This is the procedure for an Ivanka improver, reviewer, or Antonina agent.
 missing evidence. Diagnostic metrics can guide optimization, but must never
 become extra pass/fail conditions for the real-data milestone.
 
-**Assembly objective (read first):** Ivanka primarily reconstructs the
-**dominant read-supported viral sequence**, not an exhaustive list of
-haplotypes. Failure to recover a valid minority contig is **not**, by
-itself, a failure. Evaluate a contig-pruning proposal by its effect on
-the dominant sequence, phase integrity, downstream MiCall allele counts,
-and whole-pipeline runtime. Synthetic minority-haplotype recovery is a
-diagnostic and safety investigation, not a mandatory exhaustive-recall
-gate. See [Primary assembly objective](assembly-objective.md).
+**Pipeline objective (read first):** Ivanka itself is **not required to
+reconstruct any haplotype, including the most abundant one**. Ivanka's
+contigs are intermediate evidence; **the complete MiCall pipeline** must
+recover the most abundant identifiable haplotype, or honestly report
+consensus and phase uncertainty. Failure to produce a complete standalone
+contig is not by itself a failure. Evaluate pruning, tiling and candidate
+selection through the **final MiCall dominant output**, phase integrity,
+downstream allele measurements, and whole-pipeline runtime. Standalone
+synthetic contig completeness and minority recall are diagnostics, not
+biological release gates. See [pipeline objective](assembly-objective.md).
 
 ## Scientific blinding: a prerequisite to valid comparisons
 
@@ -37,8 +39,9 @@ candidates are invalid, even when both PSI metrics happen to pass.
 seven-assembler benchmark (**Intent 006**), with 198 unchanged real samples
 plus 400 diverse synthetic samples. The expanded gate requires Ivanka to
 beat IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet on each cohort,
-using independently strict alignment and runtime Ψ(r)>0 for every real r≥0
-and the expanded per-sample alignment floor. Neither benchmark can substitute
+using independently strict final-MiCall-output alignment and runtime
+Ψ(r)>0 for every real r≥0 and the expanded per-sample alignment floor.
+No isolated assembler FASTA-to-truth score qualifies the synthetic gate. Neither benchmark can substitute
 for the other; an unrun, missing, failed or incomplete comparison is **NOT
 PASSED**. These gates are mandatory **now**, not planned future options.
 
@@ -151,9 +154,12 @@ the **maximum across remapping passes is only a lower bound** on
 distinct capped pairs. Do not sum warnings from repeated passes.
 
 Extra diagnostic context: contig count/lengths; pair-level Q15 phase links;
-exact truth haplotype recovery on synthetic samples; final MAX DNA and
+**standalone assembler-to-truth** similarity and completeness; minority
+haplotype recovery on synthetic samples; final MAX DNA and
 region-offset changes; duplicated molecule warnings; invalid/missing files;
-all command logs and hashes.
+all command logs and hashes. For synthetic acceptance, score the **final
+dominant MiCall product** against withheld generating truth instead of the
+best or longest standalone contig.
 
 Metrics are *not necessarily monotone in scientific quality*: more contigs
 can inflate depth sums and perfect-coverage zeros; low clipping can result
@@ -271,11 +277,13 @@ counts exact haplotype recovery. Better.fasta **must** score better than
 worse.fasta: this is a positive calibration test, *not* evidence that longer
 database-reference alignment in real samples always represents better biology.
 
-Use the actual Rust assembler on those FASTQs next; compare its resulting
-FASTA to hidden truth *after execution*. Record unsupported recombinant
-candidates and linked versus unlinked original-pair evidence. A candidate
-that improves an alignment score but invents haplotype phase is not a
-successful scientific improvement.
+Standalone assembler-to-hidden-truth comparisons after execution are
+**diagnostic only**. For release qualification, run those reads through
+MiCall and independently score the pipeline's **final dominant output**.
+Record unsupported recombinant candidates and linked versus unlinked
+original-pair evidence. An attractive raw contig that degrades final
+MiCall reconstruction is not a scientific improvement; nor is a raw
+fragment that MiCall can successfully use a standalone failure.
 
 ## New MiCall's strict 198-sample physical retest
 

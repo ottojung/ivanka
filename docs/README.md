@@ -1,8 +1,10 @@
 # Documentation map
 
 Start with the [project README](../README.md) and the
-[primary assembly objective](assembly-objective.md). The assembly must
-remain reference-blind and prioritize the dominant read-supported path.
+[pipeline-level assembly objective](assembly-objective.md). Ivanka is
+reference-blind intermediate assembly infrastructure, **not required
+to reconstruct any haplotype in isolation**. MiCall as a complete pipeline
+must recover the most abundant identifiable haplotype.
 
 ## Binding target execution intents
 
@@ -14,8 +16,9 @@ remain reference-blind and prioritize the dominant read-supported path.
 
 - [Intent 003: reference blindness](intents/003-reference-blindness.md) —
   no known genomes, panel scores or reference-derived inputs influence Ivanka.
-- [Intent 004: dominant read-supported sequence](intents/004-dominant-sequence.md) —
-  honest dominant consensus and original-pair integrity.
+- [Intent 004: dominant recovery belongs to MiCall](intents/004-dominant-sequence.md) —
+  Ivanka alone need not reconstruct any haplotype; the full pipeline
+  must recover the most abundant identifiable viral haplotype.
 - [Intent 005: unchanged physical-198 benchmark](intents/005-physical-198-qualification.md) —
   each sample ≥90% of IVA; strict alignment and runtime Ψ(r)>0 for all r≥0.
 - [Intent 006: expanded seven-assembler benchmark](intents/006-expanded-qualification.md) —

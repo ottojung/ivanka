@@ -86,11 +86,15 @@ def join_real_runs(specification):
             selected[name] = {
                 "status": "success", "sha256": candidate["image_id"],
                 "seconds": candidate["seconds"], "score": eval_result["ivanka_score"],
+                "score_origin": "micall_final_max_reference_panel_v1",
+                "timing_origin": "micall_in_container_monotonic_v1",
             }
         selected["iva"] = {
             "status": "success", "sha256": pinned_iva,
             "seconds": original["iva"]["seconds"],
             "score": original["best_contig_acceptance"]["iva_score"],
+            "score_origin": "micall_final_max_reference_panel_v1",
+            "timing_origin": "micall_in_container_monotonic_v1",
         }
         fingerprint = hashlib.sha256(
             "".join(source_proof["fastq_sha256"]).encode()).hexdigest()

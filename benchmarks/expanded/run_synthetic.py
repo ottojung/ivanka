@@ -75,6 +75,8 @@ def run(cohort_root, results_root, binary_spec, *, threads=2, timeout=1800):
                 provenance = "".join(v["sha256"] for _, v in sorted(sha.items()))
                 row["results"][name] = {
                     "status": execution["status"], "score": score,
+                    "score_origin": "assembler_fasta_diagnostic_v1",
+                    "timing_origin": "standalone_assembler_wall_v1",
                     "seconds": execution["elapsed_wall_seconds"],
                     "sha256": hashlib.sha256(provenance.encode()).hexdigest(),
                 }
@@ -96,8 +98,9 @@ def main(argv=None):
     print("ATTEMPTED_SYNTHETIC_CASES",
           run(args.cohort, args.out, manifest,
               threads=args.threads, timeout=args.timeout))
-    print("Qualification requires all 400 synthetic and all 198 real cases "
-          "with all seven tools; run expanded.gate on the combined matrix.")
+    print("DIAGNOSTIC ONLY: these scores evaluate raw assembler FASTA. "
+          "They cannot satisfy pipeline-level Intent 004/006. "
+          "Use HXB2-derived truth and full MiCall output for qualification.")
 
 
 if __name__ == "__main__":

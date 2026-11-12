@@ -26,6 +26,14 @@ sample, and timing provenance.
    Ψ(0), Ψ(1), and Ψ(2) checks alone are insufficient. Invalid or
    unresolved numerical evidence cannot be called passing.
 
+**Scoring refers to final MiCall output, not to standalone Ivanka
+reconstruction.** Ivanka's raw contigs may be partial or empty; they are
+intermediate evidence. The unchanged original best-final-MAX score is an
+integrated pipeline proxy, not proof that the assembler individually
+recovered the dominant biological haplotype. Intent 004 makes MiCall
+responsible for recovering the dominant identifiable haplotype while
+retaining the numerical gate specified here.
+
 Both assemblers run on the same pinned MiCall base, with original reads
 untouched; any reused IVA control must have **identical full provenance**.
 Prior data, a different mapping implementation, cached incomplete results,

@@ -25,8 +25,12 @@ documented adapter operation rather than a bespoke benchmark rewrite.
    The generator, its hidden truth, the read simulation, assembler execution,
    MiCall processing and independent scoring remain separate, auditable
    stages. Never mount or pass generating truth or evaluation references to
-   an assembler. Standalone CLI microbenchmarks may be supplementary
-   diagnostics, but they do not replace integrated MiCall results.
+   an assembler. **The synthetic dominant-haplotype score must come from
+   the final MiCall output**, after pipeline completion and with a pinned
+   documented extraction method, **not from the best raw assembler
+   contig**. Standalone contig-to-truth similarity, fragmentation,
+   contig length, count, or haplotype recall are supplementary diagnostics
+   only; they do not replace or satisfy integrated MiCall results.
 3. Store machine-readable, immutable, provenance-rich **per-run, per-sample,
    per-assembler** results: outcome/error/timeout, alignment or known-truth
    score, MiCall runtime, output counts, input manifest hashes, tool/image

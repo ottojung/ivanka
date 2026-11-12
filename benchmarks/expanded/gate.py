@@ -18,6 +18,29 @@ from psi_acceptance import summarize as psi  # noqa: E402
 BASELINES = tuple(name for name in ASSEMBLERS if name != "ivanka")
 SCORE_FLOOR = 0.90
 MAX_WALL = 1800
+# The gate scores downstream MiCall output, never the assembler's FASTA.
+SCORE_ORIGINS = {
+    "real": "micall_final_max_reference_panel_v1",
+    "synthetic": "micall_final_dominant_truth_v1",
+}
+TIMING_ORIGIN = "micall_in_container_monotonic_v1"
+TRUTH_SCHEMA = "ivanka.hxb2_truth_validation.v1"
+
+
+def eligible_truth(row):
+    """Require a pinned validator report from HXB2-derived synthetic input.
+
+    A declared hash alone is not a proof of truth ancestry; the source
+    validator and signed inputs must be independently checked externally.
+    """
+    proof = row.get("truth_validation")
+    return (isinstance(proof, dict)
+            and proof.get("schema") == TRUTH_SCHEMA
+            and proof.get("valid") is True
+            and all(isinstance(proof.get(key), str)
+                    and len(proof[key]) == 64
+                    and all(c in "0123456789abcdef" for c in proof[key])
+                    for key in ("cohort_sha256", "verification_sha256")))
 
 
 def finite_positive(number):
@@ -31,10 +54,12 @@ def summarize_gate(records, *, real_count=198, synthetic_seeds=16,
     records = list(records)
     synthetic_count = synthetic_seeds * len(families)
     expected = {"real": real_count, "synthetic": synthetic_count}
-    report = {"schema": "ivanka.expanded.seven_way.v1", "pass": False,
+    report = {"schema": "ivanka.expanded.seven_way.v2", "pass": False,
               "assemblers": list(ASSEMBLERS), "expected": expected,
               "families_expected": list(families), "errors": [],
-              "comparisons": {}, "worst_case_floor": SCORE_FLOOR}
+              "comparisons": {}, "worst_case_floor": SCORE_FLOOR,
+              "score_origins": SCORE_ORIGINS, "timing_origin": TIMING_ORIGIN,
+              "synthetic_truth_schema": TRUTH_SCHEMA}
     errors = report["errors"]
     ids = set()
     groups = {"real": [], "synthetic": []}
@@ -75,9 +100,17 @@ def summarize_gate(records, *, real_count=198, synthetic_seeds=16,
             if not isinstance(row.get("input_sha256"), str) or len(row["input_sha256"]) < 16:
                 errors.append(f"{name}:missing_input_provenance")
                 continue
+            if cohort == "synthetic" and not eligible_truth(row):
+                errors.append(f"{name}:missing_verified_HXB2_truth")
+                continue
             if any(not isinstance(x, dict) or x.get("status") != "success"
                    for x in values.values()):
                 errors.append(f"{name}:failed_or_unrun_assembler")
+                continue
+            if any(x.get("score_origin") != SCORE_ORIGINS[cohort]
+                   or x.get("timing_origin") != TIMING_ORIGIN
+                   for x in values.values()):
+                errors.append(f"{name}:not_final_MiCall_output_or_timing")
                 continue
             if any(not isinstance(x.get("sha256"), str)
                    or len(x["sha256"]) != 64

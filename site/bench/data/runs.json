@@ -3201,6 +3201,347 @@
         "spades",
         "velvet"
       ]
+    },
+    {
+      "cohort": "synthetic",
+      "cohort_manifest_sha256": "964fff8226beef4787226a5542dc2667fff0102bea0b4f4694686b11af1f7f5a",
+      "date": "2026-11-12",
+      "diagnostic_sha256": "8bbd91ceb63df2a15cee7821883731dee9890eb0885d28139829021feb26dfd5",
+      "eligible_for_expanded": false,
+      "expanded_status": "incomplete",
+      "expected_sample_count": 400,
+      "families": [
+        {
+          "failures": {
+            "abyss": 1,
+            "haploflow": 0,
+            "iva": 0,
+            "ivanka": 0,
+            "megahit": 0,
+            "spades": 0,
+            "velvet": 2
+          },
+          "family": "clonal",
+          "sample_count": 10,
+          "scores": {
+            "abyss": 0.9767465800000001,
+            "haploflow": 0.87498714,
+            "iva": 0.733192716,
+            "ivanka": 0.9984566319999999,
+            "megahit": 0.985492335,
+            "spades": 0.9867784759999999,
+            "velvet": 0.9534931575000001
+          },
+          "seconds": {
+            "abyss": 118.245676135,
+            "haploflow": 112.379927589,
+            "iva": 140.76666919309997,
+            "ivanka": 118.0815092698,
+            "megahit": 127.2736453732,
+            "spades": 121.48251265430001,
+            "velvet": 119.496677253125
+          }
+        }
+      ],
+      "hxb2_truth_verified": true,
+      "id": "hxb2-v4-micall-cases-010",
+      "images": {
+        "abyss": "6b6d369f7e0f267da027b8a9fdeca71e9f717c9b886327254c0a604c35db36ab",
+        "haploflow": "160600447977c5863a58c8442f2785f2d1ca69d6b9863a10ddde748c56c1906a",
+        "iva": "a5d4923e28f3d7b9725a375d51e34b14986bd29bdab04e8bf8f36f411141b8dd",
+        "ivanka": "1c241e72a036706fc82daa19ee5d9eaf22756dbd0909632f5f7b225c78ccec43",
+        "megahit": "dbf8fe1306ed904e909f4c5f43f03dbb00796e8933286afad5754ac032776456",
+        "spades": "749092932a5aac8e9132f0d98db10f6f868f8f5dbb0161ea00f21fefc714d65f",
+        "velvet": "521e6c5620025bbc4b8897d33896d27dcf26ca0acb86b0a542a9c19def9908d7"
+      },
+      "psi": {},
+      "reference_manifest_sha256": "83e904ed0b7ee2f6ee6d43fc87cdb84af703739bce6e6ab43c8c06e4e0d25fd7",
+      "runner_source_sha256": {
+        "adapters.py": "7912f4608a535f71be4c14ddc0e60e79348ef0ae873d36b19d981d2f6c3681e4",
+        "hxb2_cohort.py": "261542ffcef15d341263dc8b309994fce385d56b0e2ba98e8bde32802d58bc9e",
+        "micall_checkpoint.py": "96b9b1abec1f607f54b935eb9a401313c727757944d7cc3b6fb22db3011ae917",
+        "micall_dominant.py": "f3720aa5fe434a38e7f6eabb6e5d1cd630cbc9831203ebdacf5371b111f977dc",
+        "micall_lock.py": "71ff01a3659584b5a1dff591655357e1cace8a7d9b08a91f51f10a3c95b7bb70",
+        "micall_synthetic.py": "9650b2e990746dc32d18b263d537e359ce00b72886696fee4db8e5d0bd2d6551",
+        "micall_synthetic_constants.py": "719f098e574077ad624bd7bcc4308db3b0b1149bf81b8dc0f23dea53306deeb3",
+        "score.py": "549c9e3cd5ae40fabb20d7f7c47bca806f035bb9172b61ddc55411456666f26e"
+      },
+      "sample_count": 10,
+      "samples": [
+        {
+          "alias": "H001",
+          "failures": [],
+          "family": "clonal",
+          "floor_ok": true,
+          "outcome": "success",
+          "score": {
+            "abyss": 0.99927976,
+            "haploflow": 0.9965017,
+            "iva": 0.87179751,
+            "ivanka": 0.99835374,
+            "megahit": 0.97438008,
+            "spades": 0.96532565,
+            "velvet": 0.8942278
+          },
+          "seconds": {
+            "abyss": 117.515868719,
+            "haploflow": 117.229704194,
+            "iva": 139.47512433,
+            "ivanka": 127.001480761,
+            "megahit": 112.976377316,
+            "spades": 121.409828031,
+            "velvet": 130.594392739
+          }
+        },
+        {
+          "alias": "H002",
+          "failures": [
+            "velvet"
+          ],
+          "family": "clonal",
+          "floor_ok": null,
+          "outcome": "failure",
+          "score": {
+            "abyss": 0.9906369,
+            "haploflow": 1.0,
+            "iva": 0.94258669,
+            "ivanka": 0.99897109,
+            "megahit": 0.99825085,
+            "spades": 1.0,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": 118.609732492,
+            "haploflow": 114.078628532,
+            "iva": 125.710145919,
+            "ivanka": 121.934794209,
+            "megahit": 144.825252651,
+            "spades": 123.16118164,
+            "velvet": null
+          }
+        },
+        {
+          "alias": "H003",
+          "failures": [
+            "velvet"
+          ],
+          "family": "clonal",
+          "floor_ok": null,
+          "outcome": "failure",
+          "score": {
+            "abyss": 0.87755942,
+            "haploflow": 0.99979422,
+            "iva": 0.84916144,
+            "ivanka": 0.99855952,
+            "megahit": 0.88558494,
+            "spades": 0.95781459,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": 120.709705027,
+            "haploflow": 146.850583976,
+            "iva": 166.001902146,
+            "ivanka": 126.876575154,
+            "megahit": 115.047121344,
+            "spades": 124.251268131,
+            "velvet": null
+          }
+        },
+        {
+          "alias": "H004",
+          "failures": [],
+          "family": "clonal",
+          "floor_ok": true,
+          "outcome": "success",
+          "score": {
+            "abyss": 0.99876531,
+            "haploflow": 0.99897109,
+            "iva": 0.0,
+            "ivanka": 0.99814796,
+            "megahit": 0.99897109,
+            "spades": 0.99897109,
+            "velvet": 0.99423809
+          },
+          "seconds": {
+            "abyss": 109.86619383,
+            "haploflow": 133.847880834,
+            "iva": 127.905007665,
+            "ivanka": 121.125669021,
+            "megahit": 134.699360157,
+            "spades": 126.53687269,
+            "velvet": 109.759239344
+          }
+        },
+        {
+          "alias": "H005",
+          "failures": [],
+          "family": "clonal",
+          "floor_ok": true,
+          "outcome": "success",
+          "score": {
+            "abyss": 0.99917687,
+            "haploflow": 0.8777652,
+            "iva": 0.79041054,
+            "ivanka": 0.99876531,
+            "megahit": 1.0,
+            "spades": 1.0,
+            "velvet": 0.97726104
+          },
+          "seconds": {
+            "abyss": 115.165292157,
+            "haploflow": 115.353389304,
+            "iva": 145.045857373,
+            "ivanka": 111.138018037,
+            "megahit": 116.177330983,
+            "spades": 125.592869101,
+            "velvet": 117.92392624
+          }
+        },
+        {
+          "alias": "H006",
+          "failures": [],
+          "family": "clonal",
+          "floor_ok": true,
+          "outcome": "success",
+          "score": {
+            "abyss": 0.93949995,
+            "haploflow": 0.93970573,
+            "iva": 0.96686902,
+            "ivanka": 0.99814796,
+            "megahit": 0.99948554,
+            "spades": 0.9471139,
+            "velvet": 0.93744212
+          },
+          "seconds": {
+            "abyss": 118.363390757,
+            "haploflow": 113.710984023,
+            "iva": 153.962335418,
+            "ivanka": 112.226699549,
+            "megahit": 141.896127161,
+            "spades": 120.418434954,
+            "velvet": 114.421454592
+          }
+        },
+        {
+          "alias": "H007",
+          "failures": [
+            "abyss"
+          ],
+          "family": "clonal",
+          "floor_ok": null,
+          "outcome": "failure",
+          "score": {
+            "abyss": null,
+            "haploflow": 0.99969133,
+            "iva": 0.93991151,
+            "ivanka": 0.99835374,
+            "megahit": 0.99969133,
+            "spades": 0.99969133,
+            "velvet": 0.9506122
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": 117.613919108,
+            "iva": 140.377771889,
+            "ivanka": 113.373053755,
+            "megahit": 129.148705777,
+            "spades": 115.439907281,
+            "velvet": 122.985455388
+          }
+        },
+        {
+          "alias": "H008",
+          "failures": [],
+          "family": "clonal",
+          "floor_ok": true,
+          "outcome": "success",
+          "score": {
+            "abyss": 0.99917687,
+            "haploflow": 0.99969133,
+            "iva": 0.0,
+            "ivanka": 0.99855952,
+            "megahit": 0.99969133,
+            "spades": 0.99969133,
+            "velvet": 0.98682992
+          },
+          "seconds": {
+            "abyss": 114.623872292,
+            "haploflow": 115.571767693,
+            "iva": 131.753131872,
+            "ivanka": 114.859368019,
+            "megahit": 135.992691264,
+            "spades": 121.836832835,
+            "velvet": 122.235681339
+          }
+        },
+        {
+          "alias": "H009",
+          "failures": [],
+          "family": "clonal",
+          "floor_ok": true,
+          "outcome": "success",
+          "score": {
+            "abyss": 0.99938265,
+            "haploflow": 0.9377508,
+            "iva": 0.97798127,
+            "ivanka": 0.99814796,
+            "megahit": 0.99938265,
+            "spades": 0.99969133,
+            "velvet": 0.95997531
+          },
+          "seconds": {
+            "abyss": 131.584227992,
+            "haploflow": 114.02363463,
+            "iva": 144.683264066,
+            "ivanka": 115.327875993,
+            "megahit": 114.427429489,
+            "spades": 117.191588986,
+            "velvet": 111.013224619
+          }
+        },
+        {
+          "alias": "H010",
+          "failures": [],
+          "family": "clonal",
+          "floor_ok": true,
+          "outcome": "success",
+          "score": {
+            "abyss": 0.98724149,
+            "haploflow": 0.0,
+            "iva": 0.99320918,
+            "ivanka": 0.99855952,
+            "megahit": 0.99948554,
+            "spades": 0.99948554,
+            "velvet": 0.92735878
+          },
+          "seconds": {
+            "abyss": 117.772801949,
+            "haploflow": 35.518783596,
+            "iva": 132.752151253,
+            "ivanka": 116.9515582,
+            "megahit": 127.54605759,
+            "spades": 118.986342894,
+            "velvet": 127.040043764
+          }
+        }
+      ],
+      "schema": "ivanka.assembler-bench.public.v1",
+      "score_origin": "micall_final_dominant_truth_v2",
+      "source_commit": "5510121fbf322ca496a3a89af3e3be7c8546452b",
+      "source_manifest_sha256": "978af51c2fc409c3127a9301d25f9ad4412a3570e5b94cc08b6a76f04d192890",
+      "status": "incomplete",
+      "status_reason": "10/400 completed HXB2-derived cases; 3 failed arms. This partial run does NOT meet the mandatory 598-case seven-way gate.",
+      "timing_origin": "micall_in_container_monotonic_v1",
+      "title": "HXB2 v4 \u00b7 seven-way integrated MiCall (in progress)",
+      "tools": [
+        "ivanka",
+        "iva",
+        "haploflow",
+        "megahit",
+        "abyss",
+        "spades",
+        "velvet"
+      ]
     }
   ],
   "schema": "ivanka.assembler-bench.public.v1",

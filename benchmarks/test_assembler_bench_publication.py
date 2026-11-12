@@ -15,7 +15,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
 
     def test_public_data_is_independently_grounded_and_complete(self):
         reports = self.root["runs"]
-        self.assertEqual(len(reports), 2)
+        self.assertGreaterEqual(len(reports), 3)
         real = next(r for r in reports if r["cohort"] == "real")
         self.assertEqual(real["sample_count"], 198)
         self.assertEqual(len(real["samples"]), 198)
@@ -41,7 +41,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
                                for f in run["families"]), 0)
 
     def test_no_private_metadata(self):
-        self.assertEqual(validate_public_site(), 2)
+        self.assertEqual(validate_public_site(), len(self.root["runs"]))
         text = json.dumps(self.root)
         for token in ("/workspace/", "/home/", ".fastq", "_R1_001",
                       "MidHCV_S", "V3LOOP_S", "patient_id"):

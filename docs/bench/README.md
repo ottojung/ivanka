@@ -65,3 +65,35 @@ successful GitHub Action is not by itself a numerical or biological
 passing benchmark; publication must be checked at the actual public URL.
 Source hashes, image identities, separate cohort scores, error accounting,
 and independent strict Ψ verdicts must be preserved for new runs.
+
+## Verified incomplete HXB2 MiCall snapshots on Pages
+
+Assembler Bench now supports source-attested, privacy-safe publication of
+partial *real MiCall* seven-assembler HXB2 results. It retains the old
+original-198 gate PASS and ineligible historical random-genome synthetic
+data as distinct runs. No unfinished HXB2 run is a seven-way PASS.
+
+An export includes only complete per-case checkpointed records: all seven
+immutable tool identities, correct original paired-read provenance,
+replay-verified HXB2 ancestry, pinned benchmark source and timer hashes,
+and independently checked final MiCall output SHA256. Public results
+contain anonymous H001-style sample aliases, family tags, actual final
+dominant-consensus known-truth score, in-container monotonic MiCall time,
+and explicit failures. Missing/failed arms have null scores and runtimes,
+not fabricated zero-score competitor losses. Protected filenames, paths,
+truths and patient metadata never appear.
+
+To add a versioned snapshot, run this on the trusted benchmark host:
+
+    PYTHONPATH=benchmarks python3 -m benchmarks.assembler_bench.hxb2_preview \
+      /workspace/ivanka-hxb2-seven-way-400-full-20261112 \
+      --public-json site/bench/data/runs.json
+
+The exporter appends an immutable run identifier based on the number
+of completed seven-arm cases and refuses duplicates or altered proof.
+A reviewed Git commit publishes the static data through the existing
+GitHub Pages workflow. Do not auto-sync private working directories.
+
+Check with the publication and HXB2 preview unittest modules, the
+site builder, node --check on site/bench/app.js, and independent page
+access. No partial result can certify either all-r signed-power gate.

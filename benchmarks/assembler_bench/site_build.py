@@ -3,6 +3,7 @@ import argparse
 import json
 import re
 import shutil
+import math
 from pathlib import Path
 
 from .publication import SCHEMA
@@ -10,6 +11,8 @@ from .publication import SCHEMA
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
 ALIAS = re.compile(r"^R[0-9]{3}$")
+HXB2_ALIAS = re.compile(r"^H[0-9]{3}$")
+HXB2_COHORT_SHA = "964fff8226beef4787226a5542dc2667fff0102bea0b4f4694686b11af1f7f5a"
 RUN = re.compile(r"^[a-zA-Z0-9_-]+$")
 SECRET = re.compile(r"/workspace/|/home/|_R[12]_[0-9]{3}|"
                     r"\.fastq(?:\.gz)?|private[-_]sample|patient[-_](?:id|name)",
@@ -64,9 +67,68 @@ def validate_public_site(site=SITE):
         if run["status"] == "ineligible":
             if run["eligible_for_expanded"] or run.get("psi"):
                 raise ValueError("ineligible run falsely presented as passing")
+        if run["status"] == "incomplete":
+            verify_hxb2_preview(run)
     if SECRET.search(json.dumps(report)):
         raise ValueError("private sample path or identifier in public report")
     return len(report["runs"])
+
+
+def verify_hxb2_preview(run):
+    """Incomplete HXB2 cases must be honestly represented, never called wins."""
+    from benchmarks.expanded.adapters import ASSEMBLERS
+    required = set(ASSEMBLERS)
+    if (run.get("cohort") != "synthetic"
+            or run.get("hxb2_truth_verified") is not True
+            or run.get("eligible_for_expanded") is not False
+            or run.get("expanded_status") != "incomplete"
+            or run.get("cohort_manifest_sha256") != HXB2_COHORT_SHA
+            or run.get("expected_sample_count") != 400
+            or run.get("psi") != {}
+            or set(run.get("tools", [])) != required
+            or set(run.get("images", {})) != required):
+        raise ValueError("incomplete HXB2 run has incorrect scientific evidence")
+    if (any(not re.fullmatch("[0-9a-f]{64}", value)
+            for value in run["images"].values())
+            or not re.fullmatch("[0-9a-f]{64}", run.get("diagnostic_sha256", ""))):
+        raise ValueError("HXB2 run missing immutable tool/output hashes")
+    samples = run.get("samples")
+    if (not isinstance(samples, list) or not 1 <= len(samples) <= 400
+            or run.get("sample_count") != len(samples)
+            or len({sample.get("alias") for sample in samples}) != len(samples)):
+        raise ValueError("incomplete HXB2 run has invalid sample count/aliases")
+    for sample in samples:
+        if (not HXB2_ALIAS.fullmatch(sample["alias"])
+                or set(sample) != {"alias", "family", "score", "seconds",
+                                   "failures", "outcome", "floor_ok"}
+                or not re.fullmatch("[a-z0-9_]+", sample["family"])
+                or set(sample["score"]) != required
+                or set(sample["seconds"]) != required
+                or not isinstance(sample["failures"], list)
+                or len(set(sample["failures"])) != len(sample["failures"])
+                or set(sample["failures"]) - required
+                or sample["outcome"] != ("failure" if sample["failures"]
+                                         else "success")):
+            raise ValueError("incomplete HXB2 result has invalid sample evidence")
+        if sample["failures"]:
+            if sample["floor_ok"] is not None:
+                raise ValueError("failed arm cannot have a qualified floor")
+        else:
+            highest = max(sample["score"][tool] for tool in required
+                          if tool != "ivanka")
+            if sample["floor_ok"] is not (
+                    sample["score"]["ivanka"] >= 0.9 * highest):
+                raise ValueError("HXB2 per-sample floor is misreported")
+        for tool in required:
+            quality, seconds = sample["score"][tool], sample["seconds"][tool]
+            if tool in sample["failures"]:
+                if quality is not None or seconds is not None:
+                    raise ValueError("failed competitor is shown as success")
+            elif (type(quality) not in (float, int)
+                  or not math.isfinite(quality) or not 0 <= quality <= 1
+                  or type(seconds) not in (float, int)
+                  or not math.isfinite(seconds) or not 0 < seconds <= 1800):
+                raise ValueError("unverified success metric in HXB2 result")
 
 
 def build(output, site=SITE):

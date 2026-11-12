@@ -30,17 +30,30 @@ benchmark adapter currently does not forward seeds. CI runs
 any newly discovered leakage path. Benchmark results from unblinded
 candidates are invalid, even when both PSI metrics happen to pass.
 
-## Current stage policy: only the existing benchmark is a gate
+## Current acceptance policy: both numerical benchmarks are required
 
-Until the current benchmark milestone is passed, optimize directly for the
-unaltered full-198 numerical criteria below. Synthetic mixtures, phase
-diagnostics, minority-contig recall, coverage metrics, extra clinical
-validation and proposed safety heuristics are **non-gating research tools**.
-They may inform an experiment; they must not block a benchmark iteration or
-be mistaken for an additional acceptance condition. This policy does not
-authorize manipulating the original FASTQs, MiCall images, benchmark results,
-scoring definitions, or measurements. A benchmark pass is not a production
-or clinical release authorization.
+**A completed Ivanka implementation must pass both** the authentic physical
+198-sample IVA benchmark below (**Intent 005**) **and** the expanded
+seven-assembler benchmark (**Intent 006**), with 198 unchanged real samples
+plus 400 diverse synthetic samples. The expanded gate requires Ivanka to
+beat IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet on each cohort,
+using independently strict alignment and runtime Ψ(r)>0 for every real r≥0
+and the expanded per-sample alignment floor. Neither benchmark can substitute
+for the other; an unrun, missing, failed or incomplete comparison is **NOT
+PASSED**. These gates are mandatory **now**, not planned future options.
+
+Other diagnostic work—phase, minority-contig recovery, clinical validation,
+coverage and exploratory synthetic examples outside the frozen 400-sample
+cohort—may inform implementation but does not create an unapproved gate.
+Preserve the original FASTQs, reference panel, source hashes, tool image
+lineage, benchmark definitions and measurements. A numerical benchmark pass
+is not by itself authorization for clinical production.
+
+The same normal default Rust-only Ivanka binary, directly invoked by MiCall
+with only `--reads1`, `--reads2`, `--output` and an empty child environment,
+must be used for both qualifications. See the [cumulative intent index](intents/README.md),
+[Intent 005](intents/005-physical-198-qualification.md), and
+[Intent 006](intents/006-expanded-qualification.md).
 
 ## Fixed qualification contract
 
@@ -60,8 +73,9 @@ For a **fresh, pinned, identical MiCall base** in both arms:
 - Do not alter original reads, cached historic IVA controls, panel definition,
   real-data result artifacts, or the clinical coverage threshold.
 
-Neither the four new synthetic fixtures nor any additional metric below is
-an acceptance gate. They supply evidence and opportunities for improvements.
+The four illustrative synthetic fixtures and the optional diagnostic metrics
+below are not additional gates. **The separate frozen 400-sample synthetic
+cohort in Intent 006 is a mandatory component of the expanded qualification.**
 
 ## Standard stages (each stage gets its own report)
 

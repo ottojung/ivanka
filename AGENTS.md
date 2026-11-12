@@ -34,7 +34,8 @@ descriptions of what the existing qualifying image already implements:
   The unchanged ≥90% per-sample alignment floor and strict positive
   alignment **and runtime Ψ(r) for every real r≥0** remain mandatory.
 - **[Intent 006: expanded seven-way qualification](docs/intents/006-expanded-qualification.md).**
-  Add the 400-synthetic + 198-real six-competitor gate without weakening 005.
+  **Require a passing** 400-synthetic + 198-real, seven-assembler gate
+  before any completion or release claim; never weaken 005.
 
 **Current status:** the previously passing image contains a Python selector
 and therefore does not satisfy **Intents 001 and 002**; its 198-sample
@@ -87,12 +88,15 @@ regardless of apparent benchmark gains.
 CI regression tests. This is a validity prerequisite for the existing
 benchmark, not another biological performance metric.
 
-**Benchmark-integrity contract.** Qualification uses the authentic
-physical-198 paired inputs, >=90%-per-sample alignment, no timeouts, and
-positive alignment/runtime Psi(r) for every r>=0. Do not silently change
-the acceptance criteria or make distinct biological investigations into
-numerical gates. Keep benchmark inputs, image lineage, measurements and
-scoring authentic.
+**Benchmark-integrity contract.** Both independently mandatory gates must
+pass: the original authentic physical-198 IVA comparison (≥90% alignment
+per sample, no timeouts, positive alignment and runtime Ψ(r) for every real
+r≥0), and the expanded 198-real + 400-synthetic comparison against all six
+other assemblers (≥90% of the best rival per sample, both strict all-r Ψ
+gates separately per competitor and cohort). Partial, missing, failed or
+unrun comparisons never qualify. Do not silently change acceptance criteria
+or turn separate exploratory diagnostics into additional requirements.
+Keep inputs, image lineage, measurements and scoring authentic.
 
 - The goal is the **dominant read-supported viral sequence / defensible
   major consensus**, **not exhaustive haplotype recovery**. Recovering a

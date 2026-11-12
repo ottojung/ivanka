@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Ivanka Assembler Bench — reproducible MiCall assembler comparisons, detailed results, and independent qualification evidence.">
+  <title>Assembler Bench · Ivanka</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Assembler Bench home">
+        <span class="brandmark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span><b>IVANKA</b><small>ASSEMBLER BENCH</small></span>
+      </a>
+      <nav aria-label="Resources">
+        <a href="https://github.com/ottojung/ivanka">Source</a>
+        <a href="https://github.com/ottojung/ivanka/blob/main/docs/intents/007-assembler-bench.md">Method</a>
+        <a href="https://github.com/ottojung/ivanka/blob/main/docs/intents/008-hxb2-synthetic-truth.md">Truth policy</a>
+      </nav>
+    </header>
+    <main>
+      <section class="intro">
+        <div class="eyebrow"><span class="live-dot"></span> PUBLIC RESULTS · SOURCE-ATTESTED</div>
+        <h1>Assembler <em>Bench.</em></h1>
+        <p class="lede">A transparent look at the viral genome assemblers tested through MiCall. Browse outcomes, compare quality and speed, and inspect exactly what has—or hasn't—been independently qualified.</p>
+        <div class="global-notice" id="globalNotice" role="status">Loading verified benchmark summaries…</div>
+      </section>
+      <section class="run-controls" aria-label="Select a benchmark run">
+        <div>
+          <label for="runSelect">BENCHMARK RUN</label>
+          <select id="runSelect" disabled><option>Loading runs…</option></select>
+        </div>
+        <div class="run-stamp">
+          <span class="meta-label">COHORT</span><strong id="runCohort">—</strong>
+        </div>
+        <div class="run-stamp">
+          <span class="meta-label">QUALIFICATION</span><strong id="runStatus">—</strong>
+        </div>
+      </section>
+      <section class="overview" aria-label="Run overview">
+        <div class="section-heading"><div><span class="overline">01 / OVERVIEW</span><h2>At a glance</h2></div><span class="date" id="runDate">—</span></div>
+        <p class="run-description" id="runDescription"></p>
+        <div class="metric-grid" id="metricCards"></div>
+      </section>
+      <section class="compare" aria-label="Assembler comparison">
+        <div class="section-heading"><div><span class="overline">02 / COMPARISON</span><h2>Across assemblers</h2></div>
+          <div class="segmented" role="group" aria-label="Metric">
+            <button id="scoreView" class="active" type="button">Alignment</button>
+            <button id="timeView" type="button">Runtime</button>
+          </div>
+        </div>
+        <p class="subtle" id="comparisonContext"></p>
+        <div class="plot" id="comparisonChart" aria-live="polite"></div>
+      </section>
+      <section class="evidence" aria-label="Independent mathematical qualification">
+        <div class="section-heading"><div><span class="overline">03 / QUALIFICATION</span><h2>Evidence, not assertions</h2></div></div>
+        <div id="evidenceContent"></div>
+      </section>
+      <section class="samples" aria-label="Individual results">
+        <div class="section-heading"><div><span class="overline">04 / DETAILS</span><h2>Inspect the cases</h2></div><button class="outline-button" id="exportCsv" type="button">Export visible CSV</button></div>
+        <div class="filters">
+          <div><label for="search">FIND SAMPLE OR FAMILY</label><input id="search" placeholder="Search R001, clonal…" autocomplete="off"></div>
+          <div><label for="comparisonTool">COMPARE AGAINST</label><select id="comparisonTool"></select></div>
+          <div><label for="outcomeFilter">OUTCOME</label><select id="outcomeFilter">
+            <option value="all">All outcomes</option><option value="win">Ivanka wins</option>
+            <option value="loss">Ivanka loses</option><option value="tie">Ties</option>
+            <option value="failure">Assembler failures</option>
+          </select></div>
+        </div>
+        <div class="table-scroll">
+          <table id="resultsTable">
+            <thead><tr><th><button type="button" data-sort="id">Sample / family <span>↕</span></button></th>
+              <th><button type="button" data-sort="ivanka">Ivanka <span>↕</span></button></th>
+              <th><button type="button" data-sort="rival">Competitor <span>↕</span></button></th>
+              <th><button type="button" data-sort="delta">Δ advantage <span>↕</span></button></th>
+              <th>Outcome</th></tr></thead>
+            <tbody id="resultRows"></tbody>
+          </table>
+        </div>
+        <div class="table-footer"><span id="resultCount"></span><span>Click a row for details · Values are independently scored</span></div>
+        <aside id="detailPanel" class="detail-panel" aria-live="polite" hidden></aside>
+      </section>
+      <section class="provenance" aria-label="Provenance">
+        <div class="section-heading"><div><span class="overline">05 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
+        <div id="provenanceContent"></div>
+      </section>
+    </main>
+    <footer>
+      <span><b>IVANKA</b> · ASSEMBLER BENCH</span>
+      <span>Privacy-preserving public summaries · Not clinical release authorization</span>
+      <a href="https://github.com/ottojung/ivanka/blob/main/docs/intents/README.md">All binding intents</a>
+    </footer>
+  </div>
+</body>
+</html>

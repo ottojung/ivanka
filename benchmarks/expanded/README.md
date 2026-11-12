@@ -1,5 +1,18 @@
 # Expanded seven-assembler benchmark — mandatory v2 acceptance gate
 
+**New mandatory conditions:** Under
+[Intent 007](../../docs/intents/007-assembler-bench.md), canonical runs
+must execute every assembler **as integrated into MiCall** and publish
+reviewable, independently verified results on Ivanka's GitHub Pages
+`/bench/` path. Under [Intent 008](../../docs/intents/008-hxb2-synthetic-truth.md),
+all new biological synthetic truth must be **HXB2 or random
+HXB2/other-HIV-subtype homologous recombinants**, optionally with
+≤5% uniformly random, untargeted substitutions. **Generic random
+A/C/G/T genomes are forbidden.** The present v1 generator and its
+400-case dataset do not satisfy this rule and are **historical
+diagnostics only**. A new ancestry-verified HXB2 cohort, MiCall-integrated
+synthetic runner and Pages report are **not yet implemented**.
+
 **This benchmark is required now for Ivanka completion and future releases.**
 It is an additional strict qualification, **not** a replacement for the
 original 198-sample IVA comparison or its all-r Ψ conditions. Every one of
@@ -13,14 +26,16 @@ the 598 cases and all seven tools must be accounted for; incomplete runs
   1,800-second per-arm limit. Each assembler must be exposed through the same
   MiCall reads1/reads2/output boundary using an image with immutable source,
   binary and MiCall-base provenance.
-- **Synthetic:** 25 mechanistically distinct families × 16 fixed random seeds
-  = **400** paired-read cases, with deterministic gzipped FASTQs, generating
-  haplotypes and SHA256 manifests. The source genome is *newly generated*,
-  not sampled from a real viral reference, and is withheld from all
-  assemblers. A separate scorer uses a full-length global alignment to the
-  most abundant generating haplotype. The equal-abundance family accepts
-  either co-dominant truth. Thus synthetic scores penalize fragmentation
-  that a short local-MAX metric could conceal.
+- **Synthetic:** 25 mechanistically distinct **read/sampling** families ×
+  16 fixed seeds = **400** paired-read cases. All hidden truth genomes
+  satisfy Intent 008: HXB2, random homologous HXB2/other-subtype recombinants,
+  and optional ≤5% uniformly sampled substitutions; no arbitrary random
+  genome generation or truth-level engineered repeats, inversions, GC
+  profiles or targeted mutation clusters. Freeze parent accessions,
+  alignments, seeds, ancestry, exact mutation sites and FASTQ/truth SHA256s.
+  Keep every truth inaccessible to every assembler. The independent
+  full-length global scorer evaluates the dominant truth, accepting
+  either truth in a genuine co-dominant mixture.
 - **Competition:** IVA, Haploflow, MEGAHIT, ABySS, SPAdes, Velvet and
   Ivanka. All seven must produce an attributable attempted result for each
   input. Missing executables, missing result rows, undiagnosed tool
@@ -42,6 +57,11 @@ an incomplete comparison, not rewarded with a fictitious score.
 
 ## Included synthetic stresses
 
+The families are **read-level** stresses, never exemptions to the
+HXB2-derived truth requirement. Families that used to fabricate
+truth-level repetitive sequences, inversions or unusual GC composition
+must be redesigned without altering the allowed truth genome.
+
 `clonal`, `iid_errors`, `quality_decay`, `cycle_bursts`,
 `homopolymer_slippage`, `systematic_errors`, `gc_dropout`,
 `amplicon_hotspots`, `coverage_hole`, `low_depth`, `ultradeep`,
@@ -51,18 +71,13 @@ an incomplete comparison, not rewarded with a fictitious score.
 `inverted_repeat`, `overlapping_mates`, `long_inserts`,
 `discordant_pairs`, `complex_mixture`.
 
-A full 400-case v1 cohort was regenerated on `marceline-dev` at
-`/workspace/ivanka-expanded-synthetic-v1-20261112`; its
-`cohort.json` SHA-256 is
-`dbcd7a1328e3e84c1a82d1fed7677fcbcd5e02a9a4efe230be79bc9efb372491`.
-This checks the generator independently on two hosts. A first
-400 × 7 *exploratory* run has now executed on `marceline-dev`, but it is
-**NOT qualified**: some competitor executions failed, the original scorer
-evaluated only one arbitrary DNA strand, and the runner included evaluator
-time in apparent assembler runtimes. Those original results are preserved
-for audit, not silently counted as valid. Both defects were fixed in the
-versioned scorer and isolated runner described below. A new complete run
-must be executed and pass every gate.
+The old **ineligible** generic-random v1 cohort is preserved at
+`/workspace/ivanka-expanded-synthetic-v1-20261112`, with manifest
+SHA-256 `dbcd7a1328e3e84c1a82d1fed7677fcbcd5e02a9a4efe230be79bc9efb372491`.
+It was used for 400 × 7 exploratory diagnostics, not qualification.
+Do not regenerate it for active tests or promote its scores into a
+passing benchmark. The mandatory HXB2-derived replacement cohort
+has **not yet been generated**.
 
 The model includes correlated errors, read-cycle-specific errors,
 homopolymer one-base insertions/deletions, hard coverage gaps, technical
@@ -101,11 +116,18 @@ https://github.com/dzerbino/velvet.
 
 ## Workflow
 
-Generate deterministic synthetic inputs without references:
+**Legacy source warning:** `benchmarks/expanded/synthetic.py`
+generates arbitrarily random A/C/G/T biological truths. Preserve its
+old outputs for historical audit, but **do not run it to create new
+synthetic biological tests or qualification data**. A new deterministic
+generator must use pinned HXB2 and subtype references, random
+recombinant ancestry, and ≤5% uniformly random mutations, with an
+independent preflight validator (Intent 008). Generating truth is
+benchmark-only; reference FASTAs must never enter any assembler.
 
-```sh
-python3 -m benchmarks.expanded.synthetic /data/expanded-synthetic --seeds 16 --pairs 900
-```
+The following preserved standalone runner commands are **development
+interfaces only** until the HXB2 cohort is replaced and all assembler
+arms run under MiCall via Assembler Bench:
 
 Pin every installed assembler executable and check the resulting hashes into
 a frozen run manifest. **Qualification requires the default Rust-only
@@ -131,6 +153,9 @@ source- and binary-pinned container with only the reads mounted, not the
 truth. These seven source-labeled containers are built and smoke-tested on
 `marceline-dev`; their immutable IDs must be pinned for every formal run.
 
+For **both the real and the synthetic qualifying cohorts**, Assembler
+Bench must run the assemblers via their real MiCall integration; the
+standalone synthetic adapter path does not qualify by itself.
 For the real cohort, build six independently pinned compatible MiCall
 candidate images, including the direct default Rust-only Ivanka.
 They must all share the exact updated-MiCall base and implement the same paired-input
@@ -153,14 +178,16 @@ python3 -m benchmarks.expanded.combine \
 ```
 
 The combine command **returns nonzero** until all 598 cases and all seven
-assemblies per case satisfy every criterion. The strict evaluator
+assemblies per case satisfy every criterion. Passing a local combine step
+alone is still insufficient: independently verify HXB2 truth ancestry,
+MiCall integration and public `/bench/` publication under Intents 007/008. The strict evaluator
 intentionally has no option to reduce cohorts or skip a tool in
 production. The functions support smaller test matrices only through
 explicit Python unit-test parameters.
 
-## Isolated seven-image synthetic benchmark (preferred)
+## Isolated seven-image synthetic diagnostics (not canonical MiCall qualification)
 
-The mandatory synthetic path executes all seven candidates as separate,
+This currently available supplementary runner executes all seven candidates as separate,
 source-labeled images descended from the identical updated-MiCall base,
 never gives a container access to its hidden reference truth, and records
 the exact image ID and command for each run. Native Ivanka uses the exact
@@ -191,6 +218,11 @@ all 198 real cases, and all seven tools in every case. Failed tools are
 recorded as incomplete comparisons—not converted to zero-score victories
 for Ivanka. Every output FASTA and tool image ID is retained for independent
 rescoring and reproducibility.
+
+This runner may be reused for supplementary checks after the HXB2-derived
+cohort is generated, but the actual qualifying comparison must exercise
+the full MiCall integration and publish its results through Assembler
+Bench. No standalone-only synthetic output qualifies.
 
 The first exploratory all-tools run is retained on `marceline-dev` at
 `/workspace/ivanka-expanded-podman-full400-20261112`; its

@@ -23,10 +23,22 @@ Compare the **same default, Rust-only Ivanka** invocation from
 
 Use the **198 original real samples** and **400 synthetic samples**
 (25 distinct mechanism-driven families × 16 independently fixed seeds).
-The synthetic families include correlated errors, homopolymer indels,
-cycle-specific errors, GC dropout, coverage holes, PCR jackpots, strain
-mixtures, repeats, contamination and discordant mates. Synthetic truth
-is evaluation-only and never available to assemblers.
+**Every synthetic truth must satisfy
+[Intent 008: HXB2-anchored truth](008-hxb2-synthetic-truth.md)**:
+only HXB2, random HXB2/other-HIV-subtype recombinants and optional
+uniformly random, non-purposefully-clustered substitutions at ≤5%.
+**Generic randomly generated A/C/G/T genomes are prohibited.** The
+existing 400-case generic-random v1 cohort and its results remain
+historical diagnostics and cannot qualify this gate; construct a new
+HXB2-derived, cryptographically pinned cohort.
+
+Families may still vary **sequencing/read-level mechanisms**—correlated
+errors, homopolymer indels, cycle-specific errors, GC dropout, coverage
+holes, PCR jackpots, strain mixtures, repeats present in allowed
+reference-derived truths, contamination and discordant mates. Never
+engineer a forbidden truth-level repeat, inversion, GC profile or cluster
+just to create a difficult family. Synthetic truth is evaluator-only
+and must never be accessible to any assembler.
 
 ## Strict qualification
 
@@ -47,6 +59,13 @@ Prespecify tool versions, thread and memory budgets, container digests,
 read inputs and evaluation definitions. Apply the same MiCall infrastructure
 and authentic physical timing semantics to all real-data comparators.
 Retain the original reference-blindness and dominant-consensus objectives.
+
+Execute and publish the authoritative comparisons through
+[Intent 007: Assembler Bench](007-assembler-bench.md), with real MiCall
+integration for every assembler, browsable independently verified results
+under Ivanka's public GitHub Pages `/bench/` subpath, and no exposed
+private sample data. **A local passing gate file without the required
+published Assembler Bench does not satisfy project completion.**
 
 The detailed current proposal and its implementation status are in
 [the expanded benchmark README](../../benchmarks/expanded/README.md).

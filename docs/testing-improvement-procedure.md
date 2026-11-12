@@ -42,6 +42,16 @@ and the expanded per-sample alignment floor. Neither benchmark can substitute
 for the other; an unrun, missing, failed or incomplete comparison is **NOT
 PASSED**. These gates are mandatory **now**, not planned future options.
 
+**The qualifying synthetic truth is now strictly HXB2-derived** under
+[Intent 008](intents/008-hxb2-synthetic-truth.md); no active synthetic
+biological test may invent a generic A/C/G/T truth genome. The first
+generic-random 400-case cohort is historical diagnostic evidence only
+and **cannot** satisfy the expanded numerical gate. The authoritative
+results must be run through the MiCall-integrated
+[Assembler Bench](intents/007-assembler-bench.md) and made usefully
+reviewable on Ivanka GitHub Pages at `/bench/`. Local reports alone
+cannot establish full completion.
+
 Other diagnostic work—phase, minority-contig recovery, clinical validation,
 coverage and exploratory synthetic examples outside the frozen 400-sample
 cohort—may inform implementation but does not create an unapproved gate.
@@ -73,9 +83,12 @@ For a **fresh, pinned, identical MiCall base** in both arms:
 - Do not alter original reads, cached historic IVA controls, panel definition,
   real-data result artifacts, or the clinical coverage threshold.
 
-The four illustrative synthetic fixtures and the optional diagnostic metrics
-below are not additional gates. **The separate frozen 400-sample synthetic
-cohort in Intent 006 is a mandatory component of the expanded qualification.**
+The four illustrative synthetic fixtures and optional diagnostic metrics
+below do not add independent *numerical* gates. However, **all newly
+generated synthetic biological truths, including diagnostic fixtures,
+must satisfy Intent 008**. The mandatory 400-sample synthetic cohort
+in Intent 006 must be newly generated from pinned HXB2/subtype parents;
+the old generic-random 400-case cohort does not qualify.
 
 ## Standard stages (each stage gets its own report)
 
@@ -86,7 +99,9 @@ cohort in Intent 006 is a mandatory component of the expanded qualification.**
    or its independently verified successor. Verify both arms actually use
    the new multi-mapping logic, without a second custom projection.
 2. **Synthetic known-truth smoke:** generate and evaluate four deterministic
-   pure synthetic FASTQ/truth cases. Truth and candidate controls must
+   FASTQ/truth cases **only from HXB2-derived genomes permitted by
+   Intent 008**. Existing random-genome fixtures are historical only
+   until regenerated. Truth and candidate controls must
    *never be passed to the assembler*.
 3. **Optional synthetic linked/unlinked phase diagnosis:** use existing
    synthetic_phase_pairs.py and smoke_rust_assembler_phase.py to
@@ -230,6 +245,13 @@ No reporting utility may promote optional metrics or known-truth synthetic
 controls into the two numerical acceptance criteria.
 
 ## Synthetic FASTQ controls with positive ground truth
+
+**Historical generator only:** the following recorded commands and
+fixtures predate Intent 008 and may produce random non-HXB2 genomic
+truths. Do **not** run them to create active synthetic biological
+tests or expanded qualification evidence. Replace their genomes with
+pinned HXB2/other-subtype recombinant truths, using at most 5%
+uniformly sampled substitutions, before reproducing this smoke suite.
 
 ```sh
 python3 benchmarks/synthetic_truth_cohort.py \

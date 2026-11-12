@@ -20,10 +20,18 @@ remain reference-blind and prioritize the dominant read-supported path.
   each sample ≥90% of IVA; strict alignment and runtime Ψ(r)>0 for all r≥0.
 - [Intent 006: expanded seven-assembler benchmark](intents/006-expanded-qualification.md) —
   mandatory 198-real + 400-synthetic, six-rival completion gate (not yet passed).
+- [Intent 007: public MiCall Assembler Bench](intents/007-assembler-bench.md) —
+  reproducible MiCall-integrated comparisons, independently reviewable on
+  Ivanka GitHub Pages at `/bench/`.
+- [Intent 008: HXB2-derived synthetic truth](intents/008-hxb2-synthetic-truth.md) —
+  only HXB2 or random HXB2/other-subtype recombinants with optional ≤5%
+  uniformly random mutations; no generic random A/C/G/T genomic truths.
 
-[All intents are cumulative](intents/README.md). The original scientific
-and numerical goals remain in force; the newly added Rust-only and default
-invocation requirements have **not yet been satisfied** by the frozen wrapped image.
+[All eight intents are cumulative](intents/README.md). The original
+scientific and numerical gates remain in force. The tagged native Rust
+alpha.3 passed the original physical-198 gate, but the mandatory
+seven-assembler benchmark, new HXB2 synthetic cohort, and published
+`/bench/` review interface are **not yet complete**.
 
 ## Current implementation and acceptance
 

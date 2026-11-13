@@ -230,7 +230,8 @@ class DetachedLifecycleTests(unittest.TestCase):
                 observed = []
                 state = {**base, **altered}
 
-                def corrupted(argv, **kwargs):
+                def corrupted(argv, *, observed=observed, state=state,
+                              **kwargs):
                     observed.append(list(argv))
                     if argv[1] == "wait":
                         return subprocess.CompletedProcess(argv, 0, b"bad")

@@ -43,9 +43,9 @@ truth, unsupported score or timing definitions). Diagonal is **N/A**.
 Do not convert a failed contender into a victory by substituting
 zero, omitting that sample or silently borrowing another run's
 baseline. Strict comparisons are only valid on the complete
-same-identity cohort. Keep real final MAX and synthetic known-truth
-scores **separate**, with no inappropriate pooling of units or
-passing via a different cohort. Compute the reverse pair directly
+same-identity cohort. Both cohorts use the same final MAX
+local-alignment scorer, while strict qualification still requires
+both complete cohorts independently. Compute the reverse pair directly
 and do not presume a total order, antisymmetry, transitivity or
 absence of cycles.
 

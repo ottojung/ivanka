@@ -43,9 +43,10 @@ and must never be accessible to any assembler.
 ## Strict qualification
 
 **Benchmark the entire MiCall pipeline**, holding MiCall processing
-constant while changing only the integrated assembler. The final
-dominant MiCall sequence/consensus is what the alignment or hidden
-known-truth score measures. Ivanka's raw contigs may be incomplete,
+constant while changing only the integrated assembler. Score the
+final MiCall MAX consensus sequences by the same maximum local
+alignment function, against the independently fixed case reference
+panel (one generating truth sequence per synthetic case). Ivanka's raw contigs may be incomplete,
 overlapping or empty; **there is no independent assembler-only
 haplotype recovery, full-length global-alignment or contig-count gate**
 under [Intent 004](004-dominant-sequence.md). In particular, synthetic
@@ -57,7 +58,7 @@ failure if the full MiCall result cannot meet the mandatory gates.
 For **each** of the six alternatives, and **separately** on the real and
 synthetic cohorts:
 
-1. The final **MiCall-with-Ivanka** alignment/known-truth
+1. The final **MiCall-with-Ivanka** local-alignment score
    **signed-power Ψ(r)>0 for every real r≥0**.
 2. The full **MiCall-with-Ivanka** measured runtime
    **signed-power Ψ(r)>0 for every real r≥0**.
@@ -67,9 +68,14 @@ synthetic cohorts:
 4. No missing executables, samples, frozen truth, incomplete outputs,
    unaccounted failure, substituted timings, timeout or missing hashes
    may be counted as an Ivanka win. Record tool-specific results honestly.
-5. Keep real MiCall/MAX and synthetic **final-MiCall-dominant-output**
-   known-truth scores **separate**; never pool incompatible Ψ scores,
-   or substitute standalone assembler FASTA for a final pipeline result.
+5. Use the exact same final MAX local-alignment function and
+   scoring parameters for every case: match +1, mismatch −1, gap
+   open −2, gap extension −1, both DNA orientations, and the
+   maximum over final MAX sequences and reference-panel members.
+   The synthetic panel is exactly one generating dominant truth sequence.
+   Retain raw alignment points in the combined 598-case view. Require
+   independent qualification on each cohort, and never substitute
+   assembler FASTA for the final MiCall output.
 
 Prespecify tool versions, thread and memory budgets, container digests,
 read inputs and evaluation definitions. Apply the same MiCall infrastructure

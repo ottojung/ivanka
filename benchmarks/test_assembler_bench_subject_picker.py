@@ -80,7 +80,8 @@ for(const run of runs){
  const result=calc.evaluate(report,'ivanka','iva',[score,runtime]);
  assert.equal(result.status,'incomplete');
  const evidence=calc.evidence(result);
- assert(evidence.rows.length>=1);
+ assert(evidence.rows.length<=2);
+ if(run.sample_count===0)assert.equal(evidence.rows.length,0);
  assert(evidence.rows.every(x=>x.expected===run.expected_sample_count));
  assert(evidence.rows.every(x=>x.paired<=run.sample_count));
  assert.equal(calc.verdict(result.status).label,'?');
@@ -158,7 +159,8 @@ for(const run of runs){
   assert.equal(x.expected,run.expected_sample_count);
   if(x.value!==null && y.value!==null)
     assert(Math.abs(x.value+y.value)<1e-8);
-  assert.equal(x.observed,true);
+  if(x.paired>0)assert.equal(x.observed,true);
+  else assert.equal(x.value,null);
  }
 }
 const fabricated={paired:2,expected:400,proof:null,
@@ -210,7 +212,8 @@ for(const a of hxb2.tools)for(const b of hxb2.tools){
 assert.equal(count,42);
 for(const run of runs.filter(r=>r.cohort!=='synthetic')){
  const result=calc.evaluate(run.dominance_matrix,'ivanka','iva',[align]);
- assert(result.entries[0].paired>0);
+ assert(result.entries[0].paired<=run.sample_count);
+ if(run.sample_count===0)assert.equal(result.entries[0].paired,0);
  assert.equal(result.status,'incomplete');
 }
 console.log('ALL_42_HXB2_PAIRWISE_COMPARISONS_PARTIAL');

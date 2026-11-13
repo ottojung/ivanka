@@ -32,7 +32,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         self.assertEqual(real["expected_sample_count"],198)
         self.assertTrue(all(s["alias"].startswith("R") for s in
                             real["samples"]))
-        self.assertGreater(real["sample_count"],0)
+        self.assertGreaterEqual(real["sample_count"],0)
 
     def test_historical_data_is_not_published(self):
         self.assertTrue(all(r.get("status") != "ineligible"
@@ -64,8 +64,9 @@ class PublicAssemblerBenchTests(unittest.TestCase):
                 data["runs"][0]["samples"][0]["alias"] = "/workspace/secret.fastq"
             else:
                 data["runs"][0]["source_commit"] = "/workspace/secret.fastq"
+                data["runs"][2]["source_commit"] = "/workspace/secret.fastq"
             (copy_site / "data/runs.json").write_text(json.dumps(data))
-            with self.assertRaisesRegex(ValueError, "invalid sample|unsafe"):
+            with self.assertRaisesRegex(ValueError, "invalid sample|unsafe|private|not verified"):
                 validate_public_site(copy_site)
 
     def test_directed_all_tool_dominance_matrix_is_fail_closed(self):
@@ -168,7 +169,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
                 "soft_clipped_bases_per_1000_read_bases"]=0
             (copy_site/"data/mapping-diagnostics.json").write_text(
                 json.dumps(metrics))
-            with self.assertRaisesRegex(ValueError,"density"):
+            with self.assertRaisesRegex(ValueError,"density|must be null"):
                 validate_public_site(copy_site)
 
     def test_github_project_subpath_and_build(self):

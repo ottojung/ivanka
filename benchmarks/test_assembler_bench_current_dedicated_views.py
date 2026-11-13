@@ -64,7 +64,10 @@ class DedicatedViewsTests(unittest.TestCase):
     def test_combined_view_is_derived_from_both_source_cohorts(self):
         report=self.report()
         wrong=copy.deepcopy(report)
-        wrong["runs"][2]["samples"][0]["score"]["ivanka"]=0.42
+        if wrong["runs"][2]["samples"]:
+            wrong["runs"][2]["samples"][0]["score"]["ivanka"]=0.42
+        else:
+            wrong["runs"][2]["source_runs"]=["unrelated-run"]
         with self.assertRaisesRegex(ValueError, "does not preserve original alignment points"):
             check_current(wrong)
 

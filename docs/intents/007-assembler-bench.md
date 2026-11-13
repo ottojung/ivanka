@@ -69,9 +69,10 @@ The Pages UI must provide at least:
   independently verified complete results, not a process exit code alone.
 - An accessible **run detail** comparing all assemblers side-by-side:
   sample counts, per-sample floor violations, runtime distributions,
-  alignment/known-truth distributions, wins/losses/ties, and complete
-  failure/timeout causes. Distinguish real MiCall/MAX scores from synthetic
-  known-truth scores; never pool incompatible scales.
+  final MAX local-alignment distributions, wins/losses/ties, and
+  complete failure/timeout causes. Both sample cohorts use the same
+  local-alignment scoring function and parameters, with original
+  alignment points preserved in the combined comparison.
 - Useful **filters and drill-down** by assembler, project, synthetic
   mechanism, sample, run, and failure class, with sortable per-sample
   comparisons and a clearly identified worst-regression view.

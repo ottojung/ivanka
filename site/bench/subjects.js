@@ -2,7 +2,7 @@
 /* Shared pure interpretation: never compute Ψ from cohort averages or a
    single-case mapping snapshot. Only verified per-sample proofs count. */
 const BenchSubjects = (() => {
-  function criterion(report, a, b, subject, direction) {
+  function criterion(report, a, b, subject, direction, snapshot) {
     const key = subject === "alignment" || subject === "runtime"
       ? subject : "diagnostic:" + subject + ":" + direction;
     if (subject !== "alignment" && subject !== "runtime" &&
@@ -12,8 +12,18 @@ const BenchSubjects = (() => {
     }
     const entry = report.metrics?.[key]?.[a]?.[b];
     if (entry) return entry;
-    return {status:"incomplete", paired:0, expected:report.expected_samples,
-      proof:null, reason:"No independently proven full-cohort Ψ for this metric"};
+    const v1 = snapshot?.tools?.[a]?.values?.[subject];
+    const v2 = snapshot?.tools?.[b]?.values?.[subject];
+    const available = subject !== "alignment" && subject !== "runtime" &&
+      snapshot?.status === "INCOMPLETE" &&
+      Number.isFinite(v1) && Number.isFinite(v2);
+    const delta=available ? (direction==="lower" ? v2-v1 : v1-v2) : null;
+    return {status:"incomplete",paired:available ? snapshot.cases_measured : 0,
+      expected:report.expected_samples,proof:null,
+      observed:available?{gains:Number(delta>0),losses:Number(delta<0),
+        ties:Number(delta===0),mean_delta:delta}:null,
+      reason:available ? "Observed diagnostic snapshot only; no full-cohort Ψ proof"
+        : "No paired measurements available for this subject"};
   }
   function conjunction(entries) {
     if (!entries.length) return "none";
@@ -26,9 +36,9 @@ const BenchSubjects = (() => {
     if (statuses.includes("unresolved")) return "unresolved";
     return statuses.every(x => x === "dominates") ? "dominates" : "unresolved";
   }
-  function evaluate(report, a, b, selected) {
+  function evaluate(report, a, b, selected, snapshot) {
     const entries = selected.map(({key,direction,label}) => ({
-      key,label,direction, ...criterion(report,a,b,key,direction)
+      key,label,direction, ...criterion(report,a,b,key,direction,snapshot)
     }));
     return {status:conjunction(entries), entries};
   }

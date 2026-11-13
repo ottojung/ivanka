@@ -119,7 +119,9 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         self.assertIn("function drawDiagnostics()",js)
         self.assertIn("function drawSubjectControls()",js)
         self.assertIn("definition.description",js)
-        self.assertIn("definition.denominator",js)
+        self.assertIn("info.denominator",js)
+        self.assertIn("BenchRanks.summary(",js)
+        self.assertIn("BenchRanks.pairs(",js)
         self.assertNotIn('id="dominanceMetric"',page)
         self.assertNotIn('Ivanka wins</option>',page)
         definitions=report["metric_catalog"]
@@ -156,6 +158,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             self.assertTrue((path / "bench/index.html").is_file())
             self.assertTrue((path / "bench/app.js").is_file())
             self.assertTrue((path / "bench/subjects.js").is_file())
+            self.assertTrue((path / "bench/rankings.js").is_file())
             self.assertTrue((path / "bench/style.css").is_file())
             self.assertTrue((path / "bench/data/runs.json").is_file())
             self.assertTrue((path / "bench/data/mapping-diagnostics.json").is_file())

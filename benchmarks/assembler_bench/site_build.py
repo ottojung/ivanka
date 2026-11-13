@@ -22,7 +22,8 @@ SECRET = re.compile(r"/workspace/|/home/|_R[12]_[0-9]{3}|"
 
 def validate_public_site(site=SITE):
     source = Path(site)
-    required = ("index.html", "style.css", "subjects.js", "app.js",
+    required = ("index.html", "style.css", "subjects.js",
+                "rankings.js", "app.js",
                 "data/runs.json",
                 "data/mapping-diagnostics.json")
     if any(not (source / name).is_file() for name in required):
@@ -37,7 +38,8 @@ def validate_public_site(site=SITE):
                  'id="dominanceSubjects"', 'id="subjectSearch"',
                  'id="subjectsCount"', 'id="firstTool"',
                  'id="diagnosticMatrix"', 'id="diagnosticMetric"',
-                 'id="diagnosticExplanation"', 'id="diagnosticChart"'):
+                 'id="diagnosticExplanation"', 'id="diagnosticChart"',
+                 'id="singleDirection"'):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
     if 'fetch("./data/mapping-diagnostics.json"' not in js:
@@ -45,9 +47,21 @@ def validate_public_site(site=SITE):
     if (any(name not in js for name in
             ("function drawDominance()", "function drawDiagnostics()",
              "function drawSubjectControls()", "function selectedSubjects()",
-             "definition.description", "definition.denominator",
+             "BenchRanks.summary(", "BenchRanks.pairs(",
+             "info.description", "info.denominator",
              "state.diagnostics?.metric_catalog"))):
         raise ValueError("public site lacks checkbox subjects or metric explanations")
+    ranks = (source / "rankings.js").read_text()
+    if (any(name not in ranks for name in
+            ("function summary(", "function measurements(", "function pairs(",
+             "expected_sample_count", "snapshot.tools?.[tool]?.values?.[key]"))):
+        # The selector must rank any real metric using only measured cases.
+        raise ValueError("public site lacks comparable numeric metric ranking")
+    if (not (html.index('class="compare"') < html.index('class="samples"')
+             < html.index('class="dominance"'))):
+        raise ValueError("single-metric and case comparisons must precede Ψ")
+    if "id=\"scoreView\"" in html or "id=\"timeView\"" in html:
+        raise ValueError("alignment/runtime-only comparison controls forbidden")
     subjects = (source / "subjects.js").read_text()
     if (any(name not in subjects for name in
             ("function conjunction(", "function criterion(", "does-not-dominate",

@@ -8,6 +8,7 @@
   <title>Assembler Bench · Comparative MiCall evaluation</title>
   <link rel="stylesheet" href="./style.css">
   <script src="./subjects.js" defer></script>
+  <script src="./rankings.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -48,48 +49,31 @@
         <div class="metric-grid" id="metricCards"></div>
       </section>
       <section class="compare" aria-label="Assembler comparison">
-        <div class="section-heading"><div><span class="overline">02 / COMPARISON</span><h2>Across assemblers</h2></div>
-          <div class="segmented" role="group" aria-label="Metric">
-            <button id="scoreView" class="active" type="button">Alignment</button>
-            <button id="timeView" type="button">Runtime</button>
+        <div class="section-heading"><div><span class="overline">02 / SINGLE-METRIC ORDER</span><h2>Rank by one metric</h2></div>
+          <div class="single-metric-controls">
+            <label for="diagnosticMetric">METRIC
+              <select id="diagnosticMetric" aria-label="Select any single metric"></select>
+            </label>
+            <label for="singleDirection">ORDER VALUES
+              <select id="singleDirection" aria-label="Order metric values">
+                <option value="higher">Highest first</option>
+                <option value="lower">Lowest first</option>
+              </select>
+            </label>
           </div>
+
         </div>
         <p class="subtle" id="comparisonContext"></p>
         <div class="plot" id="comparisonChart" aria-live="polite"></div>
-      </section>
-      <section class="dominance" aria-label="Pairwise signed-power PSI dominance">
-        <div class="section-heading"><div><span class="overline">03 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div></div>
-        <p class="subtle">Select the subjects whose <strong>joint dominance</strong> you want to test. Each checked subject must be strictly positive for every real r ≥ 0 over exactly the same complete, eligible cases. Row A versus column B.</p>
-        <div class="subject-panel">
-          <div class="subject-header">
-            <label for="subjectSearch">FIND SUBJECT<input id="subjectSearch" type="search" placeholder="Clips, coverage, concordance…" autocomplete="off"></label>
-            <div class="subject-buttons"><button type="button" id="selectSubjects">Select all</button><button type="button" id="clearSubjects">Clear</button></div>
-            <span id="subjectsCount" role="status">2 subjects selected</span>
-          </div>
-          <fieldset id="dominanceSubjects" class="subject-list"><legend>Dominance subjects (checkboxes)</legend></fieldset>
-          <p class="hint">Diagnostics with no naturally beneficial direction require you to choose <em>higher</em> or <em>lower</em> as a preference. Fewer soft clips, more depth, or more contigs do not alone prove a biologically superior assembly. Historical snapshots with only one case cannot certify full-cohort Ψ.</p>
-        </div>
-        <p class="subtle" id="dominanceContext"></p>
-        <div class="table-scroll" id="dominanceMatrix"></div>
-        <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>
-      </section>
-      <section class="diagnostics" aria-label="Mapping and assembly diagnostics">
-        <div class="section-heading"><div><span class="overline">04 / MAPPING AND ASSEMBLY</span><h2>Diagnostic metrics</h2></div>
-          <label>MEASUREMENT
-            <select id="diagnosticMetric" aria-label="Select mapping metric"></select>
-          </label>
-        </div>
+        <div class="selected-metric-review">
         <div class="metric-explanation" id="diagnosticExplanation" role="region" aria-live="polite"></div>
         <p class="subtle" id="diagnosticContext">Choose a metric for its definition, units, denominator and results. Missing data is not zero.</p>
-        <div class="diagnostic-plot" id="diagnosticChart" aria-label="Selected diagnostic metric across assemblers"></div>
+        <div class="diagnostic-plot" id="diagnosticChart" aria-label="Observed case coverage for the selected metric"></div>
         <div class="table-scroll" id="diagnosticMatrix"></div>
-      </section>
-      <section class="evidence" aria-label="Independent mathematical qualification">
-        <div class="section-heading"><div><span class="overline">05 / QUALIFICATION</span><h2>Evidence, not assertions</h2></div></div>
-        <div id="evidenceContent"></div>
+        </div>
       </section>
       <section class="samples" aria-label="Individual results">
-        <div class="section-heading"><div><span class="overline">06 / DETAILS</span><h2>Inspect the cases</h2></div><button class="outline-button" id="exportCsv" type="button">Export visible CSV</button></div>
+        <div class="section-heading"><div><span class="overline">03 / CASE-LEVEL VALUES</span><h2>Inspect the cases</h2></div><button class="outline-button" id="exportCsv" type="button">Export visible CSV</button></div>
         <div class="filters">
           <div><label for="search">FIND SAMPLE OR FAMILY</label><input id="search" placeholder="Search R001, clonal…" autocomplete="off"></div>
           <div><label for="firstTool">ASSEMBLER A</label><select id="firstTool"></select></div>
@@ -114,8 +98,28 @@
         <div class="table-footer"><span id="resultCount"></span><span>Click a row for details · Values are independently scored</span></div>
         <aside id="detailPanel" class="detail-panel" aria-live="polite" hidden></aside>
       </section>
+      <section class="dominance" aria-label="Pairwise signed-power PSI dominance">
+        <div class="section-heading"><div><span class="overline">04 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div></div>
+        <p class="subtle">Select the subjects whose <strong>joint dominance</strong> you want to test. Each checked subject must be strictly positive for every real r ≥ 0 over exactly the same complete, eligible cases. Row A versus column B.</p>
+        <div class="subject-panel">
+          <div class="subject-header">
+            <label for="subjectSearch">FIND SUBJECT<input id="subjectSearch" type="search" placeholder="Clips, coverage, concordance…" autocomplete="off"></label>
+            <div class="subject-buttons"><button type="button" id="selectSubjects">Select all</button><button type="button" id="clearSubjects">Clear</button></div>
+            <span id="subjectsCount" role="status">2 subjects selected</span>
+          </div>
+          <fieldset id="dominanceSubjects" class="subject-list"><legend>Dominance subjects (checkboxes)</legend></fieldset>
+          <p class="hint">Diagnostics with no naturally beneficial direction require you to choose <em>higher</em> or <em>lower</em> as a preference. Fewer soft clips, more depth, or more contigs do not alone prove a biologically superior assembly. Historical snapshots with only one case cannot certify full-cohort Ψ.</p>
+        </div>
+        <p class="subtle" id="dominanceContext"></p>
+        <div class="table-scroll" id="dominanceMatrix"></div>
+        <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>
+      </section>
+      <section class="evidence" aria-label="Independent mathematical qualification">
+        <div class="section-heading"><div><span class="overline">05 / CERTIFICATES & OBSERVATIONS</span><h2>Evidence, not assertions</h2></div></div>
+        <div id="evidenceContent"></div>
+      </section>
       <section class="provenance" aria-label="Provenance">
-        <div class="section-heading"><div><span class="overline">07 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
+        <div class="section-heading"><div><span class="overline">06 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
         <div id="provenanceContent"></div>
       </section>
     </main>

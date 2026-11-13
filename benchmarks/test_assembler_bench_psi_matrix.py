@@ -89,6 +89,22 @@ class DirectedDominanceTests(unittest.TestCase):
         self.assertEqual(entry["status"], "incomplete")
         self.assertEqual(entry["paired"], 1)
 
+    def test_partial_pair_observations_never_claim_cohort_dominance(self):
+        rows = [record(0, (8, 3), (5, 4), (6, 5)),
+                record(1, (8, 3), (5, 4), (6, 5))]
+        rows[1]["results"]["C"]["status"] = "failed"
+        result = matrix(rows, ["A", "B", "C"], expected=400, eligible=False)
+        ab=result["metrics"]["alignment"]["A"]["B"]
+        ac=result["metrics"]["alignment"]["A"]["C"]
+        self.assertEqual(ab["status"], "incomplete")
+        self.assertIsNone(ab["proof"])
+        self.assertEqual(ab["paired"],2)
+        self.assertEqual(ab["observed"]["gains"],2)
+        self.assertEqual(ab["observed"]["losses"],0)
+        self.assertEqual(ac["paired"],1)
+        self.assertEqual(ac["observed"]["mean_delta"],2)
+        self.assertIsNone(ac["proof"])
+
     def test_duplicate_identity_is_rejected(self):
         rows = [record(1, (5, 1), (4, 2))] * 2
         with self.assertRaisesRegex(ValueError, "duplicate"):

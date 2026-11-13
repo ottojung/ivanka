@@ -113,3 +113,30 @@ The one-case synthetic mapping diagnostic is chosen from the earliest
 completely successful, source-verified seven-arm case. Until one exists,
 all diagnostic values remain explicitly unavailable rather than
 being carried over from older runs or falsely set to zero.
+
+
+## Independent private expanded-gate evaluation
+
+The end-to-end 598-case qualification is reconstructed from immutable
+MiCall results, **not** from browser rankings or combined normalized
+scores. The source-pinned synthetic run is independently rechecked by
+the fork checkpoint verifier. The complete physical-198 attempt must
+have six independently finished candidate runs. Its frozen original
+manifest, complete MiCall result/IVA controls, source hashes and
+dedicated images are checked before constructing the common
+seven-assembler matrix with the existing strict physical joiner.
+
+Use the private host command below after or during the runs:
+
+    PYTHONPATH=.:benchmarks python3 -m benchmarks.expanded.fork_qualification       --synthetic /private/dedicated-hxb2-400       --real /private/dedicated-real198       --physical-data /private/original-physical198       --runner /private/pinned-benchmark-runner       --attestation /private/seven-branch-attestation.json       --source-roots /private/seven-source-checkouts.json       --base IMMUTABLE_MIcall_BASE_ID       --output /private/seven-way-gate-report.json
+
+The tool reports **incomplete**, never a speculative pass, until
+all 400 synthetic cases and six full 198-case physical candidate arms
+are source-verified. It then uses the existing separate-cohort
+all-comparator strict signed-power PSI gate, including the 90% floor,
+rather than pooling incompatible score scales or using a partial
+observed Ψ(0/1/2) preview. Raw physical sample identifiers are replaced
+with anonymous R001-style aliases before producing gate findings.
+Invalid source controls cannot yield a pass. Its report is a private
+analysis artifact, not permission to bypass original 198-case
+qualification, missing provenance or incomplete cohort evidence.

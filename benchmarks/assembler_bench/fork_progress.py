@@ -1,5 +1,6 @@
 """Verify source-attested MiCall fork checkpoints before public reporting."""
 import json
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -36,8 +37,12 @@ def checked(directory, runner, attestation, fork, base):
         source = next((path for path in paths if path.is_file()), None)
         if source is None or sha(source) != digest:
             raise ValueError(f"fork benchmark source changed: {name}")
-    rows = [json.loads(line) for line in (folder / "results.jsonl").read_text().splitlines()
-            if line.strip()]
+    # One captured byte snapshot binds every published row to its digest;
+    # a concurrently appended checkpoint must not change that evidence.
+    contents = (folder / "results.jsonl").read_bytes()
+    if contents and not contents.endswith(b"\n"):
+        raise ValueError("incomplete synthetic checkpoint append")
+    rows = [json.loads(line) for line in contents.splitlines() if line.strip()]
     if len(rows) > 400 or len({r["id"] for r in rows}) != len(rows):
         raise ValueError("invalid fork checkpoint count / duplicate case")
     cases = {r["id"]: r for r in cohort["cases"]}
@@ -49,16 +54,19 @@ def checked(directory, runner, attestation, fork, base):
                                  "sha256": cases[case]["sha256"]}, proof)
         if existing_case(folder / case, fields, images) != row:
             raise ValueError("fork checkpoint does not match immutable evidence")
-    return frozen, rows, sha(folder / "results.jsonl"), att
+    return frozen, rows, hashlib.sha256(contents).hexdigest(), att
 
 
 def cohort_path():
     return Path(__file__).resolve().parents[1] / "expanded/references/hxb2-400-v4-micall-high-depth-cohort.json"
 
 
-def preview(directory, runner, attestation, fork, base):
-    manifest, rows, result_hash, att = checked(
-        directory, runner, attestation, fork, base)
+def preview(directory, runner, attestation, fork, base, *, checked_result=None):
+    # The caller may supply a checkpoint already verified by checked().
+    # Re-reading here would mix two generations of an active run.
+    manifest, rows, result_hash, att = (
+        checked_result if checked_result is not None
+        else checked(directory, runner, attestation, fork, base))
     normalized = {
         "images": manifest["images"], "source_truth": manifest["truth_proof"],
         "benchmark_sources_sha256": manifest["benchmark_source_sha256"],

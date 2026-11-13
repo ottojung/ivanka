@@ -7,6 +7,7 @@ Failures after creation are never interpreted as safe-to-retry startup failures.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import os
 import re
 import signal
@@ -185,15 +186,27 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
         if started.returncode:
             raise RuntimeError("Podman start failed after container creation")
         stage = "wait"
-        waited = retry_read_or_remove(["podman", "wait", cid])
-        if waited.returncode:
-            raise RuntimeError("Podman wait failed after container start")
-        try:
-            container_exit = int(waited.stdout.decode().strip())
-        except ValueError as exc:
-            raise RuntimeError("Podman wait returned invalid exit status") from exc
-        if not 0 <= container_exit <= 255:
-            raise RuntimeError("Podman wait returned invalid exit status")
+        # Podman may return zero while its wait stdout is malformed under
+        # SQLite contention. A second wait on *this exact container ID*
+        # reads its persisted status without restarting MiCall.
+        for attempt in range(3):
+            waited = retry_read_or_remove(["podman", "wait", cid])
+            if waited.returncode:
+                raise RuntimeError("Podman wait failed after container start")
+            raw = (waited.stdout or b"").strip()
+            if re.fullmatch(rb"[0-9]{1,3}", raw) and int(raw) <= 255:
+                container_exit = int(raw)
+                break
+            if attempt == 2 or time.monotonic() + 0.2 >= deadline:
+                # No raw Podman bytes appear in logs; they may contain
+                # accidentally emitted private execution arguments.
+                digest = hashlib.sha256(raw).hexdigest()[:16]
+                raise RuntimeError(
+                    f"Podman wait returned invalid exit status "
+                    f"(bytes={len(raw)} sha256_prefix={digest})")
+            stderr.write("Benchmark: verifying exact container wait status again\n")
+            stderr.flush()
+            time.sleep(0.2)
         stage = "logs"
         logged = retry_read_or_remove(["podman", "logs", cid], output=stdout)
         if logged.returncode:

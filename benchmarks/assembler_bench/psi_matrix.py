@@ -32,8 +32,14 @@ def _entry(rows, name, other, metric, expected, eligible):
                 or not math.isfinite(x) or not math.isfinite(y)):
             continue
         pairs.append(x-y if direction == "higher" else y-x)
+    # Observed deltas are useful even when complete-cohort qualification is
+    # unavailable. They are descriptive, not a partial-data Ψ certificate.
+    observed = {"gains": sum(x > 0 for x in pairs),
+                "losses": sum(x < 0 for x in pairs),
+                "ties": sum(x == 0 for x in pairs),
+                "mean_delta": sum(pairs) / len(pairs) if pairs else None}
     base = {"status": "incomplete", "paired": len(pairs),
-            "expected": expected, "proof": None}
+            "expected": expected, "proof": None, "observed": observed}
     if not eligible or len(rows) != expected or len(pairs) != expected:
         return base
     try:
@@ -57,7 +63,9 @@ def _joint(score, runtime, expected):
         state = "unresolved"
     return {"status": state, "paired": min(score["paired"], runtime["paired"]),
             "expected": expected,
-            "proof": {"alignment": score["proof"], "runtime": runtime["proof"]}}
+            "proof": {"alignment": score["proof"], "runtime": runtime["proof"]},
+            "observed": {"alignment": score["observed"],
+                         "runtime": runtime["observed"]}}
 
 
 def matrix(rows, tools, *, expected, eligible, diagnostic_keys=()):

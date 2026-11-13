@@ -58,7 +58,9 @@ console.log('JS_DIRECTIONS_AND_PARTIAL_EVIDENCE_PASS');
         self.assertIn('key==="alignment"||key==="runtime"',source)
         self.assertIn('drawSubjectControls();',source)
         self.assertIn('id="addDiagnosticSubject"',source)
-        self.assertIn('source?.values?.[key]',source)
+        ranks=(SITE/"rankings.js").read_text()
+        self.assertIn('snapshot.tools?.[tool]?.values?.[key]',ranks)
+        self.assertIn('function summary(',ranks)
         self.assertNotIn('v.soft_clipped_reads,v.soft_clip_events',source)
 
     def test_current_snapshot_honestly_has_only_one_case(self):

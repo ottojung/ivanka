@@ -21,8 +21,10 @@ def rows_for(run):
                      and type(runtime) in (int, float)
                      and math.isfinite(score) and math.isfinite(runtime))
             tools[name] = {
-                "status": "success" if valid and not failed
-                          and sample.get("outcome") == "success" else "failed",
+                # Preserve genuine results from a successful arm even when
+                # another assembler failed on the same sample. The complete
+                # seven-arm gate is still ineligible and cannot certify Ψ.
+                "status": "success" if valid and not failed else "failed",
                 "score": score, "seconds": runtime,
                 "diagnostics": sample.get("diagnostics", {}).get(name, {})}
         result.append({"id": sample.get("alias", str(number)),

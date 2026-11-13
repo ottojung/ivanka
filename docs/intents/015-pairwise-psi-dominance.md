@@ -61,6 +61,24 @@ for precomputing the two directions of every diagnostic using the same
 independent all-r prover, without using averages or browser-side
 approximations to assert dominance.
 
+The public Bench must first show a **numeric total ordering by any
+single measured metric** (alignment, runtime, or every diagnostic),
+with selectable ascending/descending direction, per-assembler
+observation counts, units, methods, and a case-level comparison.
+This arithmetic mean order is descriptive, with explicit deterministic
+tie handling and independently disclosed missingness, not an all-r
+Ψ certificate. Put the **multi-subject dominance matrix after all
+single-metric and case-level comparisons**.
+
+When complete-cohort evidence is unavailable, **preserve observed
+case-level values and descriptive gains/losses/ties and means** rather
+than hiding them behind an incomplete-status label. Explain once, at
+the page top, that full qualification remains outstanding; show
+which observations underlie every comparison. A failed third assembler
+must not suppress valid observations from two other individual arms.
+A descriptive partial comparison must never become a certified strict
+all-r dominance verdict, nor may unavailable values become zeros.
+
 The matrix and proof evidence must be visible under public
 [`/bench/`](007-assembler-bench.md), not only in JSON.
 Allow a searchable **checkbox list of alignment, runtime and all

@@ -99,6 +99,36 @@ Check with the publication and HXB2 preview unittest modules, the
 site builder, node --check on site/bench/app.js, and independent page
 access. No partial result can certify either all-r signed-power gate.
 
+## Single-metric ranking and preservation of partial evidence
+
+The first comparison section ranks **all MiCall assemblers by any one
+selected metric**, not merely alignment or runtime. The unified
+metric selector includes all 23 published CIGAR, mapping, depth,
+concordance and contig diagnostic quantities alongside final MiCall
+alignment and runtime. Visitors can order higher or lower, even for
+descriptive quantities without an intrinsically beneficial direction.
+The ordering is based on observed arithmetic mean, with numeric ties
+broken alphabetically for deterministic display. Every ranked value
+shows its own measured-case count and denominator; a missing metric
+is **unavailable**, not scored as zero. A one-case diagnostic is
+displayed as one of 400, never silently treated as the cohort mean.
+
+The same selected metric drives the per-assembler chart, unit and
+denominator explanation, detailed coverage table, per-case A/B
+comparisons, sorting, and CSV export. Both the metric and numeric
+direction can be shared via URL parameters. These numeric rankings
+and observations are useful for exploring a running benchmark but
+are **not** the strict all-exponent Ψ qualification.
+
+The multiple-checkbox **Ψ-dominance matrix comes after the
+single-metric rankings and case-level comparisons**. Where signed-power
+certification is unavailable, verified observed pairwise wins/losses,
+ties, sample counts and mean advantages remain visible as descriptive
+results. A failed third assembler does not erase valid individual
+MiCall outputs for the other two tools. Full-cohort qualification is
+disclosed once in the page notice; incompleteness must never conceal
+usable measurements or imply false dominance.
+
 ## Neutral metrics, CIGAR soft clipping and pairwise PSI
 
 [Intent 009](../intents/009-neutral-metrics-and-pairwise-dominance.md)

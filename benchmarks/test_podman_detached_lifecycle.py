@@ -578,6 +578,39 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(result.returncode, 124)
         self.assertEqual(self.calls, [])
 
+    def test_ambiguous_wait_rechecks_same_id_without_reexecuting(self):
+        responses = iter((b"0\n0\n", b"0\n"))
+        def fake(argv, **kwargs):
+            result = self.fake(argv, **kwargs)
+            if argv[1] == "wait":
+                return subprocess.CompletedProcess(argv, 0, next(responses))
+            return result
+        with patch.object(lifecycle, "_run_command", side_effect=fake):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (0, "complete"))
+        actions = [c[1] for c in self.calls]
+        self.assertEqual(actions, ["create", "start", "wait", "wait",
+                                   "logs", "rm"])
+        self.assertEqual(self.calls[2], self.calls[3])
+        self.assertIn("exact container wait", self.stderr.getvalue())
+
+    def test_persistently_ambiguous_wait_fails_closed(self):
+        def fake(argv, **kwargs):
+            result = self.fake(argv, **kwargs)
+            if argv[1] == "wait":
+                return subprocess.CompletedProcess(argv, 0, b"0\n0\n")
+            return result
+        with patch.object(lifecycle, "_run_command", side_effect=fake):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (1, "wait"))
+        self.assertIn("sha256_prefix", self.stderr.getvalue())
+        self.assertEqual(sum(c[1] == "start" for c in self.calls), 1)
+        self.assertEqual(sum(c[1] == "wait" for c in self.calls), 3)
+        self.assertEqual(self.calls[-1][1], "rm")
+        self.assertEqual(self.stdout.getvalue(), "")
+
     def test_nonzero_micall_exit_is_preserved(self):
         def fake(argv, **kwargs):
             result = self.fake(argv, **kwargs)

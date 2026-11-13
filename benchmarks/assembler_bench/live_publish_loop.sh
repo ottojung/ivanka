@@ -28,9 +28,9 @@ while :; do
       --fork-repo "$IVANKA_BENCH_FORK_REPO" --base "$IVANKA_BENCH_BASE" || exit 1
     git add site/bench/data/runs.json site/bench/data/mapping-diagnostics.json \
       site/bench/data/live-fork-attestation.json || exit 1
+    # live_progress validates the entire staged public site before writing.
+    # CI checks the published GitHub Pages artifact after the push.
     if ! git diff --cached --quiet; then
-      PYTHONPATH=benchmarks python3 -m unittest -q \
-        benchmarks.test_assembler_bench_publication || exit 1
       git commit -m "Publish independently verified live Assembler Bench progress" ||
         exit 1
       git push origin HEAD:refs/heads/main || exit 1

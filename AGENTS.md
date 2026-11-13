@@ -6,7 +6,7 @@ and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 ## Required execution intents
 
-**All fifteen intent records are cumulative and binding. New requirements do
+**All sixteen intent records are cumulative and binding. New requirements do
 not supersede the reference-blindness, dominant-sequence, original 198-sample
 Ψ qualification, provenance, or source-quality requirements.** See
 [the complete intent index](docs/intents/README.md).
@@ -65,6 +65,12 @@ descriptions of what the existing qualifying image already implements:
   every MiCall candidate/base container from exact fork commits**,
   without runtime source patching; every public reproducibility link
   must target the fork with its full immutable commit SHA.
+- **[Intent 016: dedicated MiCall fork branch and container per assembler](docs/intents/016-dedicated-assembler-branches-and-containers.md).**
+  Every contender has its own `ottojung/MiCall` branch
+  `bench/assembler-<name>`, source-committed tool profile, dedicated
+  tool-only container, immutable distinct image ID and full fork-commit
+  provenance, sharing only the pinned downstream MiCall base. A combined
+  all-contenders image is forbidden even with separate run containers.
 - **[Intent 012: comprehensive diagnostics](docs/intents/012-assembler-diagnostic-metrics.md).**
   All assemblers must have comparable final MiCall quality, mapping,
   coverage/depth, contig structure, runtime/resource and failure metrics,

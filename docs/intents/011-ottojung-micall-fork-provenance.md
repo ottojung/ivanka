@@ -8,6 +8,12 @@ pipeline fixes, benchmark-specific integration adapters that change MiCall
 behavior, and their container build definitions is the user's fork:
 **[github.com/ottojung/MiCall](https://github.com/ottojung/MiCall)**.
 
+[Intent 016](016-dedicated-assembler-branches-and-containers.md)
+additionally requires **one separate fork branch and dedicated, tool-only
+MiCall image per assembler**. Combined all-tools images are ineligible
+even when run as separate containers. Each branch-specific source commit
+and image digest must be independently attested against a common base.
+
 The fork must actually contain **all supported assembler integrations**:
 Ivanka, IVA, Haploflow, MEGAHIT, ABySS, SPAdes, Velvet, and any future
 MiCall-integrated contender. Organize them as documented, reviewable

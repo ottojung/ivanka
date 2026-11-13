@@ -128,3 +128,9 @@ full-span and end-trimmed per-base tracks must be exposed separately.
 Missing historical diagnostic artifacts remain unavailable, not zeros.
 All measurements are diagnostics unless the unchanged numerical
 qualification intents explicitly say otherwise.
+
+
+One canonical dedicated fork branch and dedicated tool-only image are
+required **per assembler**, with a distinct immutable image ID for each.
+All-tools images are historical-only: see
+[Intent 016](../docs/intents/016-dedicated-assembler-branches-and-containers.md).

@@ -5,7 +5,8 @@ A release or benchmark result is not a valid completion claim unless it
 meets every applicable architectural, scientific, and numerical requirement.
 The Rust-only, default-invocation, enhanced benchmark, public Assembler
 Bench, HXB2-derived synthetic-truth, tool-neutral evaluation, comprehensive diagnostics, soft clipping,
-exact coverage, all-pairs Ψ, and fork-only MiCall source requirements **all apply now**;
+exact coverage, all-pairs Ψ, fork-only MiCall source, and dedicated per-assembler branch/image
+requirements **all apply now**;
 they do not replace or loosen the original objectives and gates. The
 seven-way gate is not optional or deferred.
 
@@ -26,6 +27,7 @@ seven-way gate is not optional or deferred.
 | [013 — SAM/CIGAR soft clipping](013-alignment-soft-clipping.md) | Clipped reads, events, bases, left/right clips, counts and densities; distinct from `nuc.csv` clips | **Required; all-tool capture/public presentation incomplete** |
 | [014 — exact read coverage](014-exact-read-coverage.md) | Two distinct per-base exact-read-match coverage tracks, full-span and 70-base-end-trimmed; distributions, zero breadth and provenance | **Required; current sidecars expose only full-span counts** |
 | [015 — directed all-pairs Ψ](015-pairwise-psi-dominance.md) | Proof-backed all-r alignment/runtime/joint dominance matrix with incomplete, disproven, unresolved and self states | **Required; complete public matrix pending** |
+| [016 — dedicated assembler branches and images](016-dedicated-assembler-branches-and-containers.md) | One dedicated fork branch, tool-only image and unique digest per assembler with identical MiCall baseline and exact-commit provenance | **Binding immediately; migration in progress** |
 
 ## Rules for changes and claims
 

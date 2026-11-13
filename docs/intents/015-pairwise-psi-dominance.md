@@ -90,9 +90,14 @@ and recomputed independently for every pair, every metric, and both
 directions. Incomplete runs may have different observed sample counts
 for different pairs: disclose each count.
 
-The prominent cell label must say **OBS YES** or **OBS NO** for
-mathematically determined all-r dominance on the *observed subset*,
-distinct from **YES/NO** for a certified full-cohort result.
+Keep the 7×7 matrix **compact**: the prominent cell should be just
+**YES/NO**, with a tiny **obs** qualifier for a mathematically proven
+observed-subset result; a full-cohort certified result has no qualifier.
+This compact presentation represents the full textual statuses
+**OBS YES/OBS NO** versus **YES/NO** in accessible names, cell details
+and exportable proof records. Do not render verbose scorecards, counts,
+long coverage fractions or prose inside every matrix cell. Incomplete
+qualification never turns an observed YES/NO result into '?'.
 When some selected metrics have no paired samples, display the
 available subject's observed result and the number of missing
 subjects (**PARTIAL YES**, or **OBS NO** for an observed
@@ -104,15 +109,18 @@ the signed-power positivity check is exactly the sign of the single
 paired score difference. It may establish *observed one-case* dominance
 but never complete-cohort qualification.
 
-Below the main verdict, show subject-labelled row wins, losses, ties,
-and *paired/expected* coverage. For multiple selected subjects, show
-up to two summaries directly plus a count of further measured
-subjects; all selected subjects and proof metadata remain available
-on click. **OBS YES is not full-cohort YES** and must never affect
-acceptance of the 198-real or 400-synthetic seven-way scientific gates.
-Never turn missing data into zero or a failed arm into a victory.
-Distinguish observed subset conclusions from certified full-cohort
-conclusions in the matrix legend and accessible labels.
+Keep subject-labelled row wins, losses, ties and *paired/expected*
+coverage in the **cell details, accessible description and independent
+analysis table**, not repeated as dense text in all 42 grid cells.
+The matrix must remain easily readable at desktop width and allow
+horizontal scrolling on narrow screens. Avoid warning-coloured cell
+backgrounds: **NO** dominance is a scientific comparison outcome,
+not an error or failure. Use a neutral cell background with restrained
+text contrast and a subtle primary accent for YES; ensure both states
+are distinguishable without relying on colour. **OBS YES is not
+full-cohort YES** and must never affect acceptance of the 198-real or
+400-synthetic seven-way scientific gates. Never turn missing data into
+zero or a failed arm into a victory.
 
 The matrix and proof evidence must be visible under public
 [`/bench/`](007-assembler-bench.md), not only in JSON.

@@ -99,8 +99,21 @@ def verify_identical_micall_base(iva_image, ivanka_image):
         raise ValueError("Ivanka image does not derive from the selected IVA MiCall base image")
 
 
+def verify_micall_image_pair(iva_image, candidate_image, *, competitor=None):
+    """Attested fork contenders share the MiCall base, not IVA tool layers."""
+    from fork_micall_binding import requested, check
+    if requested():
+        check(candidate_image, competitor=competitor)
+        return
+    verify_identical_micall_base(iva_image, candidate_image)
+
+
 def verify_ivanka_image_binding(image, *, competitor=None):
-    """Verify the native Rust ELF or an explicitly pinned competitor adapter."""
+    """Verify native Rust or source-attested exact-fork MiCall candidates."""
+    from fork_micall_binding import requested, check
+    if requested():
+        check(image, competitor=competitor)
+        return
     verifier = Path(__file__).with_name("verify_ivanka_binding.py").read_text()
     extra = []
     if competitor is not None:
@@ -911,6 +924,9 @@ def _run_main():
                         help="Show verified/missing IVA baselines without running analyses")
     parser.add_argument("--probe",action="store_true")
     args=parser.parse_args()
+    from fork_micall_binding import requested, require_fresh_micall_mode
+    if requested():
+        require_fresh_micall_mode(args)
     configure_podman_lifecycle(args.qualify_198, os.environ)
     from podman_store_guard import verify_expected_store
     store_proof = (verify_expected_store(
@@ -933,7 +949,9 @@ def _run_main():
     pinned_iva_id = checked.get("iva") or image_id(IVA_IMAGE)
     images = pinned_run_images(images, checked, pinned_iva_id)
     if "ivanka" in checked:
-        verify_identical_micall_base(images["iva"], images["ivanka"])
+        verify_micall_image_pair(
+            images["iva"], images["ivanka"],
+            competitor=args.candidate_assembler)
     with (DATA/"manifest.tsv").open(newline="") as manifest:
         rows=list(csv.DictReader(manifest,delimiter="\t"))
     manifest_sample_count=len(rows)

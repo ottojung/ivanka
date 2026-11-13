@@ -1,6 +1,5 @@
 """Checkbox mathematics: every selected metric is an independent obligation."""
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import unittest

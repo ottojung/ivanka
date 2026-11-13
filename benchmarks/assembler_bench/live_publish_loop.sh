@@ -23,6 +23,7 @@ while :; do
     cd "$repo"
     export PYTHONPATH="$repo:$repo/benchmarks"
     python3 -m benchmarks.assembler_bench.live_progress \
+      --real "$IVANKA_BENCH_REAL" --real-data "$IVANKA_BENCH_REAL_DATA" \
       --old "$IVANKA_BENCH_OLD" --old-source "$IVANKA_BENCH_OLD_SOURCE" \
       --fork "$IVANKA_BENCH_FORK" --fork-runner "$IVANKA_BENCH_FORK_RUNNER" \
       --attestation "$IVANKA_BENCH_ATTESTATION" \

@@ -329,7 +329,8 @@ On the authorized benchmark host, use a dedicated clean Git worktree tracking
 origin/main and run benchmarks/assembler_bench/live_publish_loop.sh with
 IVANKA_BENCH_CHECKOUT, IVANKA_BENCH_OLD, IVANKA_BENCH_OLD_SOURCE,
 IVANKA_BENCH_FORK, IVANKA_BENCH_FORK_RUNNER, IVANKA_BENCH_ATTESTATION,
-IVANKA_BENCH_FORK_REPO, IVANKA_BENCH_BASE and IVANKA_BENCH_INTERVAL=300
+IVANKA_BENCH_FORK_REPO, IVANKA_BENCH_BASE, IVANKA_BENCH_REAL,
+IVANKA_BENCH_REAL_DATA and IVANKA_BENCH_INTERVAL=300
 in its environment. The publisher independently revalidates original checkpoints,
 all seven fork image/executable attestations, frozen runner source, and HXB2 truth;
 stages and validates the full privacy-safe public site; then pushes only an
@@ -340,3 +341,11 @@ only static files; visitors receive the newest published snapshot when they
 manually reload the page. There is no automatic browser polling or backend API.
 A failed publisher check leaves the last valid Pages snapshot intact; the host
 publisher retries at its next interval.
+
+
+The same static snapshot also reports per-candidate **completed/198** and
+failed case counts from the new source-verified physical cohort. Only matched,
+uniquely finished cases from the pinned physical manifest and exact candidate
+MiCall image hashes count as completed. No sample names, reads, reference
+panel records or private output paths are uploaded; the counters are not
+qualification certificates.

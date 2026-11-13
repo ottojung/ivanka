@@ -99,6 +99,16 @@ function syncUrl() {
 }
 
 function drawOverview() {
+  const progress=state.data.real_progress;
+  el("realProgress").textContent=progress
+    ?"Physical 198 · current source-attested MiCall attempt: "+
+      Object.entries(progress.candidates)
+        .sort(([a],[b])=>a==="ivanka"?-1:b==="ivanka"?1:a.localeCompare(b))
+        .map(([name,value])=>(names[name]||name)+" "+
+          value.finished+"/198 finished"+
+          (value.failed?" ("+value.failed+" failed)":"")).join(" · ")+
+      ". Results are provisional."
+    :"No source-attested physical-198 attempt has been published yet.";
   const run=state.run;
   el("runSelect").value=run.id;
   el("runCohort").textContent=run.cohort==="real"?"Real · MiCall":

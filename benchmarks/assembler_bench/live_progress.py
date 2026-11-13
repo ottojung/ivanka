@@ -8,6 +8,7 @@ import tempfile
 from .fork_progress import preview as fork_preview
 from .hxb2_preview import preview as old_preview
 from .public_dominance import enrich
+from .real_progress import snapshot as real_snapshot
 from .site_build import SITE, validate_public_site
 
 LEGACY_ID = "hxb2-v4-original-run-live"
@@ -25,7 +26,8 @@ def replace_run(runs, report):
     return [r for r in runs if r["id"] != report["id"]] + [report]
 
 
-def update(site, old, old_source, fork, fork_runner, attestation, fork_repo, base):
+def update(site, old, old_source, fork, fork_runner, attestation, fork_repo,
+           base, *, real=None, real_data=None):
     site = Path(site)
     target = site / "data/runs.json"
     public = json.loads(target.read_text())
@@ -44,6 +46,17 @@ def update(site, old, old_source, fork, fork_runner, attestation, fork_repo, bas
     public["runs"] = replace_run(public["runs"], old_run)
     fork_run = fork_preview(fork, fork_runner, attestation, fork_repo, base)
     public["runs"] = replace_run(public["runs"], fork_run)
+    if real is not None:
+        if real_data is None:
+            raise ValueError("real benchmark requires frozen input manifest")
+        prior = public.get("real_progress", {}).get("candidates", {})
+        snapshot = real_snapshot(
+            real, real_data, fork_runner, attestation, base,
+            fork_run["images"])
+        for name, result in snapshot["candidates"].items():
+            if result["finished"] < prior.get(name, {}).get("finished", 0):
+                raise ValueError("physical-198 finished case count regressed")
+        public["real_progress"] = snapshot
     public = enrich(public)
     with tempfile.TemporaryDirectory(prefix="bench-live-") as folder:
         staged = Path(folder) / "site"
@@ -75,9 +88,12 @@ def main():
     for name in ("old", "old-source", "fork", "fork-runner",
                  "attestation", "fork-repo", "base"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--real", type=Path)
+    parser.add_argument("--real-data", type=Path)
     args = parser.parse_args()
     update(args.site, args.old, args.old_source, args.fork,
-           args.fork_runner, args.attestation, args.fork_repo, args.base)
+           args.fork_runner, args.attestation, args.fork_repo, args.base,
+           real=args.real, real_data=args.real_data)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import json
 import os
 import re
 import signal
@@ -163,6 +164,32 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
                 time.sleep(0.2)
         return result
 
+    def persisted_exit_status():
+        # An invalid wait response is not evidence that a container ran.
+        # Only the exact created ID's persisted terminal state can supply it.
+        try:
+            inspected = call(
+                ["podman", "inspect", "--format", "{{json .State}}", cid],
+                lock=True)
+            if inspected.returncode:
+                return None
+            state = json.loads(inspected.stdout)
+            code = state.get("ExitCode")
+            if (state.get("Status") != "exited"
+                    or state.get("Running") is not False
+                    or state.get("OOMKilled") is not False
+                    or state.get("Dead") is not False
+                    or type(code) is not int or not 0 <= code <= 255):
+                return None
+            started = state.get("StartedAt")
+            if (not isinstance(started, str) or not started
+                    or started.startswith("0001-")):
+                return None
+            return code
+        except (OSError, TypeError, ValueError, KeyError,
+                subprocess.TimeoutExpired, TimeoutError):
+            return None
+
     try:
         created = call(create, lock=True)
         if created.returncode:
@@ -198,6 +225,13 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
                 container_exit = int(raw)
                 break
             if attempt == 2 or time.monotonic() + 0.2 >= deadline:
+                verified_code = persisted_exit_status()
+                if verified_code is not None:
+                    container_exit = verified_code
+                    stderr.write(
+                        "Benchmark: verified terminal exit from exact Podman ID\n")
+                    stderr.flush()
+                    break
                 # No raw Podman bytes appear in logs; they may contain
                 # accidentally emitted private execution arguments.
                 digest = hashlib.sha256(raw).hexdigest()[:16]

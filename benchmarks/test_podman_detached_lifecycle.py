@@ -1,6 +1,7 @@
 """CPU-only tests for short-locked, fail-closed Podman lifecycle."""
 import io
 import hashlib
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
@@ -179,6 +180,86 @@ class DetachedLifecycleTests(unittest.TestCase):
         self.assertEqual(self.calls[0][1], "create")
         self.assertEqual(self.calls[0][-3:], ["--rm", "--project_code", "sample"])
         self.assertEqual(self.calls[0].count("--rm"), 1)
+
+    def test_invalid_wait_accepts_only_authenticated_exited_same_id(self):
+        commands = []
+        state = {
+            "Status": "exited", "Running": False, "OOMKilled": False,
+            "Dead": False, "ExitCode": 0,
+            "StartedAt": "2026-11-13T12:00:00Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+        }
+
+        def corrupted(argv, **kwargs):
+            commands.append(list(argv))
+            if argv[1] == "wait":
+                return subprocess.CompletedProcess(argv, 0, b"invalid status")
+            if argv[1] == "inspect":
+                return subprocess.CompletedProcess(
+                    argv, 0, json.dumps(state).encode())
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle, "_run_command", side_effect=corrupted):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((result.returncode, result.stage), (0, "complete"))
+        self.assertEqual(sum(row[1] == "start" for row in commands), 1)
+        self.assertEqual(sum(row[1] == "wait" for row in commands), 3)
+        inspections = [row for row in commands if row[1] == "inspect"]
+        self.assertEqual(len(inspections), 1)
+        self.assertEqual(inspections[0][-1], "b" * 64)
+        self.assertIn("verified terminal exit", self.stderr.getvalue())
+        self.assertIn("Done.", self.stdout.getvalue())
+
+    def test_invalid_wait_never_authenticates_incomplete_or_dead_container(self):
+        cases = [
+            {"Status": "running", "Running": True},
+            {"Status": "created", "Running": False},
+            {"Status": "exited", "Running": False, "OOMKilled": True},
+            {"Status": "exited", "Running": False, "Dead": True},
+            {"Status": "exited", "Running": False, "ExitCode": "0"},
+            {"Status": "exited", "Running": False,
+             "StartedAt": "0001-01-01T00:00:00Z"},
+        ]
+        base = {"Status": "exited", "Running": False, "OOMKilled": False,
+                "Dead": False, "ExitCode": 0,
+                "StartedAt": "2026-11-13T12:00:00Z"}
+
+        for altered in cases:
+            with self.subTest(altered=altered):
+                observed = []
+                state = {**base, **altered}
+
+                def corrupted(argv, *, observed=observed, state=state,
+                              **kwargs):
+                    observed.append(list(argv))
+                    if argv[1] == "wait":
+                        return subprocess.CompletedProcess(argv, 0, b"bad")
+                    if argv[1] == "inspect":
+                        return subprocess.CompletedProcess(
+                            argv, 0, json.dumps(state).encode())
+                    return self.fake(argv, **kwargs)
+
+                with patch.object(lifecycle, "_run_command",
+                                  side_effect=corrupted):
+                    outcome = lifecycle.run_detached(
+                        self.command, io.StringIO(), io.StringIO(), 1800)
+                self.assertEqual((outcome.returncode, outcome.stage),
+                                 (1, "wait"))
+                self.assertNotIn("logs", [row[1] for row in observed])
+                self.assertEqual(sum(row[1] == "start" for row in observed), 1)
+
+    def test_inspect_unreadable_state_remains_unqualified(self):
+        def unreadable(argv, **kwargs):
+            if argv[1] == "wait":
+                return subprocess.CompletedProcess(argv, 0, b"garbage")
+            if argv[1] == "inspect":
+                return subprocess.CompletedProcess(argv, 0, b"{not-json")
+            return self.fake(argv, **kwargs)
+        with patch.object(lifecycle, "_run_command", side_effect=unreadable):
+            outcome = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 1800)
+        self.assertEqual((outcome.returncode, outcome.stage), (1, "wait"))
 
     def test_missing_pinned_auto_remove_flag_is_rejected(self):
         self.command.remove("--rm")

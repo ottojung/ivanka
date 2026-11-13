@@ -21,6 +21,7 @@ from .micall_checkpoint import (
     digest, existing_case, identity, preserve_interrupted, write_case,
 )
 from .micall_dominant import SCORE_ORIGIN, evaluate_final_dominant
+from .micall_retention import prune_case
 from .micall_synthetic_constants import TIMING_ORIGIN
 from .micall_lock import exclusive_lock
 from .run_real import verify_images
@@ -119,6 +120,7 @@ def run_case(case, root, images, proof, timeout, *, resume=False):
             (directory, manifest), destination / name, name,
             images[name], timeout)
     write_case(destination, row)
+    # The final scored artifacts are committed before dropping bulky scratch.
     return row
 
 
@@ -189,6 +191,9 @@ def _run(data, output, images, *, jobs=5, timeout=MAX_SECONDS,
             for future in as_completed(futures):
                 row = future.result()
                 stream.write(json.dumps(row, sort_keys=True)+"\n")
+                # The checkpoint has been committed and the streamed row
+                # flushed. Reuse its independent evidence verifier.
+                prune_case(output, row, images, proof)
                 print("MICALL_SYNTHETIC_CASE", row["id"], "failures",
                       [name for name, result in row["results"].items()
                        if result["status"] != "success"], flush=True)
@@ -214,6 +219,7 @@ def run_manifest(proof, images, limit):
     """Pin all scoring, wrapper and timing sources across restarts."""
     root = Path(__file__).resolve().parent
     sources = ("micall_synthetic.py", "micall_checkpoint.py",
+               "micall_retention.py",
                "micall_synthetic_constants.py", "micall_lock.py",
                "micall_dominant.py",
                "score.py", "adapters.py", "hxb2_cohort.py")

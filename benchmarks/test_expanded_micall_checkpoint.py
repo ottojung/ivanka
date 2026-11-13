@@ -10,9 +10,10 @@ from expanded import micall_synthetic as runner
 from expanded.micall_checkpoint import (
     digest, existing_case, identity, write_case,
 )
+from expanded.micall_retention import prune_case, prune_completed
 
 
-def test_case(home):
+def make_case(home):
     case = home / "case"
     case.mkdir()
     manifest = {"family": "clonal", "sha256": {
@@ -52,10 +53,78 @@ def completed_row(folder, manifest, proof, images):
 
 
 class SyntheticCheckpointTests(unittest.TestCase):
+    def test_prune_only_verified_completed_cases_preserving_final_evidence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            _, manifest, proof, images = make_case(home)
+            folder = home / "clonal-s000"
+            row = completed_row(folder, manifest, proof, images)
+            for arm in ASSEMBLERS:
+                scratch = folder / arm / "scratch"
+                scratch.mkdir()
+                (scratch / "temporary.bam").write_bytes(b"intermediate")
+            (home / "run_manifest.json").write_text(json.dumps({
+                "images": images, "source_truth": proof}))
+            (home / "results.jsonl").write_text(json.dumps(row) + "\n")
+            self.assertEqual(prune_completed(home), (1, 7))
+            self.assertEqual(prune_completed(home), (1, 0))
+            self.assertEqual(existing_case(folder,
+                             identity("clonal-s000", manifest, proof), images), row)
+            for arm in ASSEMBLERS:
+                self.assertFalse((folder / arm / "scratch").exists())
+                self.assertTrue((folder / arm / "execution.json").exists())
+                self.assertTrue((folder / arm / "conseq_all.csv").exists())
+
+    def test_tampered_final_output_prevents_any_scratch_pruning(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            _, manifest, proof, images = make_case(home)
+            folder = home / "clonal-s000"
+            row = completed_row(folder, manifest, proof, images)
+            for arm in ASSEMBLERS:
+                (folder / arm / "scratch").mkdir()
+            (folder / "ivanka" / "conseq_all.csv").write_text("altered")
+            with self.assertRaisesRegex(ValueError, "modified cached"):
+                prune_case(home, row, images, proof)
+            for arm in ASSEMBLERS:
+                self.assertTrue((folder / arm / "scratch").exists())
+
+    def test_failed_arms_retain_scratch_for_diagnosis(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            _, manifest, proof, images = make_case(home)
+            folder = home / "clonal-s000"
+            row = completed_row(folder, manifest, proof, images)
+            failed = row["results"]["abyss"]
+            failed["status"] = "failed"
+            failed["seconds"] = None
+            failed.pop("final_dominant")
+            write = folder / "abyss" / "execution.json"
+            write.write_text(json.dumps(failed) + "\n")
+            (folder / "matrix.json").write_text(json.dumps(row) + "\n")
+            for arm in ASSEMBLERS:
+                (folder / arm / "scratch").mkdir()
+            self.assertEqual(prune_case(home, row, images, proof), 6)
+            self.assertTrue((folder / "abyss" / "scratch").exists())
+
+    def test_partial_stream_and_duplicate_ids_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            _, manifest, proof, images = make_case(home)
+            folder = home / "clonal-s000"
+            row = completed_row(folder, manifest, proof, images)
+            (home / "run_manifest.json").write_text(json.dumps({
+                "images": images, "source_truth": proof}))
+            (home / "results.jsonl").write_text(json.dumps(row)+"\n"+"{partial")
+            self.assertEqual(prune_completed(home), (1, 0))
+            (home / "results.jsonl").write_text((json.dumps(row)+"\n")*2)
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                prune_completed(home)
+
     def test_cached_case_requires_unchanged_final_micall_evidence(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
-            _, manifest, proof, images = test_case(home)
+            _, manifest, proof, images = make_case(home)
             folder = home / "clonal-s000"
             row = completed_row(folder, manifest, proof, images)
             fields = identity("clonal-s000", manifest, proof)
@@ -67,7 +136,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
     def test_cannot_reuse_different_image_digest_or_truth(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
-            _, manifest, proof, images = test_case(home)
+            _, manifest, proof, images = make_case(home)
             folder = home / "clonal-s000"
             completed_row(folder, manifest, proof, images)
             altered = dict(images)
@@ -83,7 +152,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
     def test_completed_case_does_not_run_any_assembler_again(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
-            case, manifest, proof, images = test_case(home)
+            case, manifest, proof, images = make_case(home)
             folder = home / "clonal-s000"
             previous = completed_row(folder, manifest, proof, images)
             with patch.object(runner, "attempt", side_effect=AssertionError):
@@ -94,7 +163,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
     def test_partially_interrupted_case_preserved_and_reexecuted(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
-            case, manifest, proof, images = test_case(home)
+            case, manifest, proof, images = make_case(home)
             partial = home / "clonal-s000"
             partial.mkdir()
             (partial / "old-logs.txt").write_text("do not destroy evidence")
@@ -118,12 +187,25 @@ class SyntheticCheckpointTests(unittest.TestCase):
             self.assertTrue((home / "clonal-s000/matrix.json").is_file())
             self.assertFalse((home / "clonal-s000/matrix.json.partial").exists())
 
+    def test_cli_forwards_resume_flag_without_restarting(self):
+        from expanded.micall_synthetic import main
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pins = root / "pins.json"
+            pins.write_text(json.dumps({tool: "a" * 64 for tool in ASSEMBLERS}))
+            with (patch("sys.argv", ["micall_synthetic", "--data", str(root),
+                                     "--images", str(pins), "--out", str(root),
+                                     "--resume"]),
+                  patch.object(runner, "run", return_value=400) as called):
+                main()
+            self.assertTrue(called.call_args.kwargs["resume"])
+
     def test_resume_refuses_changes_to_pinned_run_manifest(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
             output = home / "run"
             output.mkdir()
-            case, manifest, proof, images = test_case(home)
+            case, manifest, proof, images = make_case(home)
             pinned = runner.run_manifest(proof, images, None)
             pinned["images"] = dict(images, ivanka="f" * 64)
             (output / "run_manifest.json").write_text(json.dumps(pinned))
@@ -139,7 +221,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
     def test_source_hashes_and_snapshot_immutability(self):
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
-            _, manifest, proof, images = test_case(folder)
+            _, manifest, proof, images = make_case(folder)
             pinned = runner.run_manifest(proof, images, None)
             self.assertEqual(pinned["instrumentation_sha256"], digest(runner.TIMER))
             self.assertIn("micall_checkpoint.py", pinned["benchmark_sources_sha256"])
@@ -170,7 +252,7 @@ class SyntheticFullResumeTests(unittest.TestCase):
     def test_resume_recovers_completed_cases_with_no_duplicate_results(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
-            case, manifest, proof, images = test_case(home)
+            case, manifest, proof, images = make_case(home)
             cohort = [(f"case-{i:03d}", case, manifest) for i in range(400)]
             output = home / "run"
             calls = []

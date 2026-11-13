@@ -117,6 +117,32 @@ biological simulator; measured real library profiles, quality-score
 calibration, read-start distribution, fragment-size mixture and systematic
 bias should later be added, and untouched cases locked for validation.
 
+## Large benchmark scratch retention
+
+A 400-case seven-arm MiCall run produces substantial intermediate
+`scratch/` files. The source-pinned runner still measures complete
+in-container MiCall execution, then scores final consensus and commits
+`matrix.json`, `execution.json` and the streamed case row. Only **after
+that commit** does it verify all final-output hashes and delete
+successful-arm `scratch/` directories; failed-arm scratch remains for
+troubleshooting. Final MiCall CSVs, stdout/stderr and monotonic timing
+are never deleted. Scratch does not contribute to a result's recorded
+timed interval and is reproducible from pinned reads and images.
+
+An existing long-running benchmark can be cleaned safely without
+changing its numeric records or image commitments:
+
+```sh
+PYTHONPATH="$PWD:$PWD/benchmarks" python3 -m benchmarks.expanded.micall_retention \
+  /path/to/checkpointed-run
+```
+
+Add `--follow --watch-pid <runner-PID>` to reclaim newly committed
+successful cases until the run completes or its original process exits.
+The retention tool checks each case against its full checkpoint and
+pinned source/result hashes before removal; interrupted/uncommitted
+cases are never modified. This is disk management, not a qualification.
+
 ## Tool profiles (reviewed interface, default-oriented)
 
 | Tool | Input CLI | Expected output |

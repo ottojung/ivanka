@@ -11,6 +11,40 @@ from assembler_bench.real_progress import (
 
 
 class PhysicalProgressTests(unittest.TestCase):
+    def test_failed_checkpoint_remains_visible_without_fabricated_score(self):
+        from assembler_bench.real_public import measured
+        event = {
+            "failed": True,
+            "iva": {"exit_code": 0, "seconds": 45.,
+                    "timing_origin": "micall_in_container_monotonic_v1"},
+            "ivanka": {"exit_code": 1, "seconds": None,
+                       "timing_origin": None},
+        }
+        self.assertEqual(measured(event, "iva"), (None, None))
+        self.assertEqual(measured(event, "ivanka"), (None, None))
+        event["failed"] = False
+        with self.assertRaisesRegex(ValueError, "missing score"):
+            measured(event, "iva")
+
+    def test_scored_floor_failure_remains_scored(self):
+        from assembler_bench.real_public import measured
+        event = {
+            "failed": True,
+            "best_contig_acceptance": {
+                "iva_score": 1300., "ivanka_score": 700.,
+                "pass": False,
+            },
+            "iva": {"exit_code": 0, "seconds": 46.,
+                    "timing_origin": "micall_in_container_monotonic_v1"},
+            "ivanka": {"exit_code": 0, "seconds": 37.,
+                       "timing_origin": "micall_in_container_monotonic_v1"},
+        }
+        self.assertEqual(measured(event, "iva"), (1300., 46.))
+        self.assertEqual(measured(event, "ivanka"), (700., 37.))
+        event["ivanka"]["seconds"] = -1.
+        with self.assertRaisesRegex(ValueError, "valid score or time"):
+            measured(event, "ivanka")
+
     def test_aggregate_metadata_has_no_sample_identifiers(self):
         report = {
             "schema": PROGRESS, "expected_samples": 198,

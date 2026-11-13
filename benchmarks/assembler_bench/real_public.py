@@ -21,15 +21,20 @@ def sample_aliases(data):
 
 
 def measured(event, name):
-    """Only a successful, timed and scored final MiCall MAX counts."""
+    """Keep scored floor failures; only unscored failed arms are unavailable."""
+    if type(event.get("failed")) is not bool:
+        raise ValueError("real MiCall checkpoint lacks boolean failure outcome")
     arm = event[name]
-    ok = (arm.get("exit_code") == 0
-          and arm.get("timing_origin") == "micall_in_container_monotonic_v1")
-    score = event.get("best_contig_acceptance", {}).get(
+    acceptance = event.get("best_contig_acceptance") or {}
+    score = acceptance.get(
         "iva_score" if name == "iva" else "ivanka_score")
     seconds = arm.get("seconds")
-    if not ok:
-        return None, None
+    ok = (arm.get("exit_code") == 0
+          and arm.get("timing_origin") == "micall_in_container_monotonic_v1")
+    if (score is None or seconds is None or not ok):
+        if event["failed"] and (score is None or not ok):
+            return None, None
+        raise ValueError("successful MiCall arm has missing score or timer")
     if (type(score) not in (int, float)
             or type(seconds) not in (int, float)
             or not math.isfinite(score) or score < 0

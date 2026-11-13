@@ -54,7 +54,7 @@ for(const run of runs){
   alignment).status).label,'—');
  const verdict=calc.observedVerdict(
    calc.evaluate(report,'ivanka','iva',alignment));
- assert(verdict.label.includes('OBS')||verdict.label==='NO DATA');
+ assert(['YES','NO','—'].includes(verdict.label));
 }
 assert.equal(calc.verdict('does-not-dominate').label,'NO');
 assert.equal(calc.verdict('dominates').label,'YES');
@@ -100,9 +100,9 @@ console.log('ACTUAL_PARTIAL_EVIDENCE_VISIBLE');
         matrix=js[js.index("function drawDominance()"):
                   js.index("function render()")]
         self.assertIn('class="dom-verdict"',matrix)
-        self.assertIn('class="dom-mini"',matrix)
-        self.assertIn('esc(shortLabel)',matrix)
-        self.assertIn('esc(scope)',matrix)
+        self.assertNotIn('class="dom-mini"',matrix)
+        self.assertIn('esc(label)',matrix)
+        self.assertNotIn('esc(scope)',matrix)
         self.assertIn('BenchSubjects.observedVerdict(result)',matrix)
         self.assertIn('evidence.description',matrix)
         self.assertIn('result.entries.map(item=>',matrix)
@@ -136,12 +136,10 @@ console.log('ACTUAL_PARTIAL_EVIDENCE_VISIBLE');
         self.assertIn('class="legend-yes"',html)
         self.assertIn('class="legend-no"',html)
         self.assertLess(html.index('class="dominance"'),
-                        html.index('class="diagnostics coverage-section"'))
-        self.assertLess(html.index('class="evidence"'),
-                        html.index('class="diagnostics coverage-section"'))
-        self.assertLess(html.index('id="diagnosticChart"'),
                         html.index('class="provenance"'))
-        self.assertEqual(html.count('id="diagnosticChart"'),1)
+        self.assertNotIn('id="diagnosticChart"',html)
+        self.assertNotIn('id="diagnosticMatrix"',html)
+        self.assertNotIn('id="evidenceContent"',html)
         self.assertNotIn("'<h3>Measurement coverage</h3>'",js)
 
     def test_numeric_psi_exponents_have_correct_sign_and_mean(self):
@@ -186,7 +184,7 @@ console.log('PARTIAL_MOMENT_SYMMETRY_OK');
         self.assertIn('params.set("psi_r",state.psiExponent)',app)
         self.assertIn('params.set("psi_metric",state.psiMetric)',app)
         self.assertIn('const moment=numeric?BenchSubjects.moment(',app)
-        self.assertIn('Only this metric appears in each cell',app)
+        self.assertIn('const moment=numeric?BenchSubjects.moment(',app)
         self.assertIn('.psi-matrix .psi-positive .dom-verdict{color:var(--blue)}',css)
         self.assertIn('.psi-matrix .psi-negative .dom-verdict{color:var(--red)}',css)
 
@@ -206,7 +204,7 @@ for(const a of hxb2.tools)for(const b of hxb2.tools){
  assert.equal(x.status,'incomplete');
  assert(x.entries.every(e=>e.paired<=
   runs.find(y=>y.hxb2_truth_verified).sample_count && e.proof===null));
- assert(['OBS YES','OBS NO','PARTIAL YES','NO DATA'].includes(verdict.label));
+ assert(['YES','NO','—'].includes(verdict.label));
  ++count;
 }
 assert.equal(count,42);

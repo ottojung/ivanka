@@ -36,7 +36,10 @@ class DedicatedPublicationTests(unittest.TestCase):
         self.assertNotIn('fetch("./data/dedicated-images.json"',js)
         self.assertIn('source_url',js)
         self.assertIn('source_commit',js)
-        self.assertIn('Current pinned assembler images',js)
+        self.assertIn('Assembler builds',js)
+        self.assertIn('esc(item.image_sha256)',js)
+        self.assertNotIn('item.image_sha256.slice(',js)
+        self.assertIn('provenance-scroll',js)
         published = json.loads((SITE / "data/runs.json").read_text())
         self.assertEqual(validate_public_site(), len(published["runs"]))
 

@@ -189,3 +189,15 @@ section.dominance,section.diagnostics{margin-top:61px}
   font-variant-numeric:tabular-nums}
 @media(max-width:700px){.psi-view-controls{width:100%}
   .dominance .section-heading .psi-view-controls label{flex:1}}
+
+
+/* Immutable build identifiers stay complete; horizontal scrolling is intentional. */
+.provenance-scroll{overflow-x:auto;max-width:100%;overscroll-behavior-inline:contain}
+.provenance-scroll .dedicated-table{width:max-content;min-width:1100px}
+.provenance-scroll .dedicated-table th,
+.provenance-scroll .dedicated-table td{white-space:nowrap}
+.provenance-scroll .dedicated-table a{white-space:nowrap}
+.provenance-scroll .code-hash{
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:11px;white-space:nowrap;overflow-wrap:normal
+}

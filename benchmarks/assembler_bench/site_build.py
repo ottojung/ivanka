@@ -9,6 +9,7 @@ from pathlib import Path
 from .publication import SCHEMA
 from .site_validation import check_mapping_snapshot, check_matrices
 from .dedicated_publication import check as check_dedicated
+from .public_fork_provenance import check as check_fork_provenance
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -100,6 +101,10 @@ def validate_public_site(site=SITE):
         raise ValueError("matrix lacks checked-metric Ψ(0,1,2) numeric views")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
+    if any(token in js for token in ("setInterval(", "setTimeout(",
+                                      "EventSource(", "WebSocket(")):
+        raise ValueError("static benchmark website must never poll or stream")
+
     if re.search(r"<script[^>]*src=[\"']https?://", html):
         raise ValueError("third-party script dependency forbidden")
     report = json.loads((source / "data/runs.json").read_text())
@@ -135,6 +140,7 @@ def validate_public_site(site=SITE):
                 raise ValueError("ineligible run falsely presented as passing")
         if run["status"] == "incomplete":
             verify_hxb2_preview(run)
+        check_fork_provenance(source, run)
     check_matrices(report)
     check_mapping_snapshot(source, report)
     check_dedicated(source)

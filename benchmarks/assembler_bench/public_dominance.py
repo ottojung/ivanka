@@ -57,6 +57,8 @@ def enrich(public):
                                - expected["psi1"]) > 1e-7):
                     raise ValueError("public PSI conflicts with certificate")
         run["dominance_matrix"] = psi
+        if run.get("micall_fork_provenance", {}).get("status") == "verified":
+            continue
         run["micall_fork_provenance"] = {
             "status": "historical-unverified",
             "message": ("Old images are not proven to originate from "

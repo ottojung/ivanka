@@ -1,0 +1,236 @@
+{
+  "base_dockerfile_sha256": "c97b253f476c375ce263d5756ce76fa94923b3a2c4412439acc23e73738a92e6",
+  "base_image_sha256": "7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd",
+  "candidate_dockerfile_sha256": "2212831aac83ac4c5bb9c727010b5a95f10b9be3fd618a400f3b753c78f0240d",
+  "images": {
+    "abyss": {
+      "assembler": "abyss",
+      "baseline_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "binary_sha256": {
+        "abyss-pe": "eedd84e182c9d58d448933aa1eb8a4a78440446340829369de17bedbb963c8ad"
+      },
+      "dockerfile_sha256": "2212831aac83ac4c5bb9c727010b5a95f10b9be3fd618a400f3b753c78f0240d",
+      "image_sha256": "f2dcfb3a3c7eaa0304cdebb6b931d62305ea513fea0d2ea8ad6e8e10e4fda89a",
+      "independently_verified_build": true,
+      "iva_compatible_samtools_sha256": "39bb3d2135df2ad9b946a416b3ff4ff9b61d38b88a98bb002243425557373594",
+      "ivanka_elf": true,
+      "oci_labels": {
+        "io.buildah.version": "1.43.1",
+        "maintainer": "BC CfE in HIV/AIDS <https://github.com/cfe-lab/MiCall>",
+        "org.opencontainers.image.revision": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+        "org.opencontainers.image.source": "https://github.com/ottojung/MiCall",
+        "org.ottojung.ivanka.source-commit": "34f1bb7316168ef3b1f5c06a86f62d9a37516a62",
+        "org.ottojung.micall.assembler": "abyss",
+        "org.ottojung.micall.common-base": "7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd"
+      },
+      "source_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "source_file_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "3235ca7649aad22cc29aa8d1ddc41e5aa101eed51d12f1ce3c6e08d22aeff0ed"
+      },
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af"
+    },
+    "haploflow": {
+      "assembler": "haploflow",
+      "baseline_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "binary_sha256": {
+        "haploflow": "7915f5ede0cb3325cbe2cb4f91b2c5e54c7a38c33b7a95c388080fac8e541618"
+      },
+      "dockerfile_sha256": "2212831aac83ac4c5bb9c727010b5a95f10b9be3fd618a400f3b753c78f0240d",
+      "image_sha256": "710702fc7d020fcf2090f38b9aa29ea8c88a494e917f4168db74f0d33317d60a",
+      "independently_verified_build": true,
+      "iva_compatible_samtools_sha256": "39bb3d2135df2ad9b946a416b3ff4ff9b61d38b88a98bb002243425557373594",
+      "ivanka_elf": true,
+      "oci_labels": {
+        "io.buildah.version": "1.43.1",
+        "maintainer": "BC CfE in HIV/AIDS <https://github.com/cfe-lab/MiCall>",
+        "org.opencontainers.image.revision": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+        "org.opencontainers.image.source": "https://github.com/ottojung/MiCall",
+        "org.ottojung.ivanka.source-commit": "34f1bb7316168ef3b1f5c06a86f62d9a37516a62",
+        "org.ottojung.micall.assembler": "haploflow",
+        "org.ottojung.micall.common-base": "7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd"
+      },
+      "source_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "source_file_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "3235ca7649aad22cc29aa8d1ddc41e5aa101eed51d12f1ce3c6e08d22aeff0ed"
+      },
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af"
+    },
+    "iva": {
+      "assembler": "iva",
+      "baseline_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "binary_sha256": {
+        "iva": "9317b70522e56fec999e6ccb6fdac4f4a88c29674842a327181f28edde793d90"
+      },
+      "dockerfile_sha256": "2212831aac83ac4c5bb9c727010b5a95f10b9be3fd618a400f3b753c78f0240d",
+      "image_sha256": "d721be9309d882b5f96fd37ab29ec3ae1ae75f43f89343553760a352a180693d",
+      "independently_verified_build": true,
+      "iva_compatible_samtools_sha256": "39bb3d2135df2ad9b946a416b3ff4ff9b61d38b88a98bb002243425557373594",
+      "ivanka_elf": true,
+      "oci_labels": {
+        "io.buildah.version": "1.43.1",
+        "maintainer": "BC CfE in HIV/AIDS <https://github.com/cfe-lab/MiCall>",
+        "org.opencontainers.image.revision": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+        "org.opencontainers.image.source": "https://github.com/ottojung/MiCall",
+        "org.ottojung.ivanka.source-commit": "34f1bb7316168ef3b1f5c06a86f62d9a37516a62",
+        "org.ottojung.micall.assembler": "iva",
+        "org.ottojung.micall.common-base": "7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd"
+      },
+      "source_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "source_file_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "3235ca7649aad22cc29aa8d1ddc41e5aa101eed51d12f1ce3c6e08d22aeff0ed"
+      },
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af"
+    },
+    "ivanka": {
+      "assembler": "ivanka",
+      "baseline_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "binary_sha256": {
+        "ivanka": "ccdc105c100dbeec8e2fb4c62d4d8ce627133cff886c0ef6ac79de8b9d77ae85"
+      },
+      "dockerfile_sha256": "2212831aac83ac4c5bb9c727010b5a95f10b9be3fd618a400f3b753c78f0240d",
+      "image_sha256": "44aac6336e1401c72986fa87ee2ca79a2c7bf0b8938aff358426a69f5ff87a10",
+      "independently_verified_build": true,
+      "iva_compatible_samtools_sha256": "39bb3d2135df2ad9b946a416b3ff4ff9b61d38b88a98bb002243425557373594",
+      "ivanka_elf": true,
+      "oci_labels": {
+        "io.buildah.version": "1.43.1",
+        "maintainer": "BC CfE in HIV/AIDS <https://github.com/cfe-lab/MiCall>",
+        "org.opencontainers.image.revision": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+        "org.opencontainers.image.source": "https://github.com/ottojung/MiCall",
+        "org.ottojung.ivanka.source-commit": "34f1bb7316168ef3b1f5c06a86f62d9a37516a62",
+        "org.ottojung.micall.assembler": "ivanka",
+        "org.ottojung.micall.common-base": "7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd"
+      },
+      "source_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "source_file_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "3235ca7649aad22cc29aa8d1ddc41e5aa101eed51d12f1ce3c6e08d22aeff0ed"
+      },
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af"
+    },
+    "megahit": {
+      "assembler": "megahit",
+      "baseline_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "binary_sha256": {
+        "megahit": "06c82978a79f2cd2bf42cbd5ca931ed4aa1903f3cd44532d1ff20c1b39e8d845"
+      },
+      "dockerfile_sha256": "2212831aac83ac4c5bb9c727010b5a95f10b9be3fd618a400f3b753c78f0240d",
+      "image_sha256": "66b937be52d44bfa3a7d70dfd4e7a8735791412e11f9dbec86596007c2620272",
+      "independently_verified_build": true,
+      "iva_compatible_samtools_sha256": "39bb3d2135df2ad9b946a416b3ff4ff9b61d38b88a98bb002243425557373594",
+      "ivanka_elf": true,
+      "oci_labels": {
+        "io.buildah.version": "1.43.1",
+        "maintainer": "BC CfE in HIV/AIDS <https://github.com/cfe-lab/MiCall>",
+        "org.opencontainers.image.revision": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+        "org.opencontainers.image.source": "https://github.com/ottojung/MiCall",
+        "org.ottojung.ivanka.source-commit": "34f1bb7316168ef3b1f5c06a86f62d9a37516a62",
+        "org.ottojung.micall.assembler": "megahit",
+        "org.ottojung.micall.common-base": "7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd"
+      },
+      "source_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "source_file_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "3235ca7649aad22cc29aa8d1ddc41e5aa101eed51d12f1ce3c6e08d22aeff0ed"
+      },
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af"
+    },
+    "spades": {
+      "assembler": "spades",
+      "baseline_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "binary_sha256": {
+        "spades.py": "2c96c6fbc913305aa0a5b19ef4ab2a95c6304b656f5073b3993b1d835bb393d1"
+      },
+      "dockerfile_sha256": "2212831aac83ac4c5bb9c727010b5a95f10b9be3fd618a400f3b753c78f0240d",
+      "image_sha256": "bd00a6ea05bec180f2f6d7024cafd1faf9f500ed93ebf5428d41d3a8c00edeaf",
+      "independently_verified_build": true,
+      "iva_compatible_samtools_sha256": "39bb3d2135df2ad9b946a416b3ff4ff9b61d38b88a98bb002243425557373594",
+      "ivanka_elf": true,
+      "oci_labels": {
+        "io.buildah.version": "1.43.1",
+        "maintainer": "BC CfE in HIV/AIDS <https://github.com/cfe-lab/MiCall>",
+        "org.opencontainers.image.revision": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+        "org.opencontainers.image.source": "https://github.com/ottojung/MiCall",
+        "org.ottojung.ivanka.source-commit": "34f1bb7316168ef3b1f5c06a86f62d9a37516a62",
+        "org.ottojung.micall.assembler": "spades",
+        "org.ottojung.micall.common-base": "7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd"
+      },
+      "source_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "source_file_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "3235ca7649aad22cc29aa8d1ddc41e5aa101eed51d12f1ce3c6e08d22aeff0ed"
+      },
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af"
+    },
+    "velvet": {
+      "assembler": "velvet",
+      "baseline_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "binary_sha256": {
+        "velvetg": "7f9d5e476de815c14d22b0f9c7232b85826d9776a29f9b45e1eb9ae342fe51ae",
+        "velveth": "4b1c96bfc3decb5f6e8bb7c619fc717c05d6103c1a656e6e88fea18dc178610f"
+      },
+      "dockerfile_sha256": "2212831aac83ac4c5bb9c727010b5a95f10b9be3fd618a400f3b753c78f0240d",
+      "image_sha256": "b0a2c7b8e254958944f14d494d9b45295ca1a3c28d844396759348f15b29d6e2",
+      "independently_verified_build": true,
+      "iva_compatible_samtools_sha256": "39bb3d2135df2ad9b946a416b3ff4ff9b61d38b88a98bb002243425557373594",
+      "ivanka_elf": true,
+      "oci_labels": {
+        "io.buildah.version": "1.43.1",
+        "maintainer": "BC CfE in HIV/AIDS <https://github.com/cfe-lab/MiCall>",
+        "org.opencontainers.image.revision": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+        "org.opencontainers.image.source": "https://github.com/ottojung/MiCall",
+        "org.ottojung.ivanka.source-commit": "34f1bb7316168ef3b1f5c06a86f62d9a37516a62",
+        "org.ottojung.micall.assembler": "velvet",
+        "org.ottojung.micall.common-base": "7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd"
+      },
+      "source_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+      "source_file_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "3235ca7649aad22cc29aa8d1ddc41e5aa101eed51d12f1ce3c6e08d22aeff0ed"
+      },
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af"
+    }
+  },
+  "schema": "ivanka.assembler-bench.fork-oci-attestation.v1",
+  "source_commit": "39c157e7ea3506e84a1a049fb16293b944f5b2af",
+  "source_file_sha256": {
+    "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+    "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+    "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+    "denovo.py": "3235ca7649aad22cc29aa8d1ddc41e5aa101eed51d12f1ce3c6e08d22aeff0ed"
+  },
+  "source_repository": "https://github.com/ottojung/MiCall",
+  "source_url": "https://github.com/ottojung/MiCall/tree/39c157e7ea3506e84a1a049fb16293b944f5b2af",
+  "status": "VERIFIED_BY_INSTALLED_SOURCE_AND_BINARY_SHA"
+}

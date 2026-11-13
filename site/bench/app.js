@@ -729,6 +729,11 @@ function bind() {
     }));
 }
 
+function runOptions() {
+  el("runSelect").innerHTML=state.data.runs.map((r)=>
+    '<option value="'+esc(r.id)+'">'+esc(r.title)+'</option>').join("");
+  el("runSelect").disabled=false;
+}
 async function main() {
   bind();
   try {
@@ -746,11 +751,13 @@ async function main() {
     if(state.data.schema!=="ivanka.assembler-bench.public.v1"||
        !Array.isArray(state.data.runs)||!state.data.runs.length)
       throw new Error("Unsupported or missing public data");
-    el("runSelect").innerHTML=state.data.runs.map((r)=>
-      '<option value="'+esc(r.id)+'">'+esc(r.title)+'</option>').join("");
-    el("runSelect").disabled=false;
+    runOptions();
     const params=new URLSearchParams(location.search);
-    state.run=state.data.runs.find((r)=>r.id===params.get("run"))||state.data.runs[0];
+    const active=state.data.runs.filter(r=>r.id.endsWith("-run-live")||
+      r.id.endsWith("-attested-live"));
+    const latest=active.sort((a,b)=>b.sample_count-a.sample_count)[0];
+    state.run=state.data.runs.find((r)=>r.id===params.get("run"))||
+      latest||state.data.runs[0];
     const requested=params.get("metric")||params.get("diagnostic");
     state.metric=requested==="runtime"?"seconds":
       requested==="alignment"||!requested?"score":requested;

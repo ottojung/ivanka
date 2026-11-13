@@ -37,7 +37,7 @@ def pinned_truth():
     return cohort, proof
 
 
-def checked_run(directory):
+def checked_run(directory, source_root=None):
     """All records must be actual completed MiCall cases, never partial arms."""
     root = Path(directory)
     manifest_file = root / "run_manifest.json"
@@ -52,7 +52,7 @@ def checked_run(directory):
             or manifest.get("timer") != TIMING_ORIGIN):
         raise ValueError("not an authentic full-cohort HXB2 MiCall run")
     sources = manifest.get("benchmark_sources_sha256", {})
-    base = Path(__file__).resolve().parents[1] / "expanded"
+    base = (Path(source_root) if source_root else Path(__file__).resolve().parents[2]) / "benchmarks/expanded"
     required_sources = ("micall_synthetic.py", "micall_checkpoint.py",
                         "micall_synthetic_constants.py", "micall_lock.py",
                         "micall_dominant.py", "score.py", "adapters.py",
@@ -65,9 +65,9 @@ def checked_run(directory):
     # archived metrics; old historical snapshots lack this instrument.
     extra = manifest.get("diagnostic_sources_sha256")
     if extra is not None:
-        source_root = Path(__file__).resolve().parents[1]
-        expected = {"sam_metrics.py": source_root / "assembler_bench/sam_metrics.py",
-                    "diagnostic_metrics.py": source_root / "diagnostic_metrics.py"}
+        instrument_root = (Path(source_root) if source_root else Path(__file__).resolve().parents[2]) / "benchmarks"
+        expected = {"sam_metrics.py": instrument_root / "assembler_bench/sam_metrics.py",
+                    "diagnostic_metrics.py": instrument_root / "diagnostic_metrics.py"}
         if (set(extra) != set(expected)
                 or any(sha(path) != extra[name]
                        for name, path in expected.items())):
@@ -101,18 +101,28 @@ def checked_run(directory):
     return manifest, checked, sha(results)
 
 
-def preview(directory):
-    manifest, records, result_hash = checked_run(directory)
+def preview(directory, source_root=None):
+    manifest, records, result_hash = checked_run(directory, source_root)
+    return format_preview(manifest, records, result_hash,
+                          sha(Path(directory) / "run_manifest.json"))
+
+
+def format_preview(manifest, records, result_hash, source_manifest_sha256):
+    """Convert independently verified completed cases to anonymous public rows."""
     tools = list(ASSEMBLERS)
     families = defaultdict(list)
     samples = []
     failed_arms = 0
-    for index, row in enumerate(sorted(records, key=lambda r: r["id"]), 1):
+    cohort, _ = pinned_truth()
+    aliases = {entry["id"]: f"H{index:03d}"
+               for index, entry in enumerate(
+                   sorted(cohort["cases"], key=lambda case: case["id"]), 1)}
+    for row in sorted(records, key=lambda r: r["id"]):
         values = row["results"]
         failed = [name for name in tools if values[name]["status"] != "success"]
         failed_arms += len(failed)
         sample = {
-            "alias": f"H{index:03d}", "family": row["family"],
+            "alias": aliases[row["id"]], "family": row["family"],
             "score": {}, "seconds": {}, "failures": failed,
             "outcome": "failure" if failed else "success",
             "floor_ok": None,
@@ -172,7 +182,7 @@ def preview(directory):
         "cohort_manifest_sha256": COHORT_SHA,
         "reference_manifest_sha256": manifest["source_truth"][
             "reference_manifest_sha256"],
-        "source_manifest_sha256": sha(Path(directory)/"run_manifest.json"),
+        "source_manifest_sha256": source_manifest_sha256,
         "diagnostic_sha256": result_hash, "runner_source_sha256": source,
         "timing_origin": TIMING_ORIGIN, "score_origin": SCORE_ORIGIN,
     }

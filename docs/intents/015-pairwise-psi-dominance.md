@@ -79,6 +79,19 @@ must not suppress valid observations from two other individual arms.
 A descriptive partial comparison must never become a certified strict
 all-r dominance verdict, nor may unavailable values become zeros.
 
+**Each matrix cell must show the actual directed dominance verdict,
+not a count, score, number of observed subjects, average difference,
+or win/loss/tie tally.** Row A / column B answers exactly "Does A
+strictly Ψ-dominate B on *every* checked metric?" Display a prominent
+**YES** only with full independent proof on all selected subjects,
+**NO** only with a proven counterexample on at least one subject, and
+**?** when pairing, qualification or numerical evidence is missing/
+unresolved. Use **—** only for self-comparison. Describe the
+meaning of every status in a nearby legend. Observed gains, losses,
+ties and means remain available on clicking the cell and in the
+separate analysis panel, but must never replace the cell's truth
+status or visually masquerade as dominance.
+
 The matrix and proof evidence must be visible under public
 [`/bench/`](007-assembler-bench.md), not only in JSON.
 Allow a searchable **checkbox list of alignment, runtime and all

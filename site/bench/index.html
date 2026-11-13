@@ -112,11 +112,12 @@
         </div>
         <p class="subtle" id="dominanceContext"></p>
         <div class="dominance-legend" aria-label="Matrix verdict legend">
-          <span><strong>YES</strong> Proven strict Ψ dominance on every selected metric</span>
-          <span><strong>NO</strong> At least one selected metric disproves dominance</span>
-          <span><strong>?</strong> Insufficient or unresolved evidence</span>
+          <span><strong>YES / NO</strong> Certified all-r Ψ result on full eligible cohort</span>
+          <span><strong>OBS YES / OBS NO</strong> Strict all-r Ψ result on available paired cases only</span>
+          <span><strong>PARTIAL YES</strong> Observed dominance on measured subjects; others unmeasured</span>
+          <span><strong>NO DATA</strong> No valid paired samples for selected subjects</span>
           <span><strong>—</strong> Same assembler</span>
-          <span class="dom-legend-observed">Smaller lines: observed row wins ↑, losses ↓, ties =, and paired/expected cases; not a Ψ proof</span>
+          <span class="dom-legend-observed">Smaller lines: observed row wins ↑, losses ↓, ties =, and paired/expected cases. OBS is not full-cohort certification.</span>
         </div>
         <div class="table-scroll" id="dominanceMatrix"></div>
         <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>

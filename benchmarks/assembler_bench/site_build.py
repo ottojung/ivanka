@@ -72,12 +72,14 @@ def validate_public_site(site=SITE):
     if "function cellText(" in js:
         raise ValueError("dominance cells must not replace proof with numeric scores")
     if (any(name not in js for name in
-            ("BenchSubjects.verdict(result.status)", "esc(verdict.label)",
+            ("BenchSubjects.observedVerdict(result)", "esc(verdict.label)",
+             "BenchSubjects.verdict(result.status)",
              "BenchSubjects.evidence(result)", 'class="dom-verdict"',
-             'class="dom-preview"', 'class="dom-preview-row"',
-             "evidence.description")) or
+             'class="dom-scope-label"', 'class="dom-preview"',
+             'class="dom-preview-row"', "evidence.description")) or
             any(name not in subjects for name in
-                ("function verdict(status)", "function evidence(result, limit=2)",
+                ("function observedVerdict(result)", "function verdict(status)",
+                 "function evidence(result, limit=2)",
                  'item.paired+"/"+item.expected')) or
             any(name not in html for name in
                 ('class="dominance-legend"', 'class="dom-legend-observed"'))):

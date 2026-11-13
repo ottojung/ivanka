@@ -1,4 +1,4 @@
-"""Publish only complete-cohort, independently validated pairwise Ψ proofs."""
+"""Publish independent observed-subset Ψ alongside full-cohort certificates."""
 import json
 import math
 from pathlib import Path
@@ -33,7 +33,7 @@ def rows_for(run):
 
 
 def enrich(public):
-    """No generated verdict for incomplete or ineligible historical data."""
+    """Observed-subset proofs remain provisional until full qualification."""
     if public.get("schema") != "ivanka.assembler-bench.public.v1":
         raise ValueError("unsupported public results schema")
     for run in public["runs"]:

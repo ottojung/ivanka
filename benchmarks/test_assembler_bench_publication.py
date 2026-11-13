@@ -131,6 +131,28 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             self.assertIn(metadata["suggested_direction"],
                           ("higher","lower","unspecified"))
 
+    def test_partial_psi_proof_is_independently_recomputed(self):
+        import copy
+        from assembler_bench.site_validation import check_matrices
+        from assembler_bench.public_dominance import enrich
+        runs=json.loads((SITE/"data/runs.json").read_text())
+        check_matrices(runs)
+        recorded=next(r for r in runs["runs"] if r.get("hxb2_truth_verified"))
+        sample=recorded["dominance_matrix"]["metrics"]["alignment"]["ivanka"]["iva"]
+        self.assertEqual(sample["status"],"incomplete")
+        self.assertEqual(sample["subset"]["status"],"dominates")
+        self.assertTrue(sample["subset"]["proof"]["positive_all_nonnegative"])
+        self.assertEqual(sample["paired"],10)
+        corrupted=copy.deepcopy(runs)
+        hxb2=next(r for r in corrupted["runs"] if r.get("hxb2_truth_verified"))
+        hxb2["dominance_matrix"]["metrics"]["alignment"]["ivanka"]["iva"][
+            "subset"]["status"]="does-not-dominate"
+        with self.assertRaisesRegex(ValueError,"pairwise PSI matrix"):
+            check_matrices(corrupted)
+        self.assertEqual(enrich(runs)["runs"][-1]["dominance_matrix"][
+            "metrics"]["alignment"]["ivanka"]["iva"]["subset"]["status"],
+            "dominates")
+
     def test_tampering_with_matrix_or_density_fails_publication(self):
         import shutil
         with tempfile.TemporaryDirectory() as tmp:

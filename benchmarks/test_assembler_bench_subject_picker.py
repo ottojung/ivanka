@@ -174,6 +174,74 @@ console.log('MATRIX_VERDICT_AND_INLINE_PARTIAL_EVIDENCE_ARE_INDEPENDENT_PASS');
         self.assertIn("esc(verdict.label)",matrix)
         self.assertIn("esc(item.text)",matrix)
 
+    def test_all_hxb2_pairs_have_actual_observed_all_r_psi_results(self):
+        node=shutil.which("node")
+        if not node:self.skipTest("Node unavailable")
+        code="""
+const assert=require('assert');
+const calc=require(process.argv[1]);
+const runs=require(process.argv[2]).runs;
+const snapshot=require(process.argv[3]);
+const hxb2=runs.find(x=>x.hxb2_truth_verified).dominance_matrix;
+const real=runs.find(x=>x.cohort==='real').dominance_matrix;
+const legacy=runs.find(x=>x.status==='ineligible').dominance_matrix;
+const align={key:'alignment',label:'Alignment',direction:'higher'};
+const runtime={key:'runtime',label:'Runtime',direction:'lower'};
+const diag={key:'soft_clipped_bases_per_1000_read_bases',
+  label:'Soft clip density',direction:'lower'};
+let count=0;
+for(const a of hxb2.tools)for(const b of hxb2.tools){
+ if(a===b)continue;
+ const x=calc.evaluate(hxb2,a,b,[align,runtime]);
+ const v=calc.observedVerdict(x);
+ assert(['OBS YES','OBS NO'].includes(v.label),[a,b,v]);
+ assert.equal(x.status,'incomplete');
+ assert.equal(x.entries.length,2);
+ assert(x.entries.every(e=>e.subset?.proof&&e.paired>0));
+ assert(x.entries.every(e=>e.proof===null));
+ assert(v.scope.includes('2/2 selected subjects'));
+ ++count;
+}
+assert.equal(count,42);
+assert.equal(calc.observedVerdict(calc.evaluate(
+ hxb2,'ivanka','iva',[align,runtime])).label,'OBS YES');
+assert.equal(calc.observedVerdict(calc.evaluate(
+ hxb2,'iva','ivanka',[align,runtime])).label,'OBS NO');
+assert.equal(calc.observedVerdict(calc.evaluate(
+ hxb2,'ivanka','haploflow',[align])).label,'OBS NO');
+const composite={...snapshot,cases_measured:2};
+const unsupported=calc.evaluate(hxb2,'ivanka','iva',[diag],composite);
+assert.equal(calc.observedVerdict(unsupported).label,'NO DATA');
+const x=snapshot.tools.ivanka.values[diag.key];
+const y=snapshot.tools.iva.values[diag.key];
+const diagnosticResult=calc.observedVerdict(
+  calc.evaluate(hxb2,'ivanka','iva',[diag],snapshot));
+assert.equal(diagnosticResult.label,x<y?'OBS YES':'OBS NO');
+assert.equal(calc.observedVerdict(calc.evaluate(
+ real,'Ivanka','IVA',[align,runtime])).label,'YES');
+assert.equal(calc.observedVerdict(calc.evaluate(
+ real,'IVA','Ivanka',[align,runtime])).label,'NO');
+assert.equal(calc.observedVerdict(calc.evaluate(
+ legacy,'iva','ivanka',[align,runtime])).label,'NO DATA');
+assert.equal(calc.observedVerdict(calc.evaluate(
+ hxb2,'ivanka','iva',[align,{key:'never_observed',label:'No measurements',
+  direction:'higher'}])).label,'PARTIAL YES');
+assert.equal(calc.observedVerdict(calc.evaluate(
+ hxb2,'ivanka','iva',[{key:'never_observed',label:'None',
+  direction:'higher'}])).label,'NO DATA');
+assert.equal(calc.observedVerdict(calc.evaluate(
+ hxb2,'ivanka','iva',[{key:'final_contig_count',label:'Count',
+  direction:'unspecified'}])).label,'UNRESOLVED');
+console.log('ALL_42_OBSERVED_HXB2_PAIRWISE_ALL_R_COMPARISONS_DISPLAY_RESULTS');
+"""
+        r=subprocess.run([node,"-e",code,str(SITE/"subjects.js"),
+                          str(SITE/"data/runs.json"),
+                          str(SITE/"data/mapping-diagnostics.json")],
+                         text=True,capture_output=True,check=False,timeout=20)
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertIn('ALL_42_OBSERVED_HXB2_PAIRWISE_ALL_R_COMPARISONS_DISPLAY_RESULTS',
+                      r.stdout)
+
     def test_every_catalog_measurement_can_be_a_checkbox_subject(self):
         snapshot=json.loads((SITE/"data/mapping-diagnostics.json").read_text())
         keys=set(snapshot["metric_catalog"])

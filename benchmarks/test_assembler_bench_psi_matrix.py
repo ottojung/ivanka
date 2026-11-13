@@ -105,6 +105,70 @@ class DirectedDominanceTests(unittest.TestCase):
         self.assertEqual(ac["observed"]["mean_delta"],2)
         self.assertIsNone(ac["proof"])
 
+    def test_incomplete_subset_is_independently_proven_for_all_real_exponents(self):
+        # Observed A>B twice, but one large regression at high r:
+        # win counts and average are NOT signed-power dominance.
+        rows = [record(1,(102,2),(100,5)),
+                record(2,(102,2),(100,5)),
+                record(3,(80,2),(100,5))]
+        grid = matrix(rows,["A","B"],expected=400,eligible=False)["metrics"]
+        item = grid["alignment"]["A"]["B"]
+        self.assertEqual(item["status"],"incomplete")
+        self.assertIsNone(item["proof"])
+        self.assertEqual(item["subset"]["status"],"does-not-dominate")
+        self.assertFalse(item["subset"]["proof"]["positive_all_nonnegative"])
+        self.assertEqual(item["paired"],3)
+        self.assertEqual(item["observed"]["gains"],2)
+        self.assertEqual(item["observed"]["losses"],1)
+        self.assertEqual(grid["runtime"]["A"]["B"]["subset"]["status"],
+                         "dominates")
+        self.assertEqual(grid["alignment"]["B"]["A"]["subset"]["status"],
+                         "does-not-dominate")
+
+    def test_observed_dominance_is_preserved_when_other_arm_fails(self):
+        rows = [record(0,(8,2),(4,5),(4,5)),
+                record(1,(8,2),(4,5),(4,5)),
+                record(2,(8,2),(4,5),(4,5))]
+        rows[2]["results"]["C"]["status"]="failed"
+        grid=matrix(rows,["A","B","C"],expected=400,eligible=False)["metrics"]
+        ab=grid["alignment"]["A"]["B"]
+        ac=grid["alignment"]["A"]["C"]
+        self.assertEqual(ab["subset"]["status"],"dominates")
+        self.assertEqual(ab["paired"],3)
+        self.assertEqual(ac["subset"]["status"],"dominates")
+        self.assertEqual(ac["paired"],2)
+        self.assertIsNone(ac["proof"])
+        self.assertEqual(ac["status"],"incomplete")
+
+    def test_ties_and_unobserved_pairs_never_produce_positive_subset(self):
+        rows=[record(i,(4,2),(4,2)) for i in range(2)]
+        grid=matrix(rows,["A","B"],expected=400,eligible=False)["metrics"]
+        entry=grid["alignment"]["A"]["B"]
+        self.assertEqual(entry["subset"]["status"],"does-not-dominate")
+        self.assertEqual(entry["subset"]["proof"]["psi0"],0)
+        self.assertEqual(entry["subset"]["proof"]["zeros_nonnegative"],"R>=0")
+        rows[0]["results"]["A"]["status"]="failed"
+        rows[1]["results"]["B"]["status"]="failed"
+        entry=matrix(rows,["A","B"],expected=400,eligible=False)[
+            "metrics"]["alignment"]["A"]["B"]
+        self.assertEqual(entry["paired"],0)
+        self.assertEqual(entry["subset"]["status"],"no-data")
+        self.assertIsNone(entry["subset"]["proof"])
+
+    def test_independent_pairwise_subset_certificates_cannot_be_promoted(self):
+        rows=[record(i,(6,1),(4,2)) for i in range(3)]
+        grid=matrix(rows,["A","B"],expected=400,eligible=False)["metrics"]
+        for metric in ("alignment","runtime"):
+            entry=grid[metric]["A"]["B"]
+            self.assertEqual(entry["status"],"incomplete")
+            self.assertEqual(entry["subset"]["status"],"dominates")
+            self.assertIsNone(entry["proof"])
+            self.assertEqual(entry["subset"]["proof"]["psi0"],1)
+        joint=grid["joint"]["A"]["B"]
+        self.assertEqual(joint["status"],"incomplete")
+        self.assertEqual(joint["subset"]["alignment"]["status"],"dominates")
+        self.assertEqual(joint["subset"]["runtime"]["status"],"dominates")
+
     def test_duplicate_identity_is_rejected(self):
         rows = [record(1, (5, 1), (4, 2))] * 2
         with self.assertRaisesRegex(ValueError, "duplicate"):

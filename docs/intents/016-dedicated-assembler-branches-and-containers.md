@@ -1,7 +1,9 @@
 # Intent 016: One dedicated MiCall fork branch and container per assembler
 
-**Status: binding immediately; prior multi-tool images are historical and
-not eligible for new qualifying benchmarks.**
+**Status: binding. All seven dedicated fork branches and separately
+built images are implemented and independently source/binary attested;
+all seven completed an end-to-end MiCall smoke. Full expanded
+qualification remains outstanding; prior multi-tool images are historical.**
 
 For every assembler included in Assembler Bench, **there must be one
 separate, dedicated branch in

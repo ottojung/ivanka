@@ -253,3 +253,37 @@ public site. This attestation qualifies only source integrity; it
 **does not** certify final MiCall alignment, runtime, any synthetic
 truth, or the 598-case enhanced benchmark. A complete run must still
 pass every earlier scientific and strict all-exponent PSI gate.
+
+
+## Seven dedicated MiCall fork branches and images (Intent 016)
+
+Every assembler has a separate canonical branch under
+[ottojung/MiCall](https://github.com/ottojung/MiCall) and its own
+tool-specific, source-committed image build. Each final image has
+a distinct immutable ID, a unique branch commit, and an independently
+verified common MiCall downstream baseline.
+
+The public source and binary inventory is
+[dedicated-images.json](../../site/bench/data/dedicated-images.json).
+It is shown on the Bench provenance page using exact fork commit links;
+it does not retroactively qualify prior historical benchmark runs.
+
+To independently verify all images, provide maps of the seven immutable
+image IDs and seven clean exact-commit branch checkouts to:
+
+`python3 -m benchmarks.assembler_bench.dedicated_image_attestation
+--images IMAGES.json --source-roots BRANCHES.json
+--base-image IMMUTABLE_FORK_BASE_ID --output ATTESTATION.json`
+
+The auditor independently checks branch names, remote published commits,
+clean source, unchanged downstream MiCall module tree, committed
+tool-only build profiles, unique OCI image IDs, base layers/labels,
+actual installed source hashes and program binary hashes, and the
+absence of other nonbaseline contender executables. The shared MiCall
+baseline includes IVA as a native dependency; this does not constitute
+an additional integrated competitor in another tool's dedicated image.
+
+All seven dedicated images have completed an end-to-end HXB2 clonal
+MiCall smoke test with independently scored final consensuses.
+**The original 198-real plus 400-HXB2-synthetic seven-way numerical gate
+has not yet passed.**

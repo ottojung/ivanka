@@ -27,7 +27,7 @@ seven-way gate is not optional or deferred.
 | [013 — SAM/CIGAR soft clipping](013-alignment-soft-clipping.md) | Clipped reads, events, bases, left/right clips, counts and densities; distinct from `nuc.csv` clips | **Required; all-tool capture/public presentation incomplete** |
 | [014 — exact read coverage](014-exact-read-coverage.md) | Two distinct per-base exact-read-match coverage tracks, full-span and 70-base-end-trimmed; distributions, zero breadth and provenance | **Required; current sidecars expose only full-span counts** |
 | [015 — directed all-pairs Ψ](015-pairwise-psi-dominance.md) | Proof-backed all-r alignment/runtime/joint dominance matrix with incomplete, disproven, unresolved and self states | **Required; complete public matrix pending** |
-| [016 — dedicated assembler branches and images](016-dedicated-assembler-branches-and-containers.md) | One dedicated fork branch, tool-only image and unique digest per assembler with identical MiCall baseline and exact-commit provenance | **Binding immediately; migration in progress** |
+| [016 — dedicated assembler branches and images](016-dedicated-assembler-branches-and-containers.md) | One dedicated fork branch, tool-only image and unique digest per assembler with identical MiCall baseline and exact-commit provenance | **Seven dedicated remote branches and separately built images verified; first seven-way MiCall smoke passed; full expanded gate pending** |
 
 ## Rules for changes and claims
 

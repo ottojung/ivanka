@@ -9,6 +9,7 @@ from .real_progress import snapshot
 from .hxb2_preview import sha
 
 ID = "real198-fork-source-attested-live"
+DEDICATED_ID = "real198-dedicated-source-live"
 TOOLS = list(ASSEMBLERS)
 RUN_SCHEMA = "ivanka.assembler-bench.public.v1"
 
@@ -106,9 +107,13 @@ def preview(root, data, runner, attestation, base, images, fork_provenance):
     if any(len(cases[name]) != proof["candidates"][name]["finished"]
            for name in proof["candidates"]):
         raise ValueError("physical candidate counters disagree with result rows")
+    dedicated = fork_provenance.get("attestation_schema") == (
+        "ivanka.assembler-bench.dedicated-fork-images.v1")
     return {
-        "schema": RUN_SCHEMA, "id": ID,
-        "title": "198 physical samples · source-attested seven-way MiCall",
+        "schema": RUN_SCHEMA, "id": DEDICATED_ID if dedicated else ID,
+        "title": ("198 physical samples · dedicated seven-way MiCall"
+                  if dedicated else
+                  "198 physical samples · shared-source diagnostic MiCall"),
         "date": "2026-11-13", "cohort": "real", "status": "incomplete",
         "expanded_status": "incomplete", "eligible_for_expanded": False,
         "expected_sample_count": 198, "sample_count": len(samples),

@@ -3,13 +3,19 @@ import math
 import re
 
 from benchmarks.expanded.adapters import ASSEMBLERS
-from .combined_public import ID as COMBINED_ID, preview as combined_preview
-from .real_public import ID as REAL_ID
+from .combined_public import (
+    ID as COMBINED_ID, DEDICATED_ID as DEDICATED_COMBINED,
+    preview as combined_preview)
+from .real_public import ID as REAL_ID, DEDICATED_ID as DEDICATED_REAL
+from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
 from .real_progress import validate_public
 from .site_validation import SHA
 
 SYNTH_ID = "hxb2-v4-fork-source-attested-live"
+DEDICATED_SYNTH = "hxb2-v4-dedicated-source-live"
 EXPECTED = {SYNTH_ID, REAL_ID, COMBINED_ID}
+DEDICATED_EXPECTED = {DEDICATED_SYNTH, DEDICATED_REAL,
+                      DEDICATED_COMBINED}
 REAL_ALIAS = re.compile(r"^R[0-9]{3}$")
 
 
@@ -62,10 +68,13 @@ def check_physical(run, progress):
 
 def check_current(report):
     runs = {run["id"]: run for run in report["runs"]}
-    if len(runs) != 3 or set(runs) != EXPECTED:
-        raise ValueError("only three current source-attested benchmark views allowed")
-    synthetic, real, combined = (runs[name] for name in
-                                 (SYNTH_ID, REAL_ID, COMBINED_ID))
+    active = set(runs)
+    if len(runs) != 3 or active not in (EXPECTED, DEDICATED_EXPECTED):
+        raise ValueError("only three coherent source-attested views allowed")
+    identifiers = ((DEDICATED_SYNTH, DEDICATED_REAL, DEDICATED_COMBINED)
+                   if active == DEDICATED_EXPECTED
+                   else (SYNTH_ID, REAL_ID, COMBINED_ID))
+    synthetic, real, combined = (runs[name] for name in identifiers)
     progress = report.get("real_progress")
     validate_public(progress)
     if (synthetic["cohort"] != "synthetic"
@@ -82,6 +91,16 @@ def check_current(report):
         raise ValueError("current runs are not identical seven-assembler builds")
     if len(set(synthetic["images"].values())) != 7:
         raise ValueError("current contenders lack distinct pinned images")
+    if active == DEDICATED_EXPECTED:
+        proof = synthetic["micall_fork_provenance"]
+        source = proof.get("images", {})
+        if (proof.get("attestation_schema") != DEDICATED_SCHEMA
+                or len({item.get("source_commit") for item in
+                        source.values()}) != 7
+                or any(source[tool].get("source_branch")
+                       != "bench/assembler-" + tool
+                       for tool in ASSEMBLERS)):
+            raise ValueError("qualifying run needs seven dedicated source branches")
     check_physical(real, progress)
     expected = combined_preview(synthetic, real)
     for key, value in expected.items():

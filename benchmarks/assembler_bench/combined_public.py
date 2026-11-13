@@ -2,6 +2,7 @@
 from copy import deepcopy
 
 ID = "current-598-source-attested-combined"
+DEDICATED_ID = "current-598-dedicated-combined"
 
 
 def preview(synthetic, real):
@@ -18,7 +19,9 @@ def preview(synthetic, real):
                             for k, v in row["score"].items()}
             row["family"] = "HXB2 synthetic" if prefix == "S" else "Physical real"
             samples.append(row)
-    result.update(id=ID, title="Combined · 400 synthetic + 198 real",
+    dedicated = real["id"] == "real198-dedicated-source-live"
+    result.update(id=DEDICATED_ID if dedicated else ID,
+                  title="Combined · 400 synthetic + 198 real",
                   cohort="combined", hxb2_truth_verified=False,
                   sample_count=len(samples), expected_sample_count=598,
                   samples=samples, families=[], psi={},

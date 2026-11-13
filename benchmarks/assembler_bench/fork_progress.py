@@ -6,6 +6,7 @@ from pathlib import Path
 from benchmarks.expanded.micall_checkpoint import existing_case, identity
 from .hxb2_preview import format_preview, pinned_truth, sha
 from .image_source_attestation import verify
+from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
 
 SCHEMA = "ivanka.expanded.fork_micall_synthetic.v1"
 
@@ -64,9 +65,13 @@ def preview(directory, runner, attestation, fork, base):
     }
     result = format_preview(
         normalized, rows, result_hash, sha(Path(directory) / "run_manifest.json"))
+    dedicated = att["schema"] == DEDICATED_SCHEMA
     result.update(
-        id="hxb2-v4-fork-source-attested-live",
-        title="HXB2 v4 · source-attested fork MiCall (updating)",
+        id=("hxb2-v4-dedicated-source-live" if dedicated
+            else "hxb2-v4-fork-source-attested-live"),
+        title=("HXB2 v4 · dedicated seven-assembler MiCall (updating)"
+               if dedicated else
+               "HXB2 v4 · source-attested fork MiCall (diagnostic)"),
         date="2026-11-13",
         source_commit=subprocess.check_output(
             ["git", "-C", str(runner), "rev-parse", "HEAD"], text=True).strip(),

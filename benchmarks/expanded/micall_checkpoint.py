@@ -55,7 +55,6 @@ def existing_case(folder, fields, images):
             final = result.get("final_dominant", {})
             sources = [
                 (final.get("source_output"), final.get("conseq_csv_sha256")),
-                ("remap_counts.csv", final.get("remap_counts_sha256")),
             ]
             for relative, expected in sources:
                 if not relative or not expected or digest(arm / relative) != expected:

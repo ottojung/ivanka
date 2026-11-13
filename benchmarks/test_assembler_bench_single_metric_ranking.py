@@ -44,7 +44,7 @@ assert(ranks.summary(real,diag,'score','higher')
 assert.equal(combined.sample_count,
   runs[0].sample_count+real.sample_count);
 assert(combined.samples.every(s=>Object.values(s.score)
-  .filter(Number.isFinite).every(v=>v>=0&&v<=1)));
+  .filter(Number.isFinite).every(v=>v>=0)));
 console.log('ALL_METRIC_SEVEN_WAY_RANKINGS_PASS');
 """
         result=subprocess.run(

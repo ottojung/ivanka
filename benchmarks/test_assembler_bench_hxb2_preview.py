@@ -113,7 +113,7 @@ class Hxb2PreviewTests(unittest.TestCase):
                 "expected": 400, "limit": None,
                 "source_truth": pinned_truth()[1],
                 "status": "INCOMPLETE", "qualified": False,
-                "score": "micall_final_dominant_truth_v2",
+                "score": "micall_final_max_reference_panel_v1",
                 "timer": "micall_in_container_monotonic_v1",
                 "benchmark_sources_sha256": {},
                 "images": {name: "a"*64 for name in ASSEMBLERS},

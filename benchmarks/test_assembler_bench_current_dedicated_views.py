@@ -26,6 +26,9 @@ class DedicatedViewsTests(unittest.TestCase):
                 data["source_commit"] = commit
                 data["source_url"] = (
                     "https://github.com/ottojung/MiCall/tree/" + commit)
+        from expanded.gate import SCORE_ORIGIN
+        synthetic["score_origin"] = SCORE_ORIGIN
+        real["score_origin"] = SCORE_ORIGIN
         report["runs"] = [synthetic, real, combine(synthetic, real)]
         assert report["runs"][2]["id"] == DEDICATED_COMBINED
         return report
@@ -44,11 +47,25 @@ class DedicatedViewsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "seven dedicated"):
             check_current(wrong)
 
+    def test_combined_scores_are_exact_copies_of_each_measured_case(self):
+        report=self.report()
+        synthetic, real, both=report["runs"]
+        for original, published in zip(
+                synthetic["samples"]+real["samples"], both["samples"]):
+            self.assertEqual(original["score"], published["score"])
+            self.assertEqual(original["seconds"], published["seconds"])
+
+    def test_mismatched_score_origins_are_rejected(self):
+        report=self.report()
+        report["runs"][1]["score_origin"]="different-method"
+        with self.assertRaisesRegex(ValueError,"identical local scores"):
+            check_current(report)
+
     def test_combined_view_is_derived_from_both_source_cohorts(self):
         report=self.report()
         wrong=copy.deepcopy(report)
         wrong["runs"][2]["samples"][0]["score"]["ivanka"]=0.42
-        with self.assertRaisesRegex(ValueError, "faithful normalized join"):
+        with self.assertRaisesRegex(ValueError, "does not preserve original alignment points"):
             check_current(wrong)
 
 

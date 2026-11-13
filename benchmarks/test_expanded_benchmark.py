@@ -426,8 +426,8 @@ class ExpandedTruthScoringTests(unittest.TestCase):
                               + "W" + HXB2_PREFIX[21:] + "\n")
             result = dominant_truth_score(
                 {"nominal_fractions": [1.0]}, truth, contig)
-            self.assertLess(result["score"], 1.0)
-            self.assertGreater(result["score"], 0.9)
+            self.assertLess(result["score"], len(HXB2_PREFIX))
+            self.assertGreater(result["score"], 0)
             self.assertFalse(result["dominant_exact"])
 
     def test_truth_scoring_is_separate_and_penalizes_errors(self):
@@ -450,7 +450,7 @@ class ExpandedTruthScoringTests(unittest.TestCase):
             perfect_result = dominant_truth_score(meta, truth, perfect)
             damaged = dominant_truth_score(meta, truth, incorrect)
             nothing = dominant_truth_score(meta, truth, empty)
-            self.assertEqual(perfect_result["score"], 1)
+            self.assertEqual(perfect_result["score"], len(reference))
             self.assertTrue(perfect_result["dominant_exact"])
             from expanded.score import reverse_complement
             reverse = root / "reverse.fa"
@@ -458,7 +458,7 @@ class ExpandedTruthScoringTests(unittest.TestCase):
             reversed_result = dominant_truth_score(meta, truth, reverse)
             self.assertEqual(reversed_result["score"], perfect_result["score"])
             self.assertTrue(reversed_result["dominant_exact"])
-            self.assertLess(damaged["score"], 1)
+            self.assertLess(damaged["score"], perfect_result["score"])
             self.assertEqual(nothing["score"], 0)
             self.assertFalse(nothing["dominant_exact"])
 

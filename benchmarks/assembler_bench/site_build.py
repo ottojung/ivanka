@@ -199,7 +199,7 @@ def verify_hxb2_preview(run):
                 if quality is not None or seconds is not None:
                     raise ValueError("failed competitor is shown as success")
             elif (type(quality) not in (float, int)
-                  or not math.isfinite(quality) or not 0 <= quality <= 1
+                  or not math.isfinite(quality) or quality < 0
                   or type(seconds) not in (float, int)
                   or not math.isfinite(seconds) or not 0 < seconds <= 1800):
                 raise ValueError("unverified success metric in HXB2 result")

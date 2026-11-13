@@ -20,7 +20,7 @@ from .hxb2_cohort import attestation
 from .micall_checkpoint import (
     digest, existing_case, identity, preserve_interrupted, write_case,
 )
-from .micall_dominant import SCORE_ORIGIN, evaluate_final_dominant
+from .micall_dominant import SCORE_ORIGIN, evaluate_final_alignment
 from .micall_retention import prune_case
 from .micall_synthetic_constants import TIMING_ORIGIN
 from .micall_lock import exclusive_lock
@@ -79,7 +79,7 @@ def attempt(case, destination, name, image, timeout):
                 or clock["seconds"] > record["container_wall_seconds"] + 1):
             raise ValueError("invalid MiCall in-container monotonic timer")
         record["seconds"] = clock["seconds"]
-        metrics = evaluate_final_dominant(
+        metrics = evaluate_final_alignment(
             manifest, case_dir / manifest["hidden_truth_file"],
             destination)
         if metrics["score_origin"] != SCORE_ORIGIN:
@@ -238,8 +238,11 @@ def run_manifest(proof, images, limit):
             "diagnostic_metrics.py": digest(
                 root.parent / "diagnostic_metrics.py"),
         },
-        "benchmark_sources_sha256": {name: digest(root / name)
-                                     for name in sources},
+        "benchmark_sources_sha256": {
+            **{name: digest(root / name) for name in sources},
+            **{name: digest(root.parent / name)
+               for name in ("reference_panel.py", "project_references.py")},
+        },
     }
 
 

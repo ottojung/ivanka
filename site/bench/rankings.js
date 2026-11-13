@@ -3,9 +3,9 @@
    Every mean reports its own sample count; missing values are never zero. */
 const BenchRanks = (() => {
   const CORE = {
-    score:{label:"Final MiCall alignment",unit:"score",direction:"higher",
+    score:{label:"Final MiCall alignment",unit:"alignment points",direction:"higher",
       stage:"Final MiCall dominant consensus",
-      description:"Alignment of final MiCall MAX sequences to the fixed reference panel.",
+      description:"Maximum local-alignment points across final MiCall MAX sequences and the reference panel.",
       denominator:"Observed successful, individually scored cases"},
     seconds:{label:"MiCall runtime",unit:"seconds",direction:"lower",
       stage:"In-container MiCall monotonic timer",

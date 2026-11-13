@@ -52,8 +52,8 @@ the 598 cases and all seven tools must be accounted for; incomplete runs
   profiles or targeted mutation clusters. Freeze parent accessions,
   alignments, seeds, ancestry, exact mutation sites and FASTQ/truth SHA256s.
   Keep every truth inaccessible to every assembler. The independent
-  full-length global scorer evaluates the dominant truth, accepting
-  either truth in a genuine co-dominant mixture.
+  local alignments to exactly one frozen generating dominant
+  truth sequence, using the same final MiCall MAX scorer.
 - **Competition:** IVA, Haploflow, MEGAHIT, ABySS, SPAdes, Velvet and
   Ivanka. All seven must produce an attributable attempted result for each
   input. Missing executables, missing result rows, undiagnosed tool
@@ -61,11 +61,11 @@ the 598 cases and all seven tools must be accounted for; incomplete runs
   **cannot be converted into Ivanka wins**.
 - **New gate:** for **each of the six rivals**, separately on the 198 real
   and 400 synthetic samples, require both **final MiCall** signed-power
-  alignment/known-truth Ψ(r)>0 and full-pipeline runtime Ψ(r)>0 for
+  local-alignment Ψ(r)>0 and full-pipeline runtime Ψ(r)>0 for
   **every real r>=0**. Additionally, **MiCall with Ivanka** must score
   at least 90% of **MiCall with the best rival** on each sample.
-  There is no pooling of incompatible real-MiCall MAX and synthetic-global
-  scores. Reports must expose individual families and failure reasons.
+  Both cohorts use the same maximum local alignment of final MiCall
+  MAX consensus sequences to the independently frozen reference panel. Reports must expose individual families and failure reasons.
   Strict all-r testing uses the existing `benchmarks/psi_acceptance.py`.
 
 This is intentionally harder than the old IVA-only benchmark. It may be
@@ -269,13 +269,12 @@ python3 -m benchmarks.expanded.combine \
   --output /results/expanded-gate.json
 ```
 
-The combine command **returns nonzero** until all 598 cases and all seven
-assemblies per case satisfy every criterion. The strict v2
-gate requires a score-origin attestation for every tool: the original
-real MAX metric must be extracted from final MiCall output and the
-synthetic known-truth score must come from MiCall's final dominant
-sequence. Standalone contig-to-truth scores and standalone runtime are
-explicitly marked diagnostic and **rejected even if numerically superior**.
+The qualification command returns nonzero until all 598 cases
+and every assembler meet every criterion. The final MAX local
+alignment uses match +1, mismatch -1, gap open -2, gap extend -1
+and both DNA orientations. Every score is a raw alignment point
+total; standalone contig-level evidence cannot satisfy this gate.
+
 The actively eligible synthetic cohort has a **MiCall-compatible,
 Illumina-style paired FASTQ header** with a separate read descriptor:
 `@synthetic:family:seed:fragment 1:N:0:1` and `2:N:0:1`.
@@ -287,17 +286,12 @@ attestation are pinned in
 with SHA-256 of `cohort.json`:
 `a390ba4ecec60e2dcf2af8d7a933d7c399e401e5a44a42ac7adf868f2b341113`.
 
-The corrected **synthetic MiCall-integrated runner** invokes each of the
-seven pinned candidate images through the identical full
-`micall analyze sample` downstream pipeline, mounts **only** its
-paired FASTQs and output folder, and records the authenticated in-container
-monotonic MiCall runtime. Final known-truth scoring selects the
-highest read-supported **final full-seed MAX consensus** in MiCall
-`conseq_all.csv` using the `remap-final` counts and *never* the truth
-to choose between outputs. Its score origin is
-`micall_final_dominant_truth_v2`, separate from standalone raw-contig
-diagnostics. If final support is missing or source/binary proof drifts,
-the run fails closed. Example:
+The MiCall-integrated runner invokes every assembler through
+the same complete MiCall pipeline. It mounts reads and output only;
+evaluation occurs after MiCall exits. Every final MAX sequence in
+conseq.csv is assessed using the shared local-alignment scorer, with
+a single frozen generating truth sequence as the reference panel.
+Missing final output or invalid provenance fails closed. Example:
 
 ```sh
 python3 -m benchmarks.expanded.micall_synthetic \
@@ -319,46 +313,21 @@ intentionally has no option to reduce cohorts or skip a tool in
 production. The functions support smaller test matrices only through
 explicit Python unit-test parameters.
 
-## Scoring the final MiCall dominant sequence, not assembler FASTA
+## Final MiCall local alignment
 
-[Intent 004](../../docs/intents/004-dominant-sequence.md) assigns
-dominant-haplotype recovery to the *complete pipeline*. For the
-synthetic HXB2-derived benchmark, the canonical evaluator must read
-**MiCall's final** `conseq.csv` and `remap_counts.csv` from the
-same completed sample run. The benchmark-only
-`benchmarks.expanded.micall_dominant` module:
+The common scoring function is
+benchmarks.reference_panel.best_panel_alignment. Both cohorts supply
+final MiCall MAX sequences and their independently fixed reference panel.
+Alignment is local, uses both DNA orientations, and returns unnormalized
+points. A synthetic sample has exactly one generating truth sequence
+in its reference panel; the physical panel uses its pinned references.
+Neither scoring panel enters an assembler or MiCall process.
 
-1. Requires a final `q-cutoff=15`, `consensus-percent-cutoff=MAX`
-   consensus (not a scratch/unstitched assembler contig).
-2. Selects the dominant MiCall region **before viewing the hidden
-   truth**, by highest `remap-final <region>` read-support count,
-   deterministically records any equal-support ambiguity, and rejects
-   missing/foreign-sample/duplicate support rather than cherry-picking
-   a favorable alignment.
-3. Only **after MiCall has exited** globally aligns the selected
-   final sequence to hidden generating dominant truth in either DNA
-   orientation. Returns `score_origin =
-   micall_final_dominant_truth_v2` and SHA256 provenance for both
-   source CSV files and the selected sequence.
-4. Raises a pipeline-level error on missing/empty final MAX output
-   even if Ivanka itself legitimately exited successfully with
-   an empty FASTA. That is an **integrated pipeline failure**, not
-   a new standalone contig-recovery requirement.
-
-Example of the evaluator API, run only in benchmark infrastructure:
-
-```python
-from benchmarks.expanded.micall_dominant import evaluate_final_dominant
-result = evaluate_final_dominant(
-    hidden_sample_manifest, hidden_truth_fasta, completed_micall_directory)
-```
-
-The standalone assembler-to-truth scorer in `expanded.score` remains
-available for diagnostics and algorithm exploration only. A high
-score from that helper cannot satisfy the strict expanded gate.
-All downstream evaluation must continue to exclude truth from assembler
-and MiCall process mounts/inputs; genuine HXB2 ancestry validation
-and fully integrated real + synthetic runs are still required.
+The evaluator for a completed synthetic MiCall output is
+benchmarks.expanded.micall_dominant.evaluate_final_alignment. A missing
+final MAX output is a failed integrated MiCall result. Both cohorts use
+the identical score-origin value micall_final_max_reference_panel_v1,
+and the 598-case site preserves the raw alignment points.
 
 ## Isolated seven-image synthetic diagnostics (not canonical MiCall qualification)
 
@@ -383,7 +352,7 @@ genome/hidden-truth directory is **not mounted**. Only once the assembler
 exits does the benchmark-only Python **diagnostic** evaluator score
 its raw FASTA. This is not a MiCall pipeline result and cannot satisfy
 the mandatory synthetic qualification. In particular, the standalone
-known-truth global-alignment diagnostic must evaluate **both DNA strand
+local-alignment diagnostic must evaluate **both DNA strand
 orientations**; a reverse-complemented reconstructed genome is
 scientifically identical. Recorded `seconds` excludes truth-scoring time
 but includes container startup and adapter input preprocessing. The real
@@ -393,7 +362,7 @@ The resulting matrix declares `score_origin =
 assembler_fasta_diagnostic_v1` and a standalone timing origin. The
 strict combined gate rejects these stage labels. The next canonical
 Assembler Bench must run **MiCall** on synthetic reads and score
-its final dominant consensus, withholding truth from the pipeline
+its final MAX sequences, withholding truth from the pipeline
 until its output is frozen.
 
 The optional `--limit` is for development smoke tests only; the

@@ -9,6 +9,34 @@ from .hxb2_preview import sha
 from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
 
 SCHEMA = "ivanka.expanded.fork_micall_real.v1"
+
+TERMINAL = frozenset(("finished", "sample_timeout", "error"))
+
+
+def verified_terminal(event, candidate, images):
+    """Count authentic failures without inventing output from absent arms."""
+    status = event.get("status")
+    if status not in TERMINAL or type(event.get("failed")) is not bool:
+        raise ValueError("physical attempt has invalid terminal status")
+    if status != "finished" and not event["failed"]:
+        raise ValueError("non-success terminal status cannot claim success")
+    for arm, name in (("iva", "iva"), ("ivanka", candidate)):
+        report = event.get(arm)
+        if report is None and event["failed"]:
+            continue
+        if not isinstance(report, dict):
+            raise ValueError("physical attempt has missing arm evidence")
+        if report.get("image_id") == images[name]:
+            continue
+        # A command that failed before its image started has no measured
+        # output. Never substitute scores or accept a different image.
+        if (report.get("image_id") is None and event["failed"]
+                and type(report.get("exit_code")) is int
+                and report["exit_code"] != 0
+                and report.get("metrics") is None
+                and report.get("seconds") is None):
+            continue
+        raise ValueError("physical attempt image identity mismatch")
 PROGRESS = "ivanka.assembler-bench.real-progress.v1"
 
 
@@ -38,7 +66,7 @@ def completed(path, samples, candidate, images):
             continue
         event = json.loads(line)
         sample, status = event.get("sample"), event.get("status")
-        if sample not in samples or status not in ("started", "finished"):
+        if sample not in samples or status not in TERMINAL | {"started"}:
             raise ValueError("unexpected physical sample or event status")
         if status == "started":
             if sample in starts:
@@ -47,10 +75,7 @@ def completed(path, samples, candidate, images):
             continue
         if sample not in starts or sample in finished:
             raise ValueError("physical-198 finish lacks unique matching start")
-        if (event.get("iva", {}).get("image_id") != images["iva"]
-                or event.get("ivanka", {}).get("image_id") != images[candidate]
-                or type(event.get("failed")) is not bool):
-            raise ValueError("physical-198 completed image/outcome not verified")
+        verified_terminal(event, candidate, images)
         finished.add(sample)
         failures += int(event["failed"])
     return {"finished": len(finished), "failed": failures}

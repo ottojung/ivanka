@@ -128,17 +128,20 @@ pair and each checked metric. When the whole cohort is not yet
 complete, a cell shows **OBS YES** or **OBS NO** as an independently
 proven result for its observed subset. This is not just a sign of
 the mean, wins-versus-losses comparison or arbitrary interpolation.
-The number of observed pairs and the specific checked metrics
-are disclosed.
+The results are rendered compactly as **YES** or **NO** plus a small
+**obs** qualifier for observed-only evidence. A full-cohort
+certificate is **YES/NO** without the qualifier. **PARTIAL** marks
+measured positive Ψ on available subjects with others missing;
+**NO DATA** means no paired samples on any selected subject.
+**UNRESOLVED** is only for proof or comparison-direction uncertainty.
 
-A full-cohort certificate shows **YES** or **NO** without the OBS
-prefix. **PARTIAL YES** indicates a measured strict positive
-Ψ result for available subjects but missing selected subjects;
-**NO DATA** means no valid paired samples for any selected subject.
-**UNRESOLVED** is reserved for proof/direction uncertainty, not
-mere incomplete cohort collection. Each cell also shows subject
-labels, row gains/losses/ties and paired/expected coverage, while
-clicking provides the complete proof/witness evidence.
+The matrix fits seven assemblers in a compact neutral grid. It avoids
+colour-filled success/error cells: **not dominating is not an error**.
+All subject labels, paired sample counts, row wins/losses/ties, proof
+witnesses and expected case counts are disclosed on **cell selection**
+and in independent analysis, never replicated as paragraphs in every
+cell. Cell tooltips/accessibility labels preserve full provisional
+status and sample coverage for screen readers.
 
 An observed strict Ψ result is an exact conclusion for **the currently
 measured subset only**. It cannot be promoted to certified

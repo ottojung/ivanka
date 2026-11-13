@@ -75,15 +75,18 @@ def validate_public_site(site=SITE):
             ("BenchSubjects.observedVerdict(result)", "esc(verdict.label)",
              "BenchSubjects.verdict(result.status)",
              "BenchSubjects.evidence(result)", 'class="dom-verdict"',
-             'class="dom-scope-label"', 'class="dom-preview"',
-             'class="dom-preview-row"', "evidence.description")) or
+             'class="dom-mini"', "evidence.description",
+             'esc(shortLabel)', 'esc(scope)')) or
             any(name not in subjects for name in
                 ("function observedVerdict(result)", "function verdict(status)",
                  "function evidence(result, limit=2)",
                  'item.paired+"/"+item.expected')) or
-            any(name not in html for name in
-                ('class="dominance-legend"', 'class="dom-legend-observed"'))):
-        raise ValueError("matrix must show both strict verdict and paired evidence")
+            'class="dominance-key"' not in html or
+            any(marker in js[js.index("function drawDominance()"):
+                              js.index("function render()")]
+                for marker in ('class="dom-preview"', 'class="dom-preview-row"',
+                               'class="dom-scope-label"'))):
+        raise ValueError("matrix must show a compact verdict and preserve detailed evidence")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
     if re.search(r"<script[^>]*src=[\"']https?://", html):

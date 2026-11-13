@@ -100,7 +100,7 @@
       </section>
       <section class="dominance" aria-label="Pairwise signed-power PSI dominance">
         <div class="section-heading"><div><span class="overline">04 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div></div>
-        <p class="subtle">Select the subjects whose <strong>joint dominance</strong> you want to test. Each checked subject must be strictly positive for every real r ≥ 0 over exactly the same complete, eligible cases. Row A versus column B.</p>
+        <p class="subtle">Choose metrics for strict Ψ-dominance. The matrix compares observed paired cases; complete-cohort certification is marked separately. Rows are compared against columns.</p>
         <div class="subject-panel">
           <div class="subject-header">
             <label for="subjectSearch">FIND SUBJECT<input id="subjectSearch" type="search" placeholder="Clips, coverage, concordance…" autocomplete="off"></label>
@@ -111,14 +111,11 @@
           <p class="hint">Diagnostics with no naturally beneficial direction require you to choose <em>higher</em> or <em>lower</em> as a preference. Fewer soft clips, more depth, or more contigs do not alone prove a biologically superior assembly. Historical snapshots with only one case cannot certify full-cohort Ψ.</p>
         </div>
         <p class="subtle" id="dominanceContext"></p>
-        <div class="dominance-legend" aria-label="Matrix verdict legend">
-          <span><strong>YES / NO</strong> Certified all-r Ψ result on full eligible cohort</span>
-          <span><strong>OBS YES / OBS NO</strong> Strict all-r Ψ result on available paired cases only</span>
-          <span><strong>PARTIAL YES</strong> Observed dominance on measured subjects; others unmeasured</span>
-          <span><strong>NO DATA</strong> No valid paired samples for selected subjects</span>
-          <span><strong>—</strong> Same assembler</span>
-          <span class="dom-legend-observed">Smaller lines: observed row wins ↑, losses ↓, ties =, and paired/expected cases. OBS is not full-cohort certification.</span>
-        </div>
+        <p class="dominance-key" aria-label="Matrix legend">
+          <strong>YES</strong> dominates · <strong>NO</strong> does not ·
+          <strong>obs</strong> observed cases only · unmarked means certified.
+          Select a cell for coverage and Ψ proofs.
+        </p>
         <div class="table-scroll" id="dominanceMatrix"></div>
         <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>
       </section>

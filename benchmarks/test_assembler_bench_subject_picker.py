@@ -98,7 +98,7 @@ console.log('ALL_PAIRS_ALL_METRICS_MATRIX_VERDICTS_ONLY_PASS');
         self.assertIn("esc(verdict.label)",matrix)
         self.assertNotIn("cellText(",matrix)
         self.assertNotIn("obs.gains",matrix)
-        self.assertIn('class="dominance-legend"',html)
+        self.assertIn('class="dominance-key"',html)
 
     def test_inline_evidence_is_visible_but_never_upgrades_partial_psi(self):
         node=shutil.which("node")
@@ -167,12 +167,42 @@ console.log('MATRIX_VERDICT_AND_INLINE_PARTIAL_EVIDENCE_ARE_INDEPENDENT_PASS');
                   js.index("function render()")]
         self.assertIn("BenchSubjects.evidence(result)",matrix)
         self.assertIn('class="dom-verdict"',matrix)
-        self.assertIn('class="dom-preview"',matrix)
-        self.assertIn('class="dom-preview-row"',matrix)
-        self.assertIn('evidence.additional',matrix)
+        self.assertIn('class="dom-mini"',matrix)
         self.assertIn('evidence.description',matrix)
         self.assertIn("esc(verdict.label)",matrix)
-        self.assertIn("esc(item.text)",matrix)
+        self.assertIn("esc(shortLabel)",matrix)
+        self.assertIn("esc(scope)",matrix)
+        self.assertNotIn('class="dom-preview"',matrix)
+        self.assertNotIn('class="dom-preview-row"',matrix)
+        self.assertNotIn('class="dom-scope-label"',matrix)
+        self.assertNotIn("esc(item.text)",matrix)
+
+    def test_compact_matrix_preserves_actual_results_without_visual_noise(self):
+        js=(SITE/"app.js").read_text()
+        css=(SITE/"style.css").read_text()
+        html=(SITE/"index.html").read_text()
+        matrix=js[js.index("function drawDominance()"):
+                  js.index("function render()")]
+        self.assertIn('class="dom-verdict"',matrix)
+        self.assertIn('class="dom-mini"',matrix)
+        self.assertIn('esc(shortLabel)',matrix)
+        self.assertIn('esc(scope)',matrix)
+        self.assertIn('BenchSubjects.observedVerdict(result)',matrix)
+        self.assertIn('evidence.description',matrix)
+        self.assertIn('result.entries.map(item=>',matrix)
+        self.assertNotIn('class="dom-preview"',matrix)
+        self.assertNotIn('class="dom-preview-row"',matrix)
+        self.assertNotIn('class="dom-scope-label"',matrix)
+        self.assertNotIn('No paired measurements</span>',matrix)
+        self.assertIn('class="dominance-key"',html)
+        self.assertNotIn('class="dominance-legend"',html)
+        self.assertIn('min-width:680px;width:100%;table-layout:fixed',css)
+        self.assertNotIn('min-width:1020px',css)
+        self.assertNotIn('min-width:122px',css)
+        self.assertNotIn('background:#373025',css)
+        self.assertNotIn('background:#40242a',css)
+        self.assertNotIn('background:#143728',css)
+        self.assertIn('.psi-matrix .dom-scope-observed-no .dom-verdict',css)
 
     def test_all_hxb2_pairs_have_actual_observed_all_r_psi_results(self):
         node=shutil.which("node")

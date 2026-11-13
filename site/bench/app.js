@@ -480,6 +480,7 @@ function proofDescription(entry) {
 }
 function drawDominance() {
   const holder=el("dominanceMatrix"), details=el("dominanceDetails");
+  details.classList.add("is-empty");
   const report=state.run.dominance_matrix;
   const selected=selectedSubjects();
   syncSubjectCount();
@@ -494,13 +495,10 @@ function drawDominance() {
   const tools=report.tools;
   const snapshot=state.diagnostics?.run_id===state.run.id
     ?state.diagnostics:null;
-  el("dominanceContext").textContent=selected.length+" selected subjects: "+
+  el("dominanceContext").textContent=selected.length+" metrics: "+
     selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
-    ". The primary matrix result evaluates strict all-r Ψ on the available "+
-    "paired samples for each selected metric. OBS YES/OBS NO are actual "+
-    "observed-subset dominance results, NOT full-cohort qualification. "+
-    "Certified results are marked YES/NO without OBS; each cell also "+
-    "shows its paired observations and coverage.";
+    ". Row dominates column when strict Ψ(r)>0 for every r≥0 "+
+    "on all selected metrics.";
   holder.innerHTML='<table class="psi-matrix"><thead><tr><th>ROW A ↓ / B →</th>'+
     tools.map(tool=>'<th>'+esc(names[tool.toLowerCase()]||tool)+'</th>').join("")+
     '</tr></thead><tbody>'+
@@ -510,16 +508,13 @@ function drawDominance() {
         const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
         const verdict=BenchSubjects.observedVerdict(result);
         const evidence=BenchSubjects.evidence(result);
-        const preview=evidence.rows.length?
-          '<span class="dom-preview" aria-hidden="true">'+
-          evidence.rows.map(item=>
-            '<span class="dom-preview-row"><span class="dom-preview-name">'+
-            esc(item.label)+'</span><span class="dom-preview-counts">'+
-            esc(item.text)+'</span></span>').join("")+
-          (evidence.additional?
-            '<span class="dom-preview-more">+'+evidence.additional+
-            ' more measured</span>':'')+'</span>':
-          '<span class="dom-preview-empty" aria-hidden="true">No paired measurements</span>';
+        const shortLabel=verdict.kind==="certified"?verdict.label:
+          verdict.kind==="observed-yes"?"YES":
+          verdict.kind==="observed-no"?"NO":
+          verdict.kind==="partial-yes"?"PARTIAL":
+          verdict.kind==="no-data"?"NO DATA":verdict.label;
+        const scope=["observed-yes","observed-no","partial-yes"]
+          .includes(verdict.kind)?"obs":"";
         return '<td class="dom-'+esc(result.status)+' dom-scope-'+
           esc(verdict.kind)+'"><button type="button" data-dominates-a="'+
           esc(a)+'" data-dominates-b="'+esc(b)+'" title="'+
@@ -529,18 +524,16 @@ function drawDominance() {
           ' dominate '+esc(b)+' on all '+selected.length+' selected metrics? '+
           esc(verdict.label)+' — '+esc(verdict.explanation)+
           (evidence.description?'. Observed: '+esc(evidence.description):'')+
-          '"><span class="dom-verdict">'+esc(verdict.label)+
-          '</span><span class="dom-scope-label">'+esc(verdict.scope)+
-          '</span>'+preview+'</button></td>';
+          '"><span class="dom-verdict">'+esc(shortLabel)+
+          '</span>'+(scope?'<span class="dom-mini">'+esc(scope)+
+          '</span>':'')+'</button></td>';
       }).join("")+'</tr>').join("")+'</tbody></table>';
-  details.textContent="The large label is the calculated strict all-r "+
-    "dominance result for the observed paired subset. OBS means preliminary "+
-    "for the measured cases only; YES/NO without OBS means certified for the "+
-    "complete cohort. Select a cell for individual proofs and coverage. "+
-    report.observed_samples+" of "+report.expected_samples+
-    " sample records available; no transitivity assumed.";
+  details.textContent="Select a cell for paired counts, Ψ proofs, "+
+    "and metric details. "+report.observed_samples+"/"+report.expected_samples+
+    " samples recorded.";
   holder.querySelectorAll("button[data-dominates-a]").forEach(button=>{
     button.addEventListener("click",()=>{
+      details.classList.remove("is-empty");
       const a=button.dataset.dominatesA,b=button.dataset.dominatesB;
       const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
       const verdict=BenchSubjects.observedVerdict(result);

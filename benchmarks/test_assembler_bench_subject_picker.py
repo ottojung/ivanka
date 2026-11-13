@@ -204,6 +204,30 @@ console.log('MATRIX_VERDICT_AND_INLINE_PARTIAL_EVIDENCE_ARE_INDEPENDENT_PASS');
         self.assertNotIn('background:#143728',css)
         self.assertIn('.psi-matrix .dom-scope-observed-no .dom-verdict',css)
 
+    def test_matrix_colours_and_late_coverage_section(self):
+        import re
+        css=(SITE/"style.css").read_text()
+        html=(SITE/"index.html").read_text()
+        js=(SITE/"app.js").read_text()
+        blue=re.search(r"\.psi-matrix \.dom-scope-observed-yes \.dom-verdict,.*?"
+                       r"\.dom-scope-partial-yes \.dom-verdict\{color:var\(--blue\)\}",
+                       css,re.S)
+        red=re.search(r"\.psi-matrix \.dom-scope-observed-no \.dom-verdict,.*?"
+                      r"\.dom-scope-certified\.dom-does-not-dominate \.dom-verdict\{"
+                      r"\s*color:var\(--red\)\}",css,re.S)
+        self.assertIsNotNone(blue)
+        self.assertIsNotNone(red)
+        self.assertIn('class="legend-yes"',html)
+        self.assertIn('class="legend-no"',html)
+        self.assertLess(html.index('class="dominance"'),
+                        html.index('class="diagnostics coverage-section"'))
+        self.assertLess(html.index('class="evidence"'),
+                        html.index('class="diagnostics coverage-section"'))
+        self.assertLess(html.index('id="diagnosticChart"'),
+                        html.index('class="provenance"'))
+        self.assertEqual(html.count('id="diagnosticChart"'),1)
+        self.assertNotIn("'<h3>Measurement coverage</h3>'",js)
+
     def test_all_hxb2_pairs_have_actual_observed_all_r_psi_results(self):
         node=shutil.which("node")
         if not node:self.skipTest("Node unavailable")

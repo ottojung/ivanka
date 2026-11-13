@@ -14,8 +14,10 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         cls.root = json.loads((SITE / "data/runs.json").read_text())
 
     def test_public_data_is_independently_grounded_and_complete(self):
-        from assembler_bench.current_validation import EXPECTED
-        self.assertEqual({r["id"] for r in self.root["runs"]}, EXPECTED)
+        from assembler_bench.current_validation import (
+            EXPECTED, DEDICATED_EXPECTED)
+        self.assertIn({r["id"] for r in self.root["runs"]},
+                      (EXPECTED, DEDICATED_EXPECTED))
         self.assertEqual({r["cohort"] for r in self.root["runs"]},
                          {"synthetic", "real", "combined"})
         for run in self.root["runs"]:
@@ -58,7 +60,10 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unattested"):
                 validate_public_site(copy_site)
             data = copy.deepcopy(self.root)
-            data["runs"][0]["samples"][0]["alias"] = "/workspace/secret.fastq"
+            if data["runs"][0]["samples"]:
+                data["runs"][0]["samples"][0]["alias"] = "/workspace/secret.fastq"
+            else:
+                data["runs"][0]["source_commit"] = "/workspace/secret.fastq"
             (copy_site / "data/runs.json").write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, "invalid sample|unsafe"):
                 validate_public_site(copy_site)
@@ -134,7 +139,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         sample=recorded["dominance_matrix"]["metrics"]["alignment"]["ivanka"]["iva"]
         self.assertEqual(sample["status"],"incomplete")
         self.assertIn(sample["subset"]["status"],
-                      ("dominates","does-not-dominate","unresolved"))
+                      ("dominates","does-not-dominate","unresolved","no-data"))
         self.assertLessEqual(sample["paired"],recorded["sample_count"])
         corrupted=copy.deepcopy(runs)
         hxb2=next(r for r in corrupted["runs"] if r.get("hxb2_truth_verified"))

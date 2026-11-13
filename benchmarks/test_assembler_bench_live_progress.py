@@ -36,6 +36,19 @@ class LiveProgressTests(unittest.TestCase):
         self.assertEqual(result["runs"][-1]["micall_fork_provenance"],
                          verified["micall_fork_provenance"])
 
+    def test_new_immutable_image_set_can_reset_checkpoint_counts(self):
+        from assembler_bench.live_progress import replace_run
+        old = {"id": FORK_ID, "sample_count": 400,
+               "images": {"iva": "a" * 64}}
+        replacement = {
+            "id": "hxb2-v4-dedicated-source-live", "sample_count": 0,
+            "images": {"iva": "b" * 64}}
+        self.assertEqual(replace_run([], replacement), [replacement])
+        self.assertEqual(replace_run([old], replacement),
+                         [old, replacement])
+        with self.assertRaisesRegex(ValueError, "regressed"):
+            replace_run([replacement], {**replacement, "sample_count": -1})
+
     def test_browser_reloads_only_when_visitor_refreshes(self):
         js = (SITE / "app.js").read_text()
         self.assertIn('fetch("./data/runs.json",{cache:"no-store"})', js)

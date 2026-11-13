@@ -168,7 +168,7 @@ def verify_hxb2_preview(run):
             or not re.fullmatch("[0-9a-f]{64}", run.get("diagnostic_sha256", ""))):
         raise ValueError("HXB2 run missing immutable tool/output hashes")
     samples = run.get("samples")
-    if (not isinstance(samples, list) or not 1 <= len(samples) <= 400
+    if (not isinstance(samples, list) or not 0 <= len(samples) <= 400
             or run.get("sample_count") != len(samples)
             or len({sample.get("alias") for sample in samples}) != len(samples)):
         raise ValueError("incomplete HXB2 run has invalid sample count/aliases")

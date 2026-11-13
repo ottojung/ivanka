@@ -8,6 +8,8 @@ from benchmarks.expanded.adapters import ASSEMBLERS
 from benchmarks.expanded.gate import SCORE_ORIGIN
 from .real_progress import TERMINAL, snapshot, verified_terminal
 from .hxb2_preview import sha
+from .public_case_metrics import physical as published_metrics
+from .exact_cache import append as exact_metrics
 
 ID = "real198-fork-source-attested-live"
 DEDICATED_ID = "real198-dedicated-source-live"
@@ -49,10 +51,12 @@ def measured(event, name):
     return float(score), float(seconds)
 
 
-def case_rows(root, data, images):
+def case_rows(root, data, images, exact_root=None):
     aliases = sample_aliases(data)
     cases = {name: {} for name in TOOLS}
     failures = {name: set() for name in TOOLS}
+    diagnostics = {name: {} for name in TOOLS}
+    profiles = {name: {} for name in TOOLS}
     for name in TOOLS:
         if name == "iva":
             continue
@@ -76,20 +80,38 @@ def case_rows(root, data, images):
                 raise ValueError("physical result not a unique completed case")
             verified_terminal(event, name, images)
             cases[name][case] = measured(event, "ivanka")
+            record = event.get("ivanka") or {}
+            origin = (record.get("metrics") or {}).get("outputs") or {}
+            diagnostics[name][case], profile = exact_metrics(
+                published_metrics(record), exact_root, "real", case,
+                "ivanka", (origin.get("conseq.csv") or {}).get("sha256"),
+                images[name], candidate=name)
+            if profile is not None:
+                profiles[name][case] = profile
             if cases[name][case][0] is None:
                 failures[name].add(case)
             iva = measured(event, "iva")
             if case not in cases["iva"]:
                 cases["iva"][case] = iva
+                control = event.get("iva") or {}
+                origin = (control.get("metrics") or {}).get("outputs") or {}
+                diagnostics["iva"][case], profile = exact_metrics(
+                    published_metrics(control), exact_root, "real", case,
+                    "iva", (origin.get("conseq.csv") or {}).get("sha256"),
+                    images["iva"], candidate=name)
+                if profile is not None:
+                    profiles["iva"][case] = profile
                 if event.get("iva", {}).get("exit_code") != 0:
                     failures["iva"].add(case)
-    return aliases, cases, failures
+    return aliases, cases, failures, diagnostics, profiles
 
 
-def preview(root, data, runner, attestation, base, images, fork_provenance):
+def preview(root, data, runner, attestation, base, images, fork_provenance,
+            exact_root=None):
     """Verify the same immutable checkpoint manifest as the public counters."""
     proof = snapshot(root, data, runner, attestation, base, images)
-    aliases, cases, failures = case_rows(root, data, images)
+    aliases, cases, failures, diagnostics, profiles = case_rows(
+        root, data, images, exact_root)
     observed = set().union(*(set(rows) for rows in cases.values()))
     samples = []
     for case in sorted(observed, key=aliases.get):
@@ -103,6 +125,11 @@ def preview(root, data, runner, attestation, base, images, fork_provenance):
                  and not missing else None)
         samples.append({"alias": aliases[case], "score": score,
                         "seconds": seconds, "failures": missing,
+                        "diagnostics": {name: diagnostics[name].get(case, {})
+                                        for name in TOOLS},
+                        "exact_profiles": {name: profiles[name][case]
+                                           for name in TOOLS
+                                           if case in profiles[name]},
                         "floor_ok": floor,
                         "outcome": "failure" if missing else
                         "success" if all(x is not None for x in score.values())

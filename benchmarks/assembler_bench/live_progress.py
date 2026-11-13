@@ -28,7 +28,7 @@ def replace_run(runs, report):
 
 
 def update(site, fork, fork_runner, attestation, fork_repo, base,
-           *, real=None, real_data=None):
+           *, real=None, real_data=None, exact_root=None):
     site = Path(site)
     target = site / "data/runs.json"
     public = json.loads(target.read_text())
@@ -37,7 +37,7 @@ def update(site, fork, fork_runner, attestation, fork_repo, base,
     verified = checked_fork(fork, fork_runner, attestation, fork_repo, base)
     fork_run = fork_preview(
         fork, fork_runner, attestation, fork_repo, base,
-        checked_result=verified)
+        checked_result=verified, exact_root=exact_root)
     public["runs"] = [fork_run]
     if real is not None:
         if real_data is None:
@@ -55,7 +55,8 @@ def update(site, fork, fork_runner, attestation, fork_repo, base,
         public["real_progress"] = snapshot
         physical = physical_preview(real, real_data, fork_runner,
                                     attestation, base, fork_run["images"],
-                                    fork_run["micall_fork_provenance"])
+                                    fork_run["micall_fork_provenance"],
+                                    exact_root=exact_root)
         public["runs"].append(physical)
         public["runs"].append(combined_preview(fork_run, physical))
     public = enrich(public)
@@ -101,9 +102,11 @@ def main():
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--real", type=Path)
     parser.add_argument("--real-data", type=Path)
+    parser.add_argument("--exact-root", type=Path)
     args = parser.parse_args()
     update(args.site, args.fork, args.fork_runner, args.attestation,
-           args.fork_repo, args.base, real=args.real, real_data=args.real_data)
+           args.fork_repo, args.base, real=args.real, real_data=args.real_data,
+           exact_root=args.exact_root)
 
 
 if __name__ == "__main__":

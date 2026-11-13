@@ -5,6 +5,8 @@ from pathlib import Path
 
 from .sam_metrics import public_diagnostics
 from .metric_explanations import INFO
+from .metric_catalog_exact import catalog as exact_catalog
+from .metric_catalog_micall import catalog as micall_catalog
 
 SCHEMA = "assembler-bench.public-mapping-diagnostics.v1"
 CATALOG = {
@@ -35,6 +37,11 @@ CATALOG = {
     "final_contig_31mer_redundancy_fraction": (
         "Redundant contig 31-mer fraction", "fraction"),
 }
+
+
+CATALOG.update({key: value for key, value in micall_catalog().items()
+                if key not in CATALOG})
+CATALOG.update(exact_catalog())
 
 
 def checked_snapshot(source, public):

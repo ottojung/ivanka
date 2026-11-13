@@ -146,3 +146,20 @@ with anonymous R001-style aliases before producing gate findings.
 Invalid source controls cannot yield a pass. Its report is a private
 analysis artifact, not permission to bypass original 198-case
 qualification, missing provenance or incomplete cohort evidence.
+
+
+### Per-case diagnostic measurements
+
+The public source-attested runs retain per-case numeric MiCall CSV and
+primary-SAM diagnostics under the anonymous sample's diagnostics map.
+Rankings and histogram/KDE plots use every measured case and assembler
+rather than one illustrative case. Missing source artifacts remain missing.
+
+Exact-read coverage is computed from original R1/R2 paired reads against
+the longest final MAX consensus using the pinned MiCall implementation.
+Both full-read and 70-base interior tracks are computed after the timed
+MiCall execution. Depth statistics, uncovered fractions, zero stretches,
+breadth thresholds and separate 64-bin positional profiles are published
+with source-image and final-consensus hashes. A missing final MAX consensus
+is recorded unavailable, never as zero exact coverage. The publisher reads
+the post-MiCall sidecar store through IVANKA_BENCH_EXACT_ROOT.

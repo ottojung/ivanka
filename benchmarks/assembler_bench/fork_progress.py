@@ -8,6 +8,8 @@ from benchmarks.expanded.micall_checkpoint import existing_case, identity
 from .hxb2_preview import format_preview, pinned_truth, sha
 from .image_source_attestation import verify
 from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
+from .public_case_metrics import synthetic as published_metrics
+from .exact_cache import append as exact_metrics
 
 SCHEMA = "ivanka.expanded.fork_micall_synthetic.v1"
 
@@ -61,7 +63,8 @@ def cohort_path():
     return Path(__file__).resolve().parents[1] / "expanded/references/hxb2-400-v4-micall-high-depth-cohort.json"
 
 
-def preview(directory, runner, attestation, fork, base, *, checked_result=None):
+def preview(directory, runner, attestation, fork, base, *,
+            checked_result=None, exact_root=None):
     # The caller may supply a checkpoint already verified by checked().
     # Re-reading here would mix two generations of an active run.
     manifest, rows, result_hash, att = (
@@ -73,6 +76,24 @@ def preview(directory, runner, attestation, fork, base, *, checked_result=None):
     }
     result = format_preview(
         normalized, rows, result_hash, sha(Path(directory) / "run_manifest.json"))
+    for sample, record in zip(result["samples"],
+                              sorted(rows, key=lambda row: row["id"])):
+        for name in result["tools"]:
+            arm = record["results"][name]
+            if (arm["status"] == "success"
+                    and sample["score"][name] != arm.get("score")):
+                raise ValueError("diagnostic source and verified score diverged")
+        sample["diagnostics"], sample["exact_profiles"] = {}, {}
+        for name in result["tools"]:
+            source = record["results"][name]
+            score = source.get("final_dominant") or {}
+            values, profile = exact_metrics(
+                published_metrics(source), exact_root, "synthetic",
+                record["id"], name, score.get("conseq_csv_sha256"),
+                manifest["images"][name])
+            sample["diagnostics"][name] = values
+            if profile is not None:
+                sample["exact_profiles"][name] = profile
     dedicated = att["schema"] == DEDICATED_SCHEMA
     result.update(
         id=("hxb2-v4-dedicated-source-live" if dedicated

@@ -21,11 +21,16 @@ while :; do
     git -C "$repo" worktree add --quiet --detach "$work" origin/main || exit 1
     cd "$work" || exit 1
     export PYTHONPATH="$work:$work/benchmarks"
+    set --
+    exact_root=$(printenv IVANKA_BENCH_EXACT_ROOT || true)
+    if [ -n "$exact_root" ]; then
+      set -- --exact-root "$exact_root"
+    fi
     python3 -m benchmarks.assembler_bench.live_progress \
       --real "$IVANKA_BENCH_REAL" --real-data "$IVANKA_BENCH_REAL_DATA" \
       --fork "$IVANKA_BENCH_FORK" --fork-runner "$IVANKA_BENCH_FORK_RUNNER" \
       --attestation "$IVANKA_BENCH_ATTESTATION" \
-      --fork-repo "$IVANKA_BENCH_FORK_REPO" --base "$IVANKA_BENCH_BASE" || exit 1
+      --fork-repo "$IVANKA_BENCH_FORK_REPO" --base "$IVANKA_BENCH_BASE"       "$@" || exit 1
     git add site/bench/data/runs.json site/bench/data/mapping-diagnostics.json \
       site/bench/data/live-fork-attestation.json || exit 1
     # live_progress validates the entire staged public site before writing.

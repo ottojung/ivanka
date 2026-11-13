@@ -3,7 +3,41 @@
    cohort certification. A one-case source-validated diagnostic has an exact
    sign proof; no averaged score is ever misrepresented as signed-power Ψ. */
 const BenchSubjects = (() => {
-  function criterion(report, a, b, subject, direction, snapshot) {
+  function pairedDiagnostics(run,snapshot,subject,direction,a,b,expected) {
+    if(!run || typeof BenchRanks==="undefined" || !run.samples?.length)
+      return null;
+    const one=new Map(BenchRanks.measurements(run,snapshot,subject,a)
+      .map(x=>[x.id,x.value]));
+    const two=new Map(BenchRanks.measurements(run,snapshot,subject,b)
+      .map(x=>[x.id,x.value]));
+    const differences=[...one].flatMap(([id,v])=>
+      two.has(id)?[direction==="lower"?two.get(id)-v:v-two.get(id)]:[]);
+    const n=differences.length;
+    if(!n)return null;
+    const gains=differences.filter(v=>v>0).length;
+    const losses=differences.filter(v=>v<0).length;
+    const ties=n-gains-losses;
+    const psi0=(gains-losses)/n;
+    const psi1=differences.reduce((sum,v)=>sum+v,0)/n;
+    const psi2=differences.reduce((sum,v)=>sum+v*Math.abs(v),0)/n;
+    const positive=losses===0 && gains>0;
+    const refuted=gains===0 || psi0<=0 || psi1<=0 || psi2<=0;
+    const status=positive?"dominates":
+      refuted?"does-not-dominate":"unresolved";
+    return {
+      status:"incomplete",paired:n,expected,proof:null,
+      observed:{gains,losses,ties,mean_delta:psi1},
+      subset:{status,proof:{
+        kind:"observed-paired-signed-powers",sample_count:n,
+        psi0,psi1,psi2,
+        ...(positive?{sign:1}:refuted?{sign:-1}:{})}},
+      reason:positive?"All measured differences are nonnegative, some positive":
+        refuted?"Observed paired-subset Ψ has a nonpositive witness":
+        "Observed mixed differences need a strict all-r proof",
+    };
+  }
+
+  function criterion(report, a, b, subject, direction, snapshot, run) {
     const key = subject === "alignment" || subject === "runtime"
       ? subject : "diagnostic:" + subject + ":" + direction;
     if (subject !== "alignment" && subject !== "runtime" &&
@@ -13,6 +47,11 @@ const BenchSubjects = (() => {
     }
     const entry = report.metrics?.[key]?.[a]?.[b];
     if (entry) return entry;
+    if(subject!=="alignment" && subject!=="runtime") {
+      const paired=pairedDiagnostics(
+        run,snapshot,subject,direction,a,b,report.expected_samples);
+      if(paired)return paired;
+    }
     const v1 = snapshot?.tools?.[a]?.values?.[subject];
     const v2 = snapshot?.tools?.[b]?.values?.[subject];
     const available = subject !== "alignment" && subject !== "runtime" &&
@@ -147,9 +186,9 @@ const BenchSubjects = (() => {
     return {value,paired:entry.paired,expected:entry.expected,
       observed:!["dominates","does-not-dominate"].includes(entry.status)};
   }
-  function evaluate(report, a, b, selected, snapshot) {
+  function evaluate(report, a, b, selected, snapshot, run) {
     const entries = selected.map(({key,direction,label}) => ({
-      key,label,direction, ...criterion(report,a,b,key,direction,snapshot)
+      key,label,direction, ...criterion(report,a,b,key,direction,snapshot,run)
     }));
     return {status:conjunction(entries), entries};
   }

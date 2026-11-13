@@ -175,6 +175,51 @@ function drawCompare() {
   if(state.distributionTool)drawDistribution();
 
 }
+function drawExactProfiles(tool) {
+  const holder=el("exactProfileChart");
+  const cases=(state.run.samples||[]).map(s=>s.exact_profiles?.[tool])
+    .filter(p=>p&&Array.isArray(p.full_span)&&Array.isArray(p.inner_70)
+      &&p.full_span.length&&p.inner_70.length);
+  if(!state.metric.startsWith("exact_coverage") || !cases.length) {
+    holder.hidden=true;
+    return;
+  }
+  const length=64, means=[Array(length).fill(0),Array(length).fill(0)];
+  const tracks=["full_span","inner_70"];
+  for(const item of cases) {
+    tracks.forEach((track,index)=>{
+      const data=item[track];
+      for(let i=0;i<length;i++) {
+        const val=data[Math.min(data.length-1,Math.floor(
+          (i+.5)*data.length/length))];
+        if(Number.isFinite(val)&&val>=0)means[index][i]+=val;
+      }
+    });
+  }
+  means.forEach(track=>track.forEach((v,i)=>track[i]=v/cases.length));
+  const top=12,bottom=185,left=60,right=704;
+  const max=Math.max(1,...means.flat())*1.06;
+  const x=i=>left+i*(right-left)/(length-1);
+  const y=v=>bottom-v/max*(bottom-top);
+  const curves=means.map((array,index)=>
+    '<path class="exact-profile '+(index?"inner":"full")+'" d="'+
+    array.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+","+
+      y(v).toFixed(1)).join(" ")+'"></path>').join("");
+  holder.innerHTML='<h4>Exact-read coverage along the final consensus</h4>'+
+    '<svg viewBox="0 0 735 220" role="img" aria-label="'+
+    esc("Mean exact full-span and interior coverage profiles for "+
+      cases.length+" measured "+(names[tool]||tool)+" cases")+'">'+
+    '<line class="distribution-axis" x1="'+left+'" x2="'+right+
+    '" y1="'+bottom+'" y2="'+bottom+'"/>'+curves+
+    '<text x="'+left+'" y="208">Start</text>'+
+    '<text x="'+right+'" y="208" text-anchor="end">End</text>'+
+    '</svg><p class="distribution-legend">'+cases.length+
+    ' cases · mean depth across relative sequence position · '+
+    '<span class="profile-full">Full read</span> · '+
+    '<span class="profile-inner">Interior (70-nt ends excluded)</span></p>';
+  holder.hidden=false;
+}
+
 function drawDistribution() {
   const tool=state.distributionTool, panel=el("distributionPanel");
   if(!tool || !state.run.tools.includes(tool)) {
@@ -193,6 +238,7 @@ function drawDistribution() {
     " measured cases · "+info.unit+
     (result.n?" · range "+fmt(result.min,4)+"–"+fmt(result.max,4):"");
   panel.hidden=false;
+  drawExactProfiles(tool);
   document.querySelectorAll("#comparisonChart button[data-tool]").forEach(
     button=>button.setAttribute("aria-pressed",String(button.dataset.tool===tool)));
   if(!result.n) {
@@ -529,7 +575,7 @@ function drawDominance() {
     tools.map(a=>'<tr><th scope="row">'+esc(names[a.toLowerCase()]||a)+'</th>'+
       tools.map(b=>{
         if(a===b)return '<td class="dom-self">—</td>';
-        const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
+        const result=BenchSubjects.evaluate(report,a,b,selected,snapshot,state.run);
         const verdict=BenchSubjects.observedVerdict(result);
         const evidence=BenchSubjects.evidence(result);
         const shortLabel=
@@ -562,7 +608,7 @@ function drawDominance() {
     button.addEventListener("click",()=>{
       details.classList.remove("is-empty");
       const a=button.dataset.dominatesA,b=button.dataset.dominatesB;
-      const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
+      const result=BenchSubjects.evaluate(report,a,b,selected,snapshot,state.run);
       const verdict=BenchSubjects.observedVerdict(result);
       const complete=BenchSubjects.verdict(result.status);
       const numericEntry=numeric?result.entries.find(

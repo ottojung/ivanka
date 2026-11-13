@@ -1,3 +1,5 @@
+from .metric_catalog_exact import explanations as exact_explanations
+from .metric_catalog_micall import explanations as micall_explanations
 """Scientific meaning of public MiCall metrics, including units and denominators.
 
 Preference describes a *conventional* direction, not biological certainty.
@@ -122,3 +124,7 @@ INFO = {
         "Repeated 31-mer instances / eligible 31-mer instances.",
         "MiCall assembler output", "lower"),
 }
+
+INFO.update({key: value for key, value in micall_explanations().items()
+             if key not in INFO})
+INFO.update(exact_explanations())

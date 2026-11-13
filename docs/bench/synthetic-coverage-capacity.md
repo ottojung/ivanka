@@ -41,7 +41,7 @@ For a reproducible independent audit, execute:
       --micall /path/to/pinned/MiCall/fork \
       --output /path/to/report.json
 
-The audit validates generating-truth hashes and the MiCall source
+The audit verifies original R1/R2 compressed-read digests,\ngenerating-truth hashes, manifest hashes and the MiCall source
 threshold; its schema explicitly records qualification as
 NOT_EVALUATED. An assembler outcome requires a separate authentic
 MiCall run and source-pinned final-output scoring. Never infer a

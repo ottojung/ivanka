@@ -23,11 +23,19 @@ class CapacityTests(unittest.TestCase):
         (folder / "hidden-truth").mkdir(parents=True)
         truth = folder / "hidden-truth/haplotypes.fasta"
         truth.write_text(">dominant\n" + "ACGT" * 2400 + "\n")
+        inputs = {"reads/R1.fastq.gz": b"fake-r1-gzip-for-digest",
+                  "reads/R2.fastq.gz": b"fake-r2-gzip-for-digest"}
+        for name, contents in inputs.items():
+            target = folder / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(contents)
         record = {"family": "low_depth", "pairs": pairs,
                   "read_length": 150, "nominal_fractions": [1.0],
                   "hidden_truth_file": "hidden-truth/haplotypes.fasta",
                   "sha256": {"hidden-truth/haplotypes.fasta":
-                             hashlib.sha256(truth.read_bytes()).hexdigest()}}
+                             hashlib.sha256(truth.read_bytes()).hexdigest(),
+                             **{name: hashlib.sha256(raw).hexdigest()
+                                for name, raw in inputs.items()}}}
         (folder / "manifest.json").write_text(json.dumps(record))
         return folder
 
@@ -36,6 +44,7 @@ class CapacityTests(unittest.TestCase):
         result = one_case(root, 100)
         self.assertAlmostEqual(result["all_reads_mean_depth_ceiling"], 78.125)
         self.assertTrue(result["below_global_depth_floor"])
+        self.assertEqual(len(result["read_sha256"]), 2)
         self.assertNotIn("consensus_success", result)
         self.assertNotIn("score", result)
 
@@ -46,6 +55,12 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(result["qualification"], "NOT_EVALUATED")
         self.assertEqual(result["families"]["low_depth"]["below_floor"], 0)
         self.assertEqual(result["miCall_consensus_min_coverage"], 100)
+
+    def test_modified_read_inputs_are_rejected(self):
+        root = self.sample("sample", 2500)
+        (root / "reads/R2.fastq.gz").write_bytes(b"mutated")
+        with self.assertRaisesRegex(ValueError, "reads digest mismatch"):
+            one_case(root, 100)
 
     def test_source_and_truth_digest_tampering_is_rejected(self):
         self.sample("sample", 2500)

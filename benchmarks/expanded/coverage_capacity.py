@@ -20,7 +20,8 @@ def threshold(micall):
 
 
 def one_case(folder, minimum):
-    record = json.loads((folder / "manifest.json").read_text())
+    manifest_raw = (folder / "manifest.json").read_bytes()
+    record = json.loads(manifest_raw)
     truth_name = record["hidden_truth_file"]
     if (Path(truth_name).is_absolute()
             or ".." in Path(truth_name).parts):
@@ -29,6 +30,12 @@ def one_case(folder, minimum):
     digest = hashlib.sha256(truth_file.read_bytes()).hexdigest()
     if record["sha256"][truth_name] != digest:
         raise ValueError("synthetic truth digest mismatch")
+    verified_reads = {}
+    for name in ("reads/R1.fastq.gz", "reads/R2.fastq.gz"):
+        actual = hashlib.sha256((folder / name).read_bytes()).hexdigest()
+        if record["sha256"][name] != actual:
+            raise ValueError("synthetic reads digest mismatch")
+        verified_reads[name] = actual
     fraction = record["nominal_fractions"]
     truth = read_fasta(truth_file)
     if len(truth) != len(fraction) or not truth:
@@ -41,6 +48,8 @@ def one_case(folder, minimum):
         raise ValueError("invalid read length or pair count")
     ceiling = pairs * 2 * read_len / length
     return {"case": folder.name, "family": record["family"],
+            "manifest_sha256": hashlib.sha256(manifest_raw).hexdigest(),
+            "read_sha256": verified_reads,
             "pairs": pairs, "read_length": read_len,
             "dominant_truth_length": length,
             "all_reads_mean_depth_ceiling": round(ceiling, 6),

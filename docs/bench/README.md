@@ -135,8 +135,12 @@ measured positive Ψ on available subjects with others missing;
 **NO DATA** means no paired samples on any selected subject.
 **UNRESOLVED** is only for proof or comparison-direction uncertainty.
 
-The matrix fits seven assemblers in a compact neutral grid. It avoids
-colour-filled success/error cells: **not dominating is not an error**.
+The matrix fits seven assemblers in a compact grid. **YES is blue**
+and **NO is red**, including observed-subset verdicts; understated matching
+tints improve scanning. These colours describe pairwise mathematical
+dominance, **not** execution success or failure.
+The detailed Measurement coverage chart appears near the bottom, after
+the comparisons and Ψ certificates, before reproducibility provenance.
 All subject labels, paired sample counts, row wins/losses/ties, proof
 witnesses and expected case counts are disclosed on **cell selection**
 and in independent analysis, never replicated as paragraphs in every

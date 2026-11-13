@@ -113,11 +113,10 @@ Keep subject-labelled row wins, losses, ties and *paired/expected*
 coverage in the **cell details, accessible description and independent
 analysis table**, not repeated as dense text in all 42 grid cells.
 The matrix must remain easily readable at desktop width and allow
-horizontal scrolling on narrow screens. Avoid warning-coloured cell
-backgrounds: **NO** dominance is a scientific comparison outcome,
-not an error or failure. Use a neutral cell background with restrained
-text contrast and a subtle primary accent for YES; ensure both states
-are distinguishable without relying on colour. **OBS YES is not
+horizontal scrolling on narrow screens. Colour **YES blue** and **NO red** (including observed-subset
+verdicts), with subtle matching cell tints. These colours distinguish
+mathematical dominance outcomes, not an assembler execution success or
+failure; retain explicit text labels so colour is not the sole cue. **OBS YES is not
 full-cohort YES** and must never affect acceptance of the 198-real or
 400-synthetic seven-way scientific gates. Never turn missing data into
 zero or a failed arm into a victory.

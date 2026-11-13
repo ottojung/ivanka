@@ -68,7 +68,6 @@
         <div class="selected-metric-review">
         <div class="metric-explanation" id="diagnosticExplanation" role="region" aria-live="polite"></div>
         <p class="subtle" id="diagnosticContext">Choose a metric for its definition, units, denominator and results. Missing data is not zero.</p>
-        <div class="diagnostic-plot" id="diagnosticChart" aria-label="Observed case coverage for the selected metric"></div>
         <div class="table-scroll" id="diagnosticMatrix"></div>
         </div>
       </section>
@@ -112,7 +111,7 @@
         </div>
         <p class="subtle" id="dominanceContext"></p>
         <p class="dominance-key" aria-label="Matrix legend">
-          <strong>YES</strong> dominates · <strong>NO</strong> does not ·
+          <strong class="legend-yes">YES</strong> dominates · <strong class="legend-no">NO</strong> does not ·
           <strong>obs</strong> observed cases only · unmarked means certified.
           Select a cell for coverage and Ψ proofs.
         </p>
@@ -123,8 +122,13 @@
         <div class="section-heading"><div><span class="overline">05 / CERTIFICATES & OBSERVATIONS</span><h2>Evidence, not assertions</h2></div></div>
         <div id="evidenceContent"></div>
       </section>
+      <section class="diagnostics coverage-section" aria-label="Measurement coverage">
+        <div class="section-heading"><div><span class="overline">06 / MEASUREMENT COMPLETENESS</span><h2>Measurement coverage</h2></div></div>
+        <p class="subtle">Available cases for the currently selected metric, by assembler. Missing measurements are not zero.</p>
+        <div class="diagnostic-plot" id="diagnosticChart" aria-label="Observed case coverage for the selected metric"></div>
+      </section>
       <section class="provenance" aria-label="Provenance">
-        <div class="section-heading"><div><span class="overline">06 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
+        <div class="section-heading"><div><span class="overline">07 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
         <div id="provenanceContent"></div>
       </section>
     </main>

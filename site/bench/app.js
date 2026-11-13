@@ -189,7 +189,6 @@ function drawDiagnostics() {
     "columns. Measurements from different source stages and incompatible "+
     "cohorts are not combined.";
   el("diagnosticChart").innerHTML=
-    '<h3>Measurement coverage</h3>'+
     ranking.map(row=>'<div class="bar-line"><span class="bar-name">'+
       esc(names[row.tool.toLowerCase()]||row.tool)+'</span>'+
       '<div class="bar-track"><div class="bar-fill other" style="width:'+

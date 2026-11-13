@@ -94,7 +94,7 @@ section.dominance,section.diagnostics{margin-top:61px}
 .dominance-legend{display:flex;gap:8px 18px;flex-wrap:wrap;margin:11px 0 17px;font-size:11px;color:var(--muted)}
 .dominance-legend span{display:inline-flex;gap:6px;align-items:baseline}
 .dominance-legend strong{font-weight:800;font-size:13px;color:var(--text)}
-.dominance-legend span:first-child strong{color:var(--green)}
+.dominance-legend span:first-child strong{color:var(--blue)}
 .dominance-legend span:nth-child(2) strong{color:var(--red)}
 .dominance-legend span:nth-child(3) strong{color:var(--amber)}
 .psi-matrix td button{font-size:12px;letter-spacing:.04em}
@@ -110,8 +110,8 @@ section.dominance,section.diagnostics{margin-top:61px}
 
 
 
-/* Compact neutral pairwise relation: no status-coloured backgrounds. "NO"
-   is not a failure/error state; the distinction is categorical, not alarm. */
+/* Compact pairwise relation: blue YES and red NO encode the answer,
+   not a benchmark pass or an assembler execution failure. */
 .psi-matrix{min-width:680px;width:100%;table-layout:fixed;
   background:var(--surface)}
 .psi-matrix th{font-size:11px;padding:9px 4px;text-align:center;
@@ -137,10 +137,15 @@ section.dominance,section.diagnostics{margin-top:61px}
   text-transform:uppercase;letter-spacing:.08em;font-weight:570}
 .psi-matrix .dom-scope-observed-yes .dom-verdict,
 .psi-matrix .dom-scope-certified.dom-dominates .dom-verdict,
-.psi-matrix .dom-scope-partial-yes .dom-verdict{color:var(--cyan)}
+.psi-matrix .dom-scope-partial-yes .dom-verdict{color:var(--blue)}
 .psi-matrix .dom-scope-observed-no .dom-verdict,
 .psi-matrix .dom-scope-certified.dom-does-not-dominate .dom-verdict{
-  color:var(--text)}
+  color:var(--red)}
+.psi-matrix .dom-scope-observed-yes button,
+.psi-matrix .dom-scope-certified.dom-dominates button,
+.psi-matrix .dom-scope-partial-yes button{background:#75aaf012}
+.psi-matrix .dom-scope-observed-no button,
+.psi-matrix .dom-scope-certified.dom-does-not-dominate button{background:#f28b8712}
 .psi-matrix .dom-scope-no-data .dom-verdict,
 .psi-matrix .dom-scope-unresolved .dom-verdict{color:var(--muted)}
 .psi-matrix .dom-self{background:var(--surface);color:var(--muted);
@@ -148,6 +153,8 @@ section.dominance,section.diagnostics{margin-top:61px}
 .dominance-key{font-size:12px;color:var(--muted);
   margin:11px 0 15px;line-height:1.7}
 .dominance-key strong{font-weight:740;color:var(--text)}
+.dominance-key .legend-yes{color:var(--blue)}
+.dominance-key .legend-no{color:var(--red)}
 @media(max-width:700px){
   .psi-matrix{min-width:630px}
   .psi-matrix th:first-child{width:88px}

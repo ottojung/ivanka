@@ -20,11 +20,12 @@ pub(super) fn locate(core: &[u8], mut present: impl FnMut(&[u8]) -> bool) -> Opt
             return None;
         }
     }
-    let cut = first? + if count <= 32 {
-        SPAN / 2
-    } else {
-        (count + SPAN) / 2
-    };
+    let cut = first?
+        + if count <= 32 {
+            SPAN / 2
+        } else {
+            (count + SPAN) / 2
+        };
     if count < 3 || cut < SPAN || cut > core.len() - SPAN {
         return None;
     }

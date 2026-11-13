@@ -28,7 +28,7 @@ const BenchRanks = (() => {
       const value=snapshot.tools?.[tool]?.values?.[key];
       return finite(value)?[{id:snapshot.sample_alias,value,weight:1}]:[];
     }
-    if (run.hxb2_truth_verified||run.cohort==="real") {
+    if (run.hxb2_truth_verified||run.cohort==="real"||run.cohort==="combined") {
       return (run.samples||[]).flatMap(s=>{
         const value=s[key]?.[tool];
         return finite(value)&&!s.failures?.includes(tool)
@@ -62,7 +62,7 @@ const BenchRanks = (() => {
     const one=new Map(measurements(run,snapshot,key,first).map(x=>[x.id,x.value]));
     const two=new Map(measurements(run,snapshot,key,second).map(x=>[x.id,x.value]));
     const all=isCore(key)
-      ?run.hxb2_truth_verified||run.cohort==="real"
+      ?run.hxb2_truth_verified||run.cohort==="real"||run.cohort==="combined"
         ?run.samples.map(s=>({id:s.alias,detail:s}))
         :(run.families||[]).map(f=>({id:f.family,detail:f}))
       :snapshot?.run_id===run.id?[{id:snapshot.sample_alias,detail:null}]:[];

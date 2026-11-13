@@ -81,7 +81,7 @@ class Hxb2PreviewTests(unittest.TestCase):
             shutil.copytree(SITE, dest)
             original = json.loads((dest/"data/runs.json").read_text())
             edited = copy.deepcopy(original)
-            run = edited["runs"][-1]
+            run = next(r for r in edited["runs"] if r.get("hxb2_truth_verified"))
             sample = next(s for s in run["samples"]
                           if "ivanka" not in s["failures"])
             sample["failures"].append("ivanka")
@@ -92,7 +92,7 @@ class Hxb2PreviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "failed competitor"):
                 validate_public_site(dest)
             edited = copy.deepcopy(original)
-            run = edited["runs"][-1]
+            run = next(r for r in edited["runs"] if r.get("hxb2_truth_verified"))
             run["samples"][0]["alias"] = "/workspace/private"
             (dest/"data/runs.json").write_text(json.dumps(edited))
             with self.assertRaises(ValueError):

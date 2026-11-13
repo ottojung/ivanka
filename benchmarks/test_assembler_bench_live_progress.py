@@ -3,7 +3,7 @@ import copy
 import json
 import unittest
 
-from assembler_bench.live_progress import LEGACY_ID, FORK_ID, replace_run
+from assembler_bench.live_progress import FORK_ID, replace_run
 from assembler_bench.site_build import SITE, validate_public_site
 
 
@@ -18,10 +18,11 @@ class LiveProgressTests(unittest.TestCase):
             replace_run([run], {**next_run, "images": {}})
 
     def test_multiple_runs_stay_separate(self):
-        first = {"id": LEGACY_ID, "sample_count": 20, "images": {}}
-        second = {"id": FORK_ID, "sample_count": 4, "images": {}}
+        first = {"id": FORK_ID, "sample_count": 4, "images": {}}
+        second = {"id": "real198-fork-source-attested-live",
+                  "sample_count": 20, "images": {}}
         self.assertEqual([x["id"] for x in replace_run(
-            replace_run([], first), second)], [LEGACY_ID, FORK_ID])
+            replace_run([], first), second)], [FORK_ID, second["id"]])
 
     def test_source_provenance_is_not_silently_rewritten(self):
         from assembler_bench.public_dominance import enrich

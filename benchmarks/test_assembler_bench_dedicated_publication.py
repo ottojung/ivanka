@@ -10,10 +10,13 @@ from assembler_bench.site_build import SITE, build, validate_public_site
 from expanded.adapters import ASSEMBLERS
 
 
+FIXTURE=Path(__file__).resolve().parent/"fixtures/assembler_bench_dedicated"
+
+
 class DedicatedPublicationTests(unittest.TestCase):
     def test_all_seven_verified_branch_links_and_images_are_published(self):
-        self.assertEqual(check(SITE),len(ASSEMBLERS))
-        data=json.loads((SITE/"data/dedicated-images.json").read_text())
+        self.assertEqual(check(FIXTURE),len(ASSEMBLERS))
+        data=json.loads((FIXTURE/"data/dedicated-images.json").read_text())
         self.assertEqual(data["schema"],
                          "ivanka.assembler-bench.dedicated-fork-images.v1")
         self.assertEqual(data["status"],
@@ -30,17 +33,17 @@ class DedicatedPublicationTests(unittest.TestCase):
                 source["source_commit"])
             self.assertEqual(source["baseline_url"],data["baseline_url"])
         js=(SITE/"app.js").read_text()
-        self.assertIn('fetch("./data/dedicated-images.json"',js)
+        self.assertNotIn('fetch("./data/dedicated-images.json"',js)
         self.assertIn('source_url',js)
         self.assertIn('source_commit',js)
-        self.assertIn('These are available branch-specific builds',js)
+        self.assertIn('Current pinned assembler images',js)
         published = json.loads((SITE / "data/runs.json").read_text())
         self.assertEqual(validate_public_site(), len(published["runs"]))
 
     def test_forged_fork_links_reused_images_and_status_fail(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)/"site"
-            shutil.copytree(SITE,root)
+            shutil.copytree(FIXTURE,root)
             file=root/"data/dedicated-images.json"
             original=json.loads(file.read_text())
             changes=(
@@ -57,15 +60,16 @@ class DedicatedPublicationTests(unittest.TestCase):
                 mutator(data)
                 file.write_text(json.dumps(data))
                 with self.assertRaises(ValueError):
-                    validate_public_site(root)
+                    check(root)
 
-    def test_pages_artifact_contains_dedicated_source_inventory(self):
+    def test_pages_artifact_contains_only_current_source_attestation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/"_site"
             build(root)
-            file=root/"bench/data/dedicated-images.json"
-            self.assertTrue(file.is_file())
-            self.assertEqual(check(root/"bench"),7)
+            self.assertFalse(
+                (root/"bench/data/dedicated-images.json").exists())
+            self.assertTrue(
+                (root/"bench/data/live-fork-attestation.json").is_file())
 
 
 if __name__=="__main__":

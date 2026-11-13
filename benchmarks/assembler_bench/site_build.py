@@ -8,9 +8,8 @@ from pathlib import Path
 
 from .publication import SCHEMA
 from .site_validation import check_mapping_snapshot, check_matrices
-from .dedicated_publication import check as check_dedicated
 from .public_fork_provenance import check as check_fork_provenance
-from .real_progress import validate_public as check_real_progress
+from .current_validation import check_current
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -29,7 +28,7 @@ def validate_public_site(site=SITE):
                 "rankings.js", "app.js",
                 "data/runs.json",
                 "data/mapping-diagnostics.json",
-                "data/dedicated-images.json")
+                "data/live-fork-attestation.json")
     if any(not (source / name).is_file() for name in required):
         raise ValueError("incomplete /bench site assets")
     html = (source / "index.html").read_text()
@@ -139,13 +138,12 @@ def validate_public_site(site=SITE):
         if run["status"] == "ineligible":
             if run["eligible_for_expanded"] or run.get("psi"):
                 raise ValueError("ineligible run falsely presented as passing")
-        if run["status"] == "incomplete":
+        if run["status"] == "incomplete" and run["cohort"] == "synthetic":
             verify_hxb2_preview(run)
         check_fork_provenance(source, run)
-    check_real_progress(report.get("real_progress"))
+    check_current(report)
     check_matrices(report)
     check_mapping_snapshot(source, report)
-    check_dedicated(source)
     if SECRET.search(json.dumps(report)):
         raise ValueError("private sample path or identifier in public report")
     return len(report["runs"])

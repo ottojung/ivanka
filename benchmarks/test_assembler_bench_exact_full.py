@@ -1,7 +1,5 @@
 """Exact read placement and both-track publication must match pinned MiCall."""
 import csv
-import hashlib
-import json
 import random
 import shutil
 import subprocess
@@ -11,7 +9,6 @@ from pathlib import Path
 
 from assembler_bench.metric_catalog_exact import catalog, explanations, values
 from assembler_bench.public_case_metrics import synthetic, physical
-from assembler_bench.exact_cache import append, sidecar
 from produce_exact_coverage import generate, summarize
 
 SITE = Path(__file__).resolve().parents[1] / "site/bench"

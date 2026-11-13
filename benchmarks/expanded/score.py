@@ -1,6 +1,9 @@
 """Evaluate DNA evidence with the final MiCall local-alignment scorer."""
 from pathlib import Path
-import zlib  # Load libz before NumPy-backed alignment libraries.
+import zlib
+
+# Import libz before scientific alignment packages on Guix hosts.
+_LIBZ_LOADED = zlib.crc32(b"")
 
 from benchmarks.reference_panel import best_panel_alignment
 

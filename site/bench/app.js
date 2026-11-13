@@ -729,12 +729,44 @@ function bind() {
     }));
 }
 
+let lastPublicPayload = "";
+function runOptions() {
+  el("runSelect").innerHTML=state.data.runs.map((r)=>
+    '<option value="'+esc(r.id)+'">'+esc(r.title)+'</option>').join("");
+  el("runSelect").disabled=false;
+}
+async function pollProgress() {
+  try {
+    const response=await fetch("./data/runs.json",{cache:"no-store"});
+    if(!response.ok)throw new Error("HTTP "+response.status);
+    const payload=await response.text();
+    if(payload===lastPublicPayload)return;
+    const next=JSON.parse(payload);
+    if(next.schema!=="ivanka.assembler-bench.public.v1"||
+       !Array.isArray(next.runs)||!next.runs.length)
+      throw new Error("Invalid public snapshot");
+    const current=state.run?.id;
+    state.data=next;
+    lastPublicPayload=payload;
+    state.run=next.runs.find(r=>r.id===current)||next.runs.at(-1);
+    runOptions();
+    el("detailPanel").hidden=true;
+    render();
+    el("progressStatus").textContent=
+      "New verified results published · "+new Date().toLocaleTimeString()+
+      ". Checking every minute.";
+  } catch (_) {
+    el("progressStatus").textContent=
+      "Latest published snapshot retained; update check unavailable. Retrying automatically.";
+  }
+}
 async function main() {
   bind();
   try {
     const response=await fetch("./data/runs.json",{cache:"no-store"});
     if(!response.ok)throw new Error("HTTP "+response.status);
-    state.data=await response.json();
+    lastPublicPayload=await response.text();
+    state.data=JSON.parse(lastPublicPayload);
     try {
       const diagnosticResponse=await fetch("./data/mapping-diagnostics.json");
       state.diagnostics=diagnosticResponse.ok?await diagnosticResponse.json():null;
@@ -746,11 +778,10 @@ async function main() {
     if(state.data.schema!=="ivanka.assembler-bench.public.v1"||
        !Array.isArray(state.data.runs)||!state.data.runs.length)
       throw new Error("Unsupported or missing public data");
-    el("runSelect").innerHTML=state.data.runs.map((r)=>
-      '<option value="'+esc(r.id)+'">'+esc(r.title)+'</option>').join("");
-    el("runSelect").disabled=false;
+    runOptions();
     const params=new URLSearchParams(location.search);
-    state.run=state.data.runs.find((r)=>r.id===params.get("run"))||state.data.runs[0];
+    state.run=state.data.runs.find((r)=>r.id===params.get("run"))||
+      state.data.runs.at(-1);
     const requested=params.get("metric")||params.get("diagnostic");
     state.metric=requested==="runtime"?"seconds":
       requested==="alignment"||!requested?"score":requested;
@@ -780,6 +811,7 @@ async function main() {
       });
     }
     render();
+    setInterval(pollProgress,60000);
   } catch(error) {
     el("globalNotice").textContent="Results unavailable: "+error.message+
       ". No qualification is claimed.";

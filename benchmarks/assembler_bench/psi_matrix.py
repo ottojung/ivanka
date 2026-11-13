@@ -43,10 +43,15 @@ def _entry(rows, name, other, metric, expected, eligible):
     subset = {"status": "no-data", "proof": None}
     if pairs:
         try:
-            witness = summarize(pairs)
-            subset = {"status": "dominates" if witness[
-                "positive_all_nonnegative"] else "does-not-dominate",
-                "proof": witness}
+            # Large, incomplete previews must not stall the publication
+            # pipeline on full exponential-polynomial root isolation.
+            # Never weaken the exhaustive qualified-cohort proof.
+            witness = summarize(
+                pairs, search_roots=eligible or len(pairs) <= 48)
+            subset = {"status": (
+                "unresolved" if witness.get("proof_incomplete") else
+                "dominates" if witness["positive_all_nonnegative"] else
+                "does-not-dominate"), "proof": witness}
         except (ValueError, ArithmeticError, OverflowError):
             subset = {"status": "unresolved", "proof": None}
     base = {"status": "incomplete", "paired": len(pairs),

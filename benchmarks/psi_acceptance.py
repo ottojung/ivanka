@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation, localcontext
 from psi import grouped_terms, roots_of_sum, value_sign
 
 
-def summarize(values):
+def summarize(values, *, search_roots=True):
     """Check Psi(r)>0 for all r>=0, including r=0; fail closed on uncertainty."""
     try:
         with localcontext() as ctx:
@@ -70,6 +70,13 @@ def summarize(values):
                 if value_sign(terms, r) <= 0:
                     result["negative_witness_r"] = float(r)
                     return result
+
+            # In an incomplete UI preview, a hard case can remain explicitly
+            # unresolved instead of blocking publication for minutes.
+            # Qualification always uses the exhaustive default root search.
+            if not search_roots:
+                result["proof_incomplete"] = True
+                return result
 
             # Otherwise isolate ALL finite real zeros (including tangencies).
             # A nearly-zero negative root is treated as a failure, not a pass.

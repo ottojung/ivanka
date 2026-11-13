@@ -317,3 +317,25 @@ All seven dedicated images have completed an end-to-end HXB2 clonal
 MiCall smoke test with independently scored final consensuses.
 **The original 198-real plus 400-HXB2-synthetic seven-way numerical gate
 has not yet passed.**
+
+## Continuous public benchmark progress
+
+The source-attested fork seven-way HXB2 execution and the older historical
+seven-way run publish **separate, stable run IDs** on /bench/. Only fully
+committed cases are exported. Per-case tool failures remain failures (null
+measurements), and neither partial dataset constitutes a completed qualification.
+
+On the authorized benchmark host, use a dedicated clean Git worktree tracking
+origin/main and run benchmarks/assembler_bench/live_publish_loop.sh with
+IVANKA_BENCH_CHECKOUT, IVANKA_BENCH_OLD, IVANKA_BENCH_OLD_SOURCE,
+IVANKA_BENCH_FORK, IVANKA_BENCH_FORK_RUNNER, IVANKA_BENCH_ATTESTATION,
+IVANKA_BENCH_FORK_REPO, IVANKA_BENCH_BASE and IVANKA_BENCH_INTERVAL=300
+in its environment. The publisher independently revalidates original checkpoints,
+all seven fork image/executable attestations, frozen runner source, and HXB2 truth;
+stages and validates the full privacy-safe public site; then pushes only an
+updated anonymous summary to main (never raw reads or sample identifiers).
+
+A successful push triggers .github/workflows/pages.yml; the page checks for
+new published snapshots once per minute without losing run or analysis settings.
+A failed check leaves the last valid Pages snapshot intact, and retries on the
+next polling interval.

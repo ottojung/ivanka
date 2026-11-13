@@ -34,7 +34,8 @@ class DedicatedPublicationTests(unittest.TestCase):
         self.assertIn('source_url',js)
         self.assertIn('source_commit',js)
         self.assertIn('These are available branch-specific builds',js)
-        self.assertEqual(validate_public_site(),3)
+        published = json.loads((SITE / "data/runs.json").read_text())
+        self.assertEqual(validate_public_site(), len(published["runs"]))
 
     def test_forged_fork_links_reused_images_and_status_fail(self):
         with tempfile.TemporaryDirectory() as temp:

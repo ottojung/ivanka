@@ -84,8 +84,10 @@ class PublicAssemblerBenchTests(unittest.TestCase):
                             expected = "self" if a==b else "incomplete"
                             self.assertEqual(matrix["metrics"][metric][a][b]
                                              ["status"], expected)
-            self.assertEqual(run["micall_fork_provenance"]["status"],
-                             "historical-unverified")
+            self.assertEqual(
+                run["micall_fork_provenance"]["status"],
+                "verified" if run["id"] == "hxb2-v4-fork-source-attested-live"
+                else "historical-unverified")
 
     def test_seven_tool_soft_clip_counts_and_densities_are_reviewable(self):
         source = SITE / "data/mapping-diagnostics.json"

@@ -442,22 +442,6 @@ function proofDescription(entry) {
   }
   return partial+(entry.reason||"No complete-cohort signed-power proof");
 }
-function cellText(result,selected) {
-  const labels={self:"—",dominates:"DOMINATES",
-    "does-not-dominate":"NO",unresolved:"UNRESOLVED"};
-  if(labels[result.status])return labels[result.status];
-  if(result.status!=="incomplete")return "—";
-  if(selected.length===1) {
-    const part=result.entries[0];
-    const obs=part.observed;
-    if(obs&&part.paired>0)
-      return obs.gains+"↑ "+obs.losses+"↓ "+obs.ties+"=";
-  }
-  const available=result.entries.filter(x=>x.paired>0&&x.observed);
-  return available.length?available.length+"/"+selected.length+
-    " OBSERVED":"—";
-}
-
 function drawDominance() {
   const holder=el("dominanceMatrix"), details=el("dominanceDetails");
   const report=state.run.dominance_matrix;
@@ -476,9 +460,9 @@ function drawDominance() {
     ?state.diagnostics:null;
   el("dominanceContext").textContent=selected.length+" selected subjects: "+
     selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
-    ". Without an all-r certificate, cells show observed gains/losses "+
-    "or the number of subjects with measurements. These are observations, "+
-    "not claims of dominance.";
+    ". A cell answers whether the row assembler strictly Ψ-dominates the "+
+    "column assembler on EVERY chosen metric. See the cell details for "+
+    "per-metric proof, observed gains/losses and sample coverage.";
   holder.innerHTML='<table class="psi-matrix"><thead><tr><th>ROW A ↓ / B →</th>'+
     tools.map(tool=>'<th>'+esc(names[tool.toLowerCase()]||tool)+'</th>').join("")+
     '</tr></thead><tbody>'+
@@ -486,24 +470,29 @@ function drawDominance() {
       tools.map(b=>{
         if(a===b)return '<td class="dom-self">—</td>';
         const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
-        const label=cellText(result,selected);
+        const verdict=BenchSubjects.verdict(result.status);
         return '<td class="dom-'+esc(result.status)+'"><button type="button" data-dominates-a="'+
-          esc(a)+'" data-dominates-b="'+esc(b)+'" aria-label="'+esc(a)+
-          ' compared with '+esc(b)+' over '+selected.length+' selected subjects: '+
-          esc(label)+'">'+esc(label)+'</button></td>';
+          esc(a)+'" data-dominates-b="'+esc(b)+'" title="'+
+          esc(verdict.explanation)+'" aria-label="Does '+esc(a)+
+          ' dominate '+esc(b)+' on all '+selected.length+' selected metrics? '+
+          esc(verdict.label)+' — '+esc(verdict.explanation)+'">'+
+          esc(verdict.label)+'</button></td>';
       }).join("")+'</tr>').join("")+'</tbody></table>';
-  details.textContent="Select a cell to inspect the measurements and any "+
-    "independent proof for each subject. "+report.observed_samples+
-    " of "+report.expected_samples+" samples recorded; no transitivity assumed.";
+  details.textContent="Select a cell to inspect the evidence for each "+
+    "chosen metric. Observed gains and losses belong in the evidence panel, "+
+    "not the dominance verdict. "+report.observed_samples+" of "+
+    report.expected_samples+" samples recorded; no transitivity assumed.";
   holder.querySelectorAll("button[data-dominates-a]").forEach(button=>{
     button.addEventListener("click",()=>{
       const a=button.dataset.dominatesA,b=button.dataset.dominatesB;
       const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
+      const verdict=BenchSubjects.verdict(result.status);
       details.innerHTML='<h3>'+esc(names[a.toLowerCase()]||a)+' versus '+
         esc(names[b.toLowerCase()]||b)+' · '+selected.length+
-        ' selected subjects</h3><p>Strict all-r verdict: <b>'+
-        esc(result.status)+'</b>. Observed differences are shown separately '+
-        'from full-cohort proofs.</p>'+
+        ' selected subjects</h3><p>Does the row assembler dominate the column '+
+        'assembler on <em>every</em> selected metric? <strong>'+
+        esc(verdict.label)+'</strong> — '+esc(verdict.explanation)+
+        '. Observed differences are shown separately from full-cohort proofs.</p>'+
         '<div class="criterion-results">'+result.entries.map(item=>
           '<article><strong>'+esc(item.label)+'</strong>'+
           '<span>'+esc(item.direction)+" · "+esc(item.status)+

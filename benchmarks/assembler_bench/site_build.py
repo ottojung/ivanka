@@ -67,6 +67,14 @@ def validate_public_site(site=SITE):
             ("function conjunction(", "function criterion(", "does-not-dominate",
              "incomplete", "unresolved"))):
         raise ValueError("public matrix subject conjunction is not fail-closed")
+    if "function cellText(" in js or "obs.gains" in js[
+            js.index("function drawDominance()"):js.index("function render()")]:
+        raise ValueError("dominance matrix cells must contain verdicts, not counts")
+    if (any(name not in js for name in ("BenchSubjects.verdict(result.status)",
+             "esc(verdict.label)", "title=")) or
+            "function verdict(status)" not in subjects or
+            'class="dominance-legend"' not in html):
+        raise ValueError("matrix lacks strict yes/no/unknown verdict semantics")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
     if re.search(r"<script[^>]*src=[\"']https?://", html):

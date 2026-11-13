@@ -86,6 +86,15 @@ section.dominance,section.diagnostics{margin-top:61px}
 .selected-metric-review .diagnostic-plot{margin:18px 0}
 .selected-metric-review .diag-table th:nth-child(3){min-width:170px}
 .psi-matrix .dom-incomplete button{color:var(--amber)}
-.psi-matrix .dom-incomplete button[aria-label*="OBSERVED"]{font-variant-numeric:tabular-nums}
+.psi-matrix .dom-incomplete button{font-variant-numeric:tabular-nums}
 @media(max-width:780px){.compare .section-heading{flex-direction:column;align-items:stretch}.single-metric-controls{width:100%}.compare .bar-line,.diagnostic-plot .bar-line{grid-template-columns:98px minmax(110px,1fr) 80px 73px;gap:7px}.compare .bar-count{font-size:10px}}
 @media(max-width:470px){.single-metric-controls{display:grid;grid-template-columns:1fr 1fr}.single-metric-controls label:first-child{grid-column:1/-1;min-width:0}.single-metric-controls label{min-width:0}.compare .bar-line,.diagnostic-plot .bar-line{grid-template-columns:88px minmax(70px,1fr) 58px 53px;gap:6px}.compare .bar-name{font-size:11px}.compare .bar-value{font-size:11px}.compare .bar-count{font-size:9px}}
+
+
+.dominance-legend{display:flex;gap:8px 18px;flex-wrap:wrap;margin:11px 0 17px;font-size:11px;color:var(--muted)}
+.dominance-legend span{display:inline-flex;gap:6px;align-items:baseline}
+.dominance-legend strong{font-weight:800;font-size:13px;color:var(--text)}
+.dominance-legend span:first-child strong{color:var(--green)}
+.dominance-legend span:nth-child(2) strong{color:var(--red)}
+.dominance-legend span:nth-child(3) strong{color:var(--amber)}
+.psi-matrix td button{font-size:12px;letter-spacing:.04em}

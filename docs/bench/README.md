@@ -121,10 +121,17 @@ and observations are useful for exploring a running benchmark but
 are **not** the strict all-exponent Ψ qualification.
 
 The multiple-checkbox **Ψ-dominance matrix comes after the
-single-metric rankings and case-level comparisons**. Where signed-power
+single-metric rankings and case-level comparisons**. Every matrix cell gives the actual **YES / NO / ? / —** answer
+for "Does row A strictly Ψ-dominate column B on ALL checked subjects?"
+The cell never displays partial win counts or a numeric score in place
+of the result. A YES requires an independent full-cohort all-r proof
+for each checked metric; NO requires an independent disproof;
+? denotes incomplete or unresolved evidence; — denotes the diagonal.
+A legend spells out each state. Where signed-power
 certification is unavailable, verified observed pairwise wins/losses,
 ties, sample counts and mean advantages remain visible as descriptive
-results. A failed third assembler does not erase valid individual
+results **in the evidence panel and cell drill-down**, not as matrix
+verdicts. A failed third assembler does not erase valid individual
 MiCall outputs for the other two tools. Full-cohort qualification is
 disclosed once in the page notice; incompleteness must never conceal
 usable measurements or imply false dominance.

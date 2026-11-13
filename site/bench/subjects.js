@@ -36,12 +36,26 @@ const BenchSubjects = (() => {
     if (statuses.includes("unresolved")) return "unresolved";
     return statuses.every(x => x === "dominates") ? "dominates" : "unresolved";
   }
+  function verdict(status) {
+    // A cell answers ONLY "does row A dominate column B on the entire
+    // selected set of subjects?" Descriptive gains are never the answer.
+    const states = {
+      "dominates": {label:"YES", explanation:"Certified strict all-r Ψ dominance"},
+      "does-not-dominate": {label:"NO",
+        explanation:"At least one selected subject disproves strict Ψ dominance"},
+      "incomplete": {label:"?", explanation:"Insufficient complete paired data"},
+      "unresolved": {label:"?", explanation:"Numerical proof unresolved"},
+      "self": {label:"—", explanation:"Same assembler"},
+      "none": {label:"?", explanation:"Select at least one subject"}
+    };
+    return states[status]||{label:"?",explanation:"Dominance cannot be verified"};
+  }
   function evaluate(report, a, b, selected, snapshot) {
     const entries = selected.map(({key,direction,label}) => ({
       key,label,direction, ...criterion(report,a,b,key,direction,snapshot)
     }));
     return {status:conjunction(entries), entries};
   }
-  return {criterion,conjunction,evaluate};
+  return {criterion,conjunction,evaluate,verdict};
 })();
 if (typeof module !== "undefined") module.exports = BenchSubjects;

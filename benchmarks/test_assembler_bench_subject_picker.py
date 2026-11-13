@@ -49,6 +49,57 @@ console.log('JS_DIRECTIONS_AND_PARTIAL_EVIDENCE_PASS');
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("JS_DIRECTIONS_AND_PARTIAL_EVIDENCE_PASS", result.stdout)
 
+    def test_matrix_cells_answer_certified_dominance_not_observed_win_counts(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node unavailable")
+        code = """
+const assert=require('assert');
+const calc=require(process.argv[1]);
+const runs=require(process.argv[2]).runs;
+const real=runs.find(r=>r.cohort==='real').dominance_matrix;
+const historical=runs.find(r=>r.hxb2_truth_verified).dominance_matrix;
+const alignment=[{key:'alignment',direction:'higher',label:'Alignment'}];
+const runtime=[{key:'runtime',direction:'lower',label:'Runtime'}];
+const diagnostic=[{key:'clipped_read_fraction',direction:'lower',
+ label:'Clipped read fraction'}];
+const answer=(report,a,b,subjects)=>calc.verdict(
+  calc.evaluate(report,a,b,subjects).status).label;
+assert.strictEqual(answer(real,'Ivanka','IVA',alignment),'YES');
+assert.strictEqual(answer(real,'IVA','Ivanka',alignment),'NO');
+assert.strictEqual(answer(real,'Ivanka','IVA',alignment.concat(runtime)),'YES');
+assert.strictEqual(answer(real,'IVA','Ivanka',alignment.concat(runtime)),'NO');
+assert.strictEqual(answer(real,'Ivanka','Ivanka',alignment),'—');
+assert.strictEqual(answer(real,'Ivanka','IVA',[]),'?');
+assert.strictEqual(answer(real,'Ivanka','IVA',alignment.concat(diagnostic)),'?');
+assert.strictEqual(answer(real,'IVA','Ivanka',alignment.concat(diagnostic)),'NO');
+const preview=calc.evaluate(historical,'ivanka','spades',alignment);
+assert.strictEqual(preview.status,'incomplete');
+assert(preview.entries[0].observed.gains+
+  preview.entries[0].observed.losses>0);
+assert.strictEqual(calc.verdict(preview.status).label,'?');
+assert.strictEqual(calc.verdict('unresolved').label,'?');
+assert.strictEqual(calc.verdict('does-not-dominate').label,'NO');
+assert.strictEqual(calc.verdict('dominates').label,'YES');
+console.log('ALL_PAIRS_ALL_METRICS_MATRIX_VERDICTS_ONLY_PASS');
+"""
+        result = subprocess.run(
+            [node, "-e", code, str(SITE/"subjects.js"),
+             str(SITE/"data/runs.json")],
+            text=True, capture_output=True, timeout=15, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ALL_PAIRS_ALL_METRICS_MATRIX_VERDICTS_ONLY_PASS",
+                      result.stdout)
+        js=(SITE/"app.js").read_text()
+        html=(SITE/"index.html").read_text()
+        matrix=js[js.index("function drawDominance()"):
+                  js.index("function render()")]
+        self.assertIn("BenchSubjects.verdict(result.status)",matrix)
+        self.assertIn("esc(verdict.label)",matrix)
+        self.assertNotIn("cellText(",matrix)
+        self.assertNotIn("obs.gains",matrix)
+        self.assertIn('class="dominance-legend"',html)
+
     def test_every_catalog_measurement_can_be_a_checkbox_subject(self):
         snapshot=json.loads((SITE/"data/mapping-diagnostics.json").read_text())
         keys=set(snapshot["metric_catalog"])

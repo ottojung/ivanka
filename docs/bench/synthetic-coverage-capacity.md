@@ -30,8 +30,18 @@ b0f466d4f274e54828b1bd8b7fb4d225a6ff2a9b8269ab4029018a2b52545f45
 finished integrated MiCall with exit code 0, but the evaluator
 correctly reported no final MAX consensus. The existing pinned
 Ivanka runs show the same outcome. This supports a shared reporting
-limitation, not an isolated assembly failure. Its execution.json
-SHA-256 was
+limitation, not an isolated assembly failure.
+
+In the same Ivanka run, the longest final unstitched contig has **9,634
+bases**, and is an *exact substring* of the 9,657-base generating
+genome. Independent contig-to-truth local alignment scores 9,634,
+while the mandatory *final MiCall consensus* is absent, scoring 0.
+The contig analysis is **diagnostic only**, never a replacement for
+final MiCall scoring. Source evidence: unstitched_contigs.csv SHA-256
+677786dad6c1d5e4e0d29e194c02ba7a2064e6dfe1efa61d11e874a33b416bde;
+generating-truth FASTA SHA-256
+90d5424a7934f57d1bb3efea581910afdd599bd574bc0a5e0f631886e9594a92.
+The independent IVA control's execution.json SHA-256 was
 b8438e86bfd2b309158a1855ea84a472564b427a12578989a0bf8e3b671ffb93.
 
 For a reproducible independent audit, execute:

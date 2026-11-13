@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import random
+import secrets
 import subprocess
 import time
 
@@ -33,8 +34,11 @@ TIMER = Path(__file__).resolve().parents[1] / "inside_container_timing.py"
 
 def command(name, image, case_dir, output_dir, identifier, timeout):
     """Every assembler is integrated through the same MiCall analyze CLI."""
-    job = "ivanka-bench-synth-" + hashlib.sha256(
+    # A failed or interrupted Podman create can retain its container name.
+    # A fresh nonce prevents an earlier attempt from blocking this execution.
+    job = ("ivanka-bench-synth-" + hashlib.sha256(
         f"{identifier}:{name}:{image}".encode()).hexdigest()[:18]
+        + "-" + secrets.token_hex(8))
     base = ["podman", "run", "--rm", "--pull=never", "--network=none",
             "--userns=host", "--cpus=2", "--memory=4g",
             "--name", job, "--timeout", str(timeout),

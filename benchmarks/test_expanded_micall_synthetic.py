@@ -34,6 +34,36 @@ class MiCallSyntheticTests(unittest.TestCase):
                 self.assertIn("--cpus=2", argv)
                 self.assertIn("--memory=4g", argv)
 
+    def test_repeated_sample_attempts_use_distinct_container_names(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            first = command("ivanka", "f" * 64, base, base / "out",
+                            "quality_decay-s009", 300)
+            second = command("ivanka", "f" * 64, base, base / "out",
+                             "quality_decay-s009", 300)
+        index = first.index("--name") + 1
+        self.assertNotEqual(first[index], second[index])
+        self.assertRegex(first[index],
+                         r"^ivanka-bench-synth-[a-f0-9]{18}-[a-f0-9]{16}$")
+        self.assertEqual(first[:index], second[:index])
+        self.assertEqual(first[index + 1:], second[index + 1:])
+
+    def test_nonce_does_not_change_pinned_inputs_or_assembler(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            with patch("expanded.micall_synthetic.secrets.token_hex",
+                       side_effect=["0123456789abcdef", "fedcba9876543210"]):
+                first = command("iva", "a" * 64, base, base / "out",
+                                "clonal-s013", 1800)
+                second = command("iva", "a" * 64, base, base / "out",
+                                 "clonal-s013", 1800)
+        index = first.index("--name") + 1
+        self.assertEqual(first[index][-16:], "0123456789abcdef")
+        self.assertEqual(second[index][-16:], "fedcba9876543210")
+        self.assertEqual(
+            [*first[:index], *first[index + 1:]],
+            [*second[:index], *second[index + 1:]])
+
     def test_nonzero_micall_is_never_a_qualifying_sample(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)

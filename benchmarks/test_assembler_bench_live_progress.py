@@ -56,6 +56,76 @@ class LiveProgressTests(unittest.TestCase):
                         "WebSocket(", "pollProgress"):
             self.assertNotIn(keyword, js)
 
+    def test_publisher_uses_one_verified_checkpoint_for_report_and_mapping(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from assembler_bench import live_progress
+
+        with tempfile.TemporaryDirectory() as directory:
+            site = Path(directory)/"site"
+            data = site/"data"
+            data.mkdir(parents=True)
+            (data/"runs.json").write_text('{"runs":[]}')
+            (data/"mapping-diagnostics.json").write_text("{}")
+            att = Path(directory)/"attestation.json"
+            att.write_text("{}")
+            rows = [{"id": "a"}, {"id": "b"}]
+            verified = ({"images": {}}, rows, "digest", {})
+            run = {"id": FORK_ID, "cohort": "synthetic",
+                   "sample_count": 2, "images": {},
+                   "micall_fork_provenance": {}}
+            progress = {"candidates": {"ivanka": {"finished": 0}}}
+            with (patch.object(live_progress, "checked_fork",
+                               return_value=verified) as checked,
+                  patch.object(live_progress, "fork_preview",
+                               return_value=run) as preview,
+                  patch.object(live_progress, "real_snapshot",
+                               return_value=progress),
+                  patch.object(live_progress, "physical_preview",
+                               return_value={"id": "real"}),
+                  patch.object(live_progress, "combined_preview",
+                               return_value={"id": "combined"}),
+                  patch.object(live_progress, "enrich",
+                               side_effect=lambda x: x),
+                  patch.object(live_progress, "mapping_snapshot",
+                               return_value={}) as mapping,
+                  patch.object(live_progress, "validate_public_site")):
+                live_progress.update(
+                    site, "fork", "runner", att, "sources", "base",
+                    real="real", real_data="physical")
+                checked.assert_called_once()
+                self.assertIs(preview.call_args.kwargs["checked_result"],
+                              verified)
+                self.assertIs(mapping.call_args.args[0], rows)
+                self.assertEqual(
+                    json.loads((data/"runs.json").read_text())["runs"][0], run)
+
+    def test_verified_preview_never_reloads_a_new_checkpoint_generation(self):
+        from unittest.mock import patch
+        from assembler_bench import fork_progress
+        verified = (
+            {"images": {"iva": "a"*64}, "truth_proof": {},
+             "benchmark_source_sha256": {}},
+            [{"id": "clonal-s000"}], "b"*64,
+            {"schema": "test", "base_image_sha256": "c"*64,
+             "images": {"iva": {"source_commit": "a"*40,
+                               "source_url": "https://example.org",
+                               "image_sha256": "a"*64}}})
+        with (patch.object(fork_progress, "checked",
+                           side_effect=AssertionError("second checkpoint read")),
+              patch.object(fork_progress, "format_preview",
+                           return_value={"sample_count": 1}) as formatter,
+              patch.object(fork_progress, "sha", return_value="d"*64),
+              patch.object(fork_progress.subprocess, "check_output",
+                           return_value="e"*40)):
+            run = fork_progress.preview(
+                "run", "runner", "att", "fork", "base",
+                checked_result=verified)
+        self.assertEqual(run["sample_count"], 1)
+        self.assertEqual(formatter.call_args.args[1],
+                         verified[1])
+
     def test_existing_snapshot_still_passes_validation(self):
         self.assertGreaterEqual(validate_public_site(SITE), 3)
 

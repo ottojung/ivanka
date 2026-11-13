@@ -34,7 +34,10 @@ def update(site, fork, fork_runner, attestation, fork_repo, base,
     public = json.loads(target.read_text())
     old_run = next((r for r in public.get("runs", [])
                     if r.get("cohort") == "synthetic"), None)
-    fork_run = fork_preview(fork, fork_runner, attestation, fork_repo, base)
+    verified = checked_fork(fork, fork_runner, attestation, fork_repo, base)
+    fork_run = fork_preview(
+        fork, fork_runner, attestation, fork_repo, base,
+        checked_result=verified)
     public["runs"] = [fork_run]
     if real is not None:
         if real_data is None:
@@ -56,9 +59,7 @@ def update(site, fork, fork_runner, attestation, fork_repo, base,
         public["runs"].append(physical)
         public["runs"].append(combined_preview(fork_run, physical))
     public = enrich(public)
-    _, rows, _, _ = checked_fork(fork, fork_runner, attestation,
-                                fork_repo, base)
-    diagnostics = mapping_snapshot(rows, fork_run)
+    diagnostics = mapping_snapshot(verified[1], fork_run)
     with tempfile.TemporaryDirectory(prefix="bench-live-") as folder:
         staged = Path(folder) / "site"
         shutil.copytree(site, staged)

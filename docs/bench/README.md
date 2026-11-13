@@ -163,3 +163,10 @@ breadth thresholds and separate 64-bin positional profiles are published
 with source-image and final-consensus hashes. A missing final MAX consensus
 is recorded unavailable, never as zero exact coverage. The publisher reads
 the post-MiCall sidecar store through IVANKA_BENCH_EXACT_ROOT.
+
+### Synthetic depth capacity
+
+The [read-only coverage capacity audit](synthetic-coverage-capacity.md)
+documents MiCall's shared 100x consensus threshold and the
+low-depth cohort's approximately 78x mean read-base capacity.
+This does not replace any assembler measurement or gate.

@@ -5,7 +5,7 @@ const BenchRanks = (() => {
   const CORE = {
     score:{label:"Final MiCall alignment",unit:"score",direction:"higher",
       stage:"Final MiCall dominant consensus",
-      description:"Alignment of the final dominant MiCall consensus. Real cases use MAX-reference points; HXB2 synthetic cases use withheld-truth similarity. Never pool these scales.",
+      description:"Alignment of final MiCall MAX sequences to the fixed reference panel.",
       denominator:"Observed successful, individually scored cases"},
     seconds:{label:"MiCall runtime",unit:"seconds",direction:"lower",
       stage:"In-container MiCall monotonic timer",

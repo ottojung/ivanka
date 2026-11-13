@@ -26,9 +26,8 @@
     </header>
     <main>
       <section class="intro">
-        <div class="eyebrow"><span class="live-dot"></span> PUBLIC RESULTS · SOURCE-ATTESTED</div>
-        <h1>Assembler <em>Bench.</em></h1>
-        <p class="lede">A general framework for comparing genome assemblers through the same MiCall pipeline. Explore alignment, runtime, mapping quality, clipping diagnostics and independently verified pairwise mathematical dominance—without assuming any assembler is the winner.</p>
+        <h1>Assembler <em>Bench</em></h1>
+        <p class="lede">Compare seven genome assemblers in MiCall. Explore alignment, runtime, mapping quality and pairwise Ψ dominance across synthetic and real DNA samples.</p>
         <div class="global-notice" id="globalNotice" role="status">Loading verified benchmark summaries…</div>
       </section>
       <section class="run-controls" aria-label="Select a benchmark run">
@@ -42,7 +41,7 @@
         <div class="run-stamp">
           <span class="meta-label">QUALIFICATION</span><strong id="runStatus">—</strong>
         </div>
-        <p class="subtle" id="progressStatus" role="status">Verified results update when published to GitHub Pages. Refresh this page to load the newest snapshot.</p>
+        <p class="subtle" id="progressStatus" role="status">Refresh to see the latest results.</p>
         <p class="subtle" id="realProgress" role="status"></p>
       </section>
       <section class="overview" aria-label="Run overview">
@@ -69,8 +68,6 @@
         <div class="plot" id="comparisonChart" aria-live="polite"></div>
         <div class="selected-metric-review">
         <div class="metric-explanation" id="diagnosticExplanation" role="region" aria-live="polite"></div>
-        <p class="subtle" id="diagnosticContext">Choose a metric for its definition, units, denominator and results. Missing data is not zero.</p>
-        <div class="table-scroll" id="diagnosticMatrix"></div>
         </div>
       </section>
       <section class="samples" aria-label="Individual results">
@@ -96,7 +93,7 @@
             <tbody id="resultRows"></tbody>
           </table>
         </div>
-        <div class="table-footer"><span id="resultCount"></span><span>Click a row for details · Values are independently scored</span></div>
+        <div class="table-footer"><span id="resultCount"></span><span>Click a row for details</span></div>
         <aside id="detailPanel" class="detail-panel" aria-live="polite" hidden></aside>
       </section>
       <section class="dominance" aria-label="Pairwise signed-power PSI dominance">
@@ -115,7 +112,7 @@
             </label>
           </div>
         </div>
-        <p class="subtle">All shows strict Ψ dominance across every checked metric. Select r = 0, 1, or 2 to see a signed average advantage for one checked metric. Rows are compared against columns.</p>
+        <p class="subtle">Rows are compared with columns. All evaluates Ψ dominance for every selected metric; choose r = 0, 1, or 2 for numerical Ψ values.</p>
         <div class="subject-panel">
           <div class="subject-header">
             <label for="subjectSearch">FIND SUBJECT<input id="subjectSearch" type="search" placeholder="Clips, coverage, concordance…" autocomplete="off"></label>
@@ -123,40 +120,30 @@
             <span id="subjectsCount" role="status">2 subjects selected</span>
           </div>
           <fieldset id="dominanceSubjects" class="subject-list"><legend>Dominance subjects (checkboxes)</legend></fieldset>
-          <p class="hint">Diagnostics with no naturally beneficial direction require you to choose <em>higher</em> or <em>lower</em> as a preference. Fewer soft clips, more depth, or more contigs do not alone prove a biologically superior assembly. Historical snapshots with only one case cannot certify full-cohort Ψ.</p>
+          <p class="hint">Choose whether higher or lower is preferable for diagnostic metrics without an obvious direction.</p>
         </div>
         <p class="subtle" id="dominanceContext"></p>
         <p class="dominance-key" id="dominanceLegend" aria-label="Matrix legend">
-          <strong class="legend-yes">YES</strong> dominates · <strong class="legend-no">NO</strong> does not ·
-          <strong>obs</strong> observed cases only · unmarked means certified.
-          Select a cell for coverage and Ψ proofs.
+          <strong class="legend-yes">YES</strong> dominates · <strong class="legend-no">NO</strong> does not · <strong>—</strong> no comparison.
+          Results use the available paired cases; select a cell for details.
         </p>
         <p class="dominance-key" id="momentLegend" hidden>
           <strong class="legend-yes">Blue +</strong> row advantage ·
           <strong class="legend-no">Red −</strong> row disadvantage ·
-          <strong>0</strong> tie · <strong>obs</strong> observed subset only.
+          <strong>0</strong> tie · <strong>—</strong> no comparison.
           Ψ(0) is mean sign, Ψ(1) is mean difference, and Ψ(2) is mean signed squared difference.
         </p>
         <div class="table-scroll" id="dominanceMatrix"></div>
         <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>
       </section>
-      <section class="evidence" aria-label="Independent mathematical qualification">
-        <div class="section-heading"><div><span class="overline">05 / CERTIFICATES & OBSERVATIONS</span><h2>Evidence, not assertions</h2></div></div>
-        <div id="evidenceContent"></div>
-      </section>
-      <section class="diagnostics coverage-section" aria-label="Measurement coverage">
-        <div class="section-heading"><div><span class="overline">06 / MEASUREMENT COMPLETENESS</span><h2>Measurement coverage</h2></div></div>
-        <p class="subtle">Available cases for the currently selected metric, by assembler. Missing measurements are not zero.</p>
-        <div class="diagnostic-plot" id="diagnosticChart" aria-label="Observed case coverage for the selected metric"></div>
-      </section>
       <section class="provenance" aria-label="Provenance">
-        <div class="section-heading"><div><span class="overline">07 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
+        <div class="section-heading"><div><span class="overline">05 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
         <div id="provenanceContent"></div>
       </section>
     </main>
     <footer>
       <span><b>ASSEMBLER BENCH</b> · MiCall comparisons</span>
-      <span>Privacy-preserving public summaries · Not clinical release authorization</span>
+      <span>MiCall benchmark results · No patient-level data</span>
       <a href="https://github.com/ottojung/ivanka/blob/main/docs/intents/README.md">All binding intents</a>
     </footer>
   </div>

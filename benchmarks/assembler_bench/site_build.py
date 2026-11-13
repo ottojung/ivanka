@@ -36,12 +36,12 @@ def validate_public_site(site=SITE):
     for link in ('href="./style.css"', 'src="./subjects.js"',
                  'src="./app.js"',
                  'id="runSelect"', 'id="resultRows"',
-                 'id="comparisonChart"', 'id="evidenceContent"',
+                 'id="comparisonChart"',
                  'id="detailPanel"', 'id="dominanceMatrix"',
                  'id="dominanceSubjects"', 'id="subjectSearch"',
                  'id="subjectsCount"', 'id="firstTool"',
-                 'id="diagnosticMatrix"', 'id="diagnosticMetric"',
-                 'id="diagnosticExplanation"', 'id="diagnosticChart"',
+                 'id="diagnosticMetric"',
+                 'id="diagnosticExplanation"',
                  'id="singleDirection"', 'id="psiExponent"',
                  'id="psiMetric"', 'id="momentLegend"'):
         if link not in html:
@@ -77,8 +77,7 @@ def validate_public_site(site=SITE):
             ("BenchSubjects.observedVerdict(result)", "esc(verdict.label)",
              "BenchSubjects.verdict(result.status)",
              "BenchSubjects.evidence(result)", 'class="dom-verdict"',
-             'class="dom-mini"', "evidence.description",
-             'esc(shortLabel)', 'esc(scope)')) or
+             "evidence.description", 'esc(label)')) or
             any(name not in subjects for name in
                 ("function observedVerdict(result)", "function verdict(status)",
                  "function evidence(result, limit=2)",

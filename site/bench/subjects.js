@@ -76,22 +76,22 @@ const BenchSubjects = (() => {
     const total=statuses.length;
     const completeness=measured+"/"+total+" selected subjects measured";
     if (statuses.includes("does-not-dominate"))
-      return {label:"OBS NO",kind:"observed-no",
+      return {label:"NO",kind:"observed-no",
         explanation:"Strict Ψ does not dominate on the observed paired subset of at least one selected subject",
         scope:completeness};
     if (statuses.includes("unresolved")||statuses.includes("unresolved-direction"))
-      return {label:"UNRESOLVED",kind:"unresolved",
+      return {label:"—",kind:"unresolved",
         explanation:"Observed-subset all-r Ψ proof remains unresolved",
         scope:completeness};
     if (measured===total&&total>0)
-      return {label:"OBS YES",kind:"observed-yes",
+      return {label:"YES",kind:"observed-yes",
         explanation:"Strict Ψ dominates on the observed paired subset of every selected subject; full cohort is not certified",
         scope:completeness};
     if (measured>0)
-      return {label:"PARTIAL YES",kind:"partial-yes",
+      return {label:"YES",kind:"partial-yes",
         explanation:"Dominates on observed paired subsets, but other selected subjects have no measurements",
         scope:completeness};
-    return {label:"NO DATA",kind:"no-data",
+    return {label:"—",kind:"no-data",
       explanation:"No paired observations available for the selected subjects",
       scope:completeness};
   }

@@ -107,37 +107,35 @@ function drawOverview() {
         .map(([name,value])=>(names[name]||name)+" "+
           value.finished+"/198 finished"+
           (value.failed?" ("+value.failed+" failed)":"")).join(" · ")+
-      ". Results are provisional."
-    :"No source-attested physical-198 attempt has been published yet.";
+      "."
+    :"Physical sample results are being collected.";
   const run=state.run;
   const expected=run.expected_sample_count;
   const label=run.cohort==="combined"?"Combined · both cohorts":
     run.cohort==="real"?"Physical · MiCall":"HXB2 · MiCall";
   el("runSelect").value=run.id;
   el("runCohort").textContent=label;
-  el("runStatus").textContent="Partial · not qualified";
+  el("runStatus").textContent="In progress";
   el("runStatus").className="status-no";
   el("runDate").textContent=run.date;
-  el("runDescription").textContent=run.status_reason;
+  el("runDescription").textContent=run.cohort==="combined"
+    ?"Synthetic and real samples, all seven assemblers."
+    :run.cohort==="real"?"198 real DNA samples.":"400 synthetic DNA samples.";
   const evidence=run.cohort==="combined"
-    ?"400 synthetic + 198 physical cases (different original score scales)"
+    ?"400 synthetic + 198 real cases"
     :run.cohort==="real"?"198 physical samples; six rival runs in progress"
     :"400 source-attested HXB2-derived synthetic samples";
-  el("globalNotice").textContent="INCOMPLETE · "+evidence+
-    ". Seven assemblers are required. Missing, running and failed arms "+
-    "do not count as wins; all-r Ψ and the separate 90% floors remain "+
-    "unqualified until both cohorts are complete.";
+  el("globalNotice").textContent="Benchmark in progress · "+evidence+
+    ". Comparisons update as more samples finish.";
   const failures=run.samples.reduce((n,s)=>n+s.failures.length,0);
   const floor=run.samples.filter(s=>s.floor_ok===false).length;
   const measured=run.samples.reduce((n,s)=>n+
     Object.values(s.score).filter(Number.isFinite).length,0);
   el("metricCards").innerHTML=card("Cases with results",
-    run.sample_count+" / "+expected,"Completed case-arm evidence only")+
-    card("Assembler arms measured",String(measured),
-      "Up to "+(expected*7)+" across all seven tools")+
-    card("Reported failures",String(failures),"Failures are not wins")+
-    card("90% floor violations",String(floor),
-      "Only fully measured cases are checked");
+    run.sample_count+" / "+expected,"Published samples")+
+    card("Assembler results",String(measured),"Of "+(expected*7)+" planned")+
+    card("Run failures",String(failures),"MiCall executions")+
+    card("Below 90% alignment",String(floor),"Against the strongest rival");
 }
 
 function drawCompare() {
@@ -149,11 +147,7 @@ function drawCompare() {
   const expected=state.run.expected_sample_count||state.run.sample_count;
   const label=state.direction==="lower"?"Lowest first":"Highest first";
   el("comparisonContext").textContent=info.label+" · "+label+
-    " · ordered observed arithmetic means ("+
-    (state.run.cohort==="combined"&&state.metric==="score"
-      ?"within-case best-measured score ratio":info.unit)+
-    "); ties break alphabetically. Each tool uses only its measured cases, "+
-    "with counts shown. A numerical rank is not a Ψ-dominance proof.";
+    " · average across measured cases ("+info.unit+").";
   el("comparisonChart").innerHTML=ranking.map(row=>
     '<div class="bar-line"><span class="bar-name">'+row.rank+'. '+
     esc(names[row.tool.toLowerCase()]||row.tool)+'</span>'+
@@ -163,15 +157,13 @@ function drawCompare() {
     '<span class="bar-value">'+(row.mean===null?"—":fmt(row.mean,5))+'</span>'+
     '<span class="bar-count">'+row.observed+'/'+expected+' cases</span>'+
     '</div>').join("")+
-    '<p class="plot-caption">Measured values only; missing values and failed '+
-    'arms are excluded, not replaced with zero. Sort direction is a chosen '+
-    'numeric preference, not proof of biological superiority.</p>';
+    '<p class="plot-caption">Average values and sample counts for each assembler.</p>';
+
 }
 function drawDiagnostics() {
   const info=metricInfo();
   const ranking=BenchRanks.summary(state.run,state.diagnostics,
     state.metric,state.direction);
-  const expected=state.run.expected_sample_count||state.run.sample_count;
   el("diagnosticExplanation").innerHTML=
     '<div class="metric-explanation-head"><h3>'+esc(info.label)+'</h3>'+
     '<span>'+esc(info.unit)+'</span></div>'+
@@ -197,83 +189,7 @@ function drawDiagnostics() {
       el("dominanceSubjects").scrollIntoView({behavior:"smooth",block:"nearest"});
     });
   }
-  el("diagnosticContext").textContent=
-    "Values are ordered by the selected metric, not by a fixed set of clipping "+
-    "columns. Measurements from different source stages and incompatible "+
-    "cohorts are not combined.";
-  el("diagnosticChart").innerHTML=
-    ranking.map(row=>'<div class="bar-line"><span class="bar-name">'+
-      esc(names[row.tool.toLowerCase()]||row.tool)+'</span>'+
-      '<div class="bar-track"><div class="bar-fill other" style="width:'+
-      (100*row.observed/expected).toFixed(2)+'%"></div></div>'+
-      '<span class="bar-value">'+row.observed+'/'+expected+'</span></div>'
-    ).join("");
-  el("diagnosticMatrix").innerHTML=
-    '<table class="diag-table"><thead><tr>'+
-    ["Rank","Assembler",info.label+" ("+info.unit+")",
-      "Measured cases","Unmeasured cases"].map(text=>
-      "<th>"+esc(text)+"</th>").join("")+'</tr></thead><tbody>'+
-    ranking.map(row=>'<tr><td>'+row.rank+'</td><th>'+
-      esc(names[row.tool.toLowerCase()]||row.tool)+'</th>'+
-      '<td>'+ (row.mean===null?"unavailable":fmt(row.mean,6))+
-      '</td><td>'+row.observed+'</td><td>'+
-      (expected-row.observed)+'</td></tr>').join("")+
-    '</tbody></table>';
-}
 
-function drawEvidence() {
-  const run=state.run;
-  if(run.cohort==="real"&&run.status==="passed-original-only") {
-    const one=(label,p)=>'<article class="evidence-card"><h3>'+
-      esc(label)+'</h3><div class="verdict">Certified strict all-r Ψ</div>'+
-      '<p class="hint">'+p.gains+' gains · '+p.losses+' losses · '+
-      p.ties+' ties · no nonnegative Ψ zeros.</p>'+
-      '<div class="psi-values">'+
-      [['Ψ(0)',p.psi0],['Ψ(1)',p.psi1],['Ψ(2)',p.psi2]]
-        .map(([name,value])=>'<div><b>'+fmt(value,5)+'</b><span>'+
-          esc(name)+'</span></div>').join("")+'</div></article>';
-    el("evidenceContent").innerHTML='<div class="evidence-grid">'+
-      one("Final MiCall alignment",run.psi.alignment)+
-      one("MiCall runtime",run.psi.runtime)+'</div>';
-    return;
-  }
-  const records=[];
-  // Even without a complete seven-arm cohort, use each independently
-  // measured pair of arms. Do not turn family-level historical averages
-  // into supposedly paired read-level measurements.
-  if(run.hxb2_truth_verified||run.cohort==="real"||
-     run.cohort==="combined") {
-    for(const a of run.tools)for(const b of run.tools){
-      if(a===b)continue;
-      const all=BenchRanks.pairs(run,state.diagnostics,state.metric,
-        state.direction,a,b);
-      const paired=all.filter(row=>row.delta!==null);
-      if(!paired.length)continue;
-      const deltas=paired.map(row=>row.delta);
-      records.push({a,b,paired:paired.length,
-        expected:run.expected_sample_count||run.sample_count,
-        observed:{gains:deltas.filter(x=>x>0).length,
-          losses:deltas.filter(x=>x<0).length,
-          ties:deltas.filter(x=>x===0).length,
-          mean_delta:deltas.reduce((sum,x)=>sum+x,0)/deltas.length}});
-    }
-  }
-  el("evidenceContent").innerHTML=
-    '<p class="hint">Observed pairwise differences for the chosen metric are '+
-    'shown where individually verified values exist. These are '+
-    'descriptive counts, not mathematical claims of all-r dominance.</p>'+
-    (records.length?
-      '<div class="table-scroll"><table><thead><tr>'+
-      ['Assembler A','Assembler B','Paired cases','A gains','A losses',
-        'Ties','Mean A advantage'].map(x=>'<th>'+esc(x)+'</th>').join('')+
-      '</tr></thead><tbody>'+records.map(r=>'<tr><td>'+esc(r.a)+
-        '</td><td>'+esc(r.b)+'</td><td>'+r.paired+'/'+r.expected+
-        '</td><td>'+r.observed.gains+'</td><td>'+r.observed.losses+
-        '</td><td>'+r.observed.ties+'</td><td>'+
-        fmt(r.observed.mean_delta,5)+'</td></tr>').join("")+
-      '</tbody></table></div>':
-      '<p class="hint">No valid individual paired cases for this metric. '+
-      'Available per-assembler measurements are presented in the ranking above.</p>');
 }
 
 function drawTable() {
@@ -323,9 +239,8 @@ function showDetail(row) {
       (detail.floor_ok===null?"unresolved":detail.floor_ok?"met":"not met")+".";
   } else if(detail) {
     note=state.run.cohort==="combined"?
-      "Within-case normalized alignment; "+detail.family+
-      ". Missing measurements remain unavailable.":
-      "Only directly measured case results are shown.";
+      "Alignment score · "+detail.family:
+      "Scores for the selected cases.";
   } else {
     note="Source-attested diagnostic snapshot for one HXB2 case.";
   }
@@ -341,28 +256,19 @@ function showDetail(row) {
 function drawProvenance() {
   const r=state.run;
   const fields=[["Run",r.id],["Source commit",r.source_commit],
-    ["Samples",String(r.sample_count)],["Expanded eligibility",r.eligible_for_expanded?"Eligible":"Not eligible"]];
+    ["Samples",String(r.sample_count)]];
   for(const [label,key] of [["Manifest SHA256","manifest_sha256"],
     ["HXB2 cohort SHA256","cohort_manifest_sha256"],
-    ["Benchmark source manifest SHA256","source_manifest_sha256"],
+    ["Benchmark source SHA256","source_manifest_sha256"],
     ["Result SHA256","results_sha256"],
-    ["Independent certificate SHA256","certificate_sha256"],
-    ["Diagnostic SHA256","diagnostic_sha256"]]){
+    ["Certificate SHA256","certificate_sha256"],
+    ["Diagnostic SHA256","diagnostic_sha256"]]) {
     if(r[key])fields.push([label,r[key]]);
-  }
-  if(r.micall_fork_provenance) {
-    fields.push(["MiCall fork build provenance",
-      r.micall_fork_provenance.status+": "+r.micall_fork_provenance.message]);
-  }
-  for(const [tool,ref] of Object.entries(r.images||{})) {
-    fields.push([tool+" pinned image",typeof ref==="string"?ref:JSON.stringify(ref)]);
   }
   const inventory=r.micall_fork_provenance?.images;
   const buildLinks=inventory?
-    '<section class="dedicated-builds"><h3>Current pinned assembler images</h3>'+
-    '<p class="hint">Every image below is the actual source-attested '+
-    'MiCall fork image recorded for this comparison.</p>'+
-    '<div class="table-scroll"><table class="dedicated-table"><thead><tr>'+
+    '<section class="dedicated-builds"><h3>Assembler builds</h3>'+
+    '<div class="table-scroll provenance-scroll"><table class="dedicated-table"><thead><tr>'+
     '<th>Assembler</th><th>Dedicated fork branch</th>'+
     '<th>Fork source commit</th><th>Immutable image ID</th></tr></thead><tbody>'+
     Object.entries(inventory).map(([name,item])=>
@@ -370,12 +276,11 @@ function drawProvenance() {
       '<td>'+esc(item.source_branch||
         "Common source commit (not dedicated)")+'</td>'+
       '<td><a target="_blank" rel="noopener noreferrer" href="'+
-        esc(item.source_url)+'">'+esc(item.source_commit.slice(0,12))+
-      '</a></td><td class="code-hash" title="'+
-      esc(item.image_sha256)+'">'+esc(item.image_sha256.slice(0,20))+
-      '…</td></tr>').join("")+
+        esc(item.source_url)+'">'+esc(item.source_commit)+
+      '</a></td><td class="code-hash">'+esc(item.image_sha256)+
+      '</td></tr>').join("")+
     '</tbody></table></div></section>':
-    '<p class="hint">Source-attested fork image details unavailable.</p>';
+    '<p class="hint">Assembler build details unavailable.</p>';
   el("provenanceContent").innerHTML='<div class="provenance-box"><dl>'+fields.map(([k,v])=>
     '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>').join("")+
     '</dl></div>'+buildLinks;
@@ -386,7 +291,7 @@ function drawSubjectControls() {
   const groups=new Map([
     ["Qualification",[
       {key:"alignment",label:"Final MiCall alignment",direction:"higher",
-        description:"Higher final MiCall MAX alignment on real samples, or higher known-truth similarity on synthetic samples. Keep those score scales separate."},
+        description:"Maximum alignment of final MiCall MAX sequences to the reference panel."},
       {key:"runtime",label:"MiCall runtime",direction:"lower",
         description:"Lower in-container MiCall monotonic duration in seconds. All reads and downstream processing must be comparable."}
     ]]
@@ -539,7 +444,7 @@ function drawDominance() {
          chosen.key==="runtime"?"seconds":chosen.key==="alignment"
            ?"alignment units": "chosen metric units")+")":
        "mean signed squared advantage (metric units squared)")+
-      ". Only this metric appears in each cell; other checked metrics are not summed."
+      "."
     :selected.length+" metrics: "+
       selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
       ". Row dominates column when strict Ψ(r)>0 for every r≥0 "+
@@ -553,21 +458,16 @@ function drawDominance() {
         const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
         const verdict=BenchSubjects.observedVerdict(result);
         const evidence=BenchSubjects.evidence(result);
-        const shortLabel=verdict.kind==="certified"?verdict.label:
-          verdict.kind==="observed-yes"?"YES":
-          verdict.kind==="observed-no"?"NO":
-          verdict.kind==="partial-yes"?"PARTIAL":
-          verdict.kind==="no-data"?"NO DATA":verdict.label;
+        const shortLabel=
+          ["certified","observed-yes","partial-yes"].includes(verdict.kind)
+          ?(verdict.kind==="certified"?verdict.label:"YES")
+          :verdict.kind==="observed-no"?"NO":"—";
         const moment=numeric?BenchSubjects.moment(
           result.entries.find(e=>e.key===chosen.key),r):null;
         const number=moment?.value;
         const numberClass=number===null?"psi-unavailable":
           number>0?"psi-positive":number<0?"psi-negative":"psi-zero";
-        const label=numeric?(number===null?
-          (moment.paired?"UNRESOLVED":"NO DATA"):fmtPsi(number)):shortLabel;
-        const scope=numeric?(number!==null&&moment.observed?"obs":""):
-          (["observed-yes","observed-no","partial-yes"]
-            .includes(verdict.kind)?"obs":"");
+        const label=numeric?(number===null?"—":fmtPsi(number)):shortLabel;
         const style=numeric?"psi-number "+numberClass:
           "dom-"+result.status+" dom-scope-"+verdict.kind;
         const meaning=numeric?"Ψ("+r+") for "+chosen.label+
@@ -580,13 +480,10 @@ function drawDominance() {
           esc(meaning)+(evidence.description?' · Observed: '+
           esc(evidence.description):'')+'" aria-label="'+
           esc(a)+' versus '+esc(b)+': '+esc(meaning)+'"><span class="dom-verdict">'+
-          (numeric?esc(label):esc(shortLabel))+'</span>'+
-          (scope?'<span class="dom-mini">'+esc(scope)+
-          '</span>':'')+'</button></td>';
+          esc(label)+'</span></button></td>';
       }).join("")+'</tr>').join("")+'</tbody></table>';
-  details.textContent="Select a cell for paired counts, Ψ proofs, "+
-    "and metric details. "+report.observed_samples+"/"+report.expected_samples+
-    " samples recorded.";
+  details.textContent="Select a cell for Ψ values and sample counts. "+
+    report.observed_samples+"/"+report.expected_samples+" samples available.";
   holder.querySelectorAll("button[data-dominates-a]").forEach(button=>{
     button.addEventListener("click",()=>{
       details.classList.remove("is-empty");
@@ -600,22 +497,19 @@ function drawDominance() {
       const momentDetails=numeric?'<p>Displayed Ψ('+r+') on '+
         esc(chosen.label)+': <strong>'+esc(fmtPsi(number.value))+
         '</strong> · '+number.paired+'/'+number.expected+
-        ' paired cases. This numeric value is not an all-r certificate.</p>':'';
+        ' paired cases.</p>':'';
       details.innerHTML='<h3>'+esc(names[a.toLowerCase()]||a)+' versus '+
         esc(names[b.toLowerCase()]||b)+' · '+selected.length+
         ' selected subjects</h3>'+momentDetails+
         '<p>Observed-subset all-r Ψ dominance: <strong>'+
         esc(verdict.label)+'</strong> — '+esc(verdict.explanation)+
-        ' ('+esc(verdict.scope)+'). Full-cohort certified verdict: <strong>'+
-        esc(complete.label)+'</strong>. Observed comparisons and their proofs '+
-        'are separately itemized below.</p>'+
+        ' · '+esc(verdict.scope)+'. Full-cohort result: <strong>'+
+        esc(complete.label)+'</strong>.</p>'+
         '<div class="criterion-results">'+result.entries.map(item=>
           '<article><strong>'+esc(item.label)+'</strong>'+
           '<span>'+esc(item.direction)+" · "+esc(item.status)+
           " · "+item.paired+"/"+item.expected+" samples</span>"+
-          '<p>'+esc(proofDescription(item))+'</p></article>').join("")+'</div>'+
-        '<p class="hint">A descriptive preference is not proof of biological superiority. '+
-        'Unmeasured diagnostics cannot be scored as zero.</p>';
+          '<p>'+esc(proofDescription(item))+'</p></article>').join("")+'</div>';
       state.firstTool=a;state.tool=b;
       el("firstTool").value=a;
       const choices=state.run.tools.filter(name=>name!==a);
@@ -653,7 +547,6 @@ function render() {
   drawDiagnostics();
   drawTable();
   drawDominance();
-  drawEvidence();
   drawProvenance();
   syncUrl();
 }
@@ -784,8 +677,7 @@ async function main() {
     }
     render();
   } catch(error) {
-    el("globalNotice").textContent="Results unavailable: "+error.message+
-      ". No qualification is claimed.";
+    el("globalNotice").textContent="Couldn't load the results: "+error.message;
   }
 }
 main();

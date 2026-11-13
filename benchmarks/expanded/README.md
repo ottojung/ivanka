@@ -117,6 +117,43 @@ biological simulator; measured real library profiles, quality-score
 calibration, read-start distribution, fragment-size mixture and systematic
 bias should later be added, and untouched cases locked for validation.
 
+## Source-attested fork MiCall qualification attempts
+
+Use the **dedicated branches and per-assembler images** from
+`ottojung/MiCall`, not runtime-patched variants or mutable image tags.
+For the same immutable image map of seven full SHA256 IDs, source
+checkout and independent attestation, the new fork-specific runners
+revalidate installed source and actual binary identities before launch:
+
+```sh
+python3 -m benchmarks.expanded.fork_micall_synthetic \
+  --data /path/to/verified-hxb2-400 \
+  --images /path/to/seven-immutable-image-ids.json \
+  --fork /path/to/ottojung-MiCall-fork-checkout \
+  --base <immutable-fork-base-image-id> \
+  --attestation /path/to/independent-fork-attestation.json \
+  --out /path/to/fresh-synthetic-results --jobs 10
+python3 -m benchmarks.expanded.fork_micall_real \
+  --data /path/to/frozen-original-real198 \
+  --images /path/to/seven-immutable-image-ids.json \
+  --fork /path/to/ottojung-MiCall-fork-checkout \
+  --base <immutable-fork-base-image-id> \
+  --attestation /path/to/independent-fork-attestation.json \
+  --out /path/to/fresh-real-results --jobs 10
+```
+
+The synthetic runner can resume using `--resume`, provided the original
+source manifest matches identically. It audits the previous results
+stream and recovers independently verified per-case checkpoints, and
+reclaims successful-arm scratch after scoring. Failed cases remain
+recorded as failures, not Ivanka wins. The real runner compares each
+competitor with a fresh original IVA control on the fixed 198 samples.
+Neither runner independently declares passing qualification: use the
+strict separate-cohort seven-way gate and obtain genuine complete
+successes, runtime evidence and 90% per-case alignment floors first.
+Use `--limit` (synthetic) or `--sample`/`--tools` (real) only for explicitly
+**unqualified** development smoke tests.
+
 ## Large benchmark scratch retention
 
 A 400-case seven-arm MiCall run produces substantial intermediate

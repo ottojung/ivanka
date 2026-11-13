@@ -41,7 +41,8 @@ def validate_public_site(site=SITE):
                  'id="subjectsCount"', 'id="firstTool"',
                  'id="diagnosticMatrix"', 'id="diagnosticMetric"',
                  'id="diagnosticExplanation"', 'id="diagnosticChart"',
-                 'id="singleDirection"'):
+                 'id="singleDirection"', 'id="psiExponent"',
+                 'id="psiMetric"', 'id="momentLegend"'):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
     if 'fetch("./data/mapping-diagnostics.json"' not in js:
@@ -87,6 +88,16 @@ def validate_public_site(site=SITE):
                 for marker in ('class="dom-preview"', 'class="dom-preview-row"',
                                'class="dom-scope-label"'))):
         raise ValueError("matrix must show a compact verdict and preserve detailed evidence")
+    if (any(option not in html for option in
+            ('<option value="all" selected>All</option>',
+             '<option value="0">0</option>',
+             '<option value="1">1</option>',
+             '<option value="2">2</option>')) or
+            'function moment(entry, exponent)' not in subjects or
+            'BenchSubjects.moment(' not in js or
+            'params.set("psi_r",state.psiExponent)' not in js or
+            'params.set("psi_metric",state.psiMetric)' not in js):
+        raise ValueError("matrix lacks checked-metric Ψ(0,1,2) numeric views")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
     if re.search(r"<script[^>]*src=[\"']https?://", html):

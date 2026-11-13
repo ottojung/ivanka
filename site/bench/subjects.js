@@ -119,12 +119,40 @@ const BenchSubjects = (() => {
       selectedSubjects:result.entries.length,
       description:observed.map(item=>item.label+": "+item.text).join("; ")};
   }
+  function moment(entry, exponent) {
+    // Ψ(r) is an average over PAIRED cases: p_i > 0 favours row A.
+    // Multiple metrics cannot be summed: their scales and units differ.
+    if (![0,1,2].includes(exponent) || !entry ||
+        !Number.isInteger(entry.paired) || entry.paired<1 ||
+        !Number.isInteger(entry.expected) || entry.paired>entry.expected)
+      return {value:null, paired:0, expected:entry?.expected||0};
+    const proof=entry.proof || entry.subset?.proof;
+    const direct=proof?.["psi"+exponent];
+    let value=Number.isFinite(direct) ? direct : null;
+    const counts=entry.observed;
+    const valid=counts && [counts.gains,counts.losses,counts.ties]
+      .every(x=>Number.isInteger(x)&&x>=0) &&
+      counts.gains+counts.losses+counts.ties===entry.paired;
+    if(value===null && valid) {
+      if(exponent===0)value=(counts.gains-counts.losses)/entry.paired;
+      if(exponent===1 && Number.isFinite(counts.mean_delta))
+        value=counts.mean_delta;
+      if(exponent===2 && entry.paired===1 &&
+          Number.isFinite(counts.mean_delta)) {
+        const d=counts.mean_delta;
+        value=d*Math.abs(d);
+      }
+    }
+    if(!Number.isFinite(value))value=null;
+    return {value,paired:entry.paired,expected:entry.expected,
+      observed:!["dominates","does-not-dominate"].includes(entry.status)};
+  }
   function evaluate(report, a, b, selected, snapshot) {
     const entries = selected.map(({key,direction,label}) => ({
       key,label,direction, ...criterion(report,a,b,key,direction,snapshot)
     }));
     return {status:conjunction(entries), entries};
   }
-  return {criterion,conjunction,evaluate,verdict,observedVerdict,evidence};
+  return {criterion,conjunction,evaluate,verdict,observedVerdict,evidence,moment};
 })();
 if (typeof module !== "undefined") module.exports = BenchSubjects;

@@ -135,10 +135,21 @@ measured positive Ψ on available subjects with others missing;
 **NO DATA** means no paired samples on any selected subject.
 **UNRESOLVED** is only for proof or comparison-direction uncertainty.
 
-The matrix fits seven assemblers in a compact grid. **YES is blue**
-and **NO is red**, including observed-subset verdicts; understated matching
-tints improve scanning. These colours describe pairwise mathematical
-dominance, **not** execution success or failure.
+The matrix has an **Ψ exponent** selector, defaulting to **All**.
+**All** retains strict all-exponent dominance on every checked metric,
+with YES (blue) / NO (red) and observed-subset qualifiers. Selecting
+**0**, **1**, or **2** instead shows the **signed Ψ(r) advantage** in
+each cell, for **one explicit, selected numeric metric**. This extra
+metric selector offers the checked metrics and prevents nonsensical
+sums of alignment, runtime, and diagnostic measurements with different
+units. Ψ(0) is average sign, Ψ(1) is the difference in paired means,
+and Ψ(2) is the mean signed squared difference. Positive values are
+blue, negative values red, and exact zero neutral. Numbers use at most
+four significant digits or concise scientific notation for extremes.
+In incomplete cohorts, **obs** marks values calculated on observed
+paired samples; unavailable measurements never become zero. The selected
+exponent and numeric metric are encoded in the page URL. These colours
+reflect the pairwise comparison, **not** tool execution success/failure.
 The detailed Measurement coverage chart appears near the bottom, after
 the comparisons and Ψ certificates, before reproducibility provenance.
 All subject labels, paired sample counts, row wins/losses/ties, proof

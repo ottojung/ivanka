@@ -109,6 +109,21 @@ the signed-power positivity check is exactly the sign of the single
 paired score difference. It may establish *observed one-case* dominance
 but never complete-cohort qualification.
 
+Add a matrix-view selector with exactly **All, 0, 1, 2**,
+defaulting to **All**. All preserves the multi-subject yes/no
+all-r dominance semantics above. When r is 0, 1, or 2, cells display
+signed Ψ(r) per observed paired comparison for **one separately chosen
+checked metric**, never an unprincipled sum across differently scaled
+metrics. Ψ(r) = mean(sign(p_i)|p_i|^r), with Ψ(0) the mean
+sign and Ψ(1) the mean paired difference. Ψ(2) is the mean signed
+square, not the square of the mean. Use certified values or verified
+observed-subset values; retain an **obs** qualifier for unqualified
+cohorts and show genuine missing/unresolved data explicitly. Colour
+positive values **blue**, negative **red**, and zero neutral; cap
+number formatting to readable significant digits without hiding
+small nonzero values. The selection and numeric subject must support
+shareable URL parameters; the All view remains the default.
+
 Keep subject-labelled row wins, losses, ties and *paired/expected*
 coverage in the **cell details, accessible description and independent
 analysis table**, not repeated as dense text in all 42 grid cells.

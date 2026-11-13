@@ -201,3 +201,23 @@ section.dominance,section.diagnostics{margin-top:61px}
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
   font-size:11px;white-space:nowrap;overflow-wrap:normal
 }
+
+.rank-trigger{width:100%;text-align:left;background:transparent;color:inherit;
+  border:1px solid transparent;border-radius:7px;font:inherit;cursor:pointer;padding:4px 5px}
+.rank-trigger:hover,.rank-trigger[aria-pressed="true"]{background:var(--surface-2,#22313d);border-color:var(--border)}
+.rank-trigger:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.rank-trigger .bar-track{display:block}
+.rank-trigger .bar-fill{display:block}
+.distribution-panel{margin-top:16px;padding:19px;background:var(--surface);
+  border:1px solid var(--border);border-radius:12px}
+.distribution-panel[hidden]{display:none}
+.distribution-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.distribution-head h3{font-size:16px;margin:0}
+.distribution-head button{border:1px solid var(--border);background:transparent;
+  color:var(--text);border-radius:6px;padding:6px 12px;cursor:pointer}
+.distribution-chart svg{display:block;width:100%;height:auto;max-height:335px}
+.distribution-chart svg text{fill:var(--muted);font-size:11px}
+.distribution-axis{stroke:var(--muted);stroke-width:1}
+.distribution-bin{fill:var(--blue);opacity:.45}
+.distribution-kde{fill:none;stroke:var(--cyan);stroke-width:3;stroke-linejoin:round}
+.distribution-legend{margin:1px 0 0;color:var(--muted);font-size:12px}

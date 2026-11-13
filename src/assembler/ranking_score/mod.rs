@@ -34,7 +34,11 @@ pub(super) fn ranked_candidates(
             .cmp(&a_protected)
             .then_with(|| b_span.cmp(&a_span))
             .then_with(|| {
-                span::compare(a_span && b_span, (a.1 .1, a.1 .0.len()), (b.1 .1, b.1 .0.len()))
+                span::compare(
+                    a_span && b_span,
+                    (a.1 .1, a.1 .0.len()),
+                    (b.1 .1, b.1 .0.len()),
+                )
             })
             .then_with(|| b.1 .1.cmp(&a.1 .1))
             .then_with(|| b.1 .0.len().cmp(&a.1 .0.len()))

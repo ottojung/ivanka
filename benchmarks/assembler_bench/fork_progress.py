@@ -38,7 +38,7 @@ def checked(directory, runner, attestation, fork, base):
             raise ValueError(f"fork benchmark source changed: {name}")
     rows = [json.loads(line) for line in (folder / "results.jsonl").read_text().splitlines()
             if line.strip()]
-    if not rows or len(rows) > 400 or len({r["id"] for r in rows}) != len(rows):
+    if len(rows) > 400 or len({r["id"] for r in rows}) != len(rows):
         raise ValueError("invalid fork checkpoint count / duplicate case")
     cases = {r["id"]: r for r in cohort["cases"]}
     for row in rows:

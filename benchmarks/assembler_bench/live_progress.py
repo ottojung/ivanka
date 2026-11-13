@@ -32,13 +32,13 @@ def update(site, fork, fork_runner, attestation, fork_repo, base,
     site = Path(site)
     target = site / "data/runs.json"
     public = json.loads(target.read_text())
+    old_run = next((r for r in public.get("runs", [])
+                    if r.get("cohort") == "synthetic"), None)
     fork_run = fork_preview(fork, fork_runner, attestation, fork_repo, base)
     public["runs"] = [fork_run]
     if real is not None:
         if real_data is None:
             raise ValueError("real benchmark requires frozen input manifest")
-        old_run = next((r for r in public.get("runs", [])
-                        if r.get("cohort") == "synthetic"), None)
         same_images = (old_run is not None
                        and old_run.get("images") == fork_run["images"])
         prior = (public.get("real_progress", {}).get("candidates", {})

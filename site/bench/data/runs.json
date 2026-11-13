@@ -7,8 +7,8 @@
         "finished": 0
       },
       "haploflow": {
-        "failed": 10,
-        "finished": 48
+        "failed": 11,
+        "finished": 49
       },
       "ivanka": {
         "failed": 0,
@@ -9430,8 +9430,8 @@
           "finished": 0
         },
         "haploflow": {
-          "failed": 10,
-          "finished": 48
+          "failed": 11,
+          "finished": 49
         },
         "ivanka": {
           "failed": 0,
@@ -13591,9 +13591,11 @@
         },
         {
           "alias": "R173",
-          "failures": [],
+          "failures": [
+            "haploflow"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": null,
             "haploflow": null,
@@ -24556,10 +24558,12 @@
         },
         {
           "alias": "R-R173",
-          "failures": [],
+          "failures": [
+            "haploflow"
+          ],
           "family": "Physical real",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": null,
             "haploflow": null,

@@ -3,6 +3,7 @@ import math
 import re
 
 from benchmarks.expanded.adapters import ASSEMBLERS
+from benchmarks.expanded.gate import SCORE_ORIGIN
 from .combined_public import (
     ID as COMBINED_ID, DEDICATED_ID as DEDICATED_COMBINED,
     preview as combined_preview)
@@ -75,6 +76,9 @@ def check_current(report):
                    if active == DEDICATED_EXPECTED
                    else (SYNTH_ID, REAL_ID, COMBINED_ID))
     synthetic, real, combined = (runs[name] for name in identifiers)
+    if any(run.get("score_origin") != SCORE_ORIGIN
+           for run in (synthetic, real, combined)):
+        raise ValueError("all three views require identical local scores")
     progress = report.get("real_progress")
     validate_public(progress)
     if (synthetic["cohort"] != "synthetic"
@@ -107,6 +111,6 @@ def check_current(report):
         if key == "dominance_matrix":
             continue
         if combined.get(key) != value:
-            raise ValueError("combined cohort is not a faithful normalized join")
+            raise ValueError("combined cohort does not preserve original alignment points")
     if real["source_manifest_sha256"] != progress["run_manifest_sha256"]:
         raise ValueError("physical cohort manifest lost authenticity")

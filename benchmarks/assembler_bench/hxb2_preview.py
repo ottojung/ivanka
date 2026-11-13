@@ -55,10 +55,14 @@ def checked_run(directory, source_root=None):
     base = (Path(source_root) if source_root else Path(__file__).resolve().parents[2]) / "benchmarks/expanded"
     required_sources = ("micall_synthetic.py", "micall_checkpoint.py",
                         "micall_synthetic_constants.py", "micall_lock.py",
-                        "micall_dominant.py", "score.py", "adapters.py",
-                        "hxb2_cohort.py")
+                        "micall_dominant.py", "micall_retention.py",
+                        "score.py", "adapters.py", "hxb2_cohort.py",
+                        "reference_panel.py",
+                        "project_references.py")
     if (set(sources) != set(required_sources)
-            or any(sha(base / name) != sources[name]
+            or any(sha((base.parent if name in
+                        ("reference_panel.py", "project_references.py")
+                        else base) / name) != sources[name]
                    for name in required_sources)):
         raise ValueError("benchmark source SHA attestation mismatch")
     # New instrumented manifests bind optional diagnostic source to its
@@ -132,7 +136,8 @@ def format_preview(manifest, records, result_hash, source_manifest_sha256):
             if part["status"] == "success":
                 number = part.get("score")
                 seconds = part.get("seconds")
-                if (type(number) not in (int, float) or not 0 <= number <= 1
+                if (type(number) not in (int, float)
+                        or not math.isfinite(number) or number < 0
                         or type(seconds) not in (int, float)
                         or not math.isfinite(seconds)
                         or not 0 < seconds <= 1800):

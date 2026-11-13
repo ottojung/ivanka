@@ -13,7 +13,7 @@ revisions, aligner settings or score definitions without a warning.
 ## Mandatory diagnostic catalog
 
 1. **End-to-end result:** final MiCall **dominant** sequence alignment
-   (real final MAX and synthetic withheld-truth similarity, separately),
+   (one shared maximum local-alignment scorer on final MAX sequences),
    final sequence lengths and resolved/unresolved bases, substitution,
    insertion/deletion and consensus error indicators where independent
    truth is available, genomic/reference span, percentage covered,
@@ -53,8 +53,9 @@ For every numeric quantity with a meaningful denominator, publish both
 the raw numerator and the denominator/density, plus consistent sample
 or genomic-position aggregation. Include distributions and worst outliers
 and allow filtering by any assembler, sample, family, project, cohort,
-failure mode and measurement stage. Keep incompatible scoring units in
-separate cohorts. If a source artifact is missing or malformed, record
+failure mode and measurement stage. Keep diagnostic metrics with
+different units separately defined. If a source artifact is missing
+or malformed, record
 **null/unavailable with reason**, never zero. A run may contain partial
 diagnostics while its outcome remains **failed or incomplete**.
 

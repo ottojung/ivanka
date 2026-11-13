@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 
 from benchmarks.expanded.adapters import ASSEMBLERS
+from benchmarks.expanded.gate import SCORE_ORIGIN
 from .real_progress import snapshot
 from .hxb2_preview import sha
 
@@ -118,6 +119,7 @@ def preview(root, data, runner, attestation, base, images, fork_provenance):
         "expanded_status": "incomplete", "eligible_for_expanded": False,
         "expected_sample_count": 198, "sample_count": len(samples),
         "tools": TOOLS, "images": images, "samples": samples, "psi": {},
+        "score_origin": SCORE_ORIGIN,
         "source_manifest_sha256": sha(Path(root) / "run_manifest.json"),
         "status_reason": ("Source-attested MiCall comparison of all seven "
                           "assemblers on the same 198 physical samples. "

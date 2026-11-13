@@ -60,12 +60,12 @@ class MiCallSyntheticTests(unittest.TestCase):
                 (output/"timing.json").write_text(json.dumps({
                     "timing_origin":TIMING_ORIGIN,"exit_code":0,"seconds":3.25}))
                 return Mock(returncode=0,stage="complete")
-            final={"score":0.91,"score_origin":SCORE_ORIGIN,
+            final={"score":48.0,"score_origin":SCORE_ORIGIN,
                    "dominant_exact":False,
                    "source":{"sequence_sha256":"b"*64}}
             with (patch("expanded.micall_synthetic.run_detached",
                         side_effect=fake_micall),
-                  patch("expanded.micall_synthetic.evaluate_final_dominant",
+                  patch("expanded.micall_synthetic.evaluate_final_alignment",
                         return_value=final),
                   patch("expanded.micall_synthetic.time.monotonic",
                         side_effect=[10,14,20])):
@@ -74,7 +74,7 @@ class MiCallSyntheticTests(unittest.TestCase):
             self.assertEqual(result["seconds"],3.25)
             self.assertEqual(result["container_wall_seconds"],4)
             self.assertEqual(result["total_wall_seconds"],10)
-            self.assertEqual(result["score"],0.91)
+            self.assertEqual(result["score"],48.0)
 
     def test_wrong_micall_timing_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:

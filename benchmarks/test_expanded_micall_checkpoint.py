@@ -33,7 +33,7 @@ def completed_row(folder, manifest, proof, images):
     for name in ASSEMBLERS:
         arm = folder / name
         arm.mkdir()
-        (arm / "conseq_all.csv").write_text("final sequence\n")
+        (arm / "conseq.csv").write_text("final sequence\n")
         (arm / "remap_counts.csv").write_text("final counts\n")
         record = {
             "status": "success", "score_origin": runner.SCORE_ORIGIN,
@@ -41,9 +41,8 @@ def completed_row(folder, manifest, proof, images):
             "sha256": images[name], "exit_code": 0,
             "seconds": 2.0, "score": 0.8,
             "final_dominant": {
-                "source_output": "conseq_all.csv",
-                "conseq_csv_sha256": digest(arm / "conseq_all.csv"),
-                "remap_counts_sha256": digest(arm / "remap_counts.csv"),
+                "source_output": "conseq.csv",
+                "conseq_csv_sha256": digest(arm / "conseq.csv"),
             },
         }
         (arm / "execution.json").write_text(json.dumps(record) + "\n")
@@ -73,7 +72,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
             for arm in ASSEMBLERS:
                 self.assertFalse((folder / arm / "scratch").exists())
                 self.assertTrue((folder / arm / "execution.json").exists())
-                self.assertTrue((folder / arm / "conseq_all.csv").exists())
+                self.assertTrue((folder / arm / "conseq.csv").exists())
 
     def test_tampered_final_output_prevents_any_scratch_pruning(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -83,7 +82,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
             row = completed_row(folder, manifest, proof, images)
             for arm in ASSEMBLERS:
                 (folder / arm / "scratch").mkdir()
-            (folder / "ivanka" / "conseq_all.csv").write_text("altered")
+            (folder / "ivanka" / "conseq.csv").write_text("altered")
             with self.assertRaisesRegex(ValueError, "modified cached"):
                 prune_case(home, row, images, proof)
             for arm in ASSEMBLERS:
@@ -129,7 +128,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
             row = completed_row(folder, manifest, proof, images)
             fields = identity("clonal-s000", manifest, proof)
             self.assertEqual(existing_case(folder, fields, images), row)
-            (folder / "ivanka/conseq_all.csv").write_text("tampered\n")
+            (folder / "ivanka/conseq.csv").write_text("tampered\n")
             with self.assertRaisesRegex(ValueError, "modified cached"):
                 existing_case(folder, fields, images)
 

@@ -33,8 +33,9 @@ offer tool-neutral selection, ordering, naming, filters, plots, tables,
 distributions, failure analysis, provenance and exports. A visitor can
 compare **any two** assemblers, study **all** contestants at once, and
 inspect each sample and cohort without implicitly assuming Ivanka wins.
-Show multiple distinct, source-defined measures without combining
-incompatible real/synthetic score scales or turning an optional
+Show source-defined measures with a shared final MAX
+local-alignment scoring method for both cohorts. Retain raw
+alignment points in the combined view, and do not turn an optional
 diagnostic into an additional biological acceptance gate.
 
 The interface must include the [all-pairs Ψ matrix](015-pairwise-psi-dominance.md)

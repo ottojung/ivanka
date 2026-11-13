@@ -291,7 +291,7 @@ function drawSubjectControls() {
   const groups=new Map([
     ["Qualification",[
       {key:"alignment",label:"Final MiCall alignment",direction:"higher",
-        description:"Maximum alignment of final MiCall MAX sequences to the reference panel."},
+        description:"Highest local-alignment score across final MiCall MAX sequences and the specified reference panel; match +1, mismatch −1, gap open −2, gap extension −1."},
       {key:"runtime",label:"MiCall runtime",direction:"lower",
         description:"Lower in-container MiCall monotonic duration in seconds. All reads and downstream processing must be comparable."}
     ]]

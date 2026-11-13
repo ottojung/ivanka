@@ -40,6 +40,8 @@ def manifest(data, proof, images, attestation_file, limit):
                here.with_name("micall_retention.py"),
                here.with_name("micall_dominant.py"),
                here.with_name("score.py"),
+               here.parents[1] / "reference_panel.py",
+               here.parents[1] / "project_references.py",
                here.parents[1] / "inside_container_timing.py",
                here.parents[1] / "assembler_bench/fork_image_attestation.py",
                here.parents[1] / "assembler_bench/dedicated_image_attestation.py",

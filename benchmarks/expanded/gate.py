@@ -1,7 +1,7 @@
 """Fail-closed 198-real + 400-synthetic, seven-assembler qualification gate.
 
-The two cohorts use *different* score semantics, so they must NEVER be
-pooled into a single unstratified PSI. All competitors must be executed.
+All arms use the same final MAX local-alignment score. Qualification
+requires full evidence from every assembler and both sample cohorts.
 """
 import argparse
 import json
@@ -19,10 +19,8 @@ BASELINES = tuple(name for name in ASSEMBLERS if name != "ivanka")
 SCORE_FLOOR = 0.90
 MAX_WALL = 1800
 # The gate scores downstream MiCall output, never the assembler's FASTA.
-SCORE_ORIGINS = {
-    "real": "micall_final_max_reference_panel_v1",
-    "synthetic": "micall_final_dominant_truth_v2",
-}
+SCORE_ORIGIN = "micall_final_max_reference_panel_v1"
+SCORE_ORIGINS = {"real": SCORE_ORIGIN, "synthetic": SCORE_ORIGIN}
 TIMING_ORIGIN = "micall_in_container_monotonic_v1"
 TRUTH_SCHEMA = "ivanka.hxb2_truth_validation.v1"
 

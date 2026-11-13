@@ -14,17 +14,14 @@ MiCall assembler comparison:
   SPAdes and Velvet. Every candidate is compared with a fresh IVA run.
   The current benchmark executes the six candidates sequentially;
   unavailable and not-yet-run measurements remain missing.
-- **Combined 598 cases:** an explicitly provisional comparison using
-  both cohorts. Synthetic similarity and real reference-panel points
-  have incompatible raw units. The combined view scales the score of
-  each case-arm by **the highest measured score for that case**. The
-  denominator can change when more rivals finish. Runtime stays in
-  seconds. Independent cohort-specific comparisons and mandatory gates
-  continue to use their own original, unscaled scores.
+- **Combined 598 cases:** the same final MiCall MAX local-alignment
+scores and timed seconds over all 598 cases, with the numeric scores
+preserved exactly. Every case uses the same local-alignment scorer:
+match +1, mismatch -1, gap-open -2, gap-extension -1, across all
+final MAX sequences. The synthetic reference panel is a single
+generating truth sequence. The physical reference panel contains
+the fixed project references. All values are raw alignment points.
 
-Historical, unattested, or obsolete benchmark results are **not**
-published in the current run list or selectable from the website.
-They may be preserved privately or in source history for research.
 
 ## Static progress publication
 
@@ -49,8 +46,8 @@ Each view shows seven assemblers even while some have zero results.
 The 23 diagnostic metrics (including CIGAR soft clipping, depth and
 contig summaries) include units, denominators and missing-data
 semantics. The one-case illustrative mapping diagnostic is taken
-from the **current source-attested synthetic checkpoint**, not from
-a legacy run; it never claims to represent all 400 cases.
+from a completed source-attested checkpoint; it does not claim
+to represent all 400 cases.
 
 The single-metric total ranking uses observed measurements only,
 with a clear denominator. The directed Ψ matrix allows independently
@@ -81,7 +78,7 @@ Before changing the public site, run:
     node --check site/bench/subjects.js
 
 The site builder independently recomputes all-pairs Ψ matrices,
-validates the complete normalized combined view against both
+validates the unchanged-score combined view against both
 underlying cohorts, checks diagnostic source values and denominators,
 and rejects source-attestation failures, false qualification or
 private metadata.
@@ -118,8 +115,7 @@ being carried over from older runs or falsely set to zero.
 ## Independent private expanded-gate evaluation
 
 The end-to-end 598-case qualification is reconstructed from immutable
-MiCall results, **not** from browser rankings or combined normalized
-scores. The source-pinned synthetic run is independently rechecked by
+MiCall results, **not** from browser rankings. The source-pinned synthetic run is independently rechecked by
 the fork checkpoint verifier. The complete physical-198 attempt must
 have six independently finished candidate runs. Its frozen original
 manifest, complete MiCall result/IVA controls, source hashes and
@@ -134,7 +130,7 @@ The tool reports **incomplete**, never a speculative pass, until
 all 400 synthetic cases and six full 198-case physical candidate arms
 are source-verified. It then uses the existing separate-cohort
 all-comparator strict signed-power PSI gate, including the 90% floor,
-rather than pooling incompatible score scales or using a partial
+without replacing missing observations or accepting a partial
 observed Ψ(0/1/2) preview. Raw physical sample identifiers are replaced
 with anonymous R001-style aliases before producing gate findings.
 Invalid source controls cannot yield a pass. Its report is a private

@@ -17,7 +17,10 @@ pub(super) fn alternatives(header: &str, sequence: &[u8], reads: &Reads) -> Opti
     let candidates = variants::build(header, sequence, overlap, start, end);
     eprintln!(
         "IVANKA_UNPHASED_JOIN {}-{} repeated={} variants={}",
-        start, end, overlap, candidates.len()
+        start,
+        end,
+        overlap,
+        candidates.len()
     );
     Some(candidates)
 }

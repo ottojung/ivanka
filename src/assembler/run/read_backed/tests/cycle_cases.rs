@@ -31,8 +31,13 @@ fn both_rotations_preserve_the_same_cyclic_source_bases() {
     assert_eq!(variants.len(), 2);
     assert_eq!(variants[0].1.len(), sequence.len());
     assert_eq!(variants[1].1.len(), sequence.len());
-    let expected = sequence[..298].iter().cycle()
-        .skip(105).take(300).copied().collect::<Vec<_>>();
+    let expected = sequence[..298]
+        .iter()
+        .cycle()
+        .skip(105)
+        .take(300)
+        .copied()
+        .collect::<Vec<_>>();
     assert_eq!(variants[0].1, expected);
     assert!(variants[0].0.contains("opening1"));
     assert!(variants[1].0.contains("opening2"));

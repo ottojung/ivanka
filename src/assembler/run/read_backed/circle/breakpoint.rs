@@ -1,6 +1,6 @@
 use super::support::SPAN;
 
-/// Accept one narrow, independently unsupported junction in a long cycle.
+/// Accept one bounded, independently unsupported junction in a long cycle.
 pub(super) fn locate(core: &[u8], mut present: impl FnMut(&[u8]) -> bool) -> Option<usize> {
     if core.len() < 2500 {
         return None;
@@ -16,11 +16,15 @@ pub(super) fn locate(core: &[u8], mut present: impl FnMut(&[u8]) -> bool) -> Opt
         first.get_or_insert(position);
         last = Some(position);
         count += 1;
-        if count > 32 {
+        if count > 2 * SPAN {
             return None;
         }
     }
-    let cut = first? + SPAN / 2;
+    let cut = first? + if count <= 32 {
+        SPAN / 2
+    } else {
+        (count + SPAN) / 2
+    };
     if count < 3 || cut < SPAN || cut > core.len() - SPAN {
         return None;
     }

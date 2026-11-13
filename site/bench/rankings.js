@@ -24,7 +24,8 @@ const BenchRanks = (() => {
   }
   function measurements(run,snapshot,key,tool) {
     if (!isCore(key)) {
-      if (run.archive) {
+      if (run.archive || (run.samples||[]).some(
+        sample=>sample.diagnostics && Object.keys(sample.diagnostics).length)) {
         return (run.samples||[]).flatMap(sample=>{
           const value=sample.diagnostics?.[tool]?.[key];
           return finite(value)&&!sample.failures?.includes(tool)
@@ -72,7 +73,8 @@ const BenchRanks = (() => {
       ?run.hxb2_truth_verified||run.cohort==="real"||run.cohort==="combined"
         ?run.samples.map(s=>({id:s.alias,detail:s}))
         :(run.families||[]).map(f=>({id:f.family,detail:f}))
-      :run.archive?run.samples.map(s=>({id:s.alias,detail:s}))
+      :run.archive || (run.samples||[]).some(s=>s.diagnostics)
+        ?run.samples.map(s=>({id:s.alias,detail:s}))
       :snapshot?.run_id===run.id?[{id:snapshot.sample_alias,detail:null}]:[];
     return all.map(row=>{
       const a=one.has(row.id)?one.get(row.id):null;

@@ -208,12 +208,20 @@ The input is `conseq.csv` with final MAX rows, **not** an assembled-contig
 FASTA and not `multimap_depth.csv`. Do not infer exact coverage from average
 Bowtie2 depth. On missing originals or failure, record `null` plus the
 error instead of pretending zero uncovered positions.
-**Existing sidecar limitation:** `produce_exact_coverage.py` currently
-writes only `exact_coverage` (the full-read track), not
-`exact_coverage_overlapped`. Intent 014 requires a later implementation
-to preserve and publish both tracks for every assembler, with explicit
-zero-coverage denominators and source hashes. Historical missing
-interior tracks are `unavailable`, never inferred or silently replaced.
+The sidecar emits both full-read and 70-base interior exact coverage
+tracks for the same longest final MiCall MAX consensus. The full track
+credits each entire exact read placement, including reverse complements.
+The interior track excludes 70 nucleotides from each end. Every sidecar
+records the two per-position coverage tracks, positional profiles,
+uncovered fractions and stretches, depth quantiles and breadth thresholds,
+and immutable source digests. Historical missing interior tracks remain
+unavailable, never inferred.
+
+The public publisher joins each retained numeric MiCall diagnostic with
+its verified anonymous sample and assembler. Exact coverage runs after
+the MiCall clock stops and is joined only when the frozen read, final
+consensus and image evidence matches. Missing SAM sources are unavailable;
+ordinary Q15 mapping breadth never substitutes for exact-read coverage.
 
 ### PSI for *every* optional scalar
 

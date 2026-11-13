@@ -115,7 +115,8 @@ class LiveProgressTests(unittest.TestCase):
         with (patch.object(fork_progress, "checked",
                            side_effect=AssertionError("second checkpoint read")),
               patch.object(fork_progress, "format_preview",
-                           return_value={"sample_count": 1}) as formatter,
+                           return_value={"sample_count": 1, "samples": [],
+                                     "tools": []}) as formatter,
               patch.object(fork_progress, "sha", return_value="d"*64),
               patch.object(fork_progress.subprocess, "check_output",
                            return_value="e"*40)):

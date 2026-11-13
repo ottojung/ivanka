@@ -44,8 +44,13 @@ def enrich(public):
                         and run.get("psi", {}).get("runtime", {}).get(
                             "positive_all_nonnegative") is True)
         count = run.get("expected_sample_count", run["sample_count"])
+        # The dashboard derives optional paired diagnostics on demand
+        # from their individually verified case values. Exhaustive server-side
+        # root searches for every catalog metric would make each live refresh
+        # grow quadratically with the catalog and tool count. Mandatory
+        # alignment/runtime proofs remain independently computed here.
         psi = matrix(rows_for(run), run["tools"], expected=count,
-                     eligible=is_real_pass, diagnostic_keys=CATALOG)
+                     eligible=is_real_pass)
         if is_real_pass:
             original = run["psi"]
             alignment = psi["metrics"]["alignment"]["Ivanka"]["IVA"]

@@ -10,6 +10,7 @@ from .combined_public import (
 from .real_public import ID as REAL_ID, DEDICATED_ID as DEDICATED_REAL
 from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
 from .real_progress import validate_public
+from .public_case_metrics import validate_sample
 
 SYNTH_ID = "hxb2-v4-fork-source-attested-live"
 DEDICATED_SYNTH = "hxb2-v4-dedicated-source-live"
@@ -34,8 +35,12 @@ def check_physical(run, progress):
         if not REAL_ALIAS.fullmatch(alias) or alias in seen:
             raise ValueError("physical sample alias unsafe or duplicated")
         seen.add(alias)
-        if (set(sample) != {"alias", "score", "seconds", "failures",
-                            "floor_ok", "outcome"}
+        validate_sample(sample, ASSEMBLERS)
+        if (set(sample) not in (
+                    {"alias", "score", "seconds", "failures",
+                     "floor_ok", "outcome"},
+                    {"alias", "score", "seconds", "failures",
+                     "floor_ok", "outcome", "diagnostics", "exact_profiles"})
                 or set(sample["score"]) != set(ASSEMBLERS)
                 or set(sample["seconds"]) != set(ASSEMBLERS)
                 or len(sample["failures"]) != len(set(sample["failures"]))

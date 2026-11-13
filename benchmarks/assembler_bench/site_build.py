@@ -10,6 +10,7 @@ from .publication import SCHEMA
 from .site_validation import check_mapping_snapshot, check_matrices
 from .public_fork_provenance import check as check_fork_provenance
 from .current_validation import check_current
+from .public_case_metrics import validate_sample
 from .history_validation import validate_archive_file
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -179,9 +180,13 @@ def verify_hxb2_preview(run):
             or len({sample.get("alias") for sample in samples}) != len(samples)):
         raise ValueError("incomplete HXB2 run has invalid sample count/aliases")
     for sample in samples:
+        validate_sample(sample, required)
         if (not HXB2_ALIAS.fullmatch(sample["alias"])
-                or set(sample) != {"alias", "family", "score", "seconds",
-                                   "failures", "outcome", "floor_ok"}
+                or set(sample) not in (
+                    {"alias", "family", "score", "seconds", "failures",
+                     "outcome", "floor_ok"},
+                    {"alias", "family", "score", "seconds", "failures",
+                     "outcome", "floor_ok", "diagnostics", "exact_profiles"})
                 or not re.fullmatch("[a-z0-9_]+", sample["family"])
                 or set(sample["score"]) != required
                 or set(sample["seconds"]) != required

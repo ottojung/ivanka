@@ -221,3 +221,12 @@ section.dominance,section.diagnostics{margin-top:61px}
 .distribution-bin{fill:var(--blue);opacity:.45}
 .distribution-kde{fill:none;stroke:var(--cyan);stroke-width:3;stroke-linejoin:round}
 .distribution-legend{margin:1px 0 0;color:var(--muted);font-size:12px}
+
+.exact-profile{fill:none;stroke-width:2.7;stroke-linejoin:round}
+.exact-profile.full{stroke:var(--blue)}
+.exact-profile.inner{stroke:var(--cyan)}
+.profile-full{color:var(--blue);font-weight:650}
+.profile-inner{color:var(--cyan);font-weight:650}
+#exactProfileChart{margin-top:20px;padding-top:13px;border-top:1px solid var(--border)}
+#exactProfileChart[hidden]{display:none}
+#exactProfileChart h4{font-size:14px;margin:0 0 10px}

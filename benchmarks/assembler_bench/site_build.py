@@ -10,6 +10,7 @@ from .publication import SCHEMA
 from .site_validation import check_mapping_snapshot, check_matrices
 from .dedicated_publication import check as check_dedicated
 from .public_fork_provenance import check as check_fork_provenance
+from .real_progress import validate_public as check_real_progress
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -141,6 +142,7 @@ def validate_public_site(site=SITE):
         if run["status"] == "incomplete":
             verify_hxb2_preview(run)
         check_fork_provenance(source, run)
+    check_real_progress(report.get("real_progress"))
     check_matrices(report)
     check_mapping_snapshot(source, report)
     check_dedicated(source)

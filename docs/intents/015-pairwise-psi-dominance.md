@@ -6,8 +6,12 @@ For each **eligible**, fixed, comparable cohort, independently evaluate
 **every ordered pair** of MiCall-integrated assemblers on the **same
 complete sample set**, not only Ivanka against other tools. A matrix
 cell at row A, column B answers *whether A dominates B* for the
-selected metric. Provide at least alignment, runtime, and a **joint**
-verdict that requires both to dominate.
+selected **checkbox-selected set of subjects**. Provide alignment,
+runtime, and **every measurement in the diagnostic catalog** as
+selectable subjects, with an arbitrary-size conjunction: **A dominates B
+on a selected set iff A strictly dominates B independently on *every*
+checked subject.** The earlier alignment+runtime joint result remains
+the default selection, not a permanently hardcoded third metric.
 
 For sample i, define:
 
@@ -15,6 +19,14 @@ For sample i, define:
   final_MiCall_alignment(B,i)`.
 - **Runtime:** `p_i = runtime(B,i) - runtime(A,i)`, where lower
   verified MiCall runtime is better.
+- **Any diagnostic metric:** `p_i = metric(A,i) - metric(B,i)`
+  when higher is *explicitly* preferred, or `p_i = metric(B,i) -
+  metric(A,i)` when lower is explicitly preferred. Each diagnostic
+  has a visible definition, unit, sampling stage and denominator.
+  Fewer soft clips, more contigs or greater raw depth are **not
+  intrinsically biologically better**. Expose a higher/lower preference
+  selector for diagnostic subjects; an unspecified direction cannot
+  produce a positive dominance verdict.
 - **Signed power:** `Ψ_{A,B}(r) = Σ sign(p_i)|p_i|^r / n`, for
   **every real r ≥ 0**. Ties contribute zero, also at `r=0`.
 
@@ -37,10 +49,25 @@ passing via a different cohort. Compute the reverse pair directly
 and do not presume a total order, antisymmetry, transitivity or
 absence of cycles.
 
+A selected-subjects conjunction is **disproven** when any included,
+independently certified metric has a real counterexample. It is
+**incomplete** when no disproof exists but at least one metric lacks
+complete same-case evidence; it is **unresolved** when only numerical
+uncertainty or undefined direction prevents a verdict. It is **dominates**
+only when *all* selected subjects are independently certified positive
+for every r≥0. A one-case diagnostic preview cannot produce a valid
+400-case Ψ proof; the UI must show it as incomplete. Include support
+for precomputing the two directions of every diagnostic using the same
+independent all-r prover, without using averages or browser-side
+approximations to assert dominance.
+
 The matrix and proof evidence must be visible under public
 [`/bench/`](007-assembler-bench.md), not only in JSON.
-Allow selection of cohort, alignment/runtime/joint metric, row and
-column, and cell drill-down with gain/loss/tie counts, full pairing
+Allow a searchable **checkbox list of alignment, runtime and all
+available diagnostic metrics**, a per-diagnostic preference selector,
+cohort selection, independent row/column selection, and cell drill-down
+with the **status and proof of each selected subject** and gain/loss/tie
+counts, full pairing
 status, `Ψ(0), Ψ(1), Ψ(2), Ψ(+∞)`, minima/zeros or explicit
 counterexamples, worst-regression examples, tool/source commits
 and image IDs. An independently established dominating row may

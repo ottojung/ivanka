@@ -6,6 +6,7 @@ import re
 
 from .public_dominance import enrich
 from .public_metrics import CATALOG, SCHEMA as DIAGNOSTIC_SCHEMA
+from .metric_explanations import INFO
 
 SHA = re.compile(r"^[a-f0-9]{64}$")
 
@@ -46,7 +47,9 @@ def check_mapping_snapshot(site, report):
         raise ValueError("unverified or incomplete diagnostic snapshot")
     for metric, (label, unit) in CATALOG.items():
         if snapshot["metric_catalog"][metric] != {
-                "label": label, "unit": unit}:
+                "label": label, "unit": unit, "description": INFO[metric][0],
+                "denominator": INFO[metric][1], "stage": INFO[metric][2],
+                "suggested_direction": INFO[metric][3]}:
             raise ValueError("diagnostic unit or label drift")
     for name, arm in snapshot["tools"].items():
         data = arm.get("values", {})

@@ -22,24 +22,37 @@ SECRET = re.compile(r"/workspace/|/home/|_R[12]_[0-9]{3}|"
 
 def validate_public_site(site=SITE):
     source = Path(site)
-    required = ("index.html", "style.css", "app.js", "data/runs.json",
+    required = ("index.html", "style.css", "subjects.js", "app.js",
+                "data/runs.json",
                 "data/mapping-diagnostics.json")
     if any(not (source / name).is_file() for name in required):
         raise ValueError("incomplete /bench site assets")
     html = (source / "index.html").read_text()
     js = (source / "app.js").read_text()
-    for link in ('href="./style.css"', 'src="./app.js"',
+    for link in ('href="./style.css"', 'src="./subjects.js"',
+                 'src="./app.js"',
                  'id="runSelect"', 'id="resultRows"',
                  'id="comparisonChart"', 'id="evidenceContent"',
                  'id="detailPanel"', 'id="dominanceMatrix"',
-                 'id="dominanceMetric"', 'id="firstTool"',
-                 'id="diagnosticMatrix"', 'id="diagnosticMetric"'):
+                 'id="dominanceSubjects"', 'id="subjectSearch"',
+                 'id="subjectsCount"', 'id="firstTool"',
+                 'id="diagnosticMatrix"', 'id="diagnosticMetric"',
+                 'id="diagnosticExplanation"', 'id="diagnosticChart"'):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
     if 'fetch("./data/mapping-diagnostics.json"' not in js:
         raise ValueError("mapping report must be fetched from same origin")
-    if 'function drawDominance()' not in js or 'function drawDiagnostics()' not in js:
-        raise ValueError("public site lacks all-pairs matrix or metric reviewer")
+    if (any(name not in js for name in
+            ("function drawDominance()", "function drawDiagnostics()",
+             "function drawSubjectControls()", "function selectedSubjects()",
+             "definition.description", "definition.denominator",
+             "state.diagnostics?.metric_catalog"))):
+        raise ValueError("public site lacks checkbox subjects or metric explanations")
+    subjects = (source / "subjects.js").read_text()
+    if (any(name not in subjects for name in
+            ("function conjunction(", "function criterion(", "does-not-dominate",
+             "incomplete", "unresolved"))):
+        raise ValueError("public matrix subject conjunction is not fail-closed")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
     if re.search(r"<script[^>]*src=[\"']https?://", html):

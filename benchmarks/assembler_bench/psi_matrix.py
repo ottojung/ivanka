@@ -20,12 +20,18 @@ def _entry(rows, name, other, metric, expected, eligible):
             continue
         if a.get("status") != "success" or b.get("status") != "success":
             continue
-        key = "score" if metric == "alignment" else "seconds"
-        x, y = a.get(key), b.get(key)
+        if metric.startswith("diagnostic:"):
+            _, key, direction = metric.split(":")
+            x = a.get("diagnostics", {}).get(key)
+            y = b.get("diagnostics", {}).get(key)
+        else:
+            key = "score" if metric == "alignment" else "seconds"
+            x, y = a.get(key), b.get(key)
+            direction = "higher" if metric == "alignment" else "lower"
         if (type(x) not in (int, float) or type(y) not in (int, float)
                 or not math.isfinite(x) or not math.isfinite(y)):
             continue
-        pairs.append(x-y if metric == "alignment" else y-x)
+        pairs.append(x-y if direction == "higher" else y-x)
     base = {"status": "incomplete", "paired": len(pairs),
             "expected": expected, "proof": None}
     if not eligible or len(rows) != expected or len(pairs) != expected:
@@ -54,7 +60,7 @@ def _joint(score, runtime, expected):
             "proof": {"alignment": score["proof"], "runtime": runtime["proof"]}}
 
 
-def matrix(rows, tools, *, expected, eligible):
+def matrix(rows, tools, *, expected, eligible, diagnostic_keys=()):
     """Row A versus column B; never infer transitivity or use a baseline."""
     rows, tools = list(rows), list(tools)
     if (not tools or len(tools) != len(set(tools))
@@ -62,13 +68,21 @@ def matrix(rows, tools, *, expected, eligible):
         raise ValueError("invalid assembler set or expected cohort")
     if len(rows) != len({row.get("id") for row in rows}):
         raise ValueError("duplicate sample identifier")
-    grid = {metric: {} for metric in METRICS}
+    # Only materialize additional proof grids when actual independently
+    # sourced per-case diagnostic measurements exist. A one-case summary
+    # cannot be promoted into a complete cohort's proof.
+    present = {key for row in rows for result in row.get("results", {}).values()
+               for key in result.get("diagnostics", {})}
+    extras = tuple("diagnostic:" + key + ":" + direction
+                   for key in diagnostic_keys if key in present
+                   for direction in ("higher", "lower"))
+    grid = {metric: {} for metric in (*METRICS, *extras)}
     for a in tools:
-        for metric in METRICS:
+        for metric in grid:
             grid[metric][a] = {}
         for b in tools:
             if a == b:
-                for metric in METRICS:
+                for metric in grid:
                     grid[metric][a][b] = {
                         "status": "self", "paired": 0, "expected": expected,
                         "proof": None}
@@ -78,6 +92,9 @@ def matrix(rows, tools, *, expected, eligible):
             grid["alignment"][a][b] = score
             grid["runtime"][a][b] = runtime
             grid["joint"][a][b] = _joint(score, runtime, expected)
+            for metric in extras:
+                grid[metric][a][b] = _entry(
+                    rows, a, b, metric, expected, eligible)
     return {"schema": SCHEMA, "tools": tools, "expected_samples": expected,
             "observed_samples": len(rows), "cohort_eligible": bool(eligible),
             "direction": "row-dominates-column",

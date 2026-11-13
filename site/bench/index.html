@@ -7,6 +7,7 @@
   <meta name="description" content="Assembler Bench — independent MiCall assembler evaluation, quantitative diagnostics and all-versus-all mathematical comparisons.">
   <title>Assembler Bench · Comparative MiCall evaluation</title>
   <link rel="stylesheet" href="./style.css">
+  <script src="./subjects.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -57,16 +58,18 @@
         <div class="plot" id="comparisonChart" aria-live="polite"></div>
       </section>
       <section class="dominance" aria-label="Pairwise signed-power PSI dominance">
-        <div class="section-heading"><div><span class="overline">03 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div>
-          <label>COMPARE METRIC
-            <select id="dominanceMetric" aria-label="Select dominance metric">
-              <option value="joint">Alignment and runtime</option>
-              <option value="alignment">Alignment</option>
-              <option value="runtime">Runtime</option>
-            </select>
-          </label>
+        <div class="section-heading"><div><span class="overline">03 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div></div>
+        <p class="subtle">Select the subjects whose <strong>joint dominance</strong> you want to test. Each checked subject must be strictly positive for every real r ≥ 0 over exactly the same complete, eligible cases. Row A versus column B.</p>
+        <div class="subject-panel">
+          <div class="subject-header">
+            <label for="subjectSearch">FIND SUBJECT<input id="subjectSearch" type="search" placeholder="Clips, coverage, concordance…" autocomplete="off"></label>
+            <div class="subject-buttons"><button type="button" id="selectSubjects">Select all</button><button type="button" id="clearSubjects">Clear</button></div>
+            <span id="subjectsCount" role="status">2 subjects selected</span>
+          </div>
+          <fieldset id="dominanceSubjects" class="subject-list"><legend>Dominance subjects (checkboxes)</legend></fieldset>
+          <p class="hint">Diagnostics with no naturally beneficial direction require you to choose <em>higher</em> or <em>lower</em> as a preference. Fewer soft clips, more depth, or more contigs do not alone prove a biologically superior assembly. Historical snapshots with only one case cannot certify full-cohort Ψ.</p>
         </div>
-        <p class="subtle">Row assembler versus column assembler. Dominance requires strict Ψ(r) &gt; 0 for <strong>every real r ≥ 0</strong> on the complete, eligible cohort. Incomplete or ineligible data cannot establish any dominance.</p>
+        <p class="subtle" id="dominanceContext"></p>
         <div class="table-scroll" id="dominanceMatrix"></div>
         <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>
       </section>
@@ -76,7 +79,9 @@
             <select id="diagnosticMetric" aria-label="Select mapping metric"></select>
           </label>
         </div>
-        <p class="subtle" id="diagnosticContext">Detailed MiCall mapping and clipping metrics are shown when retained alignment evidence is available. Missing data is not a zero measurement.</p>
+        <div class="metric-explanation" id="diagnosticExplanation" role="region" aria-live="polite"></div>
+        <p class="subtle" id="diagnosticContext">Choose a metric for its definition, units, denominator and results. Missing data is not zero.</p>
+        <div class="diagnostic-plot" id="diagnosticChart" aria-label="Selected diagnostic metric across assemblers"></div>
         <div class="table-scroll" id="diagnosticMatrix"></div>
       </section>
       <section class="evidence" aria-label="Independent mathematical qualification">

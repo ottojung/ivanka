@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 from .psi_matrix import matrix
+from .public_metrics import CATALOG
 
 
 def rows_for(run):
@@ -22,7 +23,8 @@ def rows_for(run):
             tools[name] = {
                 "status": "success" if valid and not failed
                           and sample.get("outcome") == "success" else "failed",
-                "score": score, "seconds": runtime}
+                "score": score, "seconds": runtime,
+                "diagnostics": sample.get("diagnostics", {}).get(name, {})}
         result.append({"id": sample.get("alias", str(number)),
                        "results": tools})
     return result
@@ -41,7 +43,7 @@ def enrich(public):
                             "positive_all_nonnegative") is True)
         count = run.get("expected_sample_count", run["sample_count"])
         psi = matrix(rows_for(run), run["tools"], expected=count,
-                     eligible=is_real_pass)
+                     eligible=is_real_pass, diagnostic_keys=CATALOG)
         if is_real_pass:
             original = run["psi"]
             alignment = psi["metrics"]["alignment"]["Ivanka"]["IVA"]

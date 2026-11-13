@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 from .sam_metrics import public_diagnostics
+from .metric_explanations import INFO
 
 SCHEMA = "assembler-bench.public-mapping-diagnostics.v1"
 CATALOG = {
@@ -90,8 +91,11 @@ def checked_snapshot(source, public):
             "note": ("One fully verified completed example only; not a "
                      "400-case cohort or seven-way qualification. Current "
                      "image fork-commit provenance is not yet verified."),
-            "metric_catalog": {key: {"label": label, "unit": unit}
-                               for key, (label, unit) in CATALOG.items()},
+            "metric_catalog": {
+                key: {"label": label, "unit": unit, "description": INFO[key][0],
+                      "denominator": INFO[key][1], "stage": INFO[key][2],
+                      "suggested_direction": INFO[key][3]}
+                for key, (label, unit) in CATALOG.items()},
             "tools": metrics}
 
 

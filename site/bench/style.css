@@ -29,3 +29,46 @@ section.dominance,section.diagnostics{margin-top:61px}
 .diag-table th:first-child{min-width:120px}
 .diag-table td{text-align:right;font-size:12px;white-space:nowrap}
 @media(max-width:700px){.dominance .section-heading,.diagnostics .section-heading{align-items:start;flex-direction:column}.dominance .section-heading label,.diagnostics .section-heading label{width:100%}}
+/* Assemble independent Ψ subjects; every additional checkbox is conjunctive. */
+[hidden]{display:none!important}
+.subject-panel{background:var(--surface);border:1px solid var(--border);padding:22px;border-radius:13px;margin-bottom:19px}
+.subject-header{display:flex;align-items:end;gap:17px;flex-wrap:wrap}
+.subject-header>label{flex:1 1 260px;display:flex;flex-direction:column;gap:8px}
+.subject-header input{background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:11px}
+.subject-buttons{display:flex;gap:7px}
+.subject-buttons button{background:var(--elev);border:1px solid var(--border);border-radius:7px;color:var(--cyan);padding:10px 13px;cursor:pointer;font-size:12px}
+.subject-buttons button:hover,.subject-buttons button:focus-visible{border-color:var(--cyan)}
+#subjectsCount{color:var(--muted);font-size:12px;white-space:nowrap;padding-bottom:10px}
+.subject-list{margin:19px 0 10px;border:0;padding:0;min-width:0;max-height:400px;overflow:auto}
+.subject-list legend{color:var(--muted);font-size:12px;font-weight:650}
+.subject-group{margin:14px 0}
+.subject-group h3{font-size:12px;color:var(--cyan);margin:12px 0 8px;letter-spacing:.04em}
+.subject-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.subject-option{display:flex;align-items:center;justify-content:space-between;min-width:0;gap:9px;padding:9px 10px;border:1px solid #304657;border-radius:7px;background:#0e1a25}
+.subject-option label{color:var(--text);display:flex;align-items:center;gap:8px;letter-spacing:0;font-size:12px;font-weight:500;cursor:pointer;min-width:0}
+.subject-option input{accent-color:var(--cyan);width:16px;height:16px;flex:none;cursor:pointer}
+.subject-option select{font-size:11px;min-width:0;width:138px;max-width:45%;padding:5px;color:var(--muted);border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer}
+.subject-direction{font-size:10px;color:var(--muted);flex:none}
+#dominanceContext{line-height:1.7;margin:16px 0}
+.criterion-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:15px 0}
+.criterion-results article{background:#0f2430;border:1px solid var(--border);padding:13px;border-radius:8px;min-width:0}
+.criterion-results article strong{display:block;font-size:13px}
+.criterion-results article span{font-size:11px;color:var(--amber)}
+.criterion-results article p{overflow-wrap:anywhere;margin:7px 0 0}
+.metric-explanation{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:21px;margin-bottom:15px}
+.metric-explanation-head{display:flex;justify-content:space-between;align-items:center;gap:14px}
+.metric-explanation h3{font-size:19px;margin:0}
+.metric-explanation-head span{color:var(--cyan);font-size:12px;font-weight:650}
+.metric-explanation>p{font-size:14px;max-width:890px}
+.metric-explanation dl{display:grid;grid-template-columns:160px 1fr;gap:7px 18px;margin:14px 0 17px;font-size:12px}
+.metric-explanation dt{color:var(--muted);font-weight:700}
+.metric-explanation dd{margin:0}
+.diagnostic-plot{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:16px}
+.diagnostic-plot h3{font-size:15px;margin:0 0 19px}
+.diagnostic-plot h3 small{color:var(--muted);font-weight:normal}
+.diagnostic-plot .bar-line{margin:10px 0}
+.diagnostic-plot .bar-value{width:auto}
+.diag-table td{text-align:left}
+.diag-table td:nth-child(2){font-weight:650;color:var(--cyan);font-variant-numeric:tabular-nums}
+@media(max-width:820px){.subject-options{grid-template-columns:1fr}.criterion-results{grid-template-columns:1fr}}
+@media(max-width:520px){.subject-header{align-items:stretch}.subject-option select{width:118px}.metric-explanation dl{grid-template-columns:1fr}.metric-explanation dd{margin-bottom:7px}}

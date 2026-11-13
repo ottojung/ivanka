@@ -15,6 +15,25 @@ class ForkRealRunnerTests(unittest.TestCase):
         self.images={name:f"{n+1:x}"*64
                      for n,name in enumerate(ASSEMBLERS)}
 
+    def test_fresh_manifest_pins_dedicated_attestation_verifier_sources(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            data=root/"data"
+            data.mkdir()
+            (data/"manifest.tsv").write_text("frozen-manifest")
+            attestation=root/"att.json"
+            attestation.write_text("{}")
+            with patch.object(runner,"validate_real",return_value=MANIFEST):
+                report=runner.source_manifest(
+                    data,self.images,attestation,"a"*64,None,
+                    [name for name in ASSEMBLERS if name!="iva"])
+            for name in ("image_source_attestation.py",
+                         "dedicated_image_attestation.py",
+                         "fork_image_attestation.py"):
+                self.assertIn(name,report["source_files_sha256"])
+
     def test_all_six_tools_are_required_for_full_attempt(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)

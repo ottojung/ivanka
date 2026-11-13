@@ -129,14 +129,14 @@ revalidate installed source and actual binary identities before launch:
 python3 -m benchmarks.expanded.fork_micall_synthetic \
   --data /path/to/verified-hxb2-400 \
   --images /path/to/seven-immutable-image-ids.json \
-  --fork /path/to/ottojung-MiCall-fork-checkout \
+  --fork /path/to/seven-dedicated-source-roots.json \
   --base <immutable-fork-base-image-id> \
   --attestation /path/to/independent-fork-attestation.json \
   --out /path/to/fresh-synthetic-results --jobs 10
 python3 -m benchmarks.expanded.fork_micall_real \
   --data /path/to/frozen-original-real198 \
   --images /path/to/seven-immutable-image-ids.json \
-  --fork /path/to/ottojung-MiCall-fork-checkout \
+  --fork /path/to/seven-dedicated-source-roots.json \
   --base <immutable-fork-base-image-id> \
   --attestation /path/to/independent-fork-attestation.json \
   --out /path/to/fresh-real-results --jobs 10
@@ -565,3 +565,19 @@ downstream base, the native Ivanka ELF and IVA's compatible samtools.
 Preserve the resulting hashed attestation alongside run inputs.
 Historical patched/upstream images must never be renamed as compliant
 or treated as evidence for the new full-cohort gate.
+
+
+## Branch-specific qualification attestation
+
+For full qualification, supply a JSON file mapping the seven assembler
+names to clean, published, exact-commit fork branch checkouts using the
+--fork argument. Use a matching live-verified attestation created by
+benchmarks.assembler_bench.dedicated_image_attestation, and exact pinned
+image IDs for the seven branch-built images. The dedicated verifier
+checks source commits, branches, the shared MiCall base, installed
+downstream modules, executable hashes, tool isolation, and OCI layers.
+
+Legacy single-commit fork attestations can only be used as diagnostic
+historical evidence; they do not satisfy the mandatory dedicated
+branch and container requirement. Never substitute shared-commit
+images for distinct branch-built images in a qualifying 598-case run.

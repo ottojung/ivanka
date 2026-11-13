@@ -57,7 +57,10 @@ def source_manifest(data, images, attestation_file, base, sample, selected):
     root = Path(__file__).resolve()
     source = [root, root.parents[1]/"podman_full_micall.py",
               root.parents[1]/"fork_micall_binding.py",
-              root.with_name("real_matrix.py")]
+              root.with_name("real_matrix.py"),
+              root.parents[1]/"assembler_bench/image_source_attestation.py",
+              root.parents[1]/"assembler_bench/dedicated_image_attestation.py",
+              root.parents[1]/"assembler_bench/fork_image_attestation.py"]
     return {
         "schema": SCHEMA,
         "qualified": False, "status": "ATTEMPTED_NOT_QUALIFIED",

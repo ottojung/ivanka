@@ -363,10 +363,12 @@ function drawProvenance() {
     '<p class="hint">Every image below is the actual source-attested '+
     'MiCall fork image recorded for this comparison.</p>'+
     '<div class="table-scroll"><table class="dedicated-table"><thead><tr>'+
-    '<th>Assembler</th><th>Fork source commit</th>'+
-    '<th>Immutable image ID</th></tr></thead><tbody>'+
+    '<th>Assembler</th><th>Dedicated fork branch</th>'+
+    '<th>Fork source commit</th><th>Immutable image ID</th></tr></thead><tbody>'+
     Object.entries(inventory).map(([name,item])=>
       '<tr><th>'+esc(names[name]||name)+'</th>'+
+      '<td>'+esc(item.source_branch||
+        "Common source commit (not dedicated)")+'</td>'+
       '<td><a target="_blank" rel="noopener noreferrer" href="'+
         esc(item.source_url)+'">'+esc(item.source_commit.slice(0,12))+
       '</a></td><td class="code-hash" title="'+

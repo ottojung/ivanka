@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import re
 
-from benchmarks.assembler_bench.fork_image_attestation import verify
+from benchmarks.assembler_bench.image_source_attestation import verify
 
 VARIABLES = (
     "IVANKA_FORK_SOURCE_ATTESTATION",
@@ -41,7 +41,8 @@ def check(image, competitor=None, environ=None):
         raise ValueError("fork mode requires four explicit attestation inputs")
     attested = json.loads(Path(env[VARIABLES[0]]).read_text())
     images = json.loads(Path(env[VARIABLES[2]]).read_text())
-    result = verify(images, env[VARIABLES[3]], env[VARIABLES[1]])
+    result = verify(images, env[VARIABLES[0]],
+                    env[VARIABLES[1]], env[VARIABLES[3]])
     if result != attested:
         raise ValueError("live fork source audit differs from frozen attestation")
     name = competitor or "ivanka"
@@ -52,5 +53,5 @@ def check(image, competitor=None, environ=None):
             != expected):
         raise ValueError(f"{name}: candidate image differs from verified fork ID")
     return {"tool": name, "image_id": expected,
-            "fork_commit": result["source_commit"],
-            "fork_url": result["source_url"]}
+            "fork_commit": result["images"][name]["source_commit"],
+            "fork_url": result["images"][name]["source_url"]}

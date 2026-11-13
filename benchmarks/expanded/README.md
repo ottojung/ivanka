@@ -550,3 +550,22 @@ Legacy single-commit fork attestations can only be used as diagnostic
 historical evidence; they do not satisfy the mandatory dedicated
 branch and container requirement. Never substitute shared-commit
 images for distinct branch-built images in a qualifying 598-case run.
+
+## Requalifying one changed Ivanka executable
+
+When Ivanka changes but the other six MiCall assembler images are
+identical, python3 -m benchmarks.expanded.fork_ivanka_requalification
+executes **only** the newly source-attested Ivanka image. Before any
+execution it verifies all seven dedicated MiCall branches, installed
+image and binary hashes, cohort truth evidence, and the exact Rust
+source commit embedded in the Ivanka image. This full-MiCall runner
+retains the original final MAX alignment point score and monotonic
+in-container runtime, with immutable case checkpoints and an exact
+image/runner manifest for safe resume.
+
+The resulting one-arm evidence is **not** a seven-way benchmark pass.
+Unchanged rival executions can be reused only after checking their
+original image IDs, tool outputs, source attestation, frozen input
+hashes and cohort identities. A separately verified seven-way join,
+not this runner, is responsible for all-r Psi and floor qualification.
+No archived case is silently rebadged as a fresh execution.

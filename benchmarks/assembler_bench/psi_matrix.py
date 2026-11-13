@@ -37,7 +37,8 @@ def _entry(rows, name, other, metric, expected, eligible):
     observed = {"gains": sum(x > 0 for x in pairs),
                 "losses": sum(x < 0 for x in pairs),
                 "ties": sum(x == 0 for x in pairs),
-                "mean_delta": sum(pairs) / len(pairs) if pairs else None}
+                "mean_delta": round(math.fsum(pairs) / len(pairs), 12)
+                if pairs else None}
     base = {"status": "incomplete", "paired": len(pairs),
             "expected": expected, "proof": None, "observed": observed}
     if not eligible or len(rows) != expected or len(pairs) != expected:

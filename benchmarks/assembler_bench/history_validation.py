@@ -6,7 +6,7 @@ from pathlib import Path
 
 from benchmarks.expanded.adapters import ASSEMBLERS
 from benchmarks.expanded.micall_dominant import SCORE_ORIGIN
-from .archive_sources import digest, is_hash
+from .archive_sources import is_hash
 from .hxb2_preview import COHORT_SHA
 from .psi_matrix import matrix
 from .public_dominance import rows_for

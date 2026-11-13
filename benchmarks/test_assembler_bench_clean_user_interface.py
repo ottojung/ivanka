@@ -1,6 +1,4 @@
 """A compact, user-oriented site with one complete build provenance table."""
-import json
-from pathlib import Path
 import shutil
 import subprocess
 import unittest

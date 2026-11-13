@@ -10,7 +10,6 @@ from .combined_public import (
 from .real_public import ID as REAL_ID, DEDICATED_ID as DEDICATED_REAL
 from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
 from .real_progress import validate_public
-from .site_validation import SHA
 
 SYNTH_ID = "hxb2-v4-fork-source-attested-live"
 DEDICATED_SYNTH = "hxb2-v4-dedicated-source-live"

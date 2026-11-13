@@ -5,7 +5,6 @@ from pathlib import Path
 
 from benchmarks.expanded.adapters import ASSEMBLERS
 from benchmarks.expanded.micall_dominant import SCORE_ORIGIN
-from .hxb2_preview import COHORT_SHA
 from .public_metrics import CATALOG
 
 TOOLS = list(ASSEMBLERS)

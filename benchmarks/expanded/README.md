@@ -497,3 +497,32 @@ downstream base, the native Ivanka ELF and IVA's compatible samtools.
 Preserve the resulting hashed attestation alongside run inputs.
 Historical patched/upstream images must never be renamed as compliant
 or treated as evidence for the new full-cohort gate.
+
+### New fork-source-verified seven-arm MiCall synthetic runner
+
+The historical MiCall synthetic runner is retained unchanged for exact
+source-hash replay of its previous exploratory results. All new
+Intent-011-compliant HXB2 runs use a separate entry point:
+
+    python3 -m benchmarks.expanded.fork_micall_synthetic \
+      --data /private/hxb2-v4-400 \
+      --out /private/fork39c-synthetic \
+      --images /private/immutable-seven-images.json \
+      --attestation /private/independent-fork-oci-attestation.json \
+      --fork /path/to/clean/ottojung-MiCall \
+      --base FULL_IMMUTABLE_FORK_MICALL_BASE_IMAGE_ID \
+      --jobs 5 --timeout 1800
+
+On every invocation, the tool recomputes independent installed
+source, binary and OCI image audit against frozen external attestation.
+It independently validates all 400 HXB2 truths and mate FASTQ
+fingerprints even for a one-case development smoke run. No reference
+or truth enters an assembler. Final MiCall dominant consensus scores
+and in-container monotonic timings remain unchanged. Each case commits
+all seven tools atomically; --resume checks source, images, inputs,
+and completed case evidence. Interrupted trials are archived.
+
+The results and attempt summary remain NOT QUALIFIED until independent
+complete 198-real and 400-HXB2 seven-way PSI gates succeed. Failing
+competitors, missing samples, old upstream-built images, or a one-case
+development limit cannot bypass these gates.

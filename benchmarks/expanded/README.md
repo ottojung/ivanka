@@ -25,6 +25,11 @@ The upstream `cfe-lab/MiCall` must never receive pushes or PRs
 The current images must be audited/migrated before full qualification;
 their historical results must not be rebranded as fork-built evidence.
 The public `/bench/` pages must link to exact full fork commit SHAs.
+**Tool isolation ([Intent 016](../../docs/intents/016-dedicated-assembler-branches-and-containers.md)):**
+all seven contenders require their own `ottojung/MiCall` branches
+`bench/assembler-<tool>` and separately built dedicated tool-only
+containers, each from its exact branch commit and same downstream
+MiCall base. The previous combined all-tools image is historical-only.
 
 **This benchmark is required now for Ivanka completion and future releases.**
 It is an additional strict qualification, **not** a replacement for the

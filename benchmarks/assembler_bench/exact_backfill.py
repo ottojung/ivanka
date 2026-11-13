@@ -1,7 +1,5 @@
 """Compute full and interior exact-read coverage after MiCall timers stop."""
 import argparse
-import csv
-import hashlib
 import json
 import os
 import subprocess

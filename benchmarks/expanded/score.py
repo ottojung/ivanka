@@ -5,7 +5,6 @@ import zlib
 # Import libz before scientific alignment packages on Guix hosts.
 _LIBZ_LOADED = zlib.crc32(b"")
 
-from benchmarks.reference_panel import best_panel_alignment
 
 _DNA = "ACGTRYSWKMBDHVN"
 _REVERSE = str.maketrans(_DNA, "TGCAYRSWMKVHDBN")
@@ -52,6 +51,7 @@ def score_sequences(manifest, truth_path, assembled):
     if not assembled:
         return {"score": 0.0, "dominant_exact": False, "contig_count": 0,
                 "best_contig_length": 0}
+    from benchmarks.reference_panel import best_panel_alignment
     best = best_panel_alignment(assembled, (("truth", truth),))
     exact = any(seq == truth or reverse_complement(seq) == truth
                 for seq in assembled)

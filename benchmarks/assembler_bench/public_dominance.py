@@ -4,7 +4,6 @@ import math
 from pathlib import Path
 
 from .psi_matrix import matrix
-from .public_metrics import CATALOG
 
 
 def rows_for(run):

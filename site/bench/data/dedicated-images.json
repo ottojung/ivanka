@@ -1,0 +1,163 @@
+{
+  "base_image_sha256": "8d6aeb488bea7166100015c64b8f2d1f0fcc6b46d77102637899982b81bdc872",
+  "baseline_commit": "2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+  "baseline_url": "https://github.com/ottojung/MiCall/tree/2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+  "images": {
+    "abyss": {
+      "baseline_commit": "2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "dockerfile_sha256": "9a776a48c4d3ac01dfe3e59e3865c888e30a27cd9223fc7c2cb006ad078f02b3",
+      "executables_sha256": {
+        "abyss-pe": "eedd84e182c9d58d448933aa1eb8a4a78440446340829369de17bedbb963c8ad",
+        "iva": "9317b70522e56fec999e6ccb6fdac4f4a88c29674842a327181f28edde793d90"
+      },
+      "image_sha256": "cbae6abbe38b99071a86ad53e8f1d2dd2252fd937c5801ab96b81bfbae53e49d",
+      "installed_modules_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "2e01fb990044b6edaf68efb94bccb342a384e6e67e084746032a42b6f12e10dd"
+      },
+      "selected_assembler": "abyss",
+      "source_branch": "bench/assembler-abyss",
+      "source_commit": "02985be7406af4540237052edcc8d63af679cfb8",
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/02985be7406af4540237052edcc8d63af679cfb8"
+    },
+    "haploflow": {
+      "baseline_commit": "2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "dockerfile_sha256": "6db734d411fe0b508a3d16b5fe23b57cb3592be1b0570acd99b073c120cb511e",
+      "executables_sha256": {
+        "haploflow": "7915f5ede0cb3325cbe2cb4f91b2c5e54c7a38c33b7a95c388080fac8e541618",
+        "iva": "9317b70522e56fec999e6ccb6fdac4f4a88c29674842a327181f28edde793d90"
+      },
+      "image_sha256": "ed9d373432bf7a302da1fe4b91b188888e5c7d12e0642bc5535c1420015f780f",
+      "installed_modules_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "2e01fb990044b6edaf68efb94bccb342a384e6e67e084746032a42b6f12e10dd"
+      },
+      "selected_assembler": "haploflow",
+      "source_branch": "bench/assembler-haploflow",
+      "source_commit": "35d67d28c19d7e5cec8ce106822922fab6b3f0d8",
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/35d67d28c19d7e5cec8ce106822922fab6b3f0d8"
+    },
+    "iva": {
+      "baseline_commit": "2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "dockerfile_sha256": "30d4e6509555453addb434e789ca7f785350f7d52e9cb121586584de1ee53d59",
+      "executables_sha256": {
+        "iva": "9317b70522e56fec999e6ccb6fdac4f4a88c29674842a327181f28edde793d90"
+      },
+      "image_sha256": "a85915c7dca4d62e8f845f530fcd8d4a098acda76caa46ac634f12a8d5669ba3",
+      "installed_modules_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "2e01fb990044b6edaf68efb94bccb342a384e6e67e084746032a42b6f12e10dd"
+      },
+      "selected_assembler": "iva",
+      "source_branch": "bench/assembler-iva",
+      "source_commit": "d3afad73c61a7657f588b148a94d19210a35d288",
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/d3afad73c61a7657f588b148a94d19210a35d288"
+    },
+    "ivanka": {
+      "baseline_commit": "2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "dockerfile_sha256": "872da0591cb288d4981cb3afb81e2919361b44a71681deb4c32f301cbbf72657",
+      "executables_sha256": {
+        "iva": "9317b70522e56fec999e6ccb6fdac4f4a88c29674842a327181f28edde793d90",
+        "ivanka": "ccdc105c100dbeec8e2fb4c62d4d8ce627133cff886c0ef6ac79de8b9d77ae85"
+      },
+      "image_sha256": "402868c8b636765839be9e29e93a6a9b196a6deec38a20218d1d6091643e0c19",
+      "installed_modules_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "2e01fb990044b6edaf68efb94bccb342a384e6e67e084746032a42b6f12e10dd"
+      },
+      "selected_assembler": "ivanka",
+      "source_branch": "bench/assembler-ivanka",
+      "source_commit": "e31a4f2cec17a012076df5243eacabfe145f0a75",
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/e31a4f2cec17a012076df5243eacabfe145f0a75"
+    },
+    "megahit": {
+      "baseline_commit": "2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "dockerfile_sha256": "671349819c50e62bc766434c7caed1c9ca5906bf28310b954e001b72fe96147a",
+      "executables_sha256": {
+        "iva": "9317b70522e56fec999e6ccb6fdac4f4a88c29674842a327181f28edde793d90",
+        "megahit": "06c82978a79f2cd2bf42cbd5ca931ed4aa1903f3cd44532d1ff20c1b39e8d845"
+      },
+      "image_sha256": "9ac1113435192ae97f4bd0056cba8acdc7043787115cc67d97b9af0a6c58e248",
+      "installed_modules_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "2e01fb990044b6edaf68efb94bccb342a384e6e67e084746032a42b6f12e10dd"
+      },
+      "selected_assembler": "megahit",
+      "source_branch": "bench/assembler-megahit",
+      "source_commit": "695cbf33d07180da6917a702741c24f3af9cc7a4",
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/695cbf33d07180da6917a702741c24f3af9cc7a4"
+    },
+    "spades": {
+      "baseline_commit": "2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "dockerfile_sha256": "3f15b5cec3e5050dcf387660cdf4033dcb0e27b944e3a451d65a196c0194f534",
+      "executables_sha256": {
+        "iva": "9317b70522e56fec999e6ccb6fdac4f4a88c29674842a327181f28edde793d90",
+        "spades.py": "2c96c6fbc913305aa0a5b19ef4ab2a95c6304b656f5073b3993b1d835bb393d1"
+      },
+      "image_sha256": "c39cb53f8a0e26122203a6e550f01b5b1bfcd63c2c78c796fb5c3e67a9b86399",
+      "installed_modules_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "2e01fb990044b6edaf68efb94bccb342a384e6e67e084746032a42b6f12e10dd"
+      },
+      "selected_assembler": "spades",
+      "source_branch": "bench/assembler-spades",
+      "source_commit": "687fc5ac4310796765c2475ff645f4daaf06f520",
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/687fc5ac4310796765c2475ff645f4daaf06f520"
+    },
+    "velvet": {
+      "baseline_commit": "2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "baseline_url": "https://github.com/ottojung/MiCall/tree/2cf5bf6c13837e07df83ae55f99cdc5f2d2b907c",
+      "dockerfile_sha256": "1fe6812fa176dbce52a4fedc01ac7f617ba5b5f4e6faa2485efdb2d3096f9133",
+      "executables_sha256": {
+        "iva": "9317b70522e56fec999e6ccb6fdac4f4a88c29674842a327181f28edde793d90",
+        "velvetg": "7f9d5e476de815c14d22b0f9c7232b85826d9776a29f9b45e1eb9ae342fe51ae",
+        "velveth": "4b1c96bfc3decb5f6e8bb7c619fc717c05d6103c1a656e6e88fea18dc178610f"
+      },
+      "image_sha256": "da04c834196e0bb2fa70c5124c6e94aa61996cf97125c5c927d5d2dcfe6cde9d",
+      "installed_modules_sha256": {
+        "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+        "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+        "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+        "denovo.py": "2e01fb990044b6edaf68efb94bccb342a384e6e67e084746032a42b6f12e10dd"
+      },
+      "selected_assembler": "velvet",
+      "source_branch": "bench/assembler-velvet",
+      "source_commit": "1d4e6024f7741b40ab745f02b2fc8290e0ff582a",
+      "source_repository": "https://github.com/ottojung/MiCall",
+      "source_url": "https://github.com/ottojung/MiCall/tree/1d4e6024f7741b40ab745f02b2fc8290e0ff582a"
+    }
+  },
+  "installed_modules_sha256": {
+    "assembler_commands.py": "a19220751f2ab056659b8ef947b00fddb2bd22d69affb911fcfdbda7e7224d94",
+    "assembler_dispatch.py": "41052f96ea1fa5410a2f0e29797614cdd7d6d8d7789b9b98bece0d9c757b2e61",
+    "assembler_inputs.py": "cbc5f73f072465f1e50b2897c9ea9df389d2fdf09277f3547c84eeb82e03db57",
+    "denovo.py": "2e01fb990044b6edaf68efb94bccb342a384e6e67e084746032a42b6f12e10dd"
+  },
+  "schema": "ivanka.assembler-bench.dedicated-fork-images.v1",
+  "source_repository": "https://github.com/ottojung/MiCall",
+  "status": "SEVEN_INDEPENDENT_BRANCH_IMAGES_VERIFIED"
+}

@@ -6,7 +6,8 @@ const fmt = (x, digits = 2) => Number.isFinite(x)
   ? Number(x).toLocaleString("en", { maximumFractionDigits: digits }) : "—";
 const names = {iva:"IVA",ivanka:"Ivanka",haploflow:"Haploflow",megahit:"MEGAHIT",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"};
 const state = {data:null,run:null,metric:"score",firstTool:null,tool:null,
-  sort:"id",reverse:false,rows:[],diagnostics:null,direction:"higher"};
+  sort:"id",reverse:false,rows:[],diagnostics:null,dedicated:null,
+  direction:"higher"};
 
 function metricInfo() {
   return BenchRanks.definition(state.metric,state.diagnostics?.metric_catalog);
@@ -340,8 +341,32 @@ function drawProvenance() {
   for(const [tool,ref] of Object.entries(r.images||{})) {
     fields.push([tool+" pinned image",typeof ref==="string"?ref:JSON.stringify(ref)]);
   }
+  const inventory=state.dedicated;
+  const available=inventory&&inventory.status===
+    "SEVEN_INDEPENDENT_BRANCH_IMAGES_VERIFIED";
+  const buildLinks=available?
+    '<section class="dedicated-builds"><h3>Independently verified dedicated candidate images</h3>'+
+    '<p class="hint">These are available branch-specific builds for future '+
+    'MiCall runs, <strong>not</strong> the provenance of historical results above. '+
+    'No new scientific qualification is implied by an image build.</p>'+
+    '<p>Common MiCall baseline: <a href="'+esc(inventory.baseline_url)+
+    '" rel="noopener noreferrer" target="_blank">'+
+    esc(inventory.baseline_commit.slice(0,12))+'</a></p>'+
+    '<div class="table-scroll"><table class="dedicated-table"><thead><tr>'+
+    '<th>Assembler</th><th>Dedicated branch</th><th>Fork source commit</th>'+
+    '<th>Immutable image ID</th></tr></thead><tbody>'+
+    Object.entries(inventory.images).map(([name,item])=>
+      '<tr><th>'+esc(names[name]||name)+'</th>'+
+      '<td>'+esc(item.source_branch)+'</td>'+
+      '<td><a target="_blank" rel="noopener noreferrer" href="'+
+        esc(item.source_url)+'">'+esc(item.source_commit.slice(0,12))+
+        '</a></td><td class="code-hash" title="'+esc(item.image_sha256)+'">'+
+        esc(item.image_sha256.slice(0,20))+'…</td></tr>').join("")+
+    '</tbody></table></div></section>':
+    '<p class="hint">Dedicated fork branch image attestation unavailable.</p>';
   el("provenanceContent").innerHTML='<div class="provenance-box"><dl>'+fields.map(([k,v])=>
-    '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>').join("")+'</dl></div>';
+    '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>').join("")+
+    '</dl></div>'+buildLinks;
 }
 
 function drawSubjectControls() {
@@ -617,6 +642,10 @@ async function main() {
       const diagnosticResponse=await fetch("./data/mapping-diagnostics.json");
       state.diagnostics=diagnosticResponse.ok?await diagnosticResponse.json():null;
     } catch (_) {state.diagnostics=null;}
+    try {
+      const res=await fetch("./data/dedicated-images.json",{cache:"no-store"});
+      state.dedicated=res.ok?await res.json():null;
+    } catch (_) {state.dedicated=null;}
     if(state.data.schema!=="ivanka.assembler-bench.public.v1"||
        !Array.isArray(state.data.runs)||!state.data.runs.length)
       throw new Error("Unsupported or missing public data");

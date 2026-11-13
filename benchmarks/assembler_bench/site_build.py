@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .publication import SCHEMA
 from .site_validation import check_mapping_snapshot, check_matrices
+from .dedicated_publication import check as check_dedicated
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -25,7 +26,8 @@ def validate_public_site(site=SITE):
     required = ("index.html", "style.css", "subjects.js",
                 "rankings.js", "app.js",
                 "data/runs.json",
-                "data/mapping-diagnostics.json")
+                "data/mapping-diagnostics.json",
+                "data/dedicated-images.json")
     if any(not (source / name).is_file() for name in required):
         raise ValueError("incomplete /bench site assets")
     html = (source / "index.html").read_text()
@@ -114,6 +116,7 @@ def validate_public_site(site=SITE):
             verify_hxb2_preview(run)
     check_matrices(report)
     check_mapping_snapshot(source, report)
+    check_dedicated(source)
     if SECRET.search(json.dumps(report)):
         raise ValueError("private sample path or identifier in public report")
     return len(report["runs"])

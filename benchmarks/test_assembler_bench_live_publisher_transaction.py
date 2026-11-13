@@ -40,13 +40,11 @@ class TransactionalPagesTests(unittest.TestCase):
             record.write_text('{"value":"previous"}')
             (repo/"benchmarks/assembler_bench/live_progress.py").write_text(
                 "from pathlib import Path\n"
+                "import os\n"
                 "Path('site/bench/data/runs.json').write_text("
-                "'{\"value\":\"new\"}')\n")
-            (repo/"benchmarks/test_assembler_bench_publication.py").write_text(
-                "import os, unittest\n"
-                "class Check(unittest.TestCase):\n"
-                " def test_publication(self):\n"
-                "  if os.getenv('PUBLISH_TEST_FAIL'): self.fail('injected')\n")
+                "'{\"value\":\"new\"}')\n"
+                "if os.getenv('PUBLISH_TEST_FAIL'): "
+                "raise RuntimeError('injected validation failure')\n")
             commands = [
                 ("git", "-C", str(repo), "add", "."),
                 ("git", "-C", str(repo), "commit", "-qm", "baseline"),

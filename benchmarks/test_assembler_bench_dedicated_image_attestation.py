@@ -100,7 +100,8 @@ class DedicatedImageTests(unittest.TestCase):
                 ("org.ottojung.micall.source-branch","bench/assembler-iva"),
                 ("org.ottojung.micall.common-baseline-commit","c"*40),
                 ("org.opencontainers.image.source","https://github.com/cfe-lab/MiCall")):
-            def mutate(base,base_id,sources,images,inspected):
+            def mutate(base,base_id,sources,images,inspected,
+                       key=key,value=value):
                 inspected[images["spades"]]["Config"]["Labels"][key]=value
             with self.subTest(key=key), self.assertRaisesRegex(
                     ValueError,"labels mismatch"):

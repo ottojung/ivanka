@@ -57,7 +57,6 @@ class ForkSourceAndImageAuditTests(unittest.TestCase):
 
     def _fixtures(self):
         sha = "a" * 40
-        commit = audit.fork_commit_url(sha)
         source = {"root": "/tmp/nonexistent-fork", "commit": sha,
                   "source_hashes": {f: "f"*64 for f in audit.FORK_FILES},
                   "dockerfile_sha256": "d"*64,

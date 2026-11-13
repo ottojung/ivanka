@@ -43,6 +43,46 @@ are unchanged, with no weak-span detection. The latter's older integrated
 MiCall output scored zero despite the good raw contig; the source-attested
 newer image already uses an independently merged fix for unnecessary tiling.
 
+## Source-attested MiCall-integrated A/B experiment
+
+A separate, source-committed dedicated MiCall fork image was built and
+compared against the frozen source-attested original Ivanka image. Both
+images share the *exact* MiCall base layer
+`7fe84500bfb75507b1700b03d2f94dc116c72de990138a9e415210b1fe6203cd`.
+No truth or reference was mounted into either candidate container.
+Final Q15 MAX was selected by MiCall's original-read remap evidence,
+then measured by the same independent post-run truth scorer. Every arm
+exited successfully. The run is exploratory only.
+
+| Case | Control final MiCall score | Experiment final MiCall score | Control s | Experiment s |
+|---|---:|---:|---:|---:|
+| gc_dropout-s005 | 0.0000 | **0.9151** | 176.84 | 160.41 |
+| iid_errors-s009 | 0.0000 | **0.9196** | 142.62 | 175.67 |
+| clonal-s013 | 0.0000 | 0.0000 | 153.21 | 147.78 |
+
+The last case is an explicit **unresolved regression case**, not proof that
+linearization fixes every downstream failure. One improved case also took
+longer, so a positive runtime Ψ cannot be claimed from this experiment.
+
+Source/image identities:
+
+- Control Ivanka source `34f1bb7316168ef3b1f5c06a86f62d9a37516a62`;
+  image `44aac6336e1401c72986fa87ee2ca79a2c7bf0b8938aff358426a69f5ff87a10`.
+- Experiment Ivanka source `6363b46a99331a3463633d915724ccce12f5b3fe`;
+  donor `8a42799e1719bcf574c4bae18fb27ef1314015bd44975c2ce18728e0567e3700`.
+- Experimental dedicated fork source
+  `7cf5b9256e1e4a909e1d8fa66af7a28420b05248`;
+  final MiCall image
+  `42b0dedb726b0f8164dd4c0086e3331b4150ebd1ae710b03e32a48af6f9a4efd`.
+- Case records are retained in a separate local experiment checkpoint with
+  results SHA-256
+  `bff2922fc9fd79b6adc905b1e04e01dd7ef7552dd3c6e16fef3afee1370fe713`.
+
+Three additional genuine-read default-CLI controls (NFLHIVDNA, V3LOOP,
+MidHCV) returned **byte-identical FASTA** in both images; each completed
+without the cycle detector firing. These are preliminary safety controls,
+not full 198-real validation.
+
 ## Outstanding validation
 
 **Two similar full-length contigs might compete for read mappings in MiCall.**

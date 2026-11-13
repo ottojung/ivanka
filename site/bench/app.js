@@ -100,7 +100,8 @@ function syncUrl() {
 }
 
 function drawOverview() {
-  const progress=state.data.real_progress;
+  const run=state.run, previous=!!run.archive;
+  const progress=previous?null:state.data.real_progress;
   el("realProgress").textContent=progress
     ?"Physical 198 · current source-attested MiCall attempt: "+
       Object.entries(progress.candidates)
@@ -109,25 +110,29 @@ function drawOverview() {
           value.finished+"/198 finished"+
           (value.failed?" ("+value.failed+" failed)":"")).join(" · ")+
       "."
+    :previous?"Earlier MiCall executions, with their original source and image identities."
     :"Physical sample results are being collected.";
-  const run=state.run;
   const expected=run.expected_sample_count;
   const label=run.cohort==="combined"?"Combined · both cohorts":
     run.cohort==="real"?"Physical · MiCall":"HXB2 · MiCall";
   el("runSelect").value=run.id;
   el("runCohort").textContent=label;
-  el("runStatus").textContent="In progress";
-  el("runStatus").className="status-no";
+  el("runStatus").textContent=previous?"Earlier run":"In progress";
+  el("runStatus").className=previous?"status-neutral":"status-no";
   el("runDate").textContent=run.date;
-  el("runDescription").textContent=run.cohort==="combined"
+  el("runDescription").textContent=previous
+    ?"Measurements retained from this MiCall build. Each result keeps its source identity."
+    :run.cohort==="combined"
     ?"Synthetic and real samples, all seven assemblers."
     :run.cohort==="real"?"198 real DNA samples.":"400 synthetic DNA samples.";
   const evidence=run.cohort==="combined"
     ?"400 synthetic + 198 real cases"
     :run.cohort==="real"?"198 physical samples; six rival runs in progress"
     :"400 source-attested HXB2-derived synthetic samples";
-  el("globalNotice").textContent="Benchmark in progress · "+evidence+
-    ". Comparisons update as more samples finish.";
+  el("globalNotice").textContent=previous
+    ?"Earlier benchmark · "+run.sample_count+" recorded cases. Select another run to compare builds."
+    :"Benchmark in progress · "+evidence+
+      ". Comparisons update as more samples finish.";
   const failures=run.samples.reduce((n,s)=>n+s.failures.length,0);
   const floor=run.samples.filter(s=>s.floor_ok===false).length;
   const measured=run.samples.reduce((n,s)=>n+
@@ -321,6 +326,11 @@ function drawProvenance() {
   const r=state.run;
   const fields=[["Run",r.id],["Source commit",r.source_commit],
     ["Samples",String(r.sample_count)]];
+  if(r.archive) {
+    fields.push(["Execution manifest SHA256",r.archive.manifest_sha256],
+      ["Execution results SHA256",r.archive.results_sha256],
+      ["Source attestation SHA256",r.archive.source_attestation_sha256]);
+  }
   for(const [label,key] of [["Manifest SHA256","manifest_sha256"],
     ["HXB2 cohort SHA256","cohort_manifest_sha256"],
     ["Benchmark source SHA256","source_manifest_sha256"],
@@ -695,7 +705,8 @@ function bind() {
 
 function runOptions() {
   el("runSelect").innerHTML=state.data.runs.map((r)=>
-    '<option value="'+esc(r.id)+'">'+esc(r.title)+'</option>').join("");
+    '<option value="'+esc(r.id)+'">'+
+    (r.archive?"Earlier · ":"")+esc(r.title)+'</option>').join("");
   el("runSelect").disabled=false;
 }
 async function main() {
@@ -704,6 +715,14 @@ async function main() {
     const response=await fetch("./data/runs.json",{cache:"no-store"});
     if(!response.ok)throw new Error("HTTP "+response.status);
     state.data=await response.json();
+    const earlier=await fetch("./data/history.json",{cache:"no-store"});
+    if(!earlier.ok)throw new Error("Historical runs: HTTP "+earlier.status);
+    const history=await earlier.json();
+    if(history.schema!=="ivanka.assembler-bench.execution-history.v1"||
+       !Array.isArray(history.runs)) {
+      throw new Error("Unsupported execution history");
+    }
+    state.data.runs.push(...history.runs);
     try {
       const diagnosticResponse=await fetch("./data/mapping-diagnostics.json");
       state.diagnostics=diagnosticResponse.ok?await diagnosticResponse.json():null;

@@ -497,3 +497,68 @@ downstream base, the native Ivanka ELF and IVA's compatible samtools.
 Preserve the resulting hashed attestation alongside run inputs.
 Historical patched/upstream images must never be renamed as compliant
 or treated as evidence for the new full-cohort gate.
+
+### New fork-source-verified seven-arm MiCall synthetic runner
+
+The historical MiCall synthetic runner is retained unchanged for exact
+source-hash replay of its previous exploratory results. All new
+Intent-011-compliant HXB2 runs use a separate entry point:
+
+    python3 -m benchmarks.expanded.fork_micall_synthetic \
+      --data /private/hxb2-v4-400 \
+      --out /private/fork39c-synthetic \
+      --images /private/immutable-seven-images.json \
+      --attestation /private/independent-fork-oci-attestation.json \
+      --fork /path/to/clean/ottojung-MiCall \
+      --base FULL_IMMUTABLE_FORK_MICALL_BASE_IMAGE_ID \
+      --jobs 5 --timeout 1800
+
+On every invocation, the tool recomputes independent installed
+source, binary and OCI image audit against frozen external attestation.
+It independently validates all 400 HXB2 truths and mate FASTQ
+fingerprints even for a one-case development smoke run. No reference
+or truth enters an assembler. Final MiCall dominant consensus scores
+and in-container monotonic timings remain unchanged. Each case commits
+all seven tools atomically; --resume checks source, images, inputs,
+and completed case evidence. Interrupted trials are archived.
+
+The results and attempt summary remain NOT QUALIFIED until independent
+complete 198-real and 400-HXB2 seven-way PSI gates succeed. Failing
+competitors, missing samples, old upstream-built images, or a one-case
+development limit cannot bypass these gates.
+
+### New fork-source-verified real 198-sample A/B comparisons
+
+The original two-arm physical-198 runner and its frozen original
+qualifications remain historically reproducible. The source-verified
+multi-assembler mode runs the same original read-level MiCall pipeline
+with the same 33-reference independent *post-assembly* scoring panel.
+
+    python3 -m benchmarks.expanded.fork_micall_real \
+      --data /private/original-198-inputs \
+      --out /private/fork-real-198-seven-way \
+      --images /private/seven-immutable-fork-image-ids.json \
+      --attestation /private/verified-source-and-binaries.json \
+      --fork /path/to/clean/ottojung-MiCall \
+      --base FULL_IMMUTABLE_FORK_MICALL_BASE_IMAGE_ID \
+      --jobs 10
+
+A full run requires **six independently fresh** candidate-versus-IVA
+198-sample invocations: Ivanka, Haploflow, MEGAHIT, ABySS, SPAdes and
+Velvet, always the SAME pinned IVA control image from that exact fork
+revision. Every downstream MiCall analysis uses exactly the same
+original FASTQ pairs and --all_projects flag, 1800-second cap and
+independently scored final MAX consensus. IVA controls must be freshly
+run, never imported, cached or silently reused. Each attempt's full
+source and immutable image mapping is recorded; all six runners must be
+joined with expanded.real_matrix before expanded.gate can certify
+strict all-exponent PSI for both the complete real and HXB2 cohorts.
+
+For development only, --sample and --tools restrict work to one
+original sample and chosen candidate(s). Such an execution is ALWAYS
+NOT QUALIFIED, and its existing original output and status remain
+available as diagnostic evidence. The fork-specific source contract
+accepts images with a common *fork base*, not an unrelated
+assembler-specific IVA candidate image layer prefix. The original
+patched-image verifier continues using its existing strict behavior
+and is never disabled outside fully specified, live-verified fork mode.

@@ -79,34 +79,8 @@
         <div class="metric-explanation" id="diagnosticExplanation" role="region" aria-live="polite"></div>
         </div>
       </section>
-      <section class="samples" aria-label="Individual results">
-        <div class="section-heading"><div><span class="overline">03 / CASE-LEVEL VALUES</span><h2>Inspect the cases</h2></div><button class="outline-button" id="exportCsv" type="button">Export visible CSV</button></div>
-        <div class="filters">
-          <div><label for="search">FIND SAMPLE OR FAMILY</label><input id="search" placeholder="Search S-H001, R-R001, clonal…" autocomplete="off"></div>
-          <div><label for="firstTool">ASSEMBLER A</label><select id="firstTool"></select></div>
-          <div><label for="comparisonTool">ASSEMBLER B</label><select id="comparisonTool"></select></div>
-          <div><label for="outcomeFilter">OUTCOME</label><select id="outcomeFilter">
-            <option value="all">All outcomes</option><option value="win">Assembler A wins</option>
-            <option value="loss">Assembler A loses</option><option value="tie">Ties</option>
-            <option value="failure">Assembler failures</option>
-            <option value="floor">Below 90% best-rival floor</option>
-          </select></div>
-        </div>
-        <div class="table-scroll">
-          <table id="resultsTable">
-            <thead><tr><th><button type="button" data-sort="id">Sample / family <span>↕</span></button></th>
-              <th><button type="button" data-sort="first" id="firstColumn">Assembler A <span>↕</span></button></th>
-              <th><button type="button" data-sort="rival" id="secondColumn">Assembler B <span>↕</span></button></th>
-              <th><button type="button" data-sort="delta">Δ advantage <span>↕</span></button></th>
-              <th>Outcome</th></tr></thead>
-            <tbody id="resultRows"></tbody>
-          </table>
-        </div>
-        <div class="table-footer"><span id="resultCount"></span><span>Click a row for details</span></div>
-        <aside id="detailPanel" class="detail-panel" aria-live="polite" hidden></aside>
-      </section>
       <section class="dominance" aria-label="Pairwise signed-power PSI dominance">
-        <div class="section-heading"><div><span class="overline">04 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div>
+        <div class="section-heading"><div><span class="overline">03 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div>
           <div class="psi-view-controls">
             <label for="psiExponent">Ψ EXPONENT r
               <select id="psiExponent" aria-label="Ψ exponent or all-exponent dominance">
@@ -144,6 +118,32 @@
         </p>
         <div class="table-scroll" id="dominanceMatrix"></div>
         <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>
+      </section>
+      <section class="samples" aria-label="Individual results">
+        <div class="section-heading"><div><span class="overline">04 / CASE-LEVEL VALUES</span><h2>Inspect the cases</h2></div><button class="outline-button" id="exportCsv" type="button">Export visible CSV</button></div>
+        <div class="filters">
+          <div><label for="search">FIND SAMPLE OR FAMILY</label><input id="search" placeholder="Search S-H001, R-R001, clonal…" autocomplete="off"></div>
+          <div><label for="firstTool">ASSEMBLER A</label><select id="firstTool"></select></div>
+          <div><label for="comparisonTool">ASSEMBLER B</label><select id="comparisonTool"></select></div>
+          <div><label for="outcomeFilter">OUTCOME</label><select id="outcomeFilter">
+            <option value="all">All outcomes</option><option value="win">Assembler A wins</option>
+            <option value="loss">Assembler A loses</option><option value="tie">Ties</option>
+            <option value="failure">Assembler failures</option>
+            <option value="floor">Below 90% best-rival floor</option>
+          </select></div>
+        </div>
+        <div class="table-scroll">
+          <table id="resultsTable">
+            <thead><tr><th><button type="button" data-sort="id">Sample / family <span>↕</span></button></th>
+              <th><button type="button" data-sort="first" id="firstColumn">Assembler A <span>↕</span></button></th>
+              <th><button type="button" data-sort="rival" id="secondColumn">Assembler B <span>↕</span></button></th>
+              <th><button type="button" data-sort="delta">Δ advantage <span>↕</span></button></th>
+              <th>Outcome</th></tr></thead>
+            <tbody id="resultRows"></tbody>
+          </table>
+        </div>
+        <div class="table-footer"><span id="resultCount"></span><span>Click a row for details</span></div>
+        <aside id="detailPanel" class="detail-panel" aria-live="polite" hidden></aside>
       </section>
       <section class="provenance" aria-label="Provenance">
         <div class="section-heading"><div><span class="overline">05 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>

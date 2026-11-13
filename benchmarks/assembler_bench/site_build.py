@@ -10,6 +10,7 @@ from .publication import SCHEMA
 from .site_validation import check_mapping_snapshot, check_matrices
 from .public_fork_provenance import check as check_fork_provenance
 from .current_validation import check_current
+from .history_validation import validate_archive_file
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -26,7 +27,7 @@ def validate_public_site(site=SITE):
     source = Path(site)
     required = ("index.html", "style.css", "subjects.js",
                 "rankings.js", "distribution.js", "app.js",
-                "data/runs.json",
+                "data/runs.json", "data/history.json",
                 "data/mapping-diagnostics.json",
                 "data/live-fork-attestation.json")
     if any(not (source / name).is_file() for name in required):
@@ -66,9 +67,9 @@ def validate_public_site(site=SITE):
              "expected_sample_count", "snapshot.tools?.[tool]?.values?.[key]"))):
         # The selector must rank any real metric using only measured cases.
         raise ValueError("public site lacks comparable numeric metric ranking")
-    if (not (html.index('class="compare"') < html.index('class="samples"')
-             < html.index('class="dominance"'))):
-        raise ValueError("single-metric and case comparisons must precede Ψ")
+    if (not (html.index('class="compare"') < html.index('class="dominance"')
+             < html.index('class="samples"'))):
+        raise ValueError("single-metric, Ψ matrix, and case table out of order")
     if "id=\"scoreView\"" in html or "id=\"timeView\"" in html:
         raise ValueError("alignment/runtime-only comparison controls forbidden")
     subjects = (source / "subjects.js").read_text()
@@ -148,9 +149,10 @@ def validate_public_site(site=SITE):
     check_current(report)
     check_matrices(report)
     check_mapping_snapshot(source, report)
+    archived = validate_archive_file(source / "data/history.json", ids)
     if SECRET.search(json.dumps(report)):
         raise ValueError("private sample path or identifier in public report")
-    return len(report["runs"])
+    return len(report["runs"]) + archived
 
 
 def verify_hxb2_preview(run):

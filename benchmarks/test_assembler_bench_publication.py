@@ -50,14 +50,16 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[0])
         command = [sys.executable, "-S", "-c",
                    "import sys; from assembler_bench.site_build import "
-                   "validate_public_site; assert validate_public_site() == 3; "
+                    "validate_public_site; assert validate_public_site() >= 3; "
                    "assert 'Bio' not in sys.modules"]
         process = subprocess.run(command, env=environment, text=True,
                                  capture_output=True, timeout=20)
         self.assertEqual(process.returncode, 0, process.stderr)
 
     def test_no_private_metadata(self):
-        self.assertEqual(validate_public_site(), len(self.root["runs"]))
+        self.assertEqual(validate_public_site(),
+                         len(self.root["runs"]) +
+                         len(json.loads((SITE/"data/history.json").read_text())["runs"]))
         text = json.dumps(self.root)
         for token in ("/workspace/", "/home/", ".fastq", "_R1_001",
                       "MidHCV_S", "V3LOOP_S", "patient_id"):

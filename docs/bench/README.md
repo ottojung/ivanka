@@ -3,8 +3,11 @@
 Assembler Bench is a static, privacy-safe GitHub Pages website:
 https://ottojung.github.io/ivanka/bench/
 
-The public site exposes exactly three views of the current seven-way
-MiCall assembler comparison:
+The public site shows three current-cohort views and selectable
+earlier execution runs. Measurements remain attached to their
+source/image identities; a scoring change does not require
+rerunning a retained MiCall consensus output. The three current
+cohort views are:
 
 - **400 HXB2-derived synthetic samples:** final dominant MiCall output
   scored against withheld synthetic truth. Each of the seven assembler
@@ -12,8 +15,9 @@ MiCall assembler comparison:
 - **198 physical samples:** the unchanged original reads and independent
   33-reference MAX scorer, for IVA, Ivanka, Haploflow, MEGAHIT, ABySS,
   SPAdes and Velvet. Every candidate is compared with a fresh IVA run.
-  The current benchmark executes the six candidates sequentially;
-  unavailable and not-yet-run measurements remain missing.
+  The six candidates execute concurrently in their own result
+  directories and each has independent, freshly measured IVA controls.
+  Unavailable and not-yet-run measurements remain missing.
 - **Combined 598 cases:** the same final MiCall MAX local-alignment
 scores and timed seconds over all 598 cases, with the numeric scores
 preserved exactly. Every case uses the same local-alignment scorer:
@@ -33,7 +37,8 @@ anonymous aliases, numerical computations and all-pairs Ψ proofs.
 It commits only validated public JSON files into the Ivanka GitHub
 repository; the existing GitHub Pages workflow deploys them.
 
-The browser uses one static fetch when opened or manually reloaded.
+The browser loads current and earlier snapshots from static
+same-origin JSON files when opened or manually reloaded.
 It has no live API, polling interval, websocket or automatic refresh.
 
 The public 198-real result contains only nonidentifying R001-style
@@ -61,9 +66,9 @@ The full expanded benchmark is **not qualified** until the separate
 400-synthetic and 198-real gates have all seven comparable MiCall
 assemblers, the required 90% per-sample floor and the separate strict
 all-real-r>=0 alignment and runtime Ψ tests. Combining the cohorts
-never substitutes for passing both independent gates. The original
-physical Ivanka-versus-IVA qualification remains a separate binding
-requirement, though its older results are not presented as current.
+never substitutes for passing both independent gates. The original physical Ivanka-versus-IVA qualification remains a separate
+binding requirement, and its measured cases remain selectable under
+their original images and source identity.
 
 Ivanka and any contig selector acting on its output must remain
 reference-blind. Benchmark truth and viral references belong only
@@ -95,22 +100,27 @@ verification path checks the actual installed binaries and source
 modules before execution and publisher approval.
 
 
-## Transition to the independently branch-built qualifying runs
+## Immutable executions and independently reproducible scores
 
-Shared-commit results retain their original stable diagnostic run IDs
-only until the seven dedicated, branch-built source-attested benchmark
-checkpoints are available. The publisher then exposes three new stable
-dedicated IDs: one HXB2-400, one physical-198, and their 598-case
-combined view. It never mixes rows or reuses historical case counts.
-The verified image map and source-attestation SHA must change together.
+The site retains earlier MiCall executions in data/history.json,
+with anonymized H-/R-style case aliases. The archive publisher
+checks the original result stream, immutable image IDs, fork commit
+attestation, HXB2 truth proof, MiCall execution records, final
+conseq.csv digests and in-container timers. Synthetic consensus
+sequences are scored by the current local scorer against their
+one generating truth sequence. Physical scores are recovered from
+the original fixed 33-reference local alignments.
 
-Physical case counters are monotone only within the same immutable
-image set; starting a genuine new image set resets those counters.
-The one-case synthetic mapping diagnostic is chosen from the earliest
-completely successful, source-verified seven-arm case. Until one exists,
-all diagnostic values remain explicitly unavailable rather than
-being carried over from older runs or falsely set to zero.
+The current source-pinned qualification cohort remains separate:
+an earlier execution with a different image or MiCall source commit
+may be compared visually, but cannot be substituted into another
+image set's mandatory complete benchmark gate. The execution
+inventory is never erased when current progress changes.
 
+The single-metric ranking supports per-assembler histograms and
+Gaussian kernel density estimates from individual measured cases.
+Constant or one-case measurements are shown without a KDE curve.
+All diagnostic units and missing-data states remain intact.
 
 ## Independent private expanded-gate evaluation
 

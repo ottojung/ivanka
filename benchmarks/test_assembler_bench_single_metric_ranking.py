@@ -60,8 +60,8 @@ console.log('ALL_METRIC_SEVEN_WAY_RANKINGS_PASS');
         js=(SITE/"app.js").read_text()
         self.assertLess(html.index('class="compare"'),
                         html.index('class="samples"'))
-        self.assertLess(html.index('class="samples"'),
-                        html.index('class="dominance"'))
+        self.assertLess(html.index('class="dominance"'),
+                        html.index('class="samples"'))
         self.assertIn('id="singleDirection"',html)
         self.assertIn('id="diagnosticMetric"',html)
         self.assertNotIn('id="scoreView"',html)

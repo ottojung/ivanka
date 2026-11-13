@@ -41,7 +41,9 @@ class DedicatedPublicationTests(unittest.TestCase):
         self.assertNotIn('item.image_sha256.slice(',js)
         self.assertIn('provenance-scroll',js)
         published = json.loads((SITE / "data/runs.json").read_text())
-        self.assertEqual(validate_public_site(), len(published["runs"]))
+        self.assertEqual(validate_public_site(),
+                         len(published["runs"]) +
+                         len(json.loads((SITE/"data/history.json").read_text())["runs"]))
 
     def test_forged_fork_links_reused_images_and_status_fail(self):
         with tempfile.TemporaryDirectory() as temp:

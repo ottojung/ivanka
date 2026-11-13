@@ -45,6 +45,55 @@ class PhysicalProgressTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "valid score or time"):
             measured(event, "ivanka")
 
+    def test_sample_timeout_is_visible_without_claiming_success(self):
+        images = {"iva": "a"*64, "ivanka": "b"*64}
+        source = {
+            "sample": "secret-1", "status": "sample_timeout",
+            "failed": True,
+            "iva": {"image_id": images["iva"], "exit_code": 0},
+            "ivanka": {"image_id": images["ivanka"],
+                       "exit_code": 124, "seconds": None},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "results.jsonl"
+            path.write_text(json.dumps({"sample": "secret-1",
+                                        "status": "started"})+"\n"+
+                            json.dumps(source)+"\n")
+            self.assertEqual(completed(path, {"secret-1"},
+                                       "ivanka", images),
+                             {"finished": 1, "failed": 1})
+            from assembler_bench.real_public import measured
+            self.assertEqual(measured(source, "ivanka"), (None, None))
+            self.assertEqual(measured(source, "iva"), (None, None))
+            source["ivanka"]["image_id"] = "f"*64
+            path.write_text(json.dumps({"sample": "secret-1",
+                                        "status": "started"})+"\n"+
+                            json.dumps(source)+"\n")
+            with self.assertRaisesRegex(ValueError, "image identity"):
+                completed(path, {"secret-1"}, "ivanka", images)
+
+    def test_error_before_image_start_is_a_reported_failure(self):
+        images = {"iva": "a"*64, "ivanka": "b"*64}
+        source = {"sample": "secret-1", "status": "error",
+                  "failed": True,
+                  "iva": {"image_id": images["iva"], "exit_code": 0},
+                  "ivanka": {"exit_code": 1,
+                             "error": "Podman create failed"}}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "results.jsonl"
+            path.write_text(json.dumps({"sample": "secret-1",
+                                        "status": "started"})+"\n"+
+                            json.dumps(source)+"\n")
+            self.assertEqual(completed(path, {"secret-1"},
+                                       "ivanka", images),
+                             {"finished": 1, "failed": 1})
+            source["failed"] = False
+            path.write_text(json.dumps({"sample": "secret-1",
+                                        "status": "started"})+"\n"+
+                            json.dumps(source)+"\n")
+            with self.assertRaises(ValueError):
+                completed(path, {"secret-1"}, "ivanka", images)
+
     def test_aggregate_metadata_has_no_sample_identifiers(self):
         report = {
             "schema": PROGRESS, "expected_samples": 198,

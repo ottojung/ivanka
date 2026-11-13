@@ -6,7 +6,7 @@ from pathlib import Path
 
 from benchmarks.expanded.adapters import ASSEMBLERS
 from benchmarks.expanded.gate import SCORE_ORIGIN
-from .real_progress import snapshot
+from .real_progress import TERMINAL, snapshot, verified_terminal
 from .hxb2_preview import sha
 
 ID = "real198-fork-source-attested-live"
@@ -26,7 +26,11 @@ def measured(event, name):
     """Keep scored floor failures; only unscored failed arms are unavailable."""
     if type(event.get("failed")) is not bool:
         raise ValueError("real MiCall checkpoint lacks boolean failure outcome")
-    arm = event[name]
+    arm = event.get(name)
+    if arm is None and event["failed"]:
+        return None, None
+    if not isinstance(arm, dict):
+        raise ValueError("real MiCall checkpoint lacks arm measurements")
     acceptance = event.get("best_contig_acceptance") or {}
     score = acceptance.get(
         "iva_score" if name == "iva" else "ivanka_score")
@@ -61,7 +65,7 @@ def case_rows(root, data, images):
                 continue
             event = json.loads(line)
             case = event.get("sample")
-            if case not in aliases or event.get("status") not in ("started", "finished"):
+            if case not in aliases or event.get("status") not in TERMINAL | {"started"}:
                 raise ValueError("unexpected physical-198 sample or event")
             if event["status"] == "started":
                 if case in started:
@@ -70,16 +74,14 @@ def case_rows(root, data, images):
                 continue
             if case not in started or case in cases[name]:
                 raise ValueError("physical result not a unique completed case")
-            if (event["iva"].get("image_id") != images["iva"]
-                    or event["ivanka"].get("image_id") != images[name]):
-                raise ValueError("physical result uses unexpected MiCall image")
+            verified_terminal(event, name, images)
             cases[name][case] = measured(event, "ivanka")
             if cases[name][case][0] is None:
                 failures[name].add(case)
             iva = measured(event, "iva")
             if case not in cases["iva"]:
                 cases["iva"][case] = iva
-                if iva[0] is None:
+                if event.get("iva", {}).get("exit_code") != 0:
                     failures["iva"].add(case)
     return aliases, cases, failures
 
@@ -121,9 +123,8 @@ def preview(root, data, runner, attestation, base, images, fork_provenance):
         "tools": TOOLS, "images": images, "samples": samples, "psi": {},
         "score_origin": SCORE_ORIGIN,
         "source_manifest_sha256": sha(Path(root) / "run_manifest.json"),
-        "status_reason": ("Source-attested MiCall comparison of all seven "
-                          "assemblers on the same 198 physical samples. "
-                          "Only completed case-arm pairs count; not qualified."),
+        "status_reason": ("Seven MiCall assemblers compared across "
+                          "198 physical samples as measurements arrive."),
         "micall_fork_provenance": fork_provenance,
         "physical_progress": proof["candidates"],
     }

@@ -1,4 +1,5 @@
 //! Original-pair evidence selects a defensible dominant contig without references.
+mod cycles;
 mod index;
 mod island;
 mod output;
@@ -27,7 +28,8 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
     let (start, end) = island::bounds(sequence, depth);
     let clipped = &sequence[start..end];
     let observed = &depth[start..end.saturating_sub(K - 1).max(start)];
-    let selected = tiling::partition(&header, clipped, observed);
+    let selected = cycles::alternatives(&header, clipped, reads)
+        .unwrap_or_else(|| tiling::partition(&header, clipped, observed));
     eprintln!(
         "IVANKA_READ_BACKED_SELECTION native {} selected [{}] covered_31mers [{}] supporting_pairs [{}] read_support_products [{}]",
         contigs.len(), chosen, statistics.coverage[chosen], statistics.pairs[chosen],

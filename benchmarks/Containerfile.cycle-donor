@@ -1,0 +1,15 @@
+# Experimental donor only: the MiCall fork stays a separate source-built image.
+FROM docker.io/library/rust:1.93-bookworm AS build
+WORKDIR /src
+COPY Cargo.toml Cargo.lock build.rs ./
+COPY source_lints ./source_lints
+COPY src ./src
+RUN cargo build --release --locked
+
+FROM scratch
+ARG SOURCE_COMMIT
+COPY --from=build /src/target/release/ivanka /usr/local/bin/ivanka
+LABEL org.opencontainers.image.source="https://github.com/ottojung/ivanka"
+LABEL org.opencontainers.image.revision="${SOURCE_COMMIT}"
+LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.ivanka.execution="rust-direct-experimental-readspan-cycle"

@@ -17,6 +17,8 @@ const BenchSubjects = (() => {
     const v2 = snapshot?.tools?.[b]?.values?.[subject];
     const available = subject !== "alignment" && subject !== "runtime" &&
       snapshot?.status === "INCOMPLETE" &&
+      snapshot?.cases_measured === 1 &&
+      typeof snapshot?.sample_alias === "string" &&
       Number.isFinite(v1) && Number.isFinite(v2);
     const delta=available ? (direction==="lower" ? v2-v1 : v1-v2) : null;
     return {status:"incomplete",paired:available ? snapshot.cases_measured : 0,

@@ -209,6 +209,9 @@ assert.equal(calc.observedVerdict(calc.evaluate(
  hxb2,'iva','ivanka',[align,runtime])).label,'OBS NO');
 assert.equal(calc.observedVerdict(calc.evaluate(
  hxb2,'ivanka','haploflow',[align])).label,'OBS NO');
+const composite={...snapshot,cases_measured:2};
+const unsupported=calc.evaluate(hxb2,'ivanka','iva',[diag],composite);
+assert.equal(calc.observedVerdict(unsupported).label,'NO DATA');
 const x=snapshot.tools.ivanka.values[diag.key];
 const y=snapshot.tools.iva.values[diag.key];
 const diagnosticResult=calc.observedVerdict(

@@ -170,3 +170,22 @@ section.dominance,section.diagnostics{margin-top:61px}
 #dominanceDetails.is-empty{background:transparent;border:0;
   padding:7px 0;margin:7px 0 0;color:var(--muted);font-size:12px;
   line-height:1.6}
+
+/* Ψ moment views preserve the compact matrix and never combine units. */
+.psi-view-controls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.dominance .section-heading .psi-view-controls label{display:flex;flex-direction:column;gap:7px;min-width:94px;
+  font-size:11px;letter-spacing:.09em;color:var(--muted)}
+.psi-view-controls select{min-height:38px;min-width:94px;padding:8px;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:7px;font-size:13px}
+.psi-view-controls #psiMetric{max-width:240px}
+.psi-matrix .psi-positive .dom-verdict{color:var(--blue)}
+.psi-matrix .psi-negative .dom-verdict{color:var(--red)}
+.psi-matrix .psi-zero .dom-verdict,
+.psi-matrix .psi-unavailable .dom-verdict{color:var(--muted)}
+.psi-matrix .psi-positive button{background:#75aaf012}
+.psi-matrix .psi-negative button{background:#f28b8712}
+.psi-matrix .psi-number .dom-verdict{font-size:12px;letter-spacing:-.015em;
+  font-variant-numeric:tabular-nums}
+@media(max-width:700px){.psi-view-controls{width:100%}
+  .dominance .section-heading .psi-view-controls label{flex:1}}

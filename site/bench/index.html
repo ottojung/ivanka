@@ -98,8 +98,22 @@
         <aside id="detailPanel" class="detail-panel" aria-live="polite" hidden></aside>
       </section>
       <section class="dominance" aria-label="Pairwise signed-power PSI dominance">
-        <div class="section-heading"><div><span class="overline">04 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div></div>
-        <p class="subtle">Choose metrics for strict Ψ-dominance. The matrix compares observed paired cases; complete-cohort certification is marked separately. Rows are compared against columns.</p>
+        <div class="section-heading"><div><span class="overline">04 / ALL-VERSUS-ALL</span><h2>Ψ dominance matrix</h2></div>
+          <div class="psi-view-controls">
+            <label for="psiExponent">Ψ EXPONENT r
+              <select id="psiExponent" aria-label="Ψ exponent or all-exponent dominance">
+                <option value="all" selected>All</option>
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+              </select>
+            </label>
+            <label for="psiMetric" id="psiMetricWrap" hidden>NUMERIC METRIC
+              <select id="psiMetric" aria-label="Metric for numerical Ψ advantage"></select>
+            </label>
+          </div>
+        </div>
+        <p class="subtle">All shows strict Ψ dominance across every checked metric. Select r = 0, 1, or 2 to see a signed average advantage for one checked metric. Rows are compared against columns.</p>
         <div class="subject-panel">
           <div class="subject-header">
             <label for="subjectSearch">FIND SUBJECT<input id="subjectSearch" type="search" placeholder="Clips, coverage, concordance…" autocomplete="off"></label>
@@ -110,10 +124,16 @@
           <p class="hint">Diagnostics with no naturally beneficial direction require you to choose <em>higher</em> or <em>lower</em> as a preference. Fewer soft clips, more depth, or more contigs do not alone prove a biologically superior assembly. Historical snapshots with only one case cannot certify full-cohort Ψ.</p>
         </div>
         <p class="subtle" id="dominanceContext"></p>
-        <p class="dominance-key" aria-label="Matrix legend">
+        <p class="dominance-key" id="dominanceLegend" aria-label="Matrix legend">
           <strong class="legend-yes">YES</strong> dominates · <strong class="legend-no">NO</strong> does not ·
           <strong>obs</strong> observed cases only · unmarked means certified.
           Select a cell for coverage and Ψ proofs.
+        </p>
+        <p class="dominance-key" id="momentLegend" hidden>
+          <strong class="legend-yes">Blue +</strong> row advantage ·
+          <strong class="legend-no">Red −</strong> row disadvantage ·
+          <strong>0</strong> tie · <strong>obs</strong> observed subset only.
+          Ψ(0) is mean sign, Ψ(1) is mean difference, and Ψ(2) is mean signed squared difference.
         </p>
         <div class="table-scroll" id="dominanceMatrix"></div>
         <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>

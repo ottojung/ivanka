@@ -228,6 +228,98 @@ console.log('MATRIX_VERDICT_AND_INLINE_PARTIAL_EVIDENCE_ARE_INDEPENDENT_PASS');
         self.assertEqual(html.count('id="diagnosticChart"'),1)
         self.assertNotIn("'<h3>Measurement coverage</h3>'",js)
 
+    def test_numeric_psi_exponents_have_correct_sign_and_mean(self):
+        node=shutil.which("node")
+        if node is None:self.skipTest("Node unavailable")
+        code="""
+const assert=require('assert');
+const fs=require('fs');
+const calc=require(process.argv[1]);
+const runs=require(process.argv[2]).runs;
+const snapshot=require(process.argv[3]);
+const real=runs.find(x=>x.cohort==='real').dominance_matrix;
+const hxb2=runs.find(x=>x.hxb2_truth_verified).dominance_matrix;
+const subject=(key,direction)=>({key,label:key,direction});
+const score=subject('alignment','higher');
+const runtime=subject('runtime','lower');
+const entry=(report,a,b,metric,snap)=>
+  calc.evaluate(report,a,b,[metric],snap).entries[0];
+const approx=(got,expected)=>assert(Math.abs(got-expected)<1e-8);
+for(const [metric,kind] of [[score,'alignment'],[runtime,'runtime']]) {
+ const forward=entry(real,'Ivanka','IVA',metric);
+ const backward=entry(real,'IVA','Ivanka',metric);
+ for(const r of [0,1,2]) {
+  const expected=r===0?kind==='alignment'?31/198:152/198:
+    r===1?kind==='alignment'?3.272727272727273:44.26979640412626:
+    kind==='alignment'?173.73737373737373:6269.954639733785;
+  approx(calc.moment(forward,r).value,expected);
+  approx(calc.moment(backward,r).value,-expected);
+  assert.equal(calc.moment(forward,r).observed,false);
+ }
+}
+const observed=entry(hxb2,'ivanka','iva',score);
+for(const r of [0,1,2]) {
+ const m=calc.moment(observed,r);
+ approx(m.value,observed.subset.proof['psi'+r]);
+ assert.equal(m.paired,10);
+ assert.equal(m.expected,400);
+ assert.equal(m.observed,true);
+}
+const diag=subject('soft_clipped_bases_per_1000_read_bases','lower');
+const one=entry(hxb2,'ivanka','iva',diag,snapshot);
+assert.equal(one.paired,1);
+const delta=one.observed.mean_delta;
+for(const r of [0,1,2]) {
+ const expected=r===0?Math.sign(delta):r===1?delta:delta*Math.abs(delta);
+ approx(calc.moment(one,r).value,expected);
+}
+const unavailable=entry(real,'Ivanka','IVA',diag);
+for(const r of [0,1,2])assert.equal(calc.moment(unavailable,r).value,null);
+const forged={paired:2,expected:400,proof:null,
+ observed:{gains:4,losses:0,ties:0,mean_delta:8}};
+for(const r of [0,1,2])assert.equal(calc.moment(forged,r).value,null);
+const partial={paired:2,expected:400,proof:null,
+ observed:{gains:1,losses:1,ties:0,mean_delta:1.25}};
+assert.equal(calc.moment(partial,0).value,0);
+assert.equal(calc.moment(partial,1).value,1.25);
+assert.equal(calc.moment(partial,2).value,null);
+assert.equal(calc.moment(partial,3).value,null);
+const text=fs.readFileSync(process.argv[4],'utf8');
+const formatText=text.slice(text.indexOf('const fmtPsi ='),
+  text.indexOf('const names ='));
+const fmt=(new Function(formatText+String.fromCharCode(10)+'return fmtPsi;'))();
+assert.equal(fmt(3.272727272727273),'+3.273');
+assert.equal(fmt(-3.272727272727273),'-3.273');
+assert.equal(fmt(0),'0');
+assert.equal(fmt(0.0000000112),'+1.12e-8');
+assert.equal(fmt(-12345678),'-1.23e7');
+assert(!fmt(1.23456789).includes('56789'));
+console.log('MOMENTS_AND_COMPACT_FORMATTING_PASS');
+"""
+        r=subprocess.run([node,"-e",code,str(SITE/"subjects.js"),
+            str(SITE/"data/runs.json"),
+            str(SITE/"data/mapping-diagnostics.json"),str(SITE/"app.js")],
+            text=True,capture_output=True,timeout=20,check=False)
+        self.assertEqual(r.returncode,0,r.stderr)
+        self.assertIn("MOMENTS_AND_COMPACT_FORMATTING_PASS",r.stdout)
+
+    def test_psi_selector_is_independent_and_shareable(self):
+        html=(SITE/"index.html").read_text()
+        app=(SITE/"app.js").read_text()
+        css=(SITE/"style.css").read_text()
+        for option in ('all','0','1','2'):
+            self.assertIn('value="'+option+'"',html)
+        self.assertIn('id="psiMetric"',html)
+        self.assertIn('id="momentLegend"',html)
+        self.assertIn('psiExponent:"all"',app)
+        self.assertIn('state.psiMetric=params.get("psi_metric")',app)
+        self.assertIn('params.set("psi_r",state.psiExponent)',app)
+        self.assertIn('params.set("psi_metric",state.psiMetric)',app)
+        self.assertIn('const moment=numeric?BenchSubjects.moment(',app)
+        self.assertIn('Only this metric appears in each cell',app)
+        self.assertIn('.psi-matrix .psi-positive .dom-verdict{color:var(--blue)}',css)
+        self.assertIn('.psi-matrix .psi-negative .dom-verdict{color:var(--red)}',css)
+
     def test_all_hxb2_pairs_have_actual_observed_all_r_psi_results(self):
         node=shutil.which("node")
         if not node:self.skipTest("Node unavailable")

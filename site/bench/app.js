@@ -4,10 +4,19 @@ const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const fmt = (x, digits = 2) => Number.isFinite(x)
   ? Number(x).toLocaleString("en", { maximumFractionDigits: digits }) : "—";
+const fmtPsi = x => {
+  if(!Number.isFinite(x))return "—";
+  if(x===0)return "0";
+  const abs=Math.abs(x);
+  const value=(abs<0.0001||abs>=1000000)
+    ?x.toExponential(2).replace("e+","e")
+    :x.toLocaleString("en",{maximumSignificantDigits:4});
+  return x>0?"+"+value:value;
+};
 const names = {iva:"IVA",ivanka:"Ivanka",haploflow:"Haploflow",megahit:"MEGAHIT",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"};
 const state = {data:null,run:null,metric:"score",firstTool:null,tool:null,
   sort:"id",reverse:false,rows:[],diagnostics:null,dedicated:null,
-  direction:"higher"};
+  direction:"higher",psiExponent:"all",psiMetric:"alignment"};
 
 function metricInfo() {
   return BenchRanks.definition(state.metric,state.diagnostics?.metric_catalog);
@@ -82,6 +91,8 @@ function syncUrl() {
   if(state.firstTool)params.set("first",state.firstTool);
   if(state.tool)params.set("competitor",state.tool);
   if(el("search").value)params.set("search",el("search").value);
+  params.set("psi_r",state.psiExponent);
+  if(state.psiExponent!=="all")params.set("psi_metric",state.psiMetric);
   params.set("subjects",selectedSubjects().map(({key,direction})=>
     key+":"+direction).join(","));
   history.replaceState(null,"","?"+params.toString());
@@ -477,12 +488,29 @@ function proofDescription(entry) {
   return partial+subsetText+
     (entry.reason||"Complete-cohort certification not established");
 }
+function syncPsiControls(selected) {
+  const numeric=state.psiExponent!=="all";
+  el("psiExponent").value=state.psiExponent;
+  el("psiMetricWrap").hidden=!numeric;
+  el("dominanceLegend").hidden=numeric;
+  el("momentLegend").hidden=!numeric;
+  const picker=el("psiMetric");
+  if(!selected.some(s=>s.key===state.psiMetric &&
+      s.direction!=="unspecified")) {
+    state.psiMetric=(selected.find(s=>s.direction!=="unspecified")||{}).key;
+  }
+  picker.innerHTML=selected.filter(s=>s.direction!=="unspecified")
+    .map(s=>'<option value="'+esc(s.key)+'">'+esc(s.label)+'</option>')
+    .join("");
+  picker.value=state.psiMetric||"";
+}
 function drawDominance() {
   const holder=el("dominanceMatrix"), details=el("dominanceDetails");
   details.classList.add("is-empty");
   const report=state.run.dominance_matrix;
   const selected=selectedSubjects();
   syncSubjectCount();
+  syncPsiControls(selected);
   if(!report) {
     holder.textContent="No independently certified pairwise Ψ matrix was published.";
     details.textContent="No dominance is inferred from unavailable data.";return;
@@ -494,10 +522,26 @@ function drawDominance() {
   const tools=report.tools;
   const snapshot=state.diagnostics?.run_id===state.run.id
     ?state.diagnostics:null;
-  el("dominanceContext").textContent=selected.length+" metrics: "+
-    selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
-    ". Row dominates column when strict Ψ(r)>0 for every r≥0 "+
-    "on all selected metrics.";
+  const numeric=state.psiExponent!=="all";
+  const chosen=selected.find(s=>s.key===state.psiMetric);
+  if(numeric&&!chosen) {
+    holder.innerHTML='<p class="hint">Choose a metric with a numeric preference to display Ψ advantages.</p>';
+    details.textContent="Choose a direction for a selected diagnostic metric.";
+    return;
+  }
+  const r=numeric?Number(state.psiExponent):null;
+  el("dominanceContext").textContent=numeric
+    ?"Ψ("+r+") · "+chosen.label+" ("+chosen.direction+"): "+
+      (r===0?"mean sign difference (dimensionless)":
+       r===1?"mean paired advantage ("+(
+         chosen.key==="runtime"?"seconds":chosen.key==="alignment"
+           ?"alignment units": "chosen metric units")+")":
+       "mean signed squared advantage (metric units squared)")+
+      ". Only this metric appears in each cell; other checked metrics are not summed."
+    :selected.length+" metrics: "+
+      selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
+      ". Row dominates column when strict Ψ(r)>0 for every r≥0 "+
+      "on all selected metrics.";
   holder.innerHTML='<table class="psi-matrix"><thead><tr><th>ROW A ↓ / B →</th>'+
     tools.map(tool=>'<th>'+esc(names[tool.toLowerCase()]||tool)+'</th>').join("")+
     '</tr></thead><tbody>'+
@@ -512,19 +556,30 @@ function drawDominance() {
           verdict.kind==="observed-no"?"NO":
           verdict.kind==="partial-yes"?"PARTIAL":
           verdict.kind==="no-data"?"NO DATA":verdict.label;
-        const scope=["observed-yes","observed-no","partial-yes"]
-          .includes(verdict.kind)?"obs":"";
-        return '<td class="dom-'+esc(result.status)+' dom-scope-'+
-          esc(verdict.kind)+'"><button type="button" data-dominates-a="'+
+        const moment=numeric?BenchSubjects.moment(
+          result.entries.find(e=>e.key===chosen.key),r):null;
+        const number=moment?.value;
+        const numberClass=number===null?"psi-unavailable":
+          number>0?"psi-positive":number<0?"psi-negative":"psi-zero";
+        const label=numeric?(number===null?
+          (moment.paired?"UNRESOLVED":"NO DATA"):fmtPsi(number)):shortLabel;
+        const scope=numeric?(number!==null&&moment.observed?"obs":""):
+          (["observed-yes","observed-no","partial-yes"]
+            .includes(verdict.kind)?"obs":"");
+        const style=numeric?"psi-number "+numberClass:
+          "dom-"+result.status+" dom-scope-"+verdict.kind;
+        const meaning=numeric?"Ψ("+r+") for "+chosen.label+
+          ": "+(number===null?"numeric value unavailable":fmtPsi(number))+
+          "; "+(moment?.paired||0)+" paired cases":
+          "Does "+a+" dominate "+b+" on all "+selected.length+
+          " selected metrics? "+verdict.label+" — "+verdict.explanation;
+        return '<td class="'+esc(style)+'"><button type="button" data-dominates-a="'+
           esc(a)+'" data-dominates-b="'+esc(b)+'" title="'+
-          esc(verdict.explanation)+
-          (evidence.description?' · Observed: '+esc(evidence.description):'')+
-          '" aria-label="Does '+esc(a)+
-          ' dominate '+esc(b)+' on all '+selected.length+' selected metrics? '+
-          esc(verdict.label)+' — '+esc(verdict.explanation)+
-          (evidence.description?'. Observed: '+esc(evidence.description):'')+
-          '"><span class="dom-verdict">'+esc(shortLabel)+
-          '</span>'+(scope?'<span class="dom-mini">'+esc(scope)+
+          esc(meaning)+(evidence.description?' · Observed: '+
+          esc(evidence.description):'')+'" aria-label="'+
+          esc(a)+' versus '+esc(b)+': '+esc(meaning)+'"><span class="dom-verdict">'+
+          (numeric?esc(label):esc(shortLabel))+'</span>'+
+          (scope?'<span class="dom-mini">'+esc(scope)+
           '</span>':'')+'</button></td>';
       }).join("")+'</tr>').join("")+'</tbody></table>';
   details.textContent="Select a cell for paired counts, Ψ proofs, "+
@@ -537,9 +592,17 @@ function drawDominance() {
       const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
       const verdict=BenchSubjects.observedVerdict(result);
       const complete=BenchSubjects.verdict(result.status);
+      const numericEntry=numeric?result.entries.find(
+        entry=>entry.key===chosen.key):null;
+      const number=numeric?BenchSubjects.moment(numericEntry,r):null;
+      const momentDetails=numeric?'<p>Displayed Ψ('+r+') on '+
+        esc(chosen.label)+': <strong>'+esc(fmtPsi(number.value))+
+        '</strong> · '+number.paired+'/'+number.expected+
+        ' paired cases. This numeric value is not an all-r certificate.</p>':'';
       details.innerHTML='<h3>'+esc(names[a.toLowerCase()]||a)+' versus '+
         esc(names[b.toLowerCase()]||b)+' · '+selected.length+
-        ' selected subjects</h3><p>Observed-subset all-r Ψ dominance: <strong>'+
+        ' selected subjects</h3>'+momentDetails+
+        '<p>Observed-subset all-r Ψ dominance: <strong>'+
         esc(verdict.label)+'</strong> — '+esc(verdict.explanation)+
         ' ('+esc(verdict.scope)+'). Full-cohort certified verdict: <strong>'+
         esc(complete.label)+'</strong>. Observed comparisons and their proofs '+
@@ -637,6 +700,14 @@ function bind() {
   el("comparisonTool").addEventListener("change",()=>{
     state.tool=el("comparisonTool").value;render();
   });
+  el("psiExponent").addEventListener("change",()=>{
+    state.psiExponent=el("psiExponent").value;
+    drawDominance();syncUrl();
+  });
+  el("psiMetric").addEventListener("change",()=>{
+    state.psiMetric=el("psiMetric").value;
+    drawDominance();syncUrl();
+  });
   el("subjectSearch").addEventListener("input",filterSubjects);
   el("selectSubjects").addEventListener("click",()=>{
     el("dominanceSubjects").querySelectorAll("input[type=checkbox]")
@@ -688,6 +759,9 @@ async function main() {
     state.firstTool=params.get("first");
     state.tool=params.get("competitor");
     el("search").value=params.get("search")||"";
+    state.psiExponent=["all","0","1","2"].includes(params.get("psi_r"))
+      ?params.get("psi_r"):"all";
+    state.psiMetric=params.get("psi_metric")||"alignment";
     drawSubjectControls();
     const selected=params.get("subjects");
     if(selected!==null) {

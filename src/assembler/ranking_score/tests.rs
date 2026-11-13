@@ -15,3 +15,18 @@ fn cap_prefers_read_supported_quality_over_length() {
     assert_eq!(output[0].len(), 180);
     assert_eq!(output[1].len(), 900);
 }
+
+#[test]
+fn supported_span_leads_among_high_evidence_favorites() {
+    // Both top candidates have robust original-read extension support.
+    // The long path has greater total evidence but slightly lower density.
+    let mut candidates = vec![vec![b'G'; 160]; 31];
+    let mut support = vec![20usize; 31];
+    candidates.push(vec![b'A'; 10_026]);
+    support.push(19_851);
+    candidates.push(vec![b'C'; 9_597]);
+    support.push(19_156);
+    let ranked = super::ranked_candidates(candidates, support, 16, 0);
+    assert_eq!(ranked[0].0, 31);
+    assert_eq!(ranked[1].0, 32);
+}

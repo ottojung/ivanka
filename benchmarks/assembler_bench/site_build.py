@@ -25,7 +25,7 @@ SECRET = re.compile(r"/workspace/|/home/|_R[12]_[0-9]{3}|"
 def validate_public_site(site=SITE):
     source = Path(site)
     required = ("index.html", "style.css", "subjects.js",
-                "rankings.js", "app.js",
+                "rankings.js", "distribution.js", "app.js",
                 "data/runs.json",
                 "data/mapping-diagnostics.json",
                 "data/live-fork-attestation.json")
@@ -36,7 +36,8 @@ def validate_public_site(site=SITE):
     for link in ('href="./style.css"', 'src="./subjects.js"',
                  'src="./app.js"',
                  'id="runSelect"', 'id="resultRows"',
-                 'id="comparisonChart"',
+                 'id="comparisonChart"', 'id="distributionPanel"',
+                 'id="distributionChart"', 'id="distributionClose"',
                  'id="detailPanel"', 'id="dominanceMatrix"',
                  'id="dominanceSubjects"', 'id="subjectSearch"',
                  'id="subjectsCount"', 'id="firstTool"',
@@ -46,6 +47,10 @@ def validate_public_site(site=SITE):
                  'id="psiMetric"', 'id="momentLegend"'):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
+    if ("BenchDistribution.model(values)" not in js
+            or 'button[data-tool]' not in js
+            or "function drawDistribution()" not in js):
+        raise ValueError("ranking bars must reveal metric distributions")
     if 'fetch("./data/mapping-diagnostics.json"' not in js:
         raise ValueError("mapping report must be fetched from same origin")
     if (any(name not in js for name in

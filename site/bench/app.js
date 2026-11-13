@@ -16,7 +16,8 @@ const fmtPsi = x => {
 const names = {iva:"IVA",ivanka:"Ivanka",haploflow:"Haploflow",megahit:"MEGAHIT",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"};
 const state = {data:null,run:null,metric:"score",firstTool:null,tool:null,
   sort:"id",reverse:false,rows:[],diagnostics:null,
-  direction:"higher",psiExponent:"all",psiMetric:"alignment"};
+  direction:"higher",psiExponent:"all",psiMetric:"alignment",
+  distributionTool:null};
 
 function metricInfo() {
   return BenchRanks.definition(state.metric,state.diagnostics?.metric_catalog);
@@ -149,17 +150,80 @@ function drawCompare() {
   el("comparisonContext").textContent=info.label+" · "+label+
     " · average across measured cases ("+info.unit+").";
   el("comparisonChart").innerHTML=ranking.map(row=>
-    '<div class="bar-line"><span class="bar-name">'+row.rank+'. '+
+    '<button type="button" class="bar-line rank-trigger" data-tool="'+
+    esc(row.tool)+'" aria-label="Show '+esc(names[row.tool]||row.tool)+
+    ' '+esc(info.label)+' distribution">'+
+    '<span class="bar-name">'+row.rank+'. '+
     esc(names[row.tool.toLowerCase()]||row.tool)+'</span>'+
-    '<div class="bar-track"><div class="bar-fill '+
+    '<span class="bar-track"><span class="bar-fill '+
     (row.tool===state.firstTool?"":"other")+'" style="width:'+
-    (row.mean===null?0:100*Math.abs(row.mean)/cap).toFixed(2)+'%"></div></div>'+
+    (row.mean===null?0:100*Math.abs(row.mean)/cap).toFixed(2)+'%"></span></span>'+
     '<span class="bar-value">'+(row.mean===null?"—":fmt(row.mean,5))+'</span>'+
     '<span class="bar-count">'+row.observed+'/'+expected+' cases</span>'+
-    '</div>').join("")+
-    '<p class="plot-caption">Average values and sample counts for each assembler.</p>';
+    '</button>').join("")+
+    '<p class="plot-caption">Select an assembler to view its distribution.</p>';
+  el("comparisonChart").querySelectorAll("button[data-tool]").forEach(button=>
+    button.addEventListener("click",()=>{
+      state.distributionTool=button.dataset.tool;
+      drawDistribution();
+    }));
+  if(state.distributionTool)drawDistribution();
 
 }
+function drawDistribution() {
+  const tool=state.distributionTool, panel=el("distributionPanel");
+  if(!tool || !state.run.tools.includes(tool)) {
+    panel.hidden=true;
+    return;
+  }
+  const info=metricInfo();
+  const readings=BenchRanks.measurements(
+    state.run,state.diagnostics,state.metric,tool);
+  const values=readings.flatMap(row=>
+    Array.from({length:Math.min(400,row.weight)},()=>row.value));
+  const result=BenchDistribution.model(values);
+  const label=names[tool]||tool;
+  el("distributionTitle").textContent=label+" · "+info.label;
+  el("distributionSummary").textContent=result.n+
+    " measured cases · "+info.unit+
+    (result.n?" · range "+fmt(result.min,4)+"–"+fmt(result.max,4):"");
+  panel.hidden=false;
+  document.querySelectorAll("#comparisonChart button[data-tool]").forEach(
+    button=>button.setAttribute("aria-pressed",String(button.dataset.tool===tool)));
+  if(!result.n) {
+    el("distributionChart").textContent="No measurements for this assembler.";
+    return;
+  }
+  const left=65,right=705,top=14,bottom=220;
+  const height=bottom-top, width=right-left;
+  const maxDensity=Math.max(1e-12,
+    ...result.bins.map(x=>x.density),
+    ...result.curve.map(x=>x.y))*1.12;
+  const [min,max]=result.range;
+  const x=v=>left+(v-min)/(max-min)*width;
+  const y=v=>bottom-v/maxDensity*height;
+  const bars=result.bins.map(bin=>
+    '<rect x="'+x(bin.from).toFixed(2)+'" y="'+y(bin.density).toFixed(2)+
+    '" width="'+Math.max(0,x(bin.to)-x(bin.from)-.75).toFixed(2)+
+    '" height="'+Math.max(0,bottom-y(bin.density)).toFixed(2)+
+    '" class="distribution-bin"><title>'+bin.count+
+    ' cases · '+fmt(bin.from,4)+' to '+fmt(bin.to,4)+'</title></rect>').join("");
+  const density=result.curve.length?
+    '<path class="distribution-kde" d="'+result.curve.map((p,i)=>
+      (i?"L":"M")+x(p.x).toFixed(2)+","+y(p.y).toFixed(2)).join(" ")+'"></path>':"";
+  const ticks=[min,(min+max)/2,max].map(v=>
+    '<text x="'+x(v).toFixed(2)+'" y="243" text-anchor="middle">'+
+    esc(fmt(v,4))+'</text>').join("");
+  el("distributionChart").innerHTML=
+    '<svg viewBox="0 0 735 263" role="img" aria-label="'+
+    esc(label+" "+info.label+" histogram and kernel density estimate")+'">'+
+    '<line x1="'+left+'" x2="'+right+'" y1="'+bottom+'" y2="'+bottom+
+    '" class="distribution-axis"/>'+bars+density+ticks+
+    '</svg><p class="distribution-legend">Histogram · '+
+    (result.curve.length?"Gaussian KDE":"KDE unavailable for constant or single-case values")+
+    '</p>';
+}
+
 function drawDiagnostics() {
   const info=metricInfo();
   const ranking=BenchRanks.summary(state.run,state.diagnostics,
@@ -572,16 +636,21 @@ function exportCsv() {
 }
 
 function bind() {
+  el("distributionClose").addEventListener("click",()=>{
+    state.distributionTool=null;
+    el("distributionPanel").hidden=true;
+  });
   el("runSelect").addEventListener("change",()=>{
     state.run=state.data.runs.find((r)=>r.id===el("runSelect").value);
-    state.firstTool=null;state.tool=null;el("search").value="";
+    state.firstTool=null;state.tool=null;state.distributionTool=null;
+    el("search").value="";
     el("outcomeFilter").value="all";
     el("detailPanel").hidden=true;render();
   });
   el("diagnosticMetric").addEventListener("change",()=>{
     state.metric=el("diagnosticMetric").value;
     state.direction=preferredDirection(state.metric);
-    state.sort="id";state.reverse=false;
+    state.sort="id";state.reverse=false;state.distributionTool=null;
     el("detailPanel").hidden=true;
     render();
   });

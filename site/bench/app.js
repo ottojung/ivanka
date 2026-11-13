@@ -486,8 +486,9 @@ function drawDominance() {
   el("dominanceContext").textContent=selected.length+" selected subjects: "+
     selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
     ". A cell answers whether the row assembler strictly Ψ-dominates the "+
-    "column assembler on EVERY chosen metric. See the cell details for "+
-    "per-metric proof, observed gains/losses and sample coverage.";
+    "column assembler on EVERY chosen metric. Below the verdict, each cell "+
+    "shows available paired gains/losses/ties and coverage; those observed "+
+    "counts are not a certified all-r dominance result.";
   holder.innerHTML='<table class="psi-matrix"><thead><tr><th>ROW A ↓ / B →</th>'+
     tools.map(tool=>'<th>'+esc(names[tool.toLowerCase()]||tool)+'</th>').join("")+
     '</tr></thead><tbody>'+
@@ -496,17 +497,33 @@ function drawDominance() {
         if(a===b)return '<td class="dom-self">—</td>';
         const result=BenchSubjects.evaluate(report,a,b,selected,snapshot);
         const verdict=BenchSubjects.verdict(result.status);
+        const evidence=BenchSubjects.evidence(result);
+        const preview=evidence.rows.length?
+          '<span class="dom-preview" aria-hidden="true">'+
+          evidence.rows.map(item=>
+            '<span class="dom-preview-row"><span class="dom-preview-name">'+
+            esc(item.label)+'</span><span class="dom-preview-counts">'+
+            esc(item.text)+'</span></span>').join("")+
+          (evidence.additional?
+            '<span class="dom-preview-more">+'+evidence.additional+
+            ' more measured</span>':'')+'</span>':
+          '<span class="dom-preview-empty" aria-hidden="true">No paired measurements</span>';
         return '<td class="dom-'+esc(result.status)+'"><button type="button" data-dominates-a="'+
           esc(a)+'" data-dominates-b="'+esc(b)+'" title="'+
-          esc(verdict.explanation)+'" aria-label="Does '+esc(a)+
+          esc(verdict.explanation)+
+          (evidence.description?' · Observed: '+esc(evidence.description):'')+
+          '" aria-label="Does '+esc(a)+
           ' dominate '+esc(b)+' on all '+selected.length+' selected metrics? '+
-          esc(verdict.label)+' — '+esc(verdict.explanation)+'">'+
-          esc(verdict.label)+'</button></td>';
+          esc(verdict.label)+' — '+esc(verdict.explanation)+
+          (evidence.description?'. Observed: '+esc(evidence.description):'')+
+          '"><span class="dom-verdict">'+esc(verdict.label)+
+          '</span>'+preview+'</button></td>';
       }).join("")+'</tr>').join("")+'</tbody></table>';
-  details.textContent="Select a cell to inspect the evidence for each "+
-    "chosen metric. Observed gains and losses belong in the evidence panel, "+
-    "not the dominance verdict. "+report.observed_samples+" of "+
-    report.expected_samples+" samples recorded; no transitivity assumed.";
+  details.textContent="The large label is the strict Ψ verdict; the "+
+    "smaller lines are observed paired results and coverage, not a proof. "+
+    "Select a cell to inspect all selected metrics. "+
+    report.observed_samples+" of "+report.expected_samples+
+    " samples recorded; no transitivity assumed.";
   holder.querySelectorAll("button[data-dominates-a]").forEach(button=>{
     button.addEventListener("click",()=>{
       const a=button.dataset.dominatesA,b=button.dataset.dominatesB;

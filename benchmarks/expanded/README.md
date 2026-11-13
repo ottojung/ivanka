@@ -569,3 +569,21 @@ original image IDs, tool outputs, source attestation, frozen input
 hashes and cohort identities. A separately verified seven-way join,
 not this runner, is responsible for all-r Psi and floor qualification.
 No archived case is silently rebadged as a fresh execution.
+
+## Reusing six unchanged rival MiCall executions
+
+The companion benchmarks.expanded.reuse_unchanged_rivals command
+compares an independently attested seven-assembler source profile to
+an Ivanka-only requalification profile. It checks both frozen runner
+manifests, all seven OCI image attestations, original executed inputs,
+full original matrix.json and source execution.json files, and the
+new changed-Ivanka checkpoint and source commit. Only the six
+**byte-identical** rival images can be reused. The result retains the
+per-arm original/new image IDs and independently hashed execution
+files so that readers can distinguish executions across profiles.
+
+The output is diagnostic overlap evidence, never an assertion that
+the whole 400-case benchmark has passed. Source-identity differences,
+mixed rival images, modified final MAX output, or a mismatched HXB2
+truth manifest abort the join. Failed arms are retained exactly as
+recorded; they cannot become successful measurements.

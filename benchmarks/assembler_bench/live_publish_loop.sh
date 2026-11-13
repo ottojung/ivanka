@@ -2,8 +2,6 @@
 # Host publisher: only complete, verified MiCall cases enter the Pages tree.
 set -eu
 : "$IVANKA_BENCH_CHECKOUT"
-: "$IVANKA_BENCH_OLD"
-: "$IVANKA_BENCH_OLD_SOURCE"
 : "$IVANKA_BENCH_FORK"
 : "$IVANKA_BENCH_FORK_RUNNER"
 : "$IVANKA_BENCH_ATTESTATION"
@@ -24,14 +22,13 @@ while :; do
     export PYTHONPATH="$repo:$repo/benchmarks"
     python3 -m benchmarks.assembler_bench.live_progress \
       --real "$IVANKA_BENCH_REAL" --real-data "$IVANKA_BENCH_REAL_DATA" \
-      --old "$IVANKA_BENCH_OLD" --old-source "$IVANKA_BENCH_OLD_SOURCE" \
       --fork "$IVANKA_BENCH_FORK" --fork-runner "$IVANKA_BENCH_FORK_RUNNER" \
       --attestation "$IVANKA_BENCH_ATTESTATION" \
       --fork-repo "$IVANKA_BENCH_FORK_REPO" --base "$IVANKA_BENCH_BASE"
-    if ! git diff --quiet -- site/bench/data/runs.json; then
+    if ! git diff --quiet -- site/bench/data/runs.json site/bench/data/mapping-diagnostics.json; then
       PYTHONPATH=benchmarks python3 -m unittest -q \
         benchmarks.test_assembler_bench_publication
-      git add site/bench/data/runs.json site/bench/data/live-fork-attestation.json
+      git add site/bench/data/runs.json site/bench/data/mapping-diagnostics.json site/bench/data/live-fork-attestation.json
       git commit -m "Publish independently verified live Assembler Bench progress"
       git push origin HEAD:refs/heads/main
       echo "LIVE_PAGES_PUSHED $(date -u +%FT%TZ)"

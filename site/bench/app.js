@@ -15,7 +15,7 @@ const fmtPsi = x => {
 };
 const names = {iva:"IVA",ivanka:"Ivanka",haploflow:"Haploflow",megahit:"MEGAHIT",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"};
 const state = {data:null,run:null,metric:"score",firstTool:null,tool:null,
-  sort:"id",reverse:false,rows:[],diagnostics:null,dedicated:null,
+  sort:"id",reverse:false,rows:[],diagnostics:null,
   direction:"higher",psiExponent:"all",psiMetric:"alignment"};
 
 function metricInfo() {
@@ -110,44 +110,34 @@ function drawOverview() {
       ". Results are provisional."
     :"No source-attested physical-198 attempt has been published yet.";
   const run=state.run;
+  const expected=run.expected_sample_count;
+  const label=run.cohort==="combined"?"Combined · both cohorts":
+    run.cohort==="real"?"Physical · MiCall":"HXB2 · MiCall";
   el("runSelect").value=run.id;
-  el("runCohort").textContent=run.cohort==="real"?"Real · MiCall":
-    run.hxb2_truth_verified?"HXB2 · MiCall":"Synthetic · historical";
-  el("runStatus").textContent=run.status==="passed-original-only"
-    ?"Original 198 certified":
-    run.hxb2_truth_verified?"HXB2 data · partial":"Exploratory · historical";
-  el("runStatus").className=run.status==="passed-original-only"?"status-pass":"status-no";
+  el("runCohort").textContent=label;
+  el("runStatus").textContent="Partial · not qualified";
+  el("runStatus").className="status-no";
   el("runDate").textContent=run.date;
   el("runDescription").textContent=run.status_reason;
-  const coverage=run.hxb2_truth_verified?run.sample_count+"/400 observed HXB2 cases":
-    run.cohort==="real"?"198/198 original real cases (IVA comparison only)":
-    "Historical random-truth synthetic cases (not eligible)";
-  el("globalNotice").textContent=
-    "EVIDENCE STATUS · "+coverage+". Full seven-assembler qualification "+
-    "has not been established. All available measurements and observed "+
-    "comparisons remain visible below; only the separately certified "+
-    "original two-assembler result may claim an all-r Ψ pass.";
-  if(run.hxb2_truth_verified) {
-    const fails=run.samples.reduce((count,s)=>count+s.failures.length,0);
-    const floor=run.samples.filter(s=>s.floor_ok===false).length;
-    el("metricCards").innerHTML=card("HXB2 cases verified",run.sample_count+" / "+
-      run.expected_sample_count,"Real seven-way MiCall pipeline")+
-      card("Assembler arms failed",String(fails),"Failures are not Ivanka wins")+
-      card("90% floor failures",String(floor),"Only complete seven-arm cases counted")+
-      card("Mean comparisons","Available","Measured arms and pairwise counts remain reviewable");
-  } else if(run.cohort==="real") {
-    const wins=run.samples.filter((s)=>s.seconds.Ivanka<s.seconds.IVA).length;
-    el("metricCards").innerHTML=card("Physical MiCall cases","198 / 198","Independently verified original reads")+
-      card("Original runtime wins",wins+" / 198","Original Ivanka / IVA qualification")+
-      card("Mean time advantage",fmt(run.psi.runtime.psi1)+" s","MiCall monotonic time per sample")+
-      card("Alignment Ψ(1)","+"+fmt(run.psi.alignment.psi1,3),"Both all-r gates passed");
-  } else {
-    const fails=run.families.reduce((total,f)=>total+Object.values(f.failures).reduce((a,b)=>a+b,0),0);
-    el("metricCards").innerHTML=card("Legacy cases","400","Disallowed random genomic truth")+
-      card("Competitors","7","Exploratory CLI runs only")+
-      card("Failed tool runs",String(fails),"Failures are not wins")+
-      card("Exploratory comparisons","Available","Only observed values, not certification");
-  }
+  const evidence=run.cohort==="combined"
+    ?"400 synthetic + 198 physical cases (different original score scales)"
+    :run.cohort==="real"?"198 physical samples; six rival runs in progress"
+    :"400 source-attested HXB2-derived synthetic samples";
+  el("globalNotice").textContent="INCOMPLETE · "+evidence+
+    ". Seven assemblers are required. Missing, running and failed arms "+
+    "do not count as wins; all-r Ψ and the separate 90% floors remain "+
+    "unqualified until both cohorts are complete.";
+  const failures=run.samples.reduce((n,s)=>n+s.failures.length,0);
+  const floor=run.samples.filter(s=>s.floor_ok===false).length;
+  const measured=run.samples.reduce((n,s)=>n+
+    Object.values(s.score).filter(Number.isFinite).length,0);
+  el("metricCards").innerHTML=card("Cases with results",
+    run.sample_count+" / "+expected,"Completed case-arm evidence only")+
+    card("Assembler arms measured",String(measured),
+      "Up to "+(expected*7)+" across all seven tools")+
+    card("Reported failures",String(failures),"Failures are not wins")+
+    card("90% floor violations",String(floor),
+      "Only fully measured cases are checked");
 }
 
 function drawCompare() {
@@ -159,7 +149,9 @@ function drawCompare() {
   const expected=state.run.expected_sample_count||state.run.sample_count;
   const label=state.direction==="lower"?"Lowest first":"Highest first";
   el("comparisonContext").textContent=info.label+" · "+label+
-    " · ordered observed arithmetic means ("+info.unit+
+    " · ordered observed arithmetic means ("+
+    (state.run.cohort==="combined"&&state.metric==="score"
+      ?"within-case best-measured score ratio":info.unit)+
     "); ties break alphabetically. Each tool uses only its measured cases, "+
     "with counts shown. A numerical rank is not a Ψ-dominance proof.";
   el("comparisonChart").innerHTML=ranking.map(row=>
@@ -249,7 +241,8 @@ function drawEvidence() {
   // Even without a complete seven-arm cohort, use each independently
   // measured pair of arms. Do not turn family-level historical averages
   // into supposedly paired read-level measurements.
-  if(run.hxb2_truth_verified||run.cohort==="real") {
+  if(run.hxb2_truth_verified||run.cohort==="real"||
+     run.cohort==="combined") {
     for(const a of run.tools)for(const b of run.tools){
       if(a===b)continue;
       const all=BenchRanks.pairs(run,state.diagnostics,state.metric,
@@ -326,10 +319,13 @@ function showDetail(row) {
     note="HXB2-derived family: "+detail.family+
       ". Failed tool arms: "+(detail.failures?.join(", ")||"none")+".";
   } else if(state.run.cohort==="real"&&detail) {
-    note="Original real MiCall sample; 90%-alignment floor: "+
-      (detail.floor_ok?"met":"not met")+".";
+    note="Source-attested real MiCall sample; 90%-alignment floor: "+
+      (detail.floor_ok===null?"unresolved":detail.floor_ok?"met":"not met")+".";
   } else if(detail) {
-    note="Historical family aggregate across "+detail.sample_count+" cases.";
+    note=state.run.cohort==="combined"?
+      "Within-case normalized alignment; "+detail.family+
+      ". Missing measurements remain unavailable.":
+      "Only directly measured case results are shown.";
   } else {
     note="Source-attested diagnostic snapshot for one HXB2 case.";
   }
@@ -361,29 +357,23 @@ function drawProvenance() {
   for(const [tool,ref] of Object.entries(r.images||{})) {
     fields.push([tool+" pinned image",typeof ref==="string"?ref:JSON.stringify(ref)]);
   }
-  const inventory=state.dedicated;
-  const available=inventory&&inventory.status===
-    "SEVEN_INDEPENDENT_BRANCH_IMAGES_VERIFIED";
-  const buildLinks=available?
-    '<section class="dedicated-builds"><h3>Independently verified dedicated candidate images</h3>'+
-    '<p class="hint">These are available branch-specific builds for future '+
-    'MiCall runs, <strong>not</strong> the provenance of historical results above. '+
-    'No new scientific qualification is implied by an image build.</p>'+
-    '<p>Common MiCall baseline: <a href="'+esc(inventory.baseline_url)+
-    '" rel="noopener noreferrer" target="_blank">'+
-    esc(inventory.baseline_commit.slice(0,12))+'</a></p>'+
+  const inventory=r.micall_fork_provenance?.images;
+  const buildLinks=inventory?
+    '<section class="dedicated-builds"><h3>Current pinned assembler images</h3>'+
+    '<p class="hint">Every image below is the actual source-attested '+
+    'MiCall fork image recorded for this comparison.</p>'+
     '<div class="table-scroll"><table class="dedicated-table"><thead><tr>'+
-    '<th>Assembler</th><th>Dedicated branch</th><th>Fork source commit</th>'+
+    '<th>Assembler</th><th>Fork source commit</th>'+
     '<th>Immutable image ID</th></tr></thead><tbody>'+
-    Object.entries(inventory.images).map(([name,item])=>
+    Object.entries(inventory).map(([name,item])=>
       '<tr><th>'+esc(names[name]||name)+'</th>'+
-      '<td>'+esc(item.source_branch)+'</td>'+
       '<td><a target="_blank" rel="noopener noreferrer" href="'+
         esc(item.source_url)+'">'+esc(item.source_commit.slice(0,12))+
-        '</a></td><td class="code-hash" title="'+esc(item.image_sha256)+'">'+
-        esc(item.image_sha256.slice(0,20))+'…</td></tr>').join("")+
+      '</a></td><td class="code-hash" title="'+
+      esc(item.image_sha256)+'">'+esc(item.image_sha256.slice(0,20))+
+      '…</td></tr>').join("")+
     '</tbody></table></div></section>':
-    '<p class="hint">Dedicated fork branch image attestation unavailable.</p>';
+    '<p class="hint">Source-attested fork image details unavailable.</p>';
   el("provenanceContent").innerHTML='<div class="provenance-box"><dl>'+fields.map(([k,v])=>
     '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>').join("")+
     '</dl></div>'+buildLinks;
@@ -754,20 +744,14 @@ async function main() {
       const diagnosticResponse=await fetch("./data/mapping-diagnostics.json");
       state.diagnostics=diagnosticResponse.ok?await diagnosticResponse.json():null;
     } catch (_) {state.diagnostics=null;}
-    try {
-      const res=await fetch("./data/dedicated-images.json",{cache:"no-store"});
-      state.dedicated=res.ok?await res.json():null;
-    } catch (_) {state.dedicated=null;}
     if(state.data.schema!=="ivanka.assembler-bench.public.v1"||
        !Array.isArray(state.data.runs)||!state.data.runs.length)
       throw new Error("Unsupported or missing public data");
     runOptions();
     const params=new URLSearchParams(location.search);
-    const active=state.data.runs.filter(r=>r.id.endsWith("-run-live")||
-      r.id.endsWith("-attested-live"));
-    const latest=active.sort((a,b)=>b.sample_count-a.sample_count)[0];
-    state.run=state.data.runs.find((r)=>r.id===params.get("run"))||
-      latest||state.data.runs[0];
+    const latest=state.data.runs.find(r=>r.cohort==="combined")||
+      state.data.runs[0];
+    state.run=state.data.runs.find((r)=>r.id===params.get("run"))||latest;
     const requested=params.get("metric")||params.get("diagnostic");
     state.metric=requested==="runtime"?"seconds":
       requested==="alignment"||!requested?"score":requested;

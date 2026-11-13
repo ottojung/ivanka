@@ -1,1 +1,457 @@
-{"cases_measured":1,"cohort":"HXB2-derived synthetic / MiCall","expected_cases":400,"metric_catalog":{"aligned_read_bases":{"denominator":"Count of aligned query bases in primary records.","description":"Primary mapped nucleotide bases represented by CIGAR M, =, or X. Excludes soft clips, insertions, and hard clips.","label":"Aligned primary-read bases","stage":"Read-to-contig SAM alignment","suggested_direction":"higher","unit":"nt"},"clipped_read_fraction":{"denominator":"Soft-clipped primary reads / all mapped primary reads.","description":"Fraction of primary mapped read alignments carrying one or more soft clips, counting each mapped primary record once.","label":"Fraction of mapped reads clipped","stage":"Read-to-contig SAM alignment","suggested_direction":"lower","unit":"fraction"},"deleted_reference_bases":{"denominator":"Count of CIGAR D reference bases.","description":"Reference-consuming deletions in primary alignments, from CIGAR D. A deletion is not automatically a sequencing or assembler error.","label":"Mapped reference deletion bases","stage":"Read-to-contig SAM alignment","suggested_direction":"unspecified","unit":"nt"},"final_contig_31mer_redundancy_fraction":{"denominator":"Repeated 31-mer instances / eligible 31-mer instances.","description":"Proportion of assembled 31-mer instances repeated in other contigs. A heuristic indicator of redundancy, not misassembly.","label":"Redundant contig 31-mer fraction","stage":"MiCall assembler output","suggested_direction":"lower","unit":"fraction"},"final_contig_count":{"denominator":"Number of final contig records.","description":"Number of assembled contigs passed to downstream MiCall processing. Neither more nor fewer alone proves correctness.","label":"Final contig count","stage":"MiCall assembler output","suggested_direction":"unspecified","unit":"contigs"},"final_contig_total_bases":{"denominator":"Sum of assembled contig sequence lengths.","description":"Sum of lengths of all final assembled contigs. Overlapping and duplicate segments are counted repeatedly.","label":"Total contig bases","stage":"MiCall assembler output","suggested_direction":"unspecified","unit":"nt"},"inserted_bases":{"denominator":"Count of CIGAR I query bases.","description":"Nucleotide insertions in primary read alignments, from CIGAR I. True biological indels cannot be classified as errors from this alone.","label":"Mapped primary-read insertion bases","stage":"Read-to-contig SAM alignment","suggested_direction":"unspecified","unit":"nt"},"mapq_zero":{"denominator":"Count of mapped primary records with MAPQ 0.","description":"Mapped primary reads assigned MAPQ 0, which indicates no mapping confidence on the SAM scale.","label":"Primary reads with MAPQ 0","stage":"Read-to-contig SAM alignment","suggested_direction":"lower","unit":"reads"},"mean_known_mapq":{"denominator":"Sum of known primary MAPQ / primary records with MAPQ != 255.","description":"Mean mapping quality among mapped primary alignment records with known MAPQ. SAM MAPQ 255 denotes unknown and is excluded.","label":"Mean known MAPQ","stage":"Read-to-contig SAM alignment","suggested_direction":"higher","unit":"phred score"},"nuc_q15_covered_fraction":{"denominator":"Q15-covered positions / positions examined.","description":"Fraction of expected positions with supported Q15 nucleotide coverage, as available in MiCall's nucleotide summary.","label":"Q15 breadth","stage":"MiCall nucleotide summary","suggested_direction":"higher","unit":"fraction"},"nuc_q15_mean_depth":{"denominator":"Mean depth over represented Q15 nucleotide positions.","description":"Average nucleotide read depth among the positions represented in MiCall's quality-cutoff-15 nucleotide summary.","label":"Mean Q15 depth","stage":"MiCall nucleotide summary","suggested_direction":"higher","unit":"reads / site"},"nuc_soft_clips_count":{"denominator":"Sum or deduplicated per-position nuc.csv clip aggregate.","description":"MiCall's aggregated per-position nuc.csv clip count. This quantity has different inclusion and duplication rules than SAM soft clips.","label":"MiCall per-position clip aggregate","stage":"MiCall nucleotide summary","suggested_direction":"unspecified","unit":"count"},"primary_mapped":{"denominator":"Count of primary mapped alignment records.","description":"Primary alignment records marked mapped in the SAM. Secondary and supplementary records are excluded; records need not be unique molecules.","label":"Primary mapped reads","stage":"Read-to-contig SAM alignment","suggested_direction":"higher","unit":"reads"},"primary_mapped_fraction":{"denominator":"Mapped primary / (mapped + unmapped primary records).","description":"Fraction of primary SAM alignment records marked mapped; this is a read-record rate, not a genome reconstruction score.","label":"Primary mapped read fraction","stage":"Read-to-contig SAM alignment","suggested_direction":"higher","unit":"fraction"},"primary_unmapped":{"denominator":"Count of primary unmapped alignment records.","description":"Primary alignment records carrying the SAM unmapped flag. Not the same as a count of unmatched original read pairs.","label":"Primary unmapped reads","stage":"Read-to-contig SAM alignment","suggested_direction":"lower","unit":"reads"},"region_concordance_mean":{"denominator":"Mean of valid region concordance percentages.","description":"Mean MiCall regional concordance between the final result and the aligned reference panel, evaluated only after assembly.","label":"Mean region concordance","stage":"MiCall regional concordance","suggested_direction":"higher","unit":"percentage"},"secondary":{"denominator":"Count of SAM secondary alignment records.","description":"SAM secondary alignments, including alternative placements. A large count can reflect legitimate multi-mapping rather than errors.","label":"Secondary alignments","stage":"Read-to-contig SAM alignment","suggested_direction":"unspecified","unit":"records"},"soft_clip_events":{"denominator":"Count; per 1,000 mapped primary reads is available separately.","description":"CIGAR S operations on primary mapped reads. One read can contribute a left and right clip event.","label":"Soft-clip events","stage":"Read-to-contig SAM alignment","suggested_direction":"lower","unit":"events"},"soft_clip_events_per_1000_primary_mapped":{"denominator":"1,000 \u00d7 clip events / mapped primary reads.","description":"Frequency of individual left/right CIGAR S clipping operations among mapped primary alignment records.","label":"Clip events per 1,000 mapped reads","stage":"Read-to-contig SAM alignment","suggested_direction":"lower","unit":"events / 1000 reads"},"soft_clipped_bases":{"denominator":"Count; normalized per 1,000 mapped sequenced bases separately.","description":"Total nucleotide bases excluded by CIGAR S operations on primary mapped alignment records.","label":"Soft-clipped bases","stage":"Read-to-contig SAM alignment","suggested_direction":"lower","unit":"nt"},"soft_clipped_bases_per_1000_read_bases":{"denominator":"1,000 \u00d7 clipped bases / mapped primary-read bases.","description":"Total soft-clipped nucleotides normalized by mapped primary-read sequence bases. A shorter clipped fraction is not necessarily biologically more accurate.","label":"Clipped bases per 1,000 mapped read bases","stage":"Read-to-contig SAM alignment","suggested_direction":"lower","unit":"nt / 1000 nt"},"soft_clipped_reads":{"denominator":"Count; mapped primary alignment records are the reference population.","description":"Primary mapped alignment records with at least one CIGAR S operation. Both ends of the same read count once here.","label":"Soft-clipped primary reads","stage":"Read-to-contig SAM alignment","suggested_direction":"lower","unit":"reads"},"supplementary":{"denominator":"Count of SAM supplementary alignment records.","description":"SAM supplementary alignments, often associated with split mappings. Whether more or fewer is desirable depends on the sample.","label":"Supplementary alignments","stage":"Read-to-contig SAM alignment","suggested_direction":"unspecified","unit":"records"}},"note":"One fully verified completed example only; not a 400-case cohort or seven-way qualification. Current image fork-commit provenance is not yet verified.","run_id":"hxb2-v4-micall-cases-010","sample_alias":"H001","schema":"assembler-bench.public-mapping-diagnostics.v1","status":"INCOMPLETE","tools":{"abyss":{"denominators":{"all_primary_records":20000,"mapped_primary_read_bases":2995928,"mapped_primary_records":20000,"mapq_observed_primary":1934},"mapping_stage":"MiCall scratch/temp.sam","source_sha256":"3587c1e0fd9f213608625f6bff7f0523381a545d0dba4b08f79d014a28ae6e99","status":"measured","unavailable":[],"values":{"aligned_read_bases":2995927,"clipped_read_fraction":5e-05,"deleted_reference_bases":0,"final_contig_31mer_redundancy_fraction":0.01390288132178119,"final_contig_count":2,"final_contig_total_bases":9986,"inserted_bases":0,"mapq_zero":0,"mean_known_mapq":32.25025853154085,"nuc_q15_covered_fraction":1.0,"nuc_q15_mean_depth":292.2464985994398,"nuc_soft_clips_count":1,"primary_mapped":20000,"primary_mapped_fraction":1.0,"primary_unmapped":0,"region_concordance_mean":95.13876498985375,"secondary":0,"soft_clip_events":1,"soft_clip_events_per_1000_primary_mapped":0.05,"soft_clipped_bases":1,"soft_clipped_bases_per_1000_read_bases":0.0003337863927303994,"soft_clipped_reads":1,"supplementary":0}},"haploflow":{"denominators":{"all_primary_records":20000,"mapped_primary_read_bases":2995928,"mapped_primary_records":20000,"mapq_observed_primary":1936},"mapping_stage":"MiCall scratch/temp.sam","source_sha256":"91b98eb76fb55506f68cfce15b9d2f7e3e3630fd1cfd0027929c98bc4ef0afb2","status":"measured","unavailable":[],"values":{"aligned_read_bases":2991829,"clipped_read_fraction":0.0054,"deleted_reference_bases":0,"final_contig_31mer_redundancy_fraction":0.009482497730253225,"final_contig_count":2,"final_contig_total_bases":9973,"inserted_bases":2142,"mapq_zero":0,"mean_known_mapq":26.672520661157026,"nuc_q15_covered_fraction":1.0,"nuc_q15_mean_depth":292.59327731092435,"nuc_soft_clips_count":1358,"primary_mapped":20000,"primary_mapped_fraction":1.0,"primary_unmapped":0,"region_concordance_mean":95.13876498985375,"secondary":104,"soft_clip_events":111,"soft_clip_events_per_1000_primary_mapped":5.55,"soft_clipped_bases":1957,"soft_clipped_bases_per_1000_read_bases":0.6532199705733917,"soft_clipped_reads":108,"supplementary":0}},"iva":{"denominators":{"all_primary_records":20000,"mapped_primary_read_bases":2995928,"mapped_primary_records":20000,"mapq_observed_primary":0},"mapping_stage":"MiCall scratch/temp.sam","source_sha256":"386f20698e460e336619608d22562755405a1d6dd05459180ab65f24cd6184ea","status":"measured","unavailable":["mean_known_mapq"],"values":{"aligned_read_bases":2965865,"clipped_read_fraction":0.03235,"deleted_reference_bases":0,"final_contig_31mer_redundancy_fraction":0.0,"final_contig_count":2,"final_contig_total_bases":9369,"inserted_bases":0,"mapq_zero":0,"mean_known_mapq":null,"nuc_q15_covered_fraction":1.0,"nuc_q15_mean_depth":334.6829131652661,"nuc_soft_clips_count":29761,"primary_mapped":20000,"primary_mapped_fraction":1.0,"primary_unmapped":0,"region_concordance_mean":95.13876498985375,"secondary":0,"soft_clip_events":702,"soft_clip_events_per_1000_primary_mapped":35.1,"soft_clipped_bases":30063,"soft_clipped_bases_per_1000_read_bases":10.034620324653996,"soft_clipped_reads":647,"supplementary":0}},"ivanka":{"denominators":{"all_primary_records":20000,"mapped_primary_read_bases":2995928,"mapped_primary_records":20000,"mapq_observed_primary":1930},"mapping_stage":"MiCall scratch/temp.sam","source_sha256":"7410b96f9c576db33e7920043f4c79bd01fe8a1415dc8539ab492910dae7b014","status":"measured","unavailable":[],"values":{"aligned_read_bases":2995916,"clipped_read_fraction":0.0003,"deleted_reference_bases":0,"final_contig_31mer_redundancy_fraction":0.013908486192299896,"final_contig_count":2,"final_contig_total_bases":9982,"inserted_bases":0,"mapq_zero":0,"mean_known_mapq":32.18445595854922,"nuc_q15_covered_fraction":1.0,"nuc_q15_mean_depth":292.2464985994398,"nuc_soft_clips_count":12,"primary_mapped":20000,"primary_mapped_fraction":1.0,"primary_unmapped":0,"region_concordance_mean":95.13876498985375,"secondary":0,"soft_clip_events":6,"soft_clip_events_per_1000_primary_mapped":0.3,"soft_clipped_bases":12,"soft_clipped_bases_per_1000_read_bases":0.004005436712764793,"soft_clipped_reads":6,"supplementary":0}},"megahit":{"denominators":{"all_primary_records":20000,"mapped_primary_read_bases":2995928,"mapped_primary_records":20000,"mapq_observed_primary":1680},"mapping_stage":"MiCall scratch/temp.sam","source_sha256":"223d82871f413d9e9acc47f7ebc260d95d43537a068b466325e07d9ea53eb766","status":"measured","unavailable":[],"values":{"aligned_read_bases":2994728,"clipped_read_fraction":0.00385,"deleted_reference_bases":0,"final_contig_31mer_redundancy_fraction":0.013156552779194253,"final_contig_count":2,"final_contig_total_bases":9865,"inserted_bases":0,"mapq_zero":0,"mean_known_mapq":29.909523809523808,"nuc_q15_covered_fraction":1.0,"nuc_q15_mean_depth":294.25994397759104,"nuc_soft_clips_count":1227,"primary_mapped":20000,"primary_mapped_fraction":1.0,"primary_unmapped":0,"region_concordance_mean":95.13876498985375,"secondary":2,"soft_clip_events":79,"soft_clip_events_per_1000_primary_mapped":3.95,"soft_clipped_bases":1200,"soft_clipped_bases_per_1000_read_bases":0.4005436712764793,"soft_clipped_reads":77,"supplementary":0}},"spades":{"denominators":{"all_primary_records":20000,"mapped_primary_read_bases":2995928,"mapped_primary_records":20000,"mapq_observed_primary":1554},"mapping_stage":"MiCall scratch/temp.sam","source_sha256":"97f6ac939e456a87e9bbea99ce376337d6e6b182200ac5c3cc0bd357d7892bfe","status":"measured","unavailable":[],"values":{"aligned_read_bases":2994757,"clipped_read_fraction":0.0045,"deleted_reference_bases":0,"final_contig_31mer_redundancy_fraction":0.011269337158078097,"final_contig_count":2,"final_contig_total_bases":9821,"inserted_bases":0,"mapq_zero":0,"mean_known_mapq":29.815958815958815,"nuc_q15_covered_fraction":1.0,"nuc_q15_mean_depth":299.6946778711485,"nuc_soft_clips_count":1130,"primary_mapped":20000,"primary_mapped_fraction":1.0,"primary_unmapped":0,"region_concordance_mean":95.13876498985375,"secondary":0,"soft_clip_events":95,"soft_clip_events_per_1000_primary_mapped":4.75,"soft_clipped_bases":1171,"soft_clipped_bases_per_1000_read_bases":0.3908638658872977,"soft_clipped_reads":90,"supplementary":0}},"velvet":{"denominators":{"all_primary_records":20000,"mapped_primary_read_bases":2995928,"mapped_primary_records":20000,"mapq_observed_primary":424},"mapping_stage":"MiCall scratch/temp.sam","source_sha256":"269404a156a1720884cb86fdec77fc85a88e515079129e9b2bf90c3b5f0613fb","status":"measured","unavailable":[],"values":{"aligned_read_bases":2982642,"clipped_read_fraction":0.02145,"deleted_reference_bases":0,"final_contig_31mer_redundancy_fraction":0.0,"final_contig_count":2,"final_contig_total_bases":9476,"inserted_bases":0,"mapq_zero":0,"mean_known_mapq":15.415094339622641,"nuc_q15_covered_fraction":1.0,"nuc_q15_mean_depth":326.8593837535014,"nuc_soft_clips_count":13315,"primary_mapped":20000,"primary_mapped_fraction":1.0,"primary_unmapped":0,"region_concordance_mean":95.13876498985375,"secondary":2,"soft_clip_events":452,"soft_clip_events_per_1000_primary_mapped":22.6,"soft_clipped_bases":13286,"soft_clipped_bases_per_1000_read_bases":4.434686013816086,"soft_clipped_reads":429,"supplementary":0}}}}
+{
+  "cases_measured": 1,
+  "cohort": "Source-attested HXB2-derived synthetic MiCall",
+  "expected_cases": 400,
+  "metric_catalog": {
+    "aligned_read_bases": {
+      "denominator": "Count of aligned query bases in primary records.",
+      "description": "Primary mapped nucleotide bases represented by CIGAR M, =, or X. Excludes soft clips, insertions, and hard clips.",
+      "label": "Aligned primary-read bases",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "higher",
+      "unit": "nt"
+    },
+    "clipped_read_fraction": {
+      "denominator": "Soft-clipped primary reads / all mapped primary reads.",
+      "description": "Fraction of primary mapped read alignments carrying one or more soft clips, counting each mapped primary record once.",
+      "label": "Fraction of mapped reads clipped",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "lower",
+      "unit": "fraction"
+    },
+    "deleted_reference_bases": {
+      "denominator": "Count of CIGAR D reference bases.",
+      "description": "Reference-consuming deletions in primary alignments, from CIGAR D. A deletion is not automatically a sequencing or assembler error.",
+      "label": "Mapped reference deletion bases",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "unspecified",
+      "unit": "nt"
+    },
+    "final_contig_31mer_redundancy_fraction": {
+      "denominator": "Repeated 31-mer instances / eligible 31-mer instances.",
+      "description": "Proportion of assembled 31-mer instances repeated in other contigs. A heuristic indicator of redundancy, not misassembly.",
+      "label": "Redundant contig 31-mer fraction",
+      "stage": "MiCall assembler output",
+      "suggested_direction": "lower",
+      "unit": "fraction"
+    },
+    "final_contig_count": {
+      "denominator": "Number of final contig records.",
+      "description": "Number of assembled contigs passed to downstream MiCall processing. Neither more nor fewer alone proves correctness.",
+      "label": "Final contig count",
+      "stage": "MiCall assembler output",
+      "suggested_direction": "unspecified",
+      "unit": "contigs"
+    },
+    "final_contig_total_bases": {
+      "denominator": "Sum of assembled contig sequence lengths.",
+      "description": "Sum of lengths of all final assembled contigs. Overlapping and duplicate segments are counted repeatedly.",
+      "label": "Total contig bases",
+      "stage": "MiCall assembler output",
+      "suggested_direction": "unspecified",
+      "unit": "nt"
+    },
+    "inserted_bases": {
+      "denominator": "Count of CIGAR I query bases.",
+      "description": "Nucleotide insertions in primary read alignments, from CIGAR I. True biological indels cannot be classified as errors from this alone.",
+      "label": "Mapped primary-read insertion bases",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "unspecified",
+      "unit": "nt"
+    },
+    "mapq_zero": {
+      "denominator": "Count of mapped primary records with MAPQ 0.",
+      "description": "Mapped primary reads assigned MAPQ 0, which indicates no mapping confidence on the SAM scale.",
+      "label": "Primary reads with MAPQ 0",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "lower",
+      "unit": "reads"
+    },
+    "mean_known_mapq": {
+      "denominator": "Sum of known primary MAPQ / primary records with MAPQ != 255.",
+      "description": "Mean mapping quality among mapped primary alignment records with known MAPQ. SAM MAPQ 255 denotes unknown and is excluded.",
+      "label": "Mean known MAPQ",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "higher",
+      "unit": "phred score"
+    },
+    "nuc_q15_covered_fraction": {
+      "denominator": "Q15-covered positions / positions examined.",
+      "description": "Fraction of expected positions with supported Q15 nucleotide coverage, as available in MiCall's nucleotide summary.",
+      "label": "Q15 breadth",
+      "stage": "MiCall nucleotide summary",
+      "suggested_direction": "higher",
+      "unit": "fraction"
+    },
+    "nuc_q15_mean_depth": {
+      "denominator": "Mean depth over represented Q15 nucleotide positions.",
+      "description": "Average nucleotide read depth among the positions represented in MiCall's quality-cutoff-15 nucleotide summary.",
+      "label": "Mean Q15 depth",
+      "stage": "MiCall nucleotide summary",
+      "suggested_direction": "higher",
+      "unit": "reads / site"
+    },
+    "nuc_soft_clips_count": {
+      "denominator": "Sum or deduplicated per-position nuc.csv clip aggregate.",
+      "description": "MiCall's aggregated per-position nuc.csv clip count. This quantity has different inclusion and duplication rules than SAM soft clips.",
+      "label": "MiCall per-position clip aggregate",
+      "stage": "MiCall nucleotide summary",
+      "suggested_direction": "unspecified",
+      "unit": "count"
+    },
+    "primary_mapped": {
+      "denominator": "Count of primary mapped alignment records.",
+      "description": "Primary alignment records marked mapped in the SAM. Secondary and supplementary records are excluded; records need not be unique molecules.",
+      "label": "Primary mapped reads",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "higher",
+      "unit": "reads"
+    },
+    "primary_mapped_fraction": {
+      "denominator": "Mapped primary / (mapped + unmapped primary records).",
+      "description": "Fraction of primary SAM alignment records marked mapped; this is a read-record rate, not a genome reconstruction score.",
+      "label": "Primary mapped read fraction",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "higher",
+      "unit": "fraction"
+    },
+    "primary_unmapped": {
+      "denominator": "Count of primary unmapped alignment records.",
+      "description": "Primary alignment records carrying the SAM unmapped flag. Not the same as a count of unmatched original read pairs.",
+      "label": "Primary unmapped reads",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "lower",
+      "unit": "reads"
+    },
+    "region_concordance_mean": {
+      "denominator": "Mean of valid region concordance percentages.",
+      "description": "Mean MiCall regional concordance between the final result and the aligned reference panel, evaluated only after assembly.",
+      "label": "Mean region concordance",
+      "stage": "MiCall regional concordance",
+      "suggested_direction": "higher",
+      "unit": "percentage"
+    },
+    "secondary": {
+      "denominator": "Count of SAM secondary alignment records.",
+      "description": "SAM secondary alignments, including alternative placements. A large count can reflect legitimate multi-mapping rather than errors.",
+      "label": "Secondary alignments",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "unspecified",
+      "unit": "records"
+    },
+    "soft_clip_events": {
+      "denominator": "Count; per 1,000 mapped primary reads is available separately.",
+      "description": "CIGAR S operations on primary mapped reads. One read can contribute a left and right clip event.",
+      "label": "Soft-clip events",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "lower",
+      "unit": "events"
+    },
+    "soft_clip_events_per_1000_primary_mapped": {
+      "denominator": "1,000 \u00d7 clip events / mapped primary reads.",
+      "description": "Frequency of individual left/right CIGAR S clipping operations among mapped primary alignment records.",
+      "label": "Clip events per 1,000 mapped reads",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "lower",
+      "unit": "events / 1000 reads"
+    },
+    "soft_clipped_bases": {
+      "denominator": "Count; normalized per 1,000 mapped sequenced bases separately.",
+      "description": "Total nucleotide bases excluded by CIGAR S operations on primary mapped alignment records.",
+      "label": "Soft-clipped bases",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "lower",
+      "unit": "nt"
+    },
+    "soft_clipped_bases_per_1000_read_bases": {
+      "denominator": "1,000 \u00d7 clipped bases / mapped primary-read bases.",
+      "description": "Total soft-clipped nucleotides normalized by mapped primary-read sequence bases. A shorter clipped fraction is not necessarily biologically more accurate.",
+      "label": "Clipped bases per 1,000 mapped read bases",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "lower",
+      "unit": "nt / 1000 nt"
+    },
+    "soft_clipped_reads": {
+      "denominator": "Count; mapped primary alignment records are the reference population.",
+      "description": "Primary mapped alignment records with at least one CIGAR S operation. Both ends of the same read count once here.",
+      "label": "Soft-clipped primary reads",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "lower",
+      "unit": "reads"
+    },
+    "supplementary": {
+      "denominator": "Count of SAM supplementary alignment records.",
+      "description": "SAM supplementary alignments, often associated with split mappings. Whether more or fewer is desirable depends on the sample.",
+      "label": "Supplementary alignments",
+      "stage": "Read-to-contig SAM alignment",
+      "suggested_direction": "unspecified",
+      "unit": "records"
+    }
+  },
+  "note": "One verified case's metrics from the current pinned fork image builds; no cohort-wide diagnostic certificate.",
+  "run_id": "hxb2-v4-fork-source-attested-live",
+  "sample_alias": "H033",
+  "schema": "assembler-bench.public-mapping-diagnostics.v1",
+  "status": "INCOMPLETE",
+  "tools": {
+    "abyss": {
+      "denominators": {
+        "all_primary_records": 20000,
+        "mapped_primary_read_bases": 2995928,
+        "mapped_primary_records": 20000,
+        "mapq_observed_primary": 20000
+      },
+      "mapping_stage": "MiCall scratch/temp.sam",
+      "source_sha256": "48580cb7beb3b3ca1fb2cc5667e103d789253aeac9bb2c4dccf793b6be9049cf",
+      "status": "measured",
+      "unavailable": [],
+      "values": {
+        "aligned_read_bases": 2995927,
+        "clipped_read_fraction": 5e-05,
+        "deleted_reference_bases": 0,
+        "final_contig_31mer_redundancy_fraction": 0.01390288132178119,
+        "final_contig_count": 2,
+        "final_contig_total_bases": 9986,
+        "inserted_bases": 0,
+        "mapq_zero": 0,
+        "mean_known_mapq": 42.8638,
+        "nuc_q15_covered_fraction": 1.0,
+        "nuc_q15_mean_depth": 292.2464985994398,
+        "nuc_soft_clips_count": 1,
+        "primary_mapped": 20000,
+        "primary_mapped_fraction": 1.0,
+        "primary_unmapped": 0,
+        "region_concordance_mean": 95.13876498985375,
+        "secondary": 0,
+        "soft_clip_events": 1,
+        "soft_clip_events_per_1000_primary_mapped": 0.05,
+        "soft_clipped_bases": 1,
+        "soft_clipped_bases_per_1000_read_bases": 0.0003337863927303994,
+        "soft_clipped_reads": 1,
+        "supplementary": 0
+      }
+    },
+    "haploflow": {
+      "denominators": {
+        "all_primary_records": 20000,
+        "mapped_primary_read_bases": 2995928,
+        "mapped_primary_records": 20000,
+        "mapq_observed_primary": 20000
+      },
+      "mapping_stage": "MiCall scratch/temp.sam",
+      "source_sha256": "1f38585e1f8792cd7b3923d45fd755ace16a57add3d6de3206d169c192f1aca0",
+      "status": "measured",
+      "unavailable": [],
+      "values": {
+        "aligned_read_bases": 2991749,
+        "clipped_read_fraction": 0.0056,
+        "deleted_reference_bases": 0,
+        "final_contig_31mer_redundancy_fraction": 0.009482497730253225,
+        "final_contig_count": 2,
+        "final_contig_total_bases": 9973,
+        "inserted_bases": 2170,
+        "mapq_zero": 0,
+        "mean_known_mapq": 42.3239,
+        "nuc_q15_covered_fraction": 1.0,
+        "nuc_q15_mean_depth": 292.2487394957983,
+        "nuc_soft_clips_count": 1358,
+        "primary_mapped": 20000,
+        "primary_mapped_fraction": 1.0,
+        "primary_unmapped": 0,
+        "region_concordance_mean": 95.13876498985375,
+        "secondary": 0,
+        "soft_clip_events": 117,
+        "soft_clip_events_per_1000_primary_mapped": 5.85,
+        "soft_clipped_bases": 2009,
+        "soft_clipped_bases_per_1000_read_bases": 0.6705768629953723,
+        "soft_clipped_reads": 112,
+        "supplementary": 0
+      }
+    },
+    "iva": {
+      "denominators": {
+        "all_primary_records": 20000,
+        "mapped_primary_read_bases": 2995928,
+        "mapped_primary_records": 20000,
+        "mapq_observed_primary": 20000
+      },
+      "mapping_stage": "MiCall scratch/temp.sam",
+      "source_sha256": "c20ee1e53772ae35f09ed3080f694915cd6ce1ae1484afa643dff1e619db8571",
+      "status": "measured",
+      "unavailable": [],
+      "values": {
+        "aligned_read_bases": 2965865,
+        "clipped_read_fraction": 0.03235,
+        "deleted_reference_bases": 0,
+        "final_contig_31mer_redundancy_fraction": 0.0,
+        "final_contig_count": 2,
+        "final_contig_total_bases": 9369,
+        "inserted_bases": 0,
+        "mapq_zero": 0,
+        "mean_known_mapq": 43.7348,
+        "nuc_q15_covered_fraction": 1.0,
+        "nuc_q15_mean_depth": 334.6829131652661,
+        "nuc_soft_clips_count": 29761,
+        "primary_mapped": 20000,
+        "primary_mapped_fraction": 1.0,
+        "primary_unmapped": 0,
+        "region_concordance_mean": 95.13876498985375,
+        "secondary": 0,
+        "soft_clip_events": 702,
+        "soft_clip_events_per_1000_primary_mapped": 35.1,
+        "soft_clipped_bases": 30063,
+        "soft_clipped_bases_per_1000_read_bases": 10.034620324653996,
+        "soft_clipped_reads": 647,
+        "supplementary": 0
+      }
+    },
+    "ivanka": {
+      "denominators": {
+        "all_primary_records": 20000,
+        "mapped_primary_read_bases": 2995928,
+        "mapped_primary_records": 20000,
+        "mapq_observed_primary": 20000
+      },
+      "mapping_stage": "MiCall scratch/temp.sam",
+      "source_sha256": "8a659ae5ae3a3f1b1a202dd8e03bb544ab747ffea90b4fafc3be546a5528f79b",
+      "status": "measured",
+      "unavailable": [],
+      "values": {
+        "aligned_read_bases": 2995916,
+        "clipped_read_fraction": 0.0003,
+        "deleted_reference_bases": 0,
+        "final_contig_31mer_redundancy_fraction": 0.013908486192299896,
+        "final_contig_count": 2,
+        "final_contig_total_bases": 9982,
+        "inserted_bases": 0,
+        "mapq_zero": 0,
+        "mean_known_mapq": 42.8598,
+        "nuc_q15_covered_fraction": 1.0,
+        "nuc_q15_mean_depth": 292.2464985994398,
+        "nuc_soft_clips_count": 12,
+        "primary_mapped": 20000,
+        "primary_mapped_fraction": 1.0,
+        "primary_unmapped": 0,
+        "region_concordance_mean": 95.13876498985375,
+        "secondary": 0,
+        "soft_clip_events": 6,
+        "soft_clip_events_per_1000_primary_mapped": 0.3,
+        "soft_clipped_bases": 12,
+        "soft_clipped_bases_per_1000_read_bases": 0.004005436712764793,
+        "soft_clipped_reads": 6,
+        "supplementary": 0
+      }
+    },
+    "megahit": {
+      "denominators": {
+        "all_primary_records": 20000,
+        "mapped_primary_read_bases": 2995928,
+        "mapped_primary_records": 20000,
+        "mapq_observed_primary": 20000
+      },
+      "mapping_stage": "MiCall scratch/temp.sam",
+      "source_sha256": "0498f4152854eb8f3a8e2534a602fdf5d8a065d1a81101a0f002638f3542387b",
+      "status": "measured",
+      "unavailable": [],
+      "values": {
+        "aligned_read_bases": 2994728,
+        "clipped_read_fraction": 0.00385,
+        "deleted_reference_bases": 0,
+        "final_contig_31mer_redundancy_fraction": 0.013156552779194253,
+        "final_contig_count": 2,
+        "final_contig_total_bases": 9865,
+        "inserted_bases": 0,
+        "mapq_zero": 0,
+        "mean_known_mapq": 42.8164,
+        "nuc_q15_covered_fraction": 1.0,
+        "nuc_q15_mean_depth": 294.25994397759104,
+        "nuc_soft_clips_count": 1183,
+        "primary_mapped": 20000,
+        "primary_mapped_fraction": 1.0,
+        "primary_unmapped": 0,
+        "region_concordance_mean": 95.13876498985375,
+        "secondary": 0,
+        "soft_clip_events": 79,
+        "soft_clip_events_per_1000_primary_mapped": 3.95,
+        "soft_clipped_bases": 1200,
+        "soft_clipped_bases_per_1000_read_bases": 0.4005436712764793,
+        "soft_clipped_reads": 77,
+        "supplementary": 0
+      }
+    },
+    "spades": {
+      "denominators": {
+        "all_primary_records": 20000,
+        "mapped_primary_read_bases": 2995928,
+        "mapped_primary_records": 20000,
+        "mapq_observed_primary": 20000
+      },
+      "mapping_stage": "MiCall scratch/temp.sam",
+      "source_sha256": "b207d6ebbf5db7089b35e6de4c933b784b4db8db4654cd7283997f8d7f98eba4",
+      "status": "measured",
+      "unavailable": [],
+      "values": {
+        "aligned_read_bases": 2994757,
+        "clipped_read_fraction": 0.0045,
+        "deleted_reference_bases": 0,
+        "final_contig_31mer_redundancy_fraction": 0.011269337158078097,
+        "final_contig_count": 2,
+        "final_contig_total_bases": 9821,
+        "inserted_bases": 0,
+        "mapq_zero": 0,
+        "mean_known_mapq": 42.8979,
+        "nuc_q15_covered_fraction": 1.0,
+        "nuc_q15_mean_depth": 299.6946778711485,
+        "nuc_soft_clips_count": 1130,
+        "primary_mapped": 20000,
+        "primary_mapped_fraction": 1.0,
+        "primary_unmapped": 0,
+        "region_concordance_mean": 95.13876498985375,
+        "secondary": 0,
+        "soft_clip_events": 95,
+        "soft_clip_events_per_1000_primary_mapped": 4.75,
+        "soft_clipped_bases": 1171,
+        "soft_clipped_bases_per_1000_read_bases": 0.3908638658872977,
+        "soft_clipped_reads": 90,
+        "supplementary": 0
+      }
+    },
+    "velvet": {
+      "denominators": {
+        "all_primary_records": 20000,
+        "mapped_primary_read_bases": 2995928,
+        "mapped_primary_records": 20000,
+        "mapq_observed_primary": 20000
+      },
+      "mapping_stage": "MiCall scratch/temp.sam",
+      "source_sha256": "e9244baa3c8836c24f4437d043cb9b0f7bdadd7b51d30ceb1eacbe82793a7f6b",
+      "status": "measured",
+      "unavailable": [],
+      "values": {
+        "aligned_read_bases": 2982642,
+        "clipped_read_fraction": 0.02145,
+        "deleted_reference_bases": 0,
+        "final_contig_31mer_redundancy_fraction": 0.0,
+        "final_contig_count": 2,
+        "final_contig_total_bases": 9476,
+        "inserted_bases": 0,
+        "mapq_zero": 0,
+        "mean_known_mapq": 43.3552,
+        "nuc_q15_covered_fraction": 1.0,
+        "nuc_q15_mean_depth": 326.8593837535014,
+        "nuc_soft_clips_count": 13261,
+        "primary_mapped": 20000,
+        "primary_mapped_fraction": 1.0,
+        "primary_unmapped": 0,
+        "region_concordance_mean": 95.13876498985375,
+        "secondary": 0,
+        "soft_clip_events": 452,
+        "soft_clip_events_per_1000_primary_mapped": 22.6,
+        "soft_clipped_bases": 13286,
+        "soft_clipped_bases_per_1000_read_bases": 4.434686013816086,
+        "soft_clipped_reads": 429,
+        "supplementary": 0
+      }
+    }
+  }
+}

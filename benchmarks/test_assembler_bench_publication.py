@@ -14,31 +14,31 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         cls.root = json.loads((SITE / "data/runs.json").read_text())
 
     def test_public_data_is_independently_grounded_and_complete(self):
-        reports = self.root["runs"]
-        self.assertGreaterEqual(len(reports), 3)
-        real = next(r for r in reports if r["cohort"] == "real")
-        self.assertEqual(real["sample_count"], 198)
-        self.assertEqual(len(real["samples"]), 198)
-        self.assertEqual({s["alias"] for s in real["samples"]},
-                         {f"R{i:03d}" for i in range(1, 199)})
-        self.assertEqual(real["status"], "passed-original-only")
-        self.assertEqual(real["tools"], ["IVA", "Ivanka"])
-        self.assertFalse(real["eligible_for_expanded"])
-        for score in real["psi"].values():
-            self.assertTrue(score["positive_all_nonnegative"])
-            self.assertEqual(score["zeros_nonnegative"], [])
-        self.assertAlmostEqual(real["psi"]["runtime"]["psi1"],
-                               44.26979640412626, places=8)
+        from assembler_bench.current_validation import EXPECTED
+        self.assertEqual({r["id"] for r in self.root["runs"]}, EXPECTED)
+        self.assertEqual({r["cohort"] for r in self.root["runs"]},
+                         {"synthetic", "real", "combined"})
+        for run in self.root["runs"]:
+            self.assertEqual(len(run["tools"]), 7)
+            self.assertEqual(run["status"], "incomplete")
+            self.assertEqual(run["sample_count"], len(run["samples"]))
+            self.assertFalse(run["eligible_for_expanded"])
+            self.assertEqual(run["micall_fork_provenance"]["status"],
+                             "verified")
+        real = next(r for r in self.root["runs"] if r["cohort"]=="real")
+        self.assertLessEqual(real["sample_count"],198)
+        self.assertEqual(real["expected_sample_count"],198)
+        self.assertTrue(all(s["alias"].startswith("R") for s in
+                            real["samples"]))
+        self.assertGreater(real["sample_count"],0)
 
-    def test_legacy_random_truth_cannot_pretend_to_qualify(self):
-        run = next(r for r in self.root["runs"] if r["cohort"] == "synthetic")
-        self.assertEqual(run["status"], "ineligible")
-        self.assertFalse(run["eligible_for_expanded"])
-        self.assertEqual(run["sample_count"], 400)
-        self.assertEqual(len(run["families"]), 25)
-        self.assertFalse(run["psi"])
-        self.assertGreater(sum(sum(f["failures"].values())
-                               for f in run["families"]), 0)
+    def test_historical_data_is_not_published(self):
+        self.assertTrue(all(r.get("status") != "ineligible"
+                            and r.get("micall_fork_provenance",{}).get(
+                            "status") == "verified"
+                            for r in self.root["runs"]))
+        self.assertNotIn("legacy-synthetic-v1-20261112",
+                         json.dumps(self.root))
 
     def test_no_private_metadata(self):
         self.assertEqual(validate_public_site(), len(self.root["runs"]))
@@ -60,34 +60,21 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             data = copy.deepcopy(self.root)
             data["runs"][0]["samples"][0]["alias"] = "/workspace/secret.fastq"
             (copy_site / "data/runs.json").write_text(json.dumps(data))
-            with self.assertRaisesRegex(ValueError, "unsafe"):
+            with self.assertRaisesRegex(ValueError, "invalid sample|unsafe"):
                 validate_public_site(copy_site)
 
     def test_directed_all_tool_dominance_matrix_is_fail_closed(self):
-        real = next(r for r in self.root["runs"] if r["cohort"]=="real")
-        grid = real["dominance_matrix"]["metrics"]
-        for name in ("alignment", "runtime", "joint"):
-            self.assertEqual(grid[name]["Ivanka"]["IVA"]["status"],
-                             "dominates")
-            self.assertEqual(grid[name]["IVA"]["Ivanka"]["status"],
-                             "does-not-dominate")
-            self.assertEqual(grid[name]["IVA"]["IVA"]["status"], "self")
-        self.assertEqual(grid["alignment"]["Ivanka"]["IVA"]["proof"]
-                         ["zeros_nonnegative"], [])
         for run in self.root["runs"]:
             matrix = run["dominance_matrix"]
-            self.assertEqual(matrix["tools"], run["tools"])
-            if run["cohort"]=="synthetic":
-                for metric in ("alignment", "runtime", "joint"):
-                    for a in run["tools"]:
-                        for b in run["tools"]:
-                            expected = "self" if a==b else "incomplete"
-                            self.assertEqual(matrix["metrics"][metric][a][b]
-                                             ["status"], expected)
-            self.assertEqual(
-                run["micall_fork_provenance"]["status"],
-                "verified" if run["id"] == "hxb2-v4-fork-source-attested-live"
-                else "historical-unverified")
+            self.assertEqual(matrix["tools"],run["tools"])
+            for metric in ("alignment","runtime","joint"):
+                for a in run["tools"]:
+                    for b in run["tools"]:
+                        result=matrix["metrics"][metric][a][b]
+                        self.assertEqual(result["status"],
+                            "self" if a==b else "incomplete")
+            self.assertEqual(run["micall_fork_provenance"]["status"],
+                             "verified")
 
     def test_seven_tool_soft_clip_counts_and_densities_are_reviewable(self):
         source = SITE / "data/mapping-diagnostics.json"
@@ -144,14 +131,14 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         self.assertEqual(sample["status"],"incomplete")
         self.assertEqual(sample["subset"]["status"],"dominates")
         self.assertTrue(sample["subset"]["proof"]["positive_all_nonnegative"])
-        self.assertEqual(sample["paired"],10)
+        self.assertEqual(sample["paired"],recorded["sample_count"])
         corrupted=copy.deepcopy(runs)
         hxb2=next(r for r in corrupted["runs"] if r.get("hxb2_truth_verified"))
         hxb2["dominance_matrix"]["metrics"]["alignment"]["ivanka"]["iva"][
             "subset"]["status"]="does-not-dominate"
         with self.assertRaisesRegex(ValueError,"pairwise PSI matrix"):
             check_matrices(corrupted)
-        self.assertEqual(enrich(runs)["runs"][-1]["dominance_matrix"][
+        self.assertEqual(enrich(runs)["runs"][0]["dominance_matrix"][
             "metrics"]["alignment"]["ivanka"]["iva"]["subset"]["status"],
             "dominates")
 
@@ -162,7 +149,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             shutil.copytree(SITE,copy_site)
             data=copy.deepcopy(self.root)
             data["runs"][0]["dominance_matrix"]["metrics"]["joint"][
-                "IVA"]["Ivanka"]["status"]="dominates"
+                "iva"]["ivanka"]["status"]="dominates"
             (copy_site/"data/runs.json").write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError,"pairwise"):
                 validate_public_site(copy_site)

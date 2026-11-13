@@ -110,12 +110,24 @@ class PublicAssemblerBenchTests(unittest.TestCase):
                 self.assertIn("source_sha256",tool)
         page=(SITE/"index.html").read_text()
         js=(SITE/"app.js").read_text()
-        for text in ('id="dominanceMatrix"', 'id="diagnosticMatrix"',
+        for text in ('id="dominanceMatrix"', 'id="dominanceSubjects"',
+                     'id="subjectSearch"', 'id="diagnosticMatrix"',
+                     'id="diagnosticExplanation"', 'id="diagnosticChart"',
                      'id="firstTool"'):
             self.assertIn(text,page)
         self.assertIn("function drawDominance()",js)
         self.assertIn("function drawDiagnostics()",js)
+        self.assertIn("function drawSubjectControls()",js)
+        self.assertIn("definition.description",js)
+        self.assertIn("definition.denominator",js)
+        self.assertNotIn('id="dominanceMetric"',page)
         self.assertNotIn('Ivanka wins</option>',page)
+        definitions=report["metric_catalog"]
+        for name, metadata in definitions.items():
+            self.assertGreater(len(metadata["description"]), 35, name)
+            self.assertGreater(len(metadata["denominator"]), 15, name)
+            self.assertIn(metadata["suggested_direction"],
+                          ("higher","lower","unspecified"))
 
     def test_tampering_with_matrix_or_density_fails_publication(self):
         import shutil
@@ -143,6 +155,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             build(path)
             self.assertTrue((path / "bench/index.html").is_file())
             self.assertTrue((path / "bench/app.js").is_file())
+            self.assertTrue((path / "bench/subjects.js").is_file())
             self.assertTrue((path / "bench/style.css").is_file())
             self.assertTrue((path / "bench/data/runs.json").is_file())
             self.assertTrue((path / "bench/data/mapping-diagnostics.json").is_file())

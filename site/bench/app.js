@@ -65,6 +65,9 @@ function syncUrl() {
   if(state.firstTool)params.set("first",state.firstTool);
   if(state.tool)params.set("competitor",state.tool);
   if(el("search").value)params.set("search",el("search").value);
+  params.set("subjects",selectedSubjects().map(({key,direction})=>
+    key+":"+direction).join(","));
+  if(el("diagnosticMetric").value)params.set("diagnostic",el("diagnosticMetric").value);
   history.replaceState(null,"","?"+params.toString());
 }
 
@@ -252,58 +255,155 @@ function drawProvenance() {
     '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>').join("")+'</dl></div>';
 }
 
+function drawSubjectControls() {
+  const catalog=state.diagnostics?.metric_catalog||{};
+  const groups=new Map([
+    ["Qualification",[
+      {key:"alignment",label:"Final MiCall alignment",direction:"higher",
+        description:"Higher final MiCall MAX alignment on real samples, or higher known-truth similarity on synthetic samples. Keep those score scales separate."},
+      {key:"runtime",label:"MiCall runtime",direction:"lower",
+        description:"Lower in-container MiCall monotonic duration in seconds. All reads and downstream processing must be comparable."}
+    ]]
+  ]);
+  for(const [key,definition] of Object.entries(catalog)) {
+    const group=definition.stage||"Other diagnostics";
+    if(!groups.has(group))groups.set(group,[]);
+    groups.get(group).push({key,label:definition.label,
+      direction:definition.suggested_direction||"unspecified",
+      description:definition.description||"No definition supplied"});
+  }
+  const chosen=new Map([...el("dominanceSubjects").querySelectorAll("input:checked")]
+    .map(node=>[node.value,node.closest(".subject-option")
+      .querySelector("select")?.value]));
+  if(!state.subjectPickerInitialized) {
+    chosen.set("alignment","higher");
+    chosen.set("runtime","lower");
+    state.subjectPickerInitialized=true;
+  }
+  el("dominanceSubjects").innerHTML='<legend>Dominance subjects</legend>'+[...groups].map(([group,items])=>
+    '<div class="subject-group" data-subject-group="'+esc(group)+'">'+
+    '<h3>'+esc(group)+'</h3><div class="subject-options">'+
+    items.map(subject=>{
+      const isCore=subject.key==="alignment"||subject.key==="runtime";
+      const dir=chosen.get(subject.key)||subject.direction;
+      const checked=chosen.has(subject.key);
+      return '<div class="subject-option" data-subject-label="'+
+        esc((subject.label+" "+subject.description).toLowerCase())+'">'+
+        '<label title="'+esc(subject.description)+'"><input type="checkbox" value="'+
+        esc(subject.key)+'"'+(checked?' checked':'')+'>'+
+        '<span>'+esc(subject.label)+'</span></label>'+
+        (isCore?'<span class="subject-direction">Respectively '+(dir==="higher"?"higher":"lower")+' is better</span>':
+        '<select aria-label="Preference for '+esc(subject.label)+'" title="User-selected comparison preference; never a biological proof">'+
+        [['unspecified','No direction'],['higher','Higher preferred'],['lower','Lower preferred']].map(([value,label])=>
+          '<option value="'+value+'"'+(dir===value?' selected':'')+'>'+label+'</option>').join("")+
+        '</select>')+'</div>';
+    }).join("")+'</div></div>'
+  ).join("");
+  // Keep the two independently proven original dimensions as defaults.
+  el("dominanceSubjects").querySelectorAll("input[type=checkbox]").forEach(node=>
+    node.addEventListener("change",()=>{
+      drawDominance();syncSubjectCount();syncUrl();
+    }));
+  el("dominanceSubjects").querySelectorAll("select").forEach(node=>
+    node.addEventListener("change",()=>{
+      drawDominance();syncUrl();
+    }));
+  filterSubjects();
+}
+function selectedSubjects() {
+  const catalog=state.diagnostics?.metric_catalog||{};
+  return [...el("dominanceSubjects").querySelectorAll("input:checked")]
+    .map(node=>{
+      const key=node.value;
+      const core=key==="alignment"||key==="runtime";
+      return {key,label:core?(key==="alignment"?"Final MiCall alignment":"MiCall runtime")
+        :catalog[key]?.label||key,
+        direction:core?(key==="alignment"?"higher":"lower")
+          :node.closest(".subject-option").querySelector("select").value};
+    });
+}
+function syncSubjectCount() {
+  const total=selectedSubjects().length;
+  el("subjectsCount").textContent=total+" subject"+(total===1?"":"s")+" selected";
+}
+function filterSubjects() {
+  const query=el("subjectSearch").value.trim().toLowerCase();
+  el("dominanceSubjects").querySelectorAll(".subject-option").forEach(node=>{
+    node.hidden=query!==""&&!node.dataset.subjectLabel.includes(query);
+  });
+  el("dominanceSubjects").querySelectorAll(".subject-group").forEach(node=>{
+    node.hidden=![...node.querySelectorAll(".subject-option")]
+      .some(item=>!item.hidden);
+  });
+  syncSubjectCount();
+}
+function proofDescription(entry) {
+  if(entry.reason)return entry.reason;
+  const proof=entry.proof;
+  if(!proof)return "No verified all-exponent proof for this subject.";
+  return "Gains "+proof.gains+", losses "+proof.losses+", ties "+proof.ties+
+    "; Ψ(0) "+fmt(proof.psi0,5)+", Ψ(1) "+fmt(proof.psi1,5)+
+    ", Ψ(2) "+fmt(proof.psi2,5)+
+    (proof.negative_witness_r===undefined?"":"; counterexample r="+
+      fmt(proof.negative_witness_r,5));
+}
 function drawDominance() {
   const holder=el("dominanceMatrix"), details=el("dominanceDetails");
   const report=state.run.dominance_matrix;
+  const selected=selectedSubjects();
+  syncSubjectCount();
   if(!report) {
-    holder.textContent="Pairwise Ψ evidence has not been independently generated.";
-    details.textContent="No row is inferred from incomplete data.";return;
+    holder.textContent="No independently certified pairwise Ψ matrix was published.";
+    details.textContent="No dominance is inferred from unavailable data.";return;
   }
-  const mode=el("dominanceMetric").value;
-  const grid=report.metrics[mode];
+  if(!selected.length) {
+    holder.innerHTML='<p class="hint">Select at least one checkbox to build an all-subjects dominance relation.</p>';
+    details.textContent="The selected subjects form a conjunction: every selected metric must pass its own strict Ψ proof.";return;
+  }
   const tools=report.tools;
+  const preview=selected.filter(x=>x.key!=="alignment"&&x.key!=="runtime");
+  el("dominanceContext").textContent=selected.length+" subject(s): "+
+    selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
+    ". "+(preview.length?"Diagnostic Ψ needs paired per-sample measurements across the entire cohort. The published single-case diagnostic snapshot cannot establish dominance. ":"")+
+    "A proven counterexample falsifies a conjunction; otherwise incomplete data remain incomplete.";
   holder.innerHTML='<table class="psi-matrix"><thead><tr><th>ROW A ↓ / B →</th>'+
-    tools.map((tool)=>'<th>'+esc(names[tool.toLowerCase()]||tool)+'</th>').join("")+
+    tools.map(tool=>'<th>'+esc(names[tool.toLowerCase()]||tool)+'</th>').join("")+
     '</tr></thead><tbody>'+
-    tools.map((a)=>'<tr><th scope="row">'+esc(names[a.toLowerCase()]||a)+'</th>'+
-      tools.map((b)=>{
-        const value=grid[a][b], verdict=value.status;
-        const label={self:"—",dominates:"DOMINATES",
-          "does-not-dominate":"NO",incomplete:"INCOMPLETE",
-          unresolved:"UNRESOLVED"}[verdict]||"UNVERIFIED";
+    tools.map(a=>'<tr><th scope="row">'+esc(names[a.toLowerCase()]||a)+'</th>'+
+      tools.map(b=>{
         if(a===b)return '<td class="dom-self">—</td>';
-        return '<td class="dom-'+esc(verdict)+'"><button type="button" data-dominates-a="'+
-          esc(a)+'" data-dominates-b="'+esc(b)+'" aria-label="'+esc(a)+' versus '+
-          esc(b)+': '+esc(label)+'">'+esc(label)+'</button></td>';
+        const result=BenchSubjects.evaluate(report,a,b,selected);
+        const label={self:"—",none:"SELECT SUBJECTS",dominates:"DOMINATES",
+          "does-not-dominate":"NO",incomplete:"INCOMPLETE",
+          unresolved:"UNRESOLVED"}[result.status]||"UNVERIFIED";
+        return '<td class="dom-'+esc(result.status)+'"><button type="button" data-dominates-a="'+
+          esc(a)+'" data-dominates-b="'+esc(b)+'" aria-label="'+esc(a)+
+          ' compared with '+esc(b)+' over '+selected.length+' selected subjects: '+
+          esc(label)+'">'+esc(label)+'</button></td>';
       }).join("")+'</tr>').join("")+'</tbody></table>';
-  details.textContent="Select a cell for paired sample counts and strict all-r Ψ evidence. "+
-    report.observed_samples+" of "+report.expected_samples+
-    " samples recorded; incomplete/ineligible data is never labeled dominant.";
-  holder.querySelectorAll("button[data-dominates-a]").forEach((button)=>{
+  details.textContent="Choose a cell to inspect every selected criterion, its "+
+    "sample coverage and proof. "+report.observed_samples+" of "+
+    report.expected_samples+" samples recorded. No transitivity is assumed.";
+  holder.querySelectorAll("button[data-dominates-a]").forEach(button=>{
     button.addEventListener("click",()=>{
       const a=button.dataset.dominatesA,b=button.dataset.dominatesB;
-      const entry=grid[a][b];
-      const proof=entry.proof;
-      const fmtProof=(p)=>{
-        if(!p)return "No certified Ψ proof available.";
-        return 'Gains '+p.gains+', losses '+p.losses+', ties '+p.ties+
-          '; Ψ(0) '+fmt(p.psi0,5)+', Ψ(1) '+fmt(p.psi1,5)+
-          ', Ψ(2) '+fmt(p.psi2,5)+
-          (p.negative_witness_r===undefined?"":'; counterexample r='+p.negative_witness_r);
-      };
+      const result=BenchSubjects.evaluate(report,a,b,selected);
       details.innerHTML='<h3>'+esc(names[a.toLowerCase()]||a)+' versus '+
-        esc(names[b.toLowerCase()]||b)+' · '+esc(mode)+'</h3>'+
-        '<p>Verdict: <b>'+esc(entry.status)+'</b>; '+
-        entry.paired+' / '+entry.expected+' comparable samples.</p>'+
-        (mode==="joint"
-          ?'<p>Alignment: '+esc(fmtProof(proof&&proof.alignment))+
-            '</p><p>Runtime: '+esc(fmtProof(proof&&proof.runtime))+'</p>'
-          :'<p>'+esc(fmtProof(proof))+'</p>')+
-        '<p class="hint">Each cell is tested directly. The relation is not assumed to be total or transitive.</p>';
+        esc(names[b.toLowerCase()]||b)+' · '+selected.length+
+        ' selected subjects</h3><p>Joint verdict: <b>'+
+        esc(result.status)+'</b>. Each criterion uses paired samples '+
+        'and its independently certified all-r Ψ result.</p>'+
+        '<div class="criterion-results">'+result.entries.map(item=>
+          '<article><strong>'+esc(item.label)+'</strong>'+
+          '<span>'+esc(item.direction)+" · "+esc(item.status)+
+          " · "+item.paired+"/"+item.expected+" samples</span>"+
+          '<p>'+esc(proofDescription(item))+'</p></article>').join("")+'</div>'+
+        '<p class="hint">A descriptive preference is not proof of biological superiority. '+
+        'Unmeasured diagnostics cannot be scored as zero.</p>';
       state.firstTool=a;state.tool=b;
-      const choices=state.run.tools.filter((name)=>name!==a);
       el("firstTool").value=a;
-      el("comparisonTool").innerHTML=choices.map((name)=>
+      const choices=state.run.tools.filter(name=>name!==a);
+      el("comparisonTool").innerHTML=choices.map(name=>
         '<option value="'+esc(name)+'">'+esc(names[name.toLowerCase()]||name)+'</option>').join("");
       el("comparisonTool").value=b;
       el("firstColumn").textContent=a;
@@ -314,34 +414,90 @@ function drawDominance() {
 }
 
 function drawDiagnostics() {
-  const data=state.diagnostics, holder=el("diagnosticMatrix");
-  if(!data||data.run_id!==state.run.id) {
-    el("diagnosticContext").textContent="No complete retained SAM and MiCall diagnostic evidence is published for this run. This is unavailable, NOT zero.";
-    holder.innerHTML='<p class="hint">Mapping and soft-clip metrics are unavailable for this historical run. Future source-pinned runs will retain per-assembler evidence.</p>';
-    return;
+  const data=state.diagnostics;
+  const holder=el("diagnosticMatrix"), plot=el("diagnosticChart");
+  const dropdown=el("diagnosticMetric");
+  const catalog=data?.metric_catalog||{};
+  const keys=Object.keys(catalog);
+  if(!keys.length) {
+    el("diagnosticContext").textContent="No source-verified diagnostic catalog is available.";
+    el("diagnosticExplanation").textContent="No metric definition was published.";
+    holder.textContent="Metrics unavailable.";plot.replaceChildren();return;
   }
-  const labels=data.metric_catalog;
-  const dropdown=el("diagnosticMetric"), prior=dropdown.value;
-  if(dropdown.options.length!==Object.keys(labels).length) {
-    dropdown.innerHTML=Object.entries(labels).map(([key,value])=>
+  const prior=dropdown.value||state.requestedDiagnostic;
+  if(dropdown.options.length!==keys.length) {
+    dropdown.innerHTML=Object.entries(catalog).map(([key,value])=>
       '<option value="'+esc(key)+'">'+esc(value.label)+'</option>').join("");
-    dropdown.value=prior in labels?prior:"soft_clipped_bases_per_1000_read_bases";
+    dropdown.value=keys.includes(prior)?prior:"soft_clipped_bases_per_1000_read_bases";
   }
-  const key=dropdown.value, metric=labels[key], all=state.run.tools;
-  el("diagnosticContext").textContent=data.note+
-    " Mapping stage: MiCall scratch/temp.sam; denominators use mapped primary alignment records, not original molecule counts. Clipping is descriptive, not a qualification gate.";
-  const headers=['Assembler','Value ('+metric.unit+')','Mapped primary reads',
-    'Read bases','Clipped reads','Clip events','Clipped bases','Status'];
+  const key=dropdown.value, definition=catalog[key];
+  const matchesRun=data.run_id===state.run.id;
+  const measured=matchesRun ? data.tools : {};
+  const sampleCoverage=matchesRun?data.cases_measured:0;
+  const expected=state.run.expected_sample_count||state.run.sample_count;
+  const preface=matchesRun?sampleCoverage+" of "+expected+" cases measured":
+    "No source-attested diagnostic cases published for this run";
+  const preference=definition.suggested_direction==="unspecified"
+    ?"No inherent beneficial direction.":(definition.suggested_direction==="higher"
+      ?"Higher is conventionally preferred; not necessarily biologically superior."
+      :"Lower is conventionally preferred; not necessarily biologically superior.");
+  el("diagnosticExplanation").innerHTML=
+    '<div class="metric-explanation-head"><h3>'+esc(definition.label)+'</h3>'+
+    '<span>'+esc(definition.unit)+'</span></div>'+
+    '<p>'+esc(definition.description)+'</p>'+
+    '<dl><dt>Measurement stage</dt><dd>'+esc(definition.stage)+'</dd>'+
+    '<dt>Units</dt><dd>'+esc(definition.unit)+'</dd>'+
+    '<dt>Denominator / basis</dt><dd>'+esc(definition.denominator)+'</dd>'+
+    '<dt>Comparison direction</dt><dd>'+esc(preference)+'</dd>'+
+    '<dt>Evidence availability</dt><dd>'+esc(preface)+'</dd></dl>'+
+    '<button id="addDiagnosticSubject" type="button" class="outline-button">'+
+    'Add to Ψ dominance subjects</button>';
+  el("addDiagnosticSubject").addEventListener("click",()=>{
+    const checkbox=[...el("dominanceSubjects").querySelectorAll("input[type=checkbox]")]
+      .find(node=>node.value===key);
+    if(!checkbox)return;
+    checkbox.checked=true;
+    el("subjectSearch").value="";
+    filterSubjects();drawDominance();
+    syncUrl();
+    el("dominanceSubjects").scrollIntoView({behavior:"smooth",block:"nearest"});
+  });
+  el("diagnosticContext").textContent=
+    preface+". This table shows only the chosen "+definition.label+
+    " measurement. Values are from the named MiCall stage, not averaged "+
+    "across the whole cohort. Missing is not zero, and a single-case "+
+    "value cannot prove any all-r Ψ relation.";
+  const records=state.run.tools.map(name=>{
+    const source=measured[name],value=source?.values?.[key];
+    return {name,value:Number.isFinite(value)?value:null,
+      source, status:source?.status==="measured"&&Number.isFinite(value)
+        ?"Measured":"Unavailable"};
+  });
+  const valid=records.filter(row=>row.value!==null);
+  plot.innerHTML='<h3>'+esc(definition.label)+' <small>('+esc(definition.unit)+')</small></h3>'+
+    (valid.length?(()=>{
+      const cap=Math.max(...valid.map(item=>item.value),1e-12);
+      return records.map(row=>
+        '<div class="bar-line"><span class="bar-name">'+
+        esc(names[row.name.toLowerCase()]||row.name)+'</span>'+
+        '<div class="bar-track"><div class="bar-fill other" style="width:'+
+        (row.value===null?0:(100*row.value/cap)).toFixed(3)+'%"></div></div>'+
+        '<span class="bar-value">'+(row.value===null?"—":fmt(row.value,4))+
+        '</span></div>').join("");
+    })():'<p class="hint">No measurements retained for this metric in the selected run.</p>')+
+    '<p class="plot-caption">'+esc(sampleCoverage+"/"+expected+
+    " evaluated cases; descriptive measurements only. Do not infer all-cohort "+
+    "dominance from this snapshot.")+'</p>';
   holder.innerHTML='<table class="diag-table"><thead><tr>'+
-    headers.map((header)=>'<th>'+esc(header)+'</th>').join("")+'</tr></thead><tbody>'+
-    all.map((name)=>{
-      const x=data.tools[name],v=x.values||{},den=x.denominators||{};
-      return '<tr><th>'+esc(names[name.toLowerCase()]||name)+'</th>'+
-        [v[key],den.mapped_primary_records,den.mapped_primary_read_bases,
-          v.soft_clipped_reads,v.soft_clip_events,v.soft_clipped_bases].map((num)=>
-          '<td>'+esc(Number.isFinite(num)?fmt(num,5):'unavailable')+'</td>').join("")+
-        '<td>'+esc(x.status)+'</td></tr>';
-    }).join("")+'</tbody></table>';
+    ['Assembler',definition.label+' ('+definition.unit+')',
+      'Evidence status','Sample coverage','Measurement stage'].map(x=>
+      '<th>'+esc(x)+'</th>').join("")+'</tr></thead><tbody>'+
+    records.map(row=>'<tr><th>'+esc(names[row.name.toLowerCase()]||row.name)+
+      '</th><td>'+esc(row.value===null?"unavailable":fmt(row.value,6))+
+      '</td><td>'+esc(row.status)+'</td><td>'+esc(row.value===null?
+      "0 / "+expected:sampleCoverage+" / "+expected)+'</td><td>'+
+      esc(row.value===null?"not retained":definition.stage)+'</td></tr>').join("")+
+    '</tbody></table>';
 }
 
 function render() {
@@ -391,8 +547,20 @@ function bind() {
   el("comparisonTool").addEventListener("change",()=>{
     state.tool=el("comparisonTool").value;render();
   });
-  el("dominanceMetric").addEventListener("change",drawDominance);
-  el("diagnosticMetric").addEventListener("change",drawDiagnostics);
+  el("subjectSearch").addEventListener("input",filterSubjects);
+  el("selectSubjects").addEventListener("click",()=>{
+    el("dominanceSubjects").querySelectorAll("input[type=checkbox]")
+      .forEach(node=>{node.checked=true;});
+    drawDominance();syncSubjectCount();syncUrl();
+  });
+  el("clearSubjects").addEventListener("click",()=>{
+    el("dominanceSubjects").querySelectorAll("input[type=checkbox]")
+      .forEach(node=>{node.checked=false;});
+    drawDominance();syncSubjectCount();syncUrl();
+  });
+  el("diagnosticMetric").addEventListener("change",()=>{
+    drawDiagnostics();syncUrl();
+  });
   el("outcomeFilter").addEventListener("change",drawTable);
   el("search").addEventListener("input",()=>{drawTable();syncUrl();});
   el("exportCsv").addEventListener("click",exportCsv);
@@ -425,6 +593,24 @@ async function main() {
     state.firstTool=params.get("first");
     state.tool=params.get("competitor");
     el("search").value=params.get("search")||"";
+    state.requestedDiagnostic=params.get("diagnostic");
+    drawSubjectControls();
+    const selected=params.get("subjects");
+    if(selected!==null) {
+      const options=[...el("dominanceSubjects").querySelectorAll("input[type=checkbox]")];
+      options.forEach(node=>{node.checked=false;});
+      selected.split(",").forEach(token=>{
+        const separator=token.lastIndexOf(":");
+        if(separator<0)return;
+        const key=token.slice(0,separator),direction=token.slice(separator+1);
+        if(!["higher","lower","unspecified"].includes(direction))return;
+        const node=options.find(item=>item.value===key);
+        if(!node)return;
+        node.checked=true;
+        const dropdown=node.closest(".subject-option").querySelector("select");
+        if(dropdown)dropdown.value=direction;
+      });
+    }
     render();
   } catch(error) {
     el("globalNotice").textContent="Results unavailable: "+error.message+

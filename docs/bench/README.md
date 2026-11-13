@@ -51,6 +51,7 @@ Before commit, independently inspect public data and run:
 ```sh
 PYTHONPATH=benchmarks python3 -m unittest -q benchmarks.test_assembler_bench_publication
 python3 -m benchmarks.assembler_bench.site_build --output /tmp/ivanka-pages-artifact
+node --check site/bench/subjects.js
 node --check site/bench/app.js
 ```
 
@@ -104,7 +105,12 @@ access. No partial result can certify either all-r signed-power gate.
 makes Assembler Bench a **general framework for comparing arbitrary
 MiCall-integrated assemblers**, not an Ivanka-only contest. The dashboard
 has a selector for **both** assembler axes and a directed **A×B Ψ matrix**
-covering alignment, runtime and their joint strict all-exponent result.
+with a searchable **checkbox list** for alignment, runtime and the
+entire diagnostic catalog. Multiple selected subjects form a strict
+all-r conjunction. For diagnostics, visitors explicitly choose whether
+higher or lower is preferred; such a preference is not proof of biological
+superiority. Every selected subject appears in the per-cell evidence.
+The initial two-subject selection is alignment plus runtime.
 A cell is dominant only when its full cohort is present and the independent
 all-r numerical prover certifies strict Ψ(r)>0 for every r≥0.
 Incomplete, ineligible and unresolved relationships are never guessed
@@ -123,6 +129,13 @@ read bases, and clip events per 1,000 primary mapped reads. It also retains
 the existing MiCall Q15-depth, breadth, concordance, contig and other
 diagnostics, with explicit source stage and missing denominators.
 The measurements are descriptive, **never replacement numerical gates**.
+
+The selected diagnostic metric now has its **own definition, unit,
+source stage, denominator, comparison caveat, graph, and table**.
+Selecting a different metric replaces the displayed measurements
+instead of leaving a fixed soft-clipping table. Each diagnostic
+can be added directly to the matrix subjects. User choices and metric
+selection can be shared through URL query parameters.
 
 The published static `mapping-diagnostics.json` contains **one
 independently checked, complete seven-assembler HXB2 clonal example**,

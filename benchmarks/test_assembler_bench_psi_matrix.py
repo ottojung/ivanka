@@ -55,6 +55,40 @@ class DirectedDominanceTests(unittest.TestCase):
         self.assertEqual(matrix(rows, ["A", "B"], expected=2, eligible=True)
                          ["metrics"]["runtime"]["A"]["B"]["paired"], 1)
 
+    def test_diagnostic_subjects_support_both_explicit_directions(self):
+        rows = [record(i, (4, 2), (3, 4)) for i in range(3)]
+        for row in rows:
+            row["results"]["A"]["diagnostics"] = {
+                "clipped_read_fraction": .1, "primary_mapped_fraction": .8}
+            row["results"]["B"]["diagnostics"] = {
+                "clipped_read_fraction": .3, "primary_mapped_fraction": .5}
+        result = matrix(rows, ["A","B"], expected=3, eligible=True,
+                        diagnostic_keys=("clipped_read_fraction",
+                                         "primary_mapped_fraction"))
+        grid=result["metrics"]
+        low=grid["diagnostic:clipped_read_fraction:lower"]
+        high=grid["diagnostic:primary_mapped_fraction:higher"]
+        self.assertEqual(low["A"]["B"]["status"], "dominates")
+        self.assertEqual(low["B"]["A"]["status"], "does-not-dominate")
+        self.assertEqual(high["A"]["B"]["status"], "dominates")
+        self.assertEqual(grid["diagnostic:clipped_read_fraction:higher"][
+            "A"]["B"]["status"], "does-not-dominate")
+
+    def test_diagnostic_no_sample_pairs_means_no_fabricated_proofs(self):
+        rows = [record(i,(4,2),(3,4)) for i in range(3)]
+        result=matrix(rows, ["A","B"], expected=3, eligible=True,
+                      diagnostic_keys=("soft_clipped_bases",))
+        self.assertNotIn("diagnostic:soft_clipped_bases:higher",
+                         result["metrics"])
+        rows[0]["results"]["A"]["diagnostics"]={"soft_clipped_bases":1}
+        rows[0]["results"]["B"]["diagnostics"]={"soft_clipped_bases":2}
+        result=matrix(rows, ["A","B"], expected=3, eligible=True,
+                      diagnostic_keys=("soft_clipped_bases",))
+        entry=result["metrics"]["diagnostic:soft_clipped_bases:lower"][
+            "A"]["B"]
+        self.assertEqual(entry["status"], "incomplete")
+        self.assertEqual(entry["paired"], 1)
+
     def test_duplicate_identity_is_rejected(self):
         rows = [record(1, (5, 1), (4, 2))] * 2
         with self.assertRaisesRegex(ValueError, "duplicate"):

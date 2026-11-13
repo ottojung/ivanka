@@ -3,7 +3,6 @@ import csv
 import hashlib
 from pathlib import Path
 
-from Bio.Align import PairwiseAligner
 
 
 def reference_names(projects, project_code):
@@ -76,6 +75,7 @@ def aligned_to_project_reference(iva_dir, ivanka_dir, projects, project_code):
 
     Diagnostic only. Do not replace the strict IVA/Ivanka acceptance test.
     """
+    from Bio.Align import PairwiseAligner
     name, sequence = choose_reference(iva_dir, projects, project_code)
     aligner = PairwiseAligner()
     aligner.mode = "local"

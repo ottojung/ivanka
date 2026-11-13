@@ -6,8 +6,6 @@ or the pinned dataset's HXB2 FASTA, never from an IVA/Ivanka assembly.
 import hashlib
 import json
 import re
-from Bio.Align import PairwiseAligner
-from Bio.Seq import Seq
 
 try:
     import parasail  # Optional SIMD Smith-Waterman accelerator.
@@ -68,6 +66,7 @@ def panel_sha256(references):
 
 
 def _aligner():
+    from Bio.Align import PairwiseAligner
     aligner = PairwiseAligner()
     aligner.mode = "local"
     aligner.match_score = 1
@@ -85,6 +84,7 @@ def best_panel_alignment(sequences, references):
     """
     if not sequences or not references:
         raise ValueError("Missing contigs or reference panel")
+    from Bio.Seq import Seq
     aligner = None if parasail is not None else _aligner()
     matrix = parasail.matrix_create("ACGTN", 1, -1) if parasail is not None else None
     def exact_score(sequence, reference):

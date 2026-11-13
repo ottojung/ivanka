@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 pub(super) fn ranked_candidates(
     seqs: Vec<Vec<u8>>,
     counts: Vec<usize>,
@@ -8,21 +6,7 @@ pub(super) fn ranked_candidates(
 ) -> Vec<(usize, (Vec<u8>, usize))> {
     assert_eq!(seqs.len(), counts.len());
     let mut candidates = seqs.into_iter().zip(counts).enumerate().collect::<Vec<_>>();
-    let mut spans = candidates
-        .iter()
-        .filter(|(i, (_, reads))| *i >= protected && *reads > 0)
-        .map(|(i, (seq, reads))| (*i, (*reads as u128) * (seq.len() as u128)))
-        .collect::<Vec<_>>();
-    spans.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    let span_favorites = spans
-        .into_iter()
-        .take(if candidates.len() > n.saturating_mul(2) {
-            (n / 2).min(8)
-        } else {
-            0
-        })
-        .map(|(i, _)| i)
-        .collect::<HashSet<_>>();
+    let span_favorites = span::favourites(&candidates, n, protected);
     candidates.sort_unstable_by(|a, b| {
         let a_span = span_favorites.contains(&a.0);
         let b_span = span_favorites.contains(&b.0);

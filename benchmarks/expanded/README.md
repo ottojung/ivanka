@@ -485,3 +485,15 @@ MiCall integration verification without weakening the Rust-only
 contract. It does **not** automatically qualify any tool's real-data
 scores or runtimes; all 198 × 7 complete physical runs and the
 all-r Ψ gates remain mandatory.
+
+### Source-attested fork containers
+
+Intent 011 requires a separate image/source proof before **new**
+qualification runs. Prepare seven full OCI image IDs built from a
+clean exact ottojung/MiCall commit, and use
+benchmarks.assembler_bench.fork_image_attestation to verify the
+installed MiCall implementation, all assembler binaries, the shared
+downstream base, the native Ivanka ELF and IVA's compatible samtools.
+Preserve the resulting hashed attestation alongside run inputs.
+Historical patched/upstream images must never be renamed as compliant
+or treated as evidence for the new full-cohort gate.

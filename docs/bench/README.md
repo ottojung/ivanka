@@ -216,3 +216,33 @@ or unverified. The fork guard rejects upstream/unknown write targets
 and moving branch/invalid commit URLs. Existing historical numeric
 results are preserved but do not satisfy the new image provenance
 condition until a genuinely fork-built, requalified run exists.
+
+## Independent fork-built OCI source and executable attestation
+
+The builder-owned labels and a successfully built container do not, by
+themselves, prove provenance. Before a fresh seven-way source-compliant
+benchmark, independently verify *all seven* immutable MiCall image IDs:
+
+    python3 -m benchmarks.assembler_bench.fork_image_attestation \
+      --fork-checkout /path/to/clean/ottojung-MiCall \
+      --base-image <full-image-sha256> \
+      --images /path/to/all-seven-full-immutable-image-IDs.json \
+      --output /private/verified-image-attestation.json
+
+The private checkout must have the correct ottojung/MiCall origin, an
+exact full commit SHA, and no tracked or untracked changes. The validator
+rechecks the common-base OCI layers, the source labels, every assembler
+binding, and the *installed* hashes of MiCall's committed dispatch
+modules and each candidate's actual required executables. It also
+requires a native Rust Ivanka ELF and the separately pinned IVA
+samtools 1.3.1 compatibility executable. Missing or mutable image
+references and mismatched source or tool bits fail closed.
+
+The output includes exact source commit links under
+https://github.com/ottojung/MiCall/tree/<40-character-SHA> and the
+binary/source/image hashes for independent reproducibility. Keep
+private sample FASTQs and all individual read identifiers outside the
+public site. This attestation qualifies only source integrity; it
+**does not** certify final MiCall alignment, runtime, any synthetic
+truth, or the 598-case enhanced benchmark. A complete run must still
+pass every earlier scientific and strict all-exponent PSI gate.

@@ -42,6 +42,20 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         self.assertNotIn("legacy-synthetic-v1-20261112",
                          json.dumps(self.root))
 
+    def test_public_site_works_without_scientific_scoring_packages(self):
+        import os
+        import subprocess
+        import sys
+        environment = dict(os.environ)
+        environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[0])
+        command = [sys.executable, "-S", "-c",
+                   "import sys; from assembler_bench.site_build import "
+                   "validate_public_site; assert validate_public_site() == 3; "
+                   "assert 'Bio' not in sys.modules"]
+        process = subprocess.run(command, env=environment, text=True,
+                                 capture_output=True, timeout=20)
+        self.assertEqual(process.returncode, 0, process.stderr)
+
     def test_no_private_metadata(self):
         self.assertEqual(validate_public_site(), len(self.root["runs"]))
         text = json.dumps(self.root)

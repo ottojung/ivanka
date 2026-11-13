@@ -101,6 +101,10 @@ def validate_public_site(site=SITE):
         raise ValueError("matrix lacks checked-metric Ψ(0,1,2) numeric views")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
+    if any(token in js for token in ("setInterval(", "setTimeout(",
+                                      "EventSource(", "WebSocket(")):
+        raise ValueError("static benchmark website must never poll or stream")
+
     if re.search(r"<script[^>]*src=[\"']https?://", html):
         raise ValueError("third-party script dependency forbidden")
     report = json.loads((source / "data/runs.json").read_text())

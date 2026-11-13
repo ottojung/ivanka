@@ -35,6 +35,13 @@ class LiveProgressTests(unittest.TestCase):
         self.assertEqual(result["runs"][-1]["micall_fork_provenance"],
                          verified["micall_fork_provenance"])
 
+    def test_browser_reloads_only_when_visitor_refreshes(self):
+        js = (SITE / "app.js").read_text()
+        self.assertIn('fetch("./data/runs.json",{cache:"no-store"})', js)
+        for keyword in ("setInterval(", "setTimeout(", "EventSource(",
+                        "WebSocket(", "pollProgress"):
+            self.assertNotIn(keyword, js)
+
     def test_existing_snapshot_still_passes_validation(self):
         self.assertGreaterEqual(validate_public_site(SITE), 3)
 

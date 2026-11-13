@@ -35,6 +35,12 @@ def update(site, old, old_source, fork, fork_runner, attestation, fork_repo, bas
     old_run["status_reason"] = (
         f"{old_run['sample_count']}/400 verified original MiCall cases; "
         "historical images lack source-attested fork provenance; NOT qualified.")
+    for run in public["runs"]:
+        if run["id"] == "hxb2-v4-micall-cases-010":
+            run["title"] = "HXB2 v4 · archived 10-case mapping snapshot"
+            run["status_reason"] = (
+                "Archived 10-case diagnostic sample. For current benchmark "
+                "progress, select one of the updating HXB2 runs.")
     public["runs"] = replace_run(public["runs"], old_run)
     fork_run = fork_preview(fork, fork_runner, attestation, fork_repo, base)
     public["runs"] = replace_run(public["runs"], fork_run)

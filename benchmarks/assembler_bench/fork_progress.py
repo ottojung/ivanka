@@ -66,7 +66,8 @@ def preview(directory, runner, attestation, fork, base):
         normalized, rows, result_hash, sha(Path(directory) / "run_manifest.json"))
     result.update(
         id="hxb2-v4-fork-source-attested-live",
-        title="HXB2 v4 · source-attested fork MiCall (live)",
+        title="HXB2 v4 · source-attested fork MiCall (updating)",
+        date="2026-11-13",
         source_commit=subprocess.check_output(
             ["git", "-C", str(runner), "rev-parse", "HEAD"], text=True).strip(),
         source_manifest_sha256=sha(Path(directory) / "run_manifest.json"),

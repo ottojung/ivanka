@@ -335,7 +335,8 @@ all seven fork image/executable attestations, frozen runner source, and HXB2 tru
 stages and validates the full privacy-safe public site; then pushes only an
 updated anonymous summary to main (never raw reads or sample identifiers).
 
-A successful push triggers .github/workflows/pages.yml; the page checks for
-new published snapshots once per minute without losing run or analysis settings.
-A failed check leaves the last valid Pages snapshot intact, and retries on the
-next polling interval.
+A successful push triggers .github/workflows/pages.yml. The website uses
+only static files; visitors receive the newest published snapshot when they
+manually reload the page. There is no automatic browser polling or backend API.
+A failed publisher check leaves the last valid Pages snapshot intact; the host
+publisher retries at its next interval.

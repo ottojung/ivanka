@@ -113,12 +113,16 @@ def format_preview(manifest, records, result_hash, source_manifest_sha256):
     families = defaultdict(list)
     samples = []
     failed_arms = 0
-    for index, row in enumerate(sorted(records, key=lambda r: r["id"]), 1):
+    cohort, _ = pinned_truth()
+    aliases = {entry["id"]: f"H{index:03d}"
+               for index, entry in enumerate(
+                   sorted(cohort["cases"], key=lambda case: case["id"]), 1)}
+    for row in sorted(records, key=lambda r: r["id"]):
         values = row["results"]
         failed = [name for name in tools if values[name]["status"] != "success"]
         failed_arms += len(failed)
         sample = {
-            "alias": f"H{index:03d}", "family": row["family"],
+            "alias": aliases[row["id"]], "family": row["family"],
             "score": {}, "seconds": {}, "failures": failed,
             "outcome": "failure" if failed else "success",
             "floor_ok": None,

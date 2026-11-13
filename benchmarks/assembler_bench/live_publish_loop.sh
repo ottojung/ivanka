@@ -10,7 +10,7 @@ set -eu
 : "$IVANKA_BENCH_FORK_REPO"
 : "$IVANKA_BENCH_BASE"
 repo=$IVANKA_BENCH_CHECKOUT
-interval=$IVANKA_BENCH_INTERVAL
+interval=${IVANKA_BENCH_INTERVAL:-300}
 case $interval in *[!0-9]*|'') echo 'invalid interval' >&2; exit 2;; esac
 test "$interval" -ge 60
 while :; do

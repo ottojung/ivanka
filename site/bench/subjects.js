@@ -1,6 +1,7 @@
 "use strict";
-/* Shared pure interpretation: never compute Ψ from cohort averages or a
-   single-case mapping snapshot. Only verified per-sample proofs count. */
+/* Interpret independent all-r paired-subset proofs separately from full-
+   cohort certification. A one-case source-validated diagnostic has an exact
+   sign proof; no averaged score is ever misrepresented as signed-power Ψ. */
 const BenchSubjects = (() => {
   function criterion(report, a, b, subject, direction, snapshot) {
     const key = subject === "alignment" || subject === "runtime"
@@ -22,7 +23,12 @@ const BenchSubjects = (() => {
       expected:report.expected_samples,proof:null,
       observed:available?{gains:Number(delta>0),losses:Number(delta<0),
         ties:Number(delta===0),mean_delta:delta}:null,
-      reason:available ? "Observed diagnostic snapshot only; no full-cohort Ψ proof"
+      subset:available?{
+        status:delta>0?"dominates":"does-not-dominate",
+        proof:{kind:"exact-single-observation",sample_count:1,
+          sign:Math.sign(delta)}}:
+        {status:"no-data",proof:null},
+      reason:available ? "Exact signed-power result for one observed diagnostic case"
         : "No paired measurements available for this subject"};
   }
   function conjunction(entries) {
@@ -49,6 +55,43 @@ const BenchSubjects = (() => {
       "none": {label:"?", explanation:"Select at least one subject"}
     };
     return states[status]||{label:"?",explanation:"Dominance cannot be verified"};
+  }
+  function observedVerdict(result) {
+    // The top label answers the dominance question for the observations
+    // available NOW, rather than suppressing a computed result with '?'.
+    // Strict whole-cohort certification remains a separate, stronger claim.
+    if (["dominates","does-not-dominate","self"].includes(result.status)) {
+      const full=verdict(result.status);
+      return {...full, kind:"certified", scope:"Entire qualified cohort"};
+    }
+    const statuses=result.entries.map(item=>{
+      if (["dominates","does-not-dominate","unresolved"].includes(item.status))
+        return item.status;
+      return item.subset?.status||"no-data";
+    });
+    const measured=statuses.filter(x=>x==="dominates"||
+      x==="does-not-dominate").length;
+    const total=statuses.length;
+    const completeness=measured+"/"+total+" selected subjects measured";
+    if (statuses.includes("does-not-dominate"))
+      return {label:"OBS NO",kind:"observed-no",
+        explanation:"Strict Ψ does not dominate on the observed paired subset of at least one selected subject",
+        scope:completeness};
+    if (statuses.includes("unresolved")||statuses.includes("unresolved-direction"))
+      return {label:"UNRESOLVED",kind:"unresolved",
+        explanation:"Observed-subset all-r Ψ proof remains unresolved",
+        scope:completeness};
+    if (measured===total&&total>0)
+      return {label:"OBS YES",kind:"observed-yes",
+        explanation:"Strict Ψ dominates on the observed paired subset of every selected subject; full cohort is not certified",
+        scope:completeness};
+    if (measured>0)
+      return {label:"PARTIAL YES",kind:"partial-yes",
+        explanation:"Dominates on observed paired subsets, but other selected subjects have no measurements",
+        scope:completeness};
+    return {label:"NO DATA",kind:"no-data",
+      explanation:"No paired observations available for the selected subjects",
+      scope:completeness};
   }
   function evidence(result, limit=2) {
     // An observation is deliberately NOT a dominance verdict. Surface the
@@ -80,6 +123,6 @@ const BenchSubjects = (() => {
     }));
     return {status:conjunction(entries), entries};
   }
-  return {criterion,conjunction,evaluate,verdict,evidence};
+  return {criterion,conjunction,evaluate,verdict,observedVerdict,evidence};
 })();
 if (typeof module !== "undefined") module.exports = BenchSubjects;

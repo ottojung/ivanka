@@ -79,24 +79,40 @@ must not suppress valid observations from two other individual arms.
 A descriptive partial comparison must never become a certified strict
 all-r dominance verdict, nor may unavailable values become zeros.
 
-**Every matrix cell must show both its directed strict Ψ-dominance
-verdict and any observed, paired partial results directly in that cell.**
-Row A / column B answers "Does A strictly Ψ-dominate B on *every*
-checked metric?" Display a prominent **YES** only with full independent
-proof on all selected subjects, **NO** only with a proven counterexample
-on at least one subject, and **?** when pairing, qualification or
-numerical proof is missing/unresolved. Use **—** for self-comparison.
+**Every non-diagonal matrix cell must compute the strict all-exponent
+Ψ-dominance result on the observed, paired sample subset** even when
+the cohort is incomplete. An incomplete run does **not** justify
+suppressing an already computable all-r pairwise comparison with '?'.
+Apply the **same independently verified all-r signed-power algorithm**
+to each pair's valid observed samples; never substitute a win count or
+arithmetic mean for the Ψ result. The pairwise result is directional
+and recomputed independently for every pair, every metric, and both
+directions. Incomplete runs may have different observed sample counts
+for different pairs: disclose each count.
 
-**Never conceal observed results behind a question mark.** Below the
-main verdict, show the available subject-labelled counts of row wins,
-row losses, ties, and *paired/expected* sample coverage. For multiple
-checked subjects, show up to two per-subject summaries directly and
-an explicit count of remaining measured subjects, with **all** subject
-details available on click and in the separate evidence panel. Never
-replace the YES/NO/? signal with numbers, never imply a sample-average
-or provisional score is a certified full-cohort Ψ proof, and never
-substitute missing values with zero. Distinguish observed counts from
-proof status in the matrix legend and accessible label.
+The prominent cell label must say **OBS YES** or **OBS NO** for
+mathematically determined all-r dominance on the *observed subset*,
+distinct from **YES/NO** for a certified full-cohort result.
+When some selected metrics have no paired samples, display the
+available subject's observed result and the number of missing
+subjects (**PARTIAL YES**, or **OBS NO** for an observed
+counterexample), not a bare '?'. Use **NO DATA** only when no selected
+subject has any paired observations; use **UNRESOLVED** only for an
+undecidable mathematical proof or unspecified comparison direction.
+The diagonal is **—**. For a published one-case diagnostic snapshot,
+the signed-power positivity check is exactly the sign of the single
+paired score difference. It may establish *observed one-case* dominance
+but never complete-cohort qualification.
+
+Below the main verdict, show subject-labelled row wins, losses, ties,
+and *paired/expected* coverage. For multiple selected subjects, show
+up to two summaries directly plus a count of further measured
+subjects; all selected subjects and proof metadata remain available
+on click. **OBS YES is not full-cohort YES** and must never affect
+acceptance of the 198-real or 400-synthetic seven-way scientific gates.
+Never turn missing data into zero or a failed arm into a victory.
+Distinguish observed subset conclusions from certified full-cohort
+conclusions in the matrix legend and accessible labels.
 
 The matrix and proof evidence must be visible under public
 [`/bench/`](007-assembler-bench.md), not only in JSON.

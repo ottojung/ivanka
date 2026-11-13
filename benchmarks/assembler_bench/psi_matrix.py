@@ -32,24 +32,34 @@ def _entry(rows, name, other, metric, expected, eligible):
                 or not math.isfinite(x) or not math.isfinite(y)):
             continue
         pairs.append(x-y if direction == "higher" else y-x)
-    # Observed deltas are useful even when complete-cohort qualification is
-    # unavailable. They are descriptive, not a partial-data Ψ certificate.
     observed = {"gains": sum(x > 0 for x in pairs),
                 "losses": sum(x < 0 for x in pairs),
                 "ties": sum(x == 0 for x in pairs),
                 "mean_delta": round(math.fsum(pairs) / len(pairs), 12)
                 if pairs else None}
+    # This independent all-exponent proof is over the *paired observed
+    # subset*, even when the complete-cohort qualification is unavailable.
+    # It must never be silently promoted to a full-cohort certificate.
+    subset = {"status": "no-data", "proof": None}
+    if pairs:
+        try:
+            witness = summarize(pairs)
+            subset = {"status": "dominates" if witness[
+                "positive_all_nonnegative"] else "does-not-dominate",
+                "proof": witness}
+        except (ValueError, ArithmeticError, OverflowError):
+            subset = {"status": "unresolved", "proof": None}
     base = {"status": "incomplete", "paired": len(pairs),
-            "expected": expected, "proof": None, "observed": observed}
+            "expected": expected, "proof": None, "observed": observed,
+            "subset": subset}
     if not eligible or len(rows) != expected or len(pairs) != expected:
         return base
-    try:
-        proof = summarize(pairs)
-    except (ValueError, ArithmeticError, OverflowError):
+    if subset["proof"] is None:
         return {**base, "status": "unresolved"}
-    return {**base, "proof": proof,
-            "status": "dominates" if proof["positive_all_nonnegative"]
-            else "does-not-dominate"}
+    # The whole source cohort and the paired subset coincide in this
+    # branch, so the same signed-power proof is eligible for certification.
+    return {**base, "proof": subset["proof"],
+            "status": subset["status"]}
 
 
 def _joint(score, runtime, expected):
@@ -66,7 +76,9 @@ def _joint(score, runtime, expected):
             "expected": expected,
             "proof": {"alignment": score["proof"], "runtime": runtime["proof"]},
             "observed": {"alignment": score["observed"],
-                         "runtime": runtime["observed"]}}
+                         "runtime": runtime["observed"]},
+            "subset": {"alignment": score["subset"],
+                       "runtime": runtime["subset"]}}
 
 
 def matrix(rows, tools, *, expected, eligible, diagnostic_keys=()):

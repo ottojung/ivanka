@@ -121,23 +121,32 @@ and observations are useful for exploring a running benchmark but
 are **not** the strict all-exponent Ψ qualification.
 
 The multiple-checkbox **Ψ-dominance matrix comes after the
-single-metric rankings and case-level comparisons**. Every matrix cell gives the actual **YES / NO / ? / —** answer
-for "Does row A strictly Ψ-dominate column B on ALL checked subjects?"
-The **primary** cell label is the strict verdict; observed partial
-evidence is always visible **directly beneath it**, including per-metric
-paired row wins, losses, ties and paired/expected case coverage. A YES
-requires an independent full-cohort all-r proof on every checked metric;
-NO requires an independent disproof; ? means incomplete/unresolved
-evidence; — denotes the diagonal. With multiple selected metrics the
-cell shows two subject-labelled observation summaries plus an explicit
-count of any other measured subjects. Clicking exposes all selected
-metrics and observed means. A legend distinguishes observed paired
-samples from full-cohort dominance proof. A question mark never
-suppresses available empirical results, but partial counts never turn
-that mark into a falsely certified YES or NO. A failed third assembler does not erase valid individual
-MiCall outputs for the other two tools. Full-cohort qualification is
-disclosed once in the page notice; incompleteness must never conceal
-usable measurements or imply false dominance.
+single-metric rankings and case-level comparisons**. The matrix
+**computes and displays strict all-exponent signed-power Ψ dominance
+on the available paired samples** for each row/column assembler
+pair and each checked metric. When the whole cohort is not yet
+complete, a cell shows **OBS YES** or **OBS NO** as an independently
+proven result for its observed subset. This is not just a sign of
+the mean, wins-versus-losses comparison or arbitrary interpolation.
+The number of observed pairs and the specific checked metrics
+are disclosed.
+
+A full-cohort certificate shows **YES** or **NO** without the OBS
+prefix. **PARTIAL YES** indicates a measured strict positive
+Ψ result for available subjects but missing selected subjects;
+**NO DATA** means no valid paired samples for any selected subject.
+**UNRESOLVED** is reserved for proof/direction uncertainty, not
+mere incomplete cohort collection. Each cell also shows subject
+labels, row gains/losses/ties and paired/expected coverage, while
+clicking provides the complete proof/witness evidence.
+
+An observed strict Ψ result is an exact conclusion for **the currently
+measured subset only**. It cannot be promoted to certified
+all-cohort qualification. Missing/failing tool arms are never
+assigned artificial scores, and missing subjects do not count
+as demonstrated dominance. All available analysis remains visible
+rather than concealed behind question marks.
+
 
 ## Neutral metrics, CIGAR soft clipping and pairwise PSI
 

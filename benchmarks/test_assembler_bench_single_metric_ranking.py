@@ -83,7 +83,7 @@ console.log('ALL_25_METRIC_NUMERIC_RANKINGS_AND_PARTIAL_CASES_PASS');
         self.assertIn('BenchRanks.pairs(',js)
         self.assertIn('BenchSubjects.verdict(result.status)',js)
         self.assertIn('esc(verdict.label)',js)
-        self.assertIn('Observed gains and losses belong in the evidence panel',js)
+        self.assertIn('BenchSubjects.evidence(result)',js)
         self.assertNotIn('function cellText(',js)
 
 

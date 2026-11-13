@@ -69,14 +69,19 @@ def validate_public_site(site=SITE):
             ("function conjunction(", "function criterion(", "does-not-dominate",
              "incomplete", "unresolved"))):
         raise ValueError("public matrix subject conjunction is not fail-closed")
-    if "function cellText(" in js or "obs.gains" in js[
-            js.index("function drawDominance()"):js.index("function render()")]:
-        raise ValueError("dominance matrix cells must contain verdicts, not counts")
-    if (any(name not in js for name in ("BenchSubjects.verdict(result.status)",
-             "esc(verdict.label)", "title=")) or
-            "function verdict(status)" not in subjects or
-            'class="dominance-legend"' not in html):
-        raise ValueError("matrix lacks strict yes/no/unknown verdict semantics")
+    if "function cellText(" in js:
+        raise ValueError("dominance cells must not replace proof with numeric scores")
+    if (any(name not in js for name in
+            ("BenchSubjects.verdict(result.status)", "esc(verdict.label)",
+             "BenchSubjects.evidence(result)", 'class="dom-verdict"',
+             'class="dom-preview"', 'class="dom-preview-row"',
+             "evidence.description")) or
+            any(name not in subjects for name in
+                ("function verdict(status)", "function evidence(result, limit=2)",
+                 'item.paired+"/"+item.expected')) or
+            any(name not in html for name in
+                ('class="dominance-legend"', 'class="dom-legend-observed"'))):
+        raise ValueError("matrix must show both strict verdict and paired evidence")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
     if re.search(r"<script[^>]*src=[\"']https?://", html):

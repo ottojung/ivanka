@@ -50,12 +50,36 @@ const BenchSubjects = (() => {
     };
     return states[status]||{label:"?",explanation:"Dominance cannot be verified"};
   }
+  function evidence(result, limit=2) {
+    // An observation is deliberately NOT a dominance verdict. Surface the
+    // actual within-subject paired wins/losses and coverage in each matrix
+    // cell, without upgrading incomplete data to a proof.
+    const observed = result.entries.flatMap(item => {
+      const o=item.observed;
+      if (!o || !Number.isInteger(item.paired) || item.paired<=0 ||
+          !Number.isInteger(item.expected) || item.expected<item.paired ||
+          ![o.gains,o.losses,o.ties].every(Number.isInteger) ||
+          o.gains<0 || o.losses<0 || o.ties<0 ||
+          o.gains+o.losses+o.ties!==item.paired) return [];
+      const text=o.gains+"↑ "+o.losses+"↓ "+o.ties+"= · "+
+        item.paired+"/"+item.expected;
+      return [{key:item.key,label:item.label,paired:item.paired,
+        expected:item.expected,gains:o.gains,losses:o.losses,
+        ties:o.ties,text}];
+    });
+    const cap=Math.max(1,Number.isInteger(limit)?limit:2);
+    return {rows:observed.slice(0,cap),
+      additional:Math.max(0,observed.length-cap),
+      observedSubjects:observed.length,
+      selectedSubjects:result.entries.length,
+      description:observed.map(item=>item.label+": "+item.text).join("; ")};
+  }
   function evaluate(report, a, b, selected, snapshot) {
     const entries = selected.map(({key,direction,label}) => ({
       key,label,direction, ...criterion(report,a,b,key,direction,snapshot)
     }));
     return {status:conjunction(entries), entries};
   }
-  return {criterion,conjunction,evaluate,verdict};
+  return {criterion,conjunction,evaluate,verdict,evidence};
 })();
 if (typeof module !== "undefined") module.exports = BenchSubjects;

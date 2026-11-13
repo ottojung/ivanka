@@ -123,15 +123,18 @@ are **not** the strict all-exponent Ψ qualification.
 The multiple-checkbox **Ψ-dominance matrix comes after the
 single-metric rankings and case-level comparisons**. Every matrix cell gives the actual **YES / NO / ? / —** answer
 for "Does row A strictly Ψ-dominate column B on ALL checked subjects?"
-The cell never displays partial win counts or a numeric score in place
-of the result. A YES requires an independent full-cohort all-r proof
-for each checked metric; NO requires an independent disproof;
-? denotes incomplete or unresolved evidence; — denotes the diagonal.
-A legend spells out each state. Where signed-power
-certification is unavailable, verified observed pairwise wins/losses,
-ties, sample counts and mean advantages remain visible as descriptive
-results **in the evidence panel and cell drill-down**, not as matrix
-verdicts. A failed third assembler does not erase valid individual
+The **primary** cell label is the strict verdict; observed partial
+evidence is always visible **directly beneath it**, including per-metric
+paired row wins, losses, ties and paired/expected case coverage. A YES
+requires an independent full-cohort all-r proof on every checked metric;
+NO requires an independent disproof; ? means incomplete/unresolved
+evidence; — denotes the diagonal. With multiple selected metrics the
+cell shows two subject-labelled observation summaries plus an explicit
+count of any other measured subjects. Clicking exposes all selected
+metrics and observed means. A legend distinguishes observed paired
+samples from full-cohort dominance proof. A question mark never
+suppresses available empirical results, but partial counts never turn
+that mark into a falsely certified YES or NO. A failed third assembler does not erase valid individual
 MiCall outputs for the other two tools. Full-cohort qualification is
 disclosed once in the page notice; incompleteness must never conceal
 usable measurements or imply false dominance.

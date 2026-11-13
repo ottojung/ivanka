@@ -79,18 +79,24 @@ must not suppress valid observations from two other individual arms.
 A descriptive partial comparison must never become a certified strict
 all-r dominance verdict, nor may unavailable values become zeros.
 
-**Each matrix cell must show the actual directed dominance verdict,
-not a count, score, number of observed subjects, average difference,
-or win/loss/tie tally.** Row A / column B answers exactly "Does A
-strictly Ψ-dominate B on *every* checked metric?" Display a prominent
-**YES** only with full independent proof on all selected subjects,
-**NO** only with a proven counterexample on at least one subject, and
-**?** when pairing, qualification or numerical evidence is missing/
-unresolved. Use **—** only for self-comparison. Describe the
-meaning of every status in a nearby legend. Observed gains, losses,
-ties and means remain available on clicking the cell and in the
-separate analysis panel, but must never replace the cell's truth
-status or visually masquerade as dominance.
+**Every matrix cell must show both its directed strict Ψ-dominance
+verdict and any observed, paired partial results directly in that cell.**
+Row A / column B answers "Does A strictly Ψ-dominate B on *every*
+checked metric?" Display a prominent **YES** only with full independent
+proof on all selected subjects, **NO** only with a proven counterexample
+on at least one subject, and **?** when pairing, qualification or
+numerical proof is missing/unresolved. Use **—** for self-comparison.
+
+**Never conceal observed results behind a question mark.** Below the
+main verdict, show the available subject-labelled counts of row wins,
+row losses, ties, and *paired/expected* sample coverage. For multiple
+checked subjects, show up to two per-subject summaries directly and
+an explicit count of remaining measured subjects, with **all** subject
+details available on click and in the separate evidence panel. Never
+replace the YES/NO/? signal with numbers, never imply a sample-average
+or provisional score is a certified full-cohort Ψ proof, and never
+substitute missing values with zero. Distinguish observed counts from
+proof status in the matrix legend and accessible label.
 
 The matrix and proof evidence must be visible under public
 [`/bench/`](007-assembler-bench.md), not only in JSON.

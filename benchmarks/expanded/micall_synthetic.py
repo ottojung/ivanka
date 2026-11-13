@@ -258,7 +258,7 @@ def main():
     images = json.loads(args.images.read_text())
     print("INTEGRATED_MICALL_SYNTHETIC_ATTEMPTED",
           run(args.data, args.out, images, jobs=args.jobs,
-              timeout=args.timeout, limit=args.limit))
+              timeout=args.timeout, limit=args.limit, resume=args.resume))
     print("NOT A PASS: combine with six complete physical-198 MiCall "
           "comparisons and apply strict expanded all-r gate.")
 

@@ -187,6 +187,19 @@ class SyntheticCheckpointTests(unittest.TestCase):
             self.assertTrue((home / "clonal-s000/matrix.json").is_file())
             self.assertFalse((home / "clonal-s000/matrix.json.partial").exists())
 
+    def test_cli_forwards_resume_flag_without_restarting(self):
+        from expanded.micall_synthetic import main
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pins = root / "pins.json"
+            pins.write_text(json.dumps({tool: "a" * 64 for tool in ASSEMBLERS}))
+            with (patch("sys.argv", ["micall_synthetic", "--data", str(root),
+                                     "--images", str(pins), "--out", str(root),
+                                     "--resume"]),
+                  patch.object(runner, "run", return_value=400) as called):
+                main()
+            self.assertTrue(called.call_args.kwargs["resume"])
+
     def test_resume_refuses_changes_to_pinned_run_manifest(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)

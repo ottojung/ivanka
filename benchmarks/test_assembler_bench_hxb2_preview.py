@@ -82,12 +82,13 @@ class Hxb2PreviewTests(unittest.TestCase):
             original = json.loads((dest/"data/runs.json").read_text())
             edited = copy.deepcopy(original)
             run = next(r for r in edited["runs"] if r.get("hxb2_truth_verified"))
-            sample = next(s for s in run["samples"]
-                          if "ivanka" not in s["failures"])
-            sample["failures"].append("ivanka")
+            sample = run["samples"][0]
+            tool = sample["failures"][0] if sample["failures"] else "ivanka"
+            if tool not in sample["failures"]:
+                sample["failures"].append(tool)
             sample["outcome"] = "failure"
             sample["floor_ok"] = None
-            sample["score"]["ivanka"] = 0.0
+            sample["score"][tool] = 0.0
             (dest/"data/runs.json").write_text(json.dumps(edited))
             with self.assertRaisesRegex(ValueError, "failed competitor"):
                 validate_public_site(dest)

@@ -39,9 +39,13 @@ def check_mapping_snapshot(site, report):
             or run is None
             or run.get("hxb2_truth_verified") is not True
             or snapshot.get("status") != "INCOMPLETE"
-            or snapshot.get("cases_measured") != 1
+            or snapshot.get("cases_measured") not in (0, 1)
             or snapshot.get("expected_cases") != 400
-            or snapshot.get("sample_alias") != run["samples"][0]["alias"]
+            or (snapshot.get("cases_measured") == 1
+                and snapshot.get("sample_alias") not in {
+                    sample["alias"] for sample in run["samples"]})
+            or (snapshot.get("cases_measured") == 0
+                and snapshot.get("sample_alias") is not None)
             or set(snapshot.get("tools", {})) != set(run["tools"])
             or set(snapshot.get("metric_catalog", {})) != set(CATALOG)):
         raise ValueError("unverified or incomplete diagnostic snapshot")
@@ -51,6 +55,15 @@ def check_mapping_snapshot(site, report):
                 "denominator": INFO[metric][1], "stage": INFO[metric][2],
                 "suggested_direction": INFO[metric][3]}:
             raise ValueError("diagnostic unit or label drift")
+    if snapshot["cases_measured"] == 0:
+        if re.search(r"/workspace/|/home/|\.fastq|patient[-_]?id",
+                     source.read_text(), re.IGNORECASE):
+            raise ValueError("private identifiers leaked into mapping data")
+        from .current_mapping import missing_arm
+        for name, arm in snapshot["tools"].items():
+            if arm != missing_arm():
+                raise ValueError(f"{name}: missing mapping case must be null")
+        return
     for name, arm in snapshot["tools"].items():
         data = arm.get("values", {})
         denom = arm.get("denominators", {})

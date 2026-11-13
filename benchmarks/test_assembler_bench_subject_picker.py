@@ -232,9 +232,9 @@ console.log('ALL_42_HXB2_PAIRWISE_COMPARISONS_PARTIAL');
         self.assertIn('function summary(',ranks)
         self.assertNotIn('v.soft_clipped_reads,v.soft_clip_events',source)
 
-    def test_current_snapshot_honestly_has_only_one_case(self):
+    def test_current_snapshot_never_invents_missing_diagnostics(self):
         current=json.loads((SITE/"data/mapping-diagnostics.json").read_text())
-        self.assertEqual(current["cases_measured"],1)
+        self.assertIn(current["cases_measured"],(0,1))
         self.assertEqual(current["expected_cases"],400)
         self.assertEqual(current["status"],"INCOMPLETE")
 

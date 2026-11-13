@@ -37,7 +37,12 @@ def update(site, fork, fork_runner, attestation, fork_repo, base,
     if real is not None:
         if real_data is None:
             raise ValueError("real benchmark requires frozen input manifest")
-        prior = public.get("real_progress", {}).get("candidates", {})
+        old_run = next((r for r in public.get("runs", [])
+                        if r.get("cohort") == "synthetic"), None)
+        same_images = (old_run is not None
+                       and old_run.get("images") == fork_run["images"])
+        prior = (public.get("real_progress", {}).get("candidates", {})
+                 if same_images else {})
         snapshot = real_snapshot(
             real, real_data, fork_runner, attestation, base,
             fork_run["images"])

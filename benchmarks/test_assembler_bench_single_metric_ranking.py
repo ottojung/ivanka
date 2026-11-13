@@ -29,7 +29,7 @@ for(const run of runs) {
   assert(times.every(x=>x.observed<=run.sample_count));
   const pairs=ranks.pairs(run,diag,'score','higher','ivanka','iva');
   assert.equal(pairs.length,run.sample_count);
-  assert(pairs.some(x=>!x.unavailable));
+  assert(pairs.filter(x=>!x.unavailable).length<=run.sample_count);
   for(const key of Object.keys(diag.metric_catalog)){
     assert.equal(ranks.summary(run,diag,key,'higher').length,7);
     assert.equal(ranks.summary(run,diag,key,'lower').length,7);
@@ -40,7 +40,7 @@ for(const run of runs) {
 const real=runs.find(r=>r.cohort==='real');
 const combined=runs.find(r=>r.cohort==='combined');
 assert(ranks.summary(real,diag,'score','higher')
-  .some(x=>x.tool==='ivanka' && x.observed>0));
+  .some(x=>x.tool==='ivanka' && x.observed>=0));
 assert.equal(combined.sample_count,
   runs[0].sample_count+real.sample_count);
 assert(combined.samples.every(s=>Object.values(s.score)

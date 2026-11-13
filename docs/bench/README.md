@@ -96,3 +96,20 @@ A source-attested image set based on one shared fork commit is
 historical diagnostics, not qualifying evidence. The dedicated
 verification path checks the actual installed binaries and source
 modules before execution and publisher approval.
+
+
+## Transition to the independently branch-built qualifying runs
+
+Shared-commit results retain their original stable diagnostic run IDs
+only until the seven dedicated, branch-built source-attested benchmark
+checkpoints are available. The publisher then exposes three new stable
+dedicated IDs: one HXB2-400, one physical-198, and their 598-case
+combined view. It never mixes rows or reuses historical case counts.
+The verified image map and source-attestation SHA must change together.
+
+Physical case counters are monotone only within the same immutable
+image set; starting a genuine new image set resets those counters.
+The one-case synthetic mapping diagnostic is chosen from the earliest
+completely successful, source-verified seven-arm case. Until one exists,
+all diagnostic values remain explicitly unavailable rather than
+being carried over from older runs or falsely set to zero.

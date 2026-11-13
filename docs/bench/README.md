@@ -85,3 +85,14 @@ validates the complete normalized combined view against both
 underlying cohorts, checks diagnostic source values and denominators,
 and rejects source-attestation failures, false qualification or
 private metadata.
+
+
+## Dedicated branch provenance requirement
+
+The canonical seven-way run must attest seven different
+MiCall fork branch commits, one per assembler, with seven different
+immutable image identities sharing only the pinned downstream base.
+A source-attested image set based on one shared fork commit is
+historical diagnostics, not qualifying evidence. The dedicated
+verification path checks the actual installed binaries and source
+modules before execution and publisher approval.

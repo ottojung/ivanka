@@ -30,7 +30,11 @@ class ForkBindingTests(unittest.TestCase):
             attested={
                 "source_commit": "f"*40,
                 "source_url": "https://github.com/ottojung/MiCall/tree/"+"f"*40,
-                "images": {name: {"image_sha256":sha}
+                "images": {name: {
+                    "image_sha256":sha,
+                    "source_commit": "f"*40 if name=="ivanka" else "e"*40,
+                    "source_url": "https://github.com/ottojung/MiCall/tree/"
+                                  +("f"*40 if name=="ivanka" else "e"*40)}
                            for name,sha in images.items()},
             }
             attest=root/"proof.json"
@@ -41,8 +45,10 @@ class ForkBindingTests(unittest.TestCase):
             with patch("fork_micall_binding.verify",return_value=attested):
                 info=check("a"*64,environ=env)
                 self.assertEqual(info["tool"],"ivanka")
+                self.assertEqual(info["fork_commit"],"f"*40)
                 info=check("c"*64,competitor="spades",environ=env)
                 self.assertEqual(info["tool"],"spades")
+                self.assertEqual(info["fork_commit"],"e"*40)
                 with self.assertRaisesRegex(ValueError,"differs"):
                     check("a"*64,competitor="spades",environ=env)
                 with self.assertRaisesRegex(ValueError,"differs"):

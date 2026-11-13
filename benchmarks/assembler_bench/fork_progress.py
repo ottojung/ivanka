@@ -5,7 +5,7 @@ from pathlib import Path
 
 from benchmarks.expanded.micall_checkpoint import existing_case, identity
 from .hxb2_preview import format_preview, pinned_truth, sha
-from .fork_image_attestation import verify
+from .image_source_attestation import verify
 
 SCHEMA = "ivanka.expanded.fork_micall_synthetic.v1"
 
@@ -27,7 +27,7 @@ def checked(directory, runner, attestation, fork, base):
             or any(att["images"][name]["image_sha256"] != image
                    for name, image in images.items())):
         raise ValueError("fork run manifest / HXB2 truth / image mismatch")
-    if verify(images, base, fork) != att:
+    if verify(images, attestation, fork, base) != att:
         raise ValueError("fork binaries differ from independent attestation")
     for name, digest in frozen["benchmark_source_sha256"].items():
         paths = [runner / "benchmarks" / part / name
@@ -79,11 +79,14 @@ def preview(directory, runner, attestation, fork, base):
         "status": "verified",
         "message": "Independently matched all seven fork-commit sources and installed binaries. This is partial data, not a qualification.",
         "attestation_sha256": sha(attestation),
+        "attestation_schema": att["schema"],
         "base_image_sha256": base,
         "images": {name: {
             "source_commit": v["source_commit"],
             "source_url": v["source_url"],
             "image_sha256": v["image_sha256"],
+            **({"source_branch": v["source_branch"]}
+               if "source_branch" in v else {}),
         } for name, v in att["images"].items()},
     }
     return result

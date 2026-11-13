@@ -16,6 +16,16 @@ def check(site, run):
     if not path.is_file() or sha(path) != proof.get("attestation_sha256"):
         raise ValueError("missing or tampered source-verified fork attestation")
     att = json.loads(path.read_text())
+    if (proof.get("attestation_schema", att.get("schema"))
+            != att.get("schema")):
+        raise ValueError("public fork attestation schema mismatch")
+    if (att.get("schema") == "ivanka.assembler-bench.dedicated-fork-images.v1"
+            and (len({entry.get("source_commit") for entry in
+                      att["images"].values()}) != len(att["images"])
+                 or any(entry.get("source_branch") !=
+                        "bench/assembler-" + name
+                        for name, entry in att["images"].items()))):
+        raise ValueError("public dedicated fork branches not independent")
     if (att.get("base_image_sha256") != proof.get("base_image_sha256")
             or set(att.get("images", {})) != set(run["tools"])
             or set(run["images"]) != set(run["tools"])
@@ -27,6 +37,7 @@ def check(site, run):
                 or image["image_sha256"] != shown["image_sha256"]
                 or image["source_commit"] != shown["source_commit"]
                 or image["source_url"] != shown["source_url"]
+                or shown.get("source_branch") != image.get("source_branch")
                 or not SOURCE.fullmatch(image["source_url"])
                 or not SHA.fullmatch(image["image_sha256"])
                 or not SHA.fullmatch(proof["base_image_sha256"])):

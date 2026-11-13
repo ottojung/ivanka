@@ -6,20 +6,23 @@ from pathlib import Path
 from benchmarks.expanded.adapters import ASSEMBLERS
 from benchmarks.expanded.real_matrix import MANIFEST
 from .hxb2_preview import sha
+from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
 
 SCHEMA = "ivanka.expanded.fork_micall_real.v1"
 PROGRESS = "ivanka.assembler-bench.real-progress.v1"
 
 
-def source_ok(manifest, runner):
+def source_ok(manifest, runner, dedicated):
     sources = manifest.get("source_files_sha256", {})
     required = ("fork_micall_real.py", "real_matrix.py",
                 "podman_full_micall.py", "fork_micall_binding.py")
-    if set(sources) != set(required):
+    extra = ("image_source_attestation.py",
+             "dedicated_image_attestation.py", "fork_image_attestation.py")
+    if set(sources) != set(required + (extra if dedicated else ())):
         raise ValueError("physical-198 benchmark source list changed")
     for name, digest in sources.items():
         root = Path(runner) / "benchmarks"
-        path = next((root / part / name for part in ("expanded", "")
+        path = next((root / part / name for part in ("expanded", "assembler_bench", "")
                      if (root / part / name).is_file()), None)
         if path is None or sha(path) != digest:
             raise ValueError(f"physical-198 benchmark source mismatch: {name}")
@@ -69,7 +72,8 @@ def snapshot(root, data, runner, attestation, base, images):
             manifest.get("real_manifest_sha256") != MANIFEST or
             sha(Path(data) / "manifest.tsv") != MANIFEST):
         raise ValueError("physical-198 run source / cohort attestation mismatch")
-    source_ok(manifest, runner)
+    source_ok(manifest, runner, json.loads(Path(attestation).read_text())
+              .get("schema") == DEDICATED_SCHEMA)
     with (Path(data) / "manifest.tsv").open(newline="") as stream:
         rows = list(csv.DictReader(stream, delimiter="\t"))
     samples = {row["sample"] for row in rows}

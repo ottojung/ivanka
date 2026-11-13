@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from pathlib import Path
 
-from benchmarks.assembler_bench.fork_image_attestation import verify
+from benchmarks.assembler_bench.image_source_attestation import verify
 from .adapters import ASSEMBLERS
 from .hxb2_cohort import attestation
 from .micall_checkpoint import (
@@ -27,7 +27,7 @@ def checked_images(images, attestation_file, fork, base):
     if set(images) != set(ASSEMBLERS):
         raise ValueError("all seven exact fork image IDs required")
     expected = json.loads(Path(attestation_file).read_text())
-    actual = verify(images, base, fork)
+    actual = verify(images, attestation_file, fork, base)
     if actual != expected:
         raise ValueError("fork image attestation differs from live installed code")
     return actual
@@ -41,7 +41,9 @@ def manifest(data, proof, images, attestation_file, limit):
                here.with_name("micall_dominant.py"),
                here.with_name("score.py"),
                here.parents[1] / "inside_container_timing.py",
-               here.parents[1] / "assembler_bench/fork_image_attestation.py")
+               here.parents[1] / "assembler_bench/fork_image_attestation.py",
+               here.parents[1] / "assembler_bench/dedicated_image_attestation.py",
+               here.parents[1] / "assembler_bench/image_source_attestation.py")
     return {
         "schema": SCHEMA,
         "status": "ATTEMPTED_NOT_QUALIFIED",

@@ -173,9 +173,6 @@ def qualify(root, dataset, runner, images_path, attestation, sources, base):
     # Rehash original read pairs and actual MiCall artifacts rather than
     # trusting the already-serialized result journal.
     hxb2_sha = authenticate_records(records, original_rows, dataset, root, images)
-    with (dataset / "manifest.tsv").open(newline="") as file:
-        rows = list(csv.DictReader(file, delimiter="\t"))
-    authenticated_hxb2 = authenticate_records(records, rows, dataset, root, images)
     report = evaluate(records, images, set(names))
     report["provenance"] = {
         "hxb2_sha256": hxb2_sha,
@@ -185,7 +182,6 @@ def qualify(root, dataset, runner, images_path, attestation, sources, base):
         "attestation_sha256": sha(attestation),
         "original_fastq_manifest_sha256": MANIFEST,
         "source_commit": source,
-        "original_hxb2_sha256": authenticated_hxb2,
         "image_id": images["ivanka"],
     }
     report["expanded_seven_way_qualified"] = False

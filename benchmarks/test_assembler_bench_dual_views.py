@@ -50,6 +50,7 @@ assert(html.includes('Clipped reads')&&html.includes('Primary mapped SAM records
 assert(html.includes('Ivanka')&&html.includes('IVA'));
 assert.equal((html.match(/<summary>/g)||[]).length,3);
 assert(html.includes('— means unavailable, not zero'));
+assert(!html.includes('table-scroll'));
 const subjects=[
  {key:'alignment',direction:'higher',label:'Alignment'},
  {key:'runtime',direction:'lower',label:'Runtime'},
@@ -61,6 +62,21 @@ assert.equal((charts.match(/distribution-kde series-a/g)||[]).length,3);
 assert.equal((charts.match(/distribution-kde series-b/g)||[]).length,3);
 assert(charts.includes('4 measured')&&charts.includes('3 measured'));
 assert(charts.includes('2 matched case IDs'));
+const eachBar=[...charts.matchAll(/<rect class="distribution-bin (series-[ab])" x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/g)];
+assert(eachBar.length>0&&eachBar.length%2===0);
+for(let i=0;i<eachBar.length;i+=2) {
+ const behind=eachBar[i],front=eachBar[i+1];
+ assert.notEqual(behind[1],front[1]);
+ assert.equal(behind[2],front[2],'bars must share x-position');
+ assert.equal(behind[4],front[4],'bars must share width');
+ assert(Number(behind[5])>=Number(front[5]),'taller bar must render first');
+}
+const onlyOne=JSON.parse(JSON.stringify(run));
+for(const sample of onlyOne.samples)sample.diagnostics.iva.clips=null;
+const onePlot=V.plotMetric(onlyOne,snapshot,subjects[2],'ivanka','iva');
+assert(onePlot.includes('0 measured'));
+assert(onePlot.includes('distribution-bin series-a'));
+assert(!onePlot.includes('NaN'));
 const missing=V.plotMetric(run,snapshot,{key:'unknown'},'ivanka','iva');
 assert(missing.includes('definition unavailable'));
 console.log('PAIRED_VIEWS_OK');
@@ -84,6 +100,9 @@ console.log('PAIRED_VIEWS_OK');
         self.assertIn('BenchViews.sampleTable(', js)
         self.assertIn('BenchViews.matrixPlots(', js)
         self.assertIn('::backdrop', css)
+        self.assertIn('overflow:hidden}', css)
+        self.assertIn('overflow-y:auto;overflow-x:hidden', css)
+        self.assertIn('.sample-metric-table{min-width:0;width:100%', css)
 
 
 if __name__ == "__main__":

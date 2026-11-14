@@ -1,21 +1,7 @@
-use super::{circle, island, scoring::Statistics, tiling, Entry, Reads, K};
-use std::fs::File;
-use std::io::{self, BufWriter, Write};
-
-/// One complete FASTA replacement; no partially ranked output is exposed.
-pub(super) fn write(path: &str, entries: &[Entry]) -> io::Result<()> {
-    let mut output = BufWriter::new(File::create(path)?);
-    for (header, sequence) in entries {
-        output.write_all(header.as_bytes())?;
-        output.write_all(b"\n")?;
-        output.write_all(sequence)?;
-        output.write_all(b"\n")?;
-    }
-    output.flush()
-}
+use super::{circle, island, tiling, Entry, Reads, Statistics, K};
 
 /// Preserve read-backed components independently: no unobserved joins.
-pub(super) fn component(
+pub(crate) fn component(
     contigs: &[Vec<u8>],
     stats: &Statistics,
     reads: &Reads,
@@ -40,12 +26,21 @@ pub(super) fn component(
             core.len()
         );
         let left = tiling::partition(
-            &format!("{header}_part1"),
+            &part_header(chosen, 1, cut),
             &core[..cut],
             &observed[..cut - K + 1],
         );
-        let right = tiling::partition(&format!("{header}_part2"), &core[cut..], &observed[cut..]);
+        let right = tiling::partition(
+            &part_header(chosen, 2, core.len() - cut),
+            &core[cut..],
+            &observed[cut..],
+        );
         return left.into_iter().chain(right).collect();
     }
     tiling::partition(&header, core, observed)
+}
+
+/// Unique FASTA IDs matter because MiCall keys BLAST genotypes by record.name.
+pub(crate) fn part_header(chosen: usize, part: usize, len: usize) -> String {
+    format!(">ivanka_{}_part{} len={}", chosen + 1, part, len)
 }

@@ -81,6 +81,36 @@ class RetainedSourceEvidenceTests(unittest.TestCase):
             sample_provenance(SAMPLE, self.row, self.record, self.dataset,
                               IMAGES, HXB2)
 
+    def test_reject_truthy_nonboolean_cached_control(self):
+        self.record["iva_baseline_reused"] = "yes"
+        with self.assertRaisesRegex(ValueError, "non-fresh"):
+            sample_provenance(SAMPLE, self.row, self.record, self.dataset,
+                              IMAGES, HXB2)
+
+    def test_reject_symlinked_original_sample_parent(self):
+        real = self.dataset / "samples" / SAMPLE
+        moved = self.root / "moved-original"
+        real.rename(moved)
+        real.symlink_to(moved, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "redirected"):
+            sample_provenance(SAMPLE, self.row, self.record, self.dataset,
+                              IMAGES, HXB2)
+
+    def test_reject_symlinked_output_parent(self):
+        parent = self.folder.parent
+        moved = self.root / "moved-output-parent"
+        parent.rename(moved)
+        parent.symlink_to(moved, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "redirected"):
+            check_retained_arm(SAMPLE, self.record, "iva", self.root,
+                               IMAGES["iva"])
+
+    def test_reject_traversal_in_invocation(self):
+        self.record["invocation"] = "../outside"
+        with self.assertRaisesRegex(ValueError, "unsafe"):
+            check_retained_arm(SAMPLE, self.record, "iva", self.root,
+                               IMAGES["iva"])
+
     def test_reject_changed_final_consensus(self):
         self.conseq.write_text("consensus-percent-cutoff,sequence\nMAX,TTTT\n")
         with self.assertRaisesRegex(ValueError, "hash mismatch"):

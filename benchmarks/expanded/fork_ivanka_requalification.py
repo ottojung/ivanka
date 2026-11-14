@@ -17,7 +17,8 @@ from .run_synthetic import cohort_rows
 SCHEMA = "ivanka.expanded.fork_ivanka_requalification.v1"
 
 
-def source_manifest(data, proof, images, attestation_file, binary_commit, limit):
+def source_manifest(data, proof, images, attestation_file, binary_commit,
+                    limit, only_v2_low_depth=False):
     root = Path(__file__).resolve()
     source = (root, root.with_name("fork_micall_synthetic.py"),
               root.with_name("micall_synthetic.py"),
@@ -28,8 +29,15 @@ def source_manifest(data, proof, images, attestation_file, binary_commit, limit)
               root.parents[1] / "project_references.py",
               root.parents[1] / "podman_detached_lifecycle.py",
               root.parents[1] / "inside_container_timing.py")
-    return {"schema": SCHEMA, "qualified": False, "expected": 400,
+    if only_v2_low_depth:
+        source += (root.with_name("v2_lowdepth_probe.py"),
+                   root.with_name("hxb2_lowdepth_v2.py"),
+                   root.with_name("hxb2_cohort.py"))
+    expected = 16 if only_v2_low_depth else 400
+    return {"schema": SCHEMA, "qualified": False, "expected": expected,
             "limit": limit, "selected_assembler": "ivanka",
+            "case_subset": ("hxb2_v2_low_depth_16" if only_v2_low_depth
+                            else None),
             "cohort_sha256": digest(Path(data) / "cohort.json"),
             "truth_proof": proof, "images": images,
             "ivanka_source_commit": binary_commit,
@@ -103,12 +111,26 @@ def cleanup(root, row, image, proof):
         shutil.rmtree(scratch)
 
 
+def select_cases(cases, proof, only_v2_low_depth):
+    if not only_v2_low_depth:
+        return cases
+    if proof.get("schema") != "ivanka.hxb2_truth_validation.v2":
+        raise ValueError("the low-depth-only probe requires attested v2 truth")
+    from .v2_lowdepth_probe import only_changed
+    return only_changed(cases)
+
+
 def run(data, destination, images, source_roots, base, att_file,
-        binary_commit, *, jobs=2, timeout=1800, limit=None, resume=False):
+        binary_commit, *, jobs=2, timeout=1800, limit=None, resume=False,
+        only_v2_low_depth=False):
     if jobs not in range(1, 5) or timeout not in range(1, 1801):
         raise ValueError("jobs must be 1..4; timeout 1..1800")
     if limit is not None and limit not in range(1, 401):
         raise ValueError("limited diagnostic cases must be 1..400")
+    if only_v2_low_depth and limit is not None:
+        raise ValueError("v2 low-depth probe must select exactly all 16 cases")
+    if only_v2_low_depth and timeout != 1800:
+        raise ValueError("v2 low-depth probe requires the original 1800s limit")
     destination = Path(destination).resolve()
     with exclusive_lock(destination):
         evidence = checked_images(images, att_file, source_roots, base)
@@ -123,10 +145,11 @@ def run(data, destination, images, source_roots, base, att_file,
         cases = list(cohort_rows(data))
         if len(cases) != 400:
             raise ValueError("invalid HXB2 cohort size")
+        cases = select_cases(cases, proof, only_v2_low_depth)
         if limit is not None:
             cases = cases[:limit]
         frozen = source_manifest(data, proof, images, att_file,
-                                 binary_commit, limit)
+                                 binary_commit, limit, only_v2_low_depth)
         manifest_path = destination/"run_manifest.json"
         if resume:
             if not manifest_path.is_file() or json.loads(
@@ -172,13 +195,15 @@ def main():
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--only-v2-low-depth", action="store_true",
+                        help="source-attested 16 new v2 cases, not a full qualification")
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     images = json.loads(args.images.read_text())
     print("IVANKA_SINGLE_ARM_ATTEMPTS", run(args.data, args.out, images,
         args.fork, args.base, args.attestation, args.binary_commit,
         jobs=args.jobs, timeout=args.timeout, limit=args.limit,
-        resume=args.resume))
+        resume=args.resume, only_v2_low_depth=args.only_v2_low_depth))
 
 
 if __name__ == "__main__":

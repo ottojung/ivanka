@@ -25,4 +25,13 @@ pub(super) fn best(contigs: &[Vec<u8>], stats: &Statistics) -> usize {
 }
 
 mod distinct;
-pub(super) use distinct::complement;
+pub(super) use distinct::distinct;
+
+pub(super) fn complement(
+    contigs: &[Vec<u8>],
+    stats: &Statistics,
+    hits: &Hits,
+    primary: usize,
+) -> Option<usize> {
+    distinct(contigs, stats, hits, &[primary])
+}

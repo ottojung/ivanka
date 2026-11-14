@@ -6,6 +6,8 @@ mod support;
 #[cfg(test)]
 mod test_junction;
 #[cfg(test)]
+mod test_strict;
+#[cfg(test)]
 mod test_variable;
 #[cfg(test)]
 mod tests;
@@ -29,4 +31,12 @@ pub(super) fn repair(sequence: &[u8], depth: &[u32], reads: &Reads) -> Option<(V
     }
     let cut = breakpoint::locate(core, |word| support::present(word, reads))?;
     rotate::at(sequence, depth, cut, overlap, K)
+}
+
+/// Withhold a long unsupported internal adjacency while retaining both pieces.
+pub(super) fn unbridged_cut(sequence: &[u8], reads: &Reads) -> Option<usize> {
+    if reads.max_read_len < support::SPAN {
+        return None;
+    }
+    breakpoint::locate_strict(sequence, |word| support::present(word, reads))
 }

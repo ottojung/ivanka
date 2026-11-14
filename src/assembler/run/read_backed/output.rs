@@ -32,5 +32,20 @@ pub(super) fn component(
     let (start, end) = island::bounds(sequence, depth);
     let observed = &depth[start..end.saturating_sub(K - 1).max(start)];
     let header = format!(">ivanka_{} len={}", chosen + 1, sequence.len());
-    tiling::partition(&header, &sequence[start..end], observed)
+    let core = &sequence[start..end];
+    if let Some(cut) = circle::unbridged_cut(core, reads) {
+        eprintln!(
+            "IVANKA_READ_BACKED_UNBRIDGED_JUNCTION cut={} len={}",
+            cut,
+            core.len()
+        );
+        let left = tiling::partition(
+            &format!("{header}_part1"),
+            &core[..cut],
+            &observed[..cut - K + 1],
+        );
+        let right = tiling::partition(&format!("{header}_part2"), &core[cut..], &observed[cut..]);
+        return left.into_iter().chain(right).collect();
+    }
+    tiling::partition(&header, core, observed)
 }

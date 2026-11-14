@@ -15,9 +15,15 @@ pub(super) fn assemble_deep(
         .filter(|(_, count)| **count >= 15)
         .map(|(&seed, &count)| (seed, count))
         .collect::<Vec<_>>();
-    deep.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    // Selecting the top rescue budget avoids sorting every distinct seed.
+    // The same ordering is restored for the selected prefix before assembly.
+    let limit = rescue_limit.min(deep.len());
+    if limit > 0 {
+        deep.select_nth_unstable_by(limit - 1, |a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        deep[..limit].sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    }
     let mut rescued = 0usize;
-    for (seed, count) in deep.into_iter().take(rescue_limit) {
+    for (seed, count) in deep.into_iter().take(limit) {
         // Re-running deterministic extension on an identical anchor adds no contig.
         if attempted_seeds.contains(&seed) {
             continue;

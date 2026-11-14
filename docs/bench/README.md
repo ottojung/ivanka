@@ -170,3 +170,11 @@ The [read-only coverage capacity audit](synthetic-coverage-capacity.md)
 documents MiCall's shared 100x consensus threshold and the
 low-depth cohort's approximately 78x mean read-base capacity.
 This does not replace any assembler measurement or gate.
+
+### Prospective low-depth v2 experiment
+
+The [versioned low-depth v2 cohort](synthetic-lowdepth-v2.md) repairs
+the shared MiCall coverage-capacity issue using the same genome truths
+and a depth that remains lower than normal. It does not mutate the
+frozen v1 cohort, erase previous expensive results or waive
+qualification. No release pass is implied by the IVA/Ivanka pilot.

@@ -18,8 +18,13 @@ from .synthetic import fingerprint
 def cohort_rows(cohort_root):
     root = Path(cohort_root).resolve()
     cohort = json.loads((root / "cohort.json").read_text())
-    if cohort.get("schema") != "ivanka.expanded.cohort.hxb2.v1":
+    if cohort.get("schema") not in (
+            "ivanka.expanded.cohort.hxb2.v1",
+            "ivanka.expanded.cohort.hxb2.v2"):
         raise ValueError("legacy random or invalid HXB2 synthetic cohort")
+    if cohort["schema"].endswith(".v2"):
+        from .hxb2_lowdepth_v2 import verify_metadata
+        verify_metadata(root, cohort)
     from .hxb2_truth import validate
     if cohort["samples"] != len(cohort["cases"]):
         raise ValueError("cohort manifest is incomplete")

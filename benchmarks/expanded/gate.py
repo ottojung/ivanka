@@ -23,6 +23,7 @@ SCORE_ORIGIN = "micall_final_max_reference_panel_v1"
 SCORE_ORIGINS = {"real": SCORE_ORIGIN, "synthetic": SCORE_ORIGIN}
 TIMING_ORIGIN = "micall_in_container_monotonic_v1"
 TRUTH_SCHEMA = "ivanka.hxb2_truth_validation.v1"
+TRUTH_SCHEMAS = {TRUTH_SCHEMA, "ivanka.hxb2_truth_validation.v2"}
 
 
 def eligible_truth(row):
@@ -33,7 +34,7 @@ def eligible_truth(row):
     """
     proof = row.get("truth_validation")
     return (isinstance(proof, dict)
-            and proof.get("schema") == TRUTH_SCHEMA
+            and proof.get("schema") in TRUTH_SCHEMAS
             and proof.get("valid") is True
             and all(isinstance(proof.get(key), str)
                     and len(proof[key]) == 64
@@ -78,6 +79,16 @@ def summarize_gate(records, *, real_count=198, synthetic_seeds=16,
         if cohort == "synthetic":
             family = row.get("family")
             family_counts[family] = family_counts.get(family, 0) + 1
+    proofs = {
+        json.dumps(row.get("truth_validation"), sort_keys=True)
+        for row in groups["synthetic"]
+    }
+    if len(proofs) > 1:
+        errors.append("synthetic:mixed_truth_cohorts")
+    elif proofs:
+        proof = groups["synthetic"][0].get("truth_validation")
+        if isinstance(proof, dict) and proof.get("schema") in TRUTH_SCHEMAS:
+            report["synthetic_truth_schema"] = proof["schema"]
     for cohort, count in expected.items():
         if len(groups[cohort]) != count:
             errors.append(f"{cohort}:expected_{count}_observed_{len(groups[cohort])}")

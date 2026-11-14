@@ -22,19 +22,17 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
     let hits = index::build(contigs);
     let statistics = scoring::count(contigs, reads, &hits);
     let chosen = ranking::best(contigs, &statistics);
-    let repaired = circle::repair(&contigs[chosen], &statistics.depth[chosen], reads);
-    let (sequence, depth): (&[u8], &[u32]) = match &repaired {
-        Some((seq, depths)) => (seq, depths),
-        None => (&contigs[chosen], &statistics.depth[chosen]),
-    };
-    let header = format!(">ivanka_{} len={}", chosen + 1, sequence.len());
-    if repaired.is_some() {
-        eprintln!("IVANKA_READ_BACKED_REOPENED_CYCLE len={}", sequence.len());
+    let mut selected = output::component(contigs, &statistics, reads, chosen);
+    if let Some(other) = ranking::complement(contigs, &statistics, &hits, chosen) {
+        eprintln!(
+            "IVANKA_READ_BACKED_DISTINCT_COMPONENT secondary={} original_pairs={}",
+            other, statistics.pairs[other]
+        );
+        let extra = output::component(contigs, &statistics, reads, other);
+        if selected.len() + extra.len() <= 16 {
+            selected.extend(extra);
+        }
     }
-    let (start, end) = island::bounds(sequence, depth);
-    let clipped = &sequence[start..end];
-    let observed = &depth[start..end.saturating_sub(K - 1).max(start)];
-    let selected = tiling::partition(&header, clipped, observed);
     eprintln!(
         "IVANKA_READ_BACKED_SELECTION native {} selected [{}] covered_31mers [{}] supporting_pairs [{}] read_support_products [{}]",
         contigs.len(), chosen, statistics.coverage[chosen], statistics.pairs[chosen],

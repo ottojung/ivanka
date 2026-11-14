@@ -230,3 +230,50 @@ section.dominance,section.diagnostics{margin-top:61px}
 #exactProfileChart{margin-top:20px;padding-top:13px;border-top:1px solid var(--border)}
 #exactProfileChart[hidden]{display:none}
 #exactProfileChart h4{font-size:14px;margin:0 0 10px}
+
+/* Native modal keeps the long, full-metric case comparison out of the page flow. */
+#sampleDialog{width:min(1050px,96vw);max-width:96vw;max-height:90dvh;
+  padding:0;border:1px solid var(--border);border-radius:14px;
+  background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+#sampleDialog::backdrop{background:#030910cc;backdrop-filter:blur(4px)}
+.sample-dialog-content{padding:0 22px 24px;max-height:90dvh;overflow:auto}
+.sample-dialog-header{position:sticky;top:0;z-index:2;background:var(--surface);
+  display:flex;align-items:center;justify-content:space-between;gap:15px;
+  border-bottom:1px solid var(--border);padding:19px 0 13px}
+.sample-dialog-header h2{margin:0;font-size:22px;letter-spacing:-.025em}
+.sample-metric-group{margin:22px 0}
+.sample-metric-group h3{margin:0 0 9px;font-size:15px;color:var(--cyan)}
+.sample-metric-table{min-width:600px;table-layout:fixed}
+.sample-metric-table th:first-child{width:56%}
+.sample-metric-table th:not(:first-child){width:22%;text-align:right}
+.sample-metric-table td{padding:10px 13px;vertical-align:top}
+.sample-metric-table td:not(:first-child){text-align:right;white-space:nowrap}
+.sample-metric-table summary{color:var(--text);cursor:pointer;font-weight:550}
+.sample-metric-table summary:hover{color:var(--cyan)}
+.sample-metric-table small{color:var(--muted);font-size:11px}
+.sample-metric-table details p{font-size:12px;color:var(--muted);margin:6px 0}
+.sample-metric-table details p strong{color:var(--text)}
+
+/* A and B share bin boundaries and density axes within each selected metric. */
+.matrix-distributions{border-top:1px solid var(--border);margin-top:24px;padding-top:20px}
+.matrix-distributions>h3{margin:0 0 5px;font-size:18px}
+.matrix-plot{margin:18px 0;padding:16px;border:1px solid var(--border);
+  border-radius:10px;background:var(--surface)}
+.matrix-plot h4{font-size:15px;margin:0 0 10px}
+.matrix-plot h4 small{font-weight:400;color:var(--muted)}
+.matrix-plot svg{display:block;width:100%;height:auto;max-height:310px}
+.matrix-plot svg text{font-size:11px;fill:var(--muted)}
+.matrix-plot .distribution-bin.series-a{fill:var(--cyan);opacity:.48}
+.matrix-plot .distribution-bin.series-b{fill:var(--amber);opacity:.48}
+.matrix-plot .distribution-kde.series-a{stroke:var(--cyan)}
+.matrix-plot .distribution-kde.series-b{stroke:var(--amber);stroke-dasharray:8 5}
+.matrix-plot .distribution-legend{margin-top:8px;line-height:1.5}
+.series-key{font-weight:700}
+.series-key.series-a{color:var(--cyan)}
+.series-key.series-b{color:var(--amber)}
+@media(max-width:600px){
+  .sample-dialog-content{padding:0 12px 15px}
+  .sample-dialog-header h2{font-size:17px}
+  .sample-dialog-header .outline-button{padding:7px 10px}
+  .matrix-plot{padding:10px}
+}

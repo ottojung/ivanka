@@ -7,7 +7,7 @@ const BenchDistribution = (() => {
     const lo=Math.floor(index), hi=Math.ceil(index);
     return sorted[lo]+(sorted[hi]-sorted[lo])*(index-lo);
   }
-  function model(numbers) {
+  function model(numbers,config={}) {
     const values=numbers.filter(finite).slice().sort((a,b)=>a-b);
     const n=values.length;
     if(!n)return {n:0,bins:[],curve:[],bandwidth:null,range:null};
@@ -21,11 +21,11 @@ const BenchDistribution = (() => {
       ?.9*sigma*Math.pow(n,-.2):null;
     const fallback=Math.max(1,Math.abs(mean)*.1);
     const margin=bandwidth?Math.min(3*bandwidth,2*span):fallback;
-    const min=low-margin,max=high+margin;
+    const [min,max]=config.range||[low-margin,high+margin];
     const width=max-min;
     const fd=iqr>0?2*iqr/Math.cbrt(n):0;
-    const count=span>0?Math.max(3,Math.min(32,
-      Math.ceil(span/(fd>0?fd:span/Math.max(3,Math.sqrt(n)))))):1;
+    const count=config.bins|| (span>0?Math.max(3,Math.min(32,
+      Math.ceil(span/(fd>0?fd:span/Math.max(3,Math.sqrt(n)))))):1);
     const binWidth=width/count;
     const counts=Array(count).fill(0);
     for(const value of values) {
@@ -53,6 +53,12 @@ const BenchDistribution = (() => {
     return {n,bins,curve,bandwidth,range:[min,max],
       min:low,max:high,mean};
   }
-  return {model};
+  function compare(first,second) {
+    const pooled=model([...first,...second]);
+    if(!pooled.n)return {pooled,first:model([]),second:model([])};
+    const shared={range:pooled.range,bins:pooled.bins.length};
+    return {pooled,first:model(first,shared),second:model(second,shared)};
+  }
+  return {model,compare};
 })();
 if(typeof module!=="undefined")module.exports=BenchDistribution;

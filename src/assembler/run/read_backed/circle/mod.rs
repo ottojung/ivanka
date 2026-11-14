@@ -1,6 +1,8 @@
 mod breakpoint;
 mod overlap;
+mod reextend;
 mod rotate;
+pub(super) use reextend::try_extend;
 mod seam;
 mod support;
 #[cfg(test)]
@@ -10,7 +12,7 @@ mod test_variable;
 #[cfg(test)]
 mod tests;
 
-use super::{encode, Reads, K};
+use super::{encode, extend, index, scoring, Reads, K};
 const MAX_OVERLAP: usize = 512;
 const MIN_OVERLAP: usize = 256;
 

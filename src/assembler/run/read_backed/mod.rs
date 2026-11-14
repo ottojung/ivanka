@@ -10,7 +10,7 @@ mod tests;
 mod tiling;
 mod trimming;
 
-use super::{encode, Reads, K};
+use super::{encode, extend, Reads, K};
 use std::io;
 
 type Entry = (String, Vec<u8>);
@@ -23,7 +23,10 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
     let statistics = scoring::count(contigs, reads, &hits);
     let chosen = ranking::best(contigs, &statistics);
     let repaired = circle::repair(&contigs[chosen], &statistics.depth[chosen], reads);
-    let (sequence, depth): (&[u8], &[u32]) = match &repaired {
+    let reextended = repaired
+        .as_ref()
+        .and_then(|(seq, _)| circle::try_extend(seq, reads));
+    let (sequence, depth): (&[u8], &[u32]) = match reextended.as_ref().or(repaired.as_ref()) {
         Some((seq, depths)) => (seq, depths),
         None => (&contigs[chosen], &statistics.depth[chosen]),
     };

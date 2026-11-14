@@ -25,4 +25,6 @@ pub(super) fn best(contigs: &[Vec<u8>], stats: &Statistics) -> usize {
 }
 
 mod distinct;
+#[cfg(test)]
 pub(super) use distinct::complement;
+pub(super) use distinct::complements;

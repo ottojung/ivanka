@@ -13,8 +13,8 @@ import subprocess
 
 from benchmarks.assembler_bench.image_source_attestation import verify
 from benchmarks.expanded.strict_fork_physical198_evidence import authenticate_records
+from benchmarks.expanded.strict_fork_physical198_scoring import authenticate_scores
 from benchmarks.expanded.real_matrix import MANIFEST, PANEL
-from benchmarks.expanded.strict_fork_physical198_evidence import authenticate_records
 from psi_acceptance import summarize
 
 SCHEMA = "ivanka.strict_fork_physical198.v1"
@@ -173,10 +173,13 @@ def qualify(root, dataset, runner, images_path, attestation, sources, base):
     # Rehash original read pairs and actual MiCall artifacts rather than
     # trusting the already-serialized result journal.
     hxb2_sha = authenticate_records(records, original_rows, dataset, root, images)
+    scoring_panel_sha = authenticate_scores(records, dataset, images, PANEL)
     report = evaluate(records, images, set(names))
     report["provenance"] = {
         "hxb2_sha256": hxb2_sha,
         "original_reads_and_final_outputs_reverified": True,
+        "final_max_scores_independently_recomputed": True,
+        "scoring_panel_sha256": scoring_panel_sha,
         "run_manifest_sha256": sha(root / "run_manifest.json"),
         "result_journal_sha256": journal_sha,
         "attestation_sha256": sha(attestation),

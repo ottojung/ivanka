@@ -37,7 +37,7 @@ const BenchViews = (() => {
       groups.reduce((n,g)=>n+g.rows.length,0)+
       ' metrics have at least one recorded value. — means unavailable, not zero.</p>'+
       groups.map(g=>'<section class="sample-metric-group"><h3>'+safe(g.stage)+
-        '</h3><div class="table-scroll"><table class="sample-metric-table"><thead><tr>'+
+        '</h3><table class="sample-metric-table"><thead><tr>'+
         '<th>Metric and calculation</th><th>'+safe(label(a))+
         '</th><th>'+safe(label(b))+'</th></tr></thead><tbody>'+
         g.rows.map(row=>'<tr><td><details><summary>'+safe(row.info.label)+
@@ -45,7 +45,7 @@ const BenchViews = (() => {
           safe(row.info.denominator)+'</p></details><small>'+safe(row.info.unit)+
           '</small></td><td class="number">'+value(row.first)+'</td>'+
           '<td class="number">'+value(row.second)+'</td></tr>').join("")+
-        '</tbody></table></div></section>').join("");
+        '</tbody></table></section>').join("");
   }
   function plotMetric(run,snapshot,subject,a,b) {
     const key=keyFor(subject.key);
@@ -73,14 +73,23 @@ const BenchViews = (() => {
       ...comparison.first.curve.map(p=>p.y),
       ...comparison.second.curve.map(p=>p.y))*1.12;
     const y=v=>bottom-v/peak*(bottom-top);
-    const bars=(model,series,offset)=>model.bins.map(bin=>{
-      const width=(x(bin.to)-x(bin.from))/2;
-      return '<rect class="distribution-bin '+series+'" x="'+
-        (x(bin.from)+offset*width+.5).toFixed(2)+'" y="'+
-        y(bin.density).toFixed(2)+'" width="'+Math.max(0,width-1).toFixed(2)+
-        '" height="'+Math.max(0,bottom-y(bin.density)).toFixed(2)+'"><title>'+
-        safe(label(series==="series-a"?a:b))+': '+bin.count+' values, '+
+    // Bars share their complete bin interval; render taller bars behind shorter.
+    const bins=comparison.first.bins.length
+      ?comparison.first.bins:comparison.second.bins;
+    const bars=bins.map((sourceBin,index)=>{
+      const empty={...sourceBin,count:0,density:0};
+      const firstBin=comparison.first.bins[index]||empty;
+      const secondBin=comparison.second.bins[index]||empty;
+      const draw=(bin,series,tool)=>'<rect class="distribution-bin '+series+
+        '" x="'+(x(bin.from)+.5).toFixed(2)+'" y="'+
+        y(bin.density).toFixed(2)+'" width="'+
+        Math.max(0,x(bin.to)-x(bin.from)-1).toFixed(2)+
+        '" height="'+Math.max(0,bottom-y(bin.density)).toFixed(2)+
+        '"><title>'+safe(label(tool))+': '+bin.count+' values, '+
         value(bin.from)+' to '+value(bin.to)+'</title></rect>';
+      const first=draw(firstBin,"series-a",a);
+      const second=draw(secondBin,"series-b",b);
+      return firstBin.density>=secondBin.density?first+second:second+first;
     }).join("");
     const curve=(model,series)=>model.curve.length
       ?'<path class="distribution-kde '+series+'" d="'+model.curve.map((p,i)=>
@@ -89,8 +98,8 @@ const BenchViews = (() => {
     const ticks=[low,(low+high)/2,high].map(t=>
       '<text x="'+x(t).toFixed(2)+'" y="230" text-anchor="middle">'+
       safe(value(t))+'</text>').join("");
-    const summary='<p class="distribution-legend">Histograms: relative frequency '+
-      'per unit, with identical bin edges and axes. Curves: Gaussian KDE '+
+    const summary='<p class="distribution-legend">Histograms: overlaid relative frequency '+
+      'per unit, with identical bin edges and axes; taller bars behind shorter bars. Curves: Gaussian KDE '+
       '(absent for constant or single-value series). Values are independently '+
       'normalized within each assembler.</p>';
     return '<article class="matrix-plot">'+title+
@@ -98,7 +107,7 @@ const BenchViews = (() => {
       safe(info.label+', '+label(a)+' and '+label(b)+' histogram and KDE')+'">'+
       '<line class="distribution-axis" x1="'+left+'" x2="'+right+
       '" y1="'+bottom+'" y2="'+bottom+'"></line>'+
-      bars(comparison.first,"series-a",0)+bars(comparison.second,"series-b",1)+
+      bars+
       curve(comparison.first,"series-a")+curve(comparison.second,"series-b")+
       ticks+'</svg>'+legend+summary+'</article>';
   }

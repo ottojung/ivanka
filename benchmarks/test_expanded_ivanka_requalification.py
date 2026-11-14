@@ -59,6 +59,44 @@ class SingleArmRequalificationTests(unittest.TestCase):
                             "base",self.att,self.source_commit,
                             jobs=1,limit=1,resume=resume)
 
+    def test_v2_probe_selects_only_unchanged_rule_new_read_cases(self):
+        from expanded.v2_lowdepth_probe import SAMPLES
+        cases = [(name, self.root/name, {"pairs": 5000})
+                 for name in SAMPLES]
+        cases += [(f"clonal-s{i:03d}", self.root/f"clonal-s{i:03d}",
+                   {"pairs": 10000}) for i in range(16)]
+        proof = {"schema": "ivanka.hxb2_truth_validation.v2", "valid": True}
+        selected = solo.select_cases(cases, proof, True)
+        self.assertEqual([c[0] for c in selected], list(SAMPLES))
+        with self.assertRaisesRegex(ValueError, "attested v2 truth"):
+            solo.select_cases(cases, {"schema":
+                "ivanka.hxb2_truth_validation.v1"}, True)
+        with self.assertRaisesRegex(ValueError, "sixteen"):
+            solo.select_cases(cases[:-17], proof, True)
+        cases[0] = (cases[0][0], cases[0][1], {"pairs": 2500})
+        with self.assertRaisesRegex(ValueError, "unexpected v2"):
+            solo.select_cases(cases, proof, True)
+
+    def test_v2_probe_cannot_be_partial_or_cross_cohort(self):
+        with self.assertRaisesRegex(ValueError, "all 16"):
+            solo.run(self.data, self.out, self.images, "/source",
+                     "base", self.att, self.source_commit,
+                     only_v2_low_depth=True, limit=1)
+        with self.assertRaisesRegex(ValueError, "original 1800s"):
+            solo.run(self.data, self.out, self.images, "/source",
+                     "base", self.att, self.source_commit,
+                     only_v2_low_depth=True, timeout=1799)
+        proof = {"schema": "ivanka.hxb2_truth_validation.v2",
+                 "valid": True}
+        frozen = solo.source_manifest(
+            self.data, proof, self.images, self.att,
+            self.source_commit, None, True)
+        self.assertEqual(frozen["expected"], 16)
+        self.assertFalse(frozen["qualified"])
+        self.assertEqual(frozen["case_subset"], "hxb2_v2_low_depth_16")
+        self.assertIn("v2_lowdepth_probe.py", frozen["source_sha256"])
+        self.assertIn("hxb2_cohort.py", frozen["source_sha256"])
+
     def test_immutable_complete_case_can_resume_without_micall(self):
         self.assertEqual(self.run_mocked(),1)
         folder=self.out/"s000"

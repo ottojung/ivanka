@@ -1,5 +1,5 @@
-use super::novelty::novel;
-use super::{Hits, Statistics};
+use super::{mate_linked, novelty::novel};
+use super::{Hits, PairLinks, Statistics};
 use std::cmp::Reverse;
 
 /// Keep independent read-backed fragments separate; never fabricate their join.
@@ -8,12 +8,14 @@ pub(crate) fn complements(
     stats: &Statistics,
     hits: &Hits,
     primary: usize,
+    links: &PairLinks,
 ) -> Vec<usize> {
     let mut picked = vec![primary];
     while picked.len() < 8 {
         let next = (0..contigs.len())
             .filter_map(|i| {
-                if picked.contains(&i) || stats.coverage[i] == 0 {
+                if picked.contains(&i) || stats.coverage[i] == 0 || !mate_linked(i, &picked, links)
+                {
                     return None;
                 }
                 let independent = novel(i, contigs, stats, hits, &picked);
@@ -38,7 +40,10 @@ pub(crate) fn complement(
     hits: &Hits,
     primary: usize,
 ) -> Option<usize> {
-    complements(contigs, stats, hits, primary)
+    let links = (0..contigs.len())
+        .map(|i| ((i, i), 3))
+        .collect::<PairLinks>();
+    complements(contigs, stats, hits, primary, &links)
         .into_iter()
         .next()
 }

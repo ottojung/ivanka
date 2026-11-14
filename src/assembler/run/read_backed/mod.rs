@@ -23,13 +23,13 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
     let statistics = scoring::count(contigs, reads, &hits);
     let chosen = ranking::best(contigs, &statistics);
     let mut selected = output::component(contigs, &statistics, reads, chosen);
-    if let Some(other) = ranking::complement(contigs, &statistics, &hits, chosen) {
-        eprintln!(
-            "IVANKA_READ_BACKED_DISTINCT_COMPONENT secondary={} original_pairs={}",
-            other, statistics.pairs[other]
-        );
+    for other in ranking::complements(contigs, &statistics, &hits, chosen) {
         let extra = output::component(contigs, &statistics, reads, other);
         if selected.len() + extra.len() <= 16 {
+            eprintln!(
+                "IVANKA_READ_BACKED_DISTINCT_COMPONENT secondary={} original_pairs={}",
+                other, statistics.pairs[other]
+            );
             selected.extend(extra);
         }
     }

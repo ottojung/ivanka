@@ -89,9 +89,10 @@ INFO = {
         "Count of CIGAR D reference bases.",
         "Read-to-contig SAM alignment", "unspecified"),
     "nuc_soft_clips_count": (
-        "MiCall's aggregated per-position nuc.csv clip count. This quantity "
-        "has different inclusion and duplication rules than SAM soft clips.",
-        "Sum or deduplicated per-position nuc.csv clip aggregate.",
+        "For each (seed, refseq.nuc.pos) in nuc.csv, take the maximum "
+        "nonnegative integer clip count across overlapping region rows, "
+        "then sum these maxima. This is not the SAM CIGAR S event count.",
+        "Sum of max(clip) over distinct valid seed/reference positions.",
         "MiCall nucleotide summary", "unspecified"),
     "nuc_q15_mean_depth": (
         "Average nucleotide read depth among the positions represented in "
@@ -127,4 +128,9 @@ INFO = {
 
 INFO.update({key: value for key, value in micall_explanations().items()
              if key not in INFO})
+# The calculation rules take precedence over older generic summaries.
 INFO.update(exact_explanations())
+from .metric_catalog_micall_rules import RULES
+from .metric_catalog_micall import stage
+for key,(_,description,denominator) in RULES.items():
+    INFO[key]=(description,denominator,stage(key),INFO[key][3])

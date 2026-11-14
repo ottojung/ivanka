@@ -27,7 +27,7 @@ SECRET = re.compile(r"/workspace/|/home/|_R[12]_[0-9]{3}|"
 def validate_public_site(site=SITE):
     source = Path(site)
     required = ("index.html", "style.css", "subjects.js",
-                "rankings.js", "distribution.js", "app.js",
+                "rankings.js", "distribution.js", "compare_views.js", "app.js",
                 "data/runs.json", "data/history.json",
                 "data/mapping-diagnostics.json",
                 "data/live-fork-attestation.json")
@@ -36,11 +36,12 @@ def validate_public_site(site=SITE):
     html = (source / "index.html").read_text()
     js = (source / "app.js").read_text()
     for link in ('href="./style.css"', 'src="./subjects.js"',
-                 'src="./app.js"',
+                 'src="./app.js"', 'src="./compare_views.js"',
                  'id="runSelect"', 'id="resultRows"',
                  'id="comparisonChart"', 'id="distributionPanel"',
                  'id="distributionChart"', 'id="distributionClose"',
-                 'id="detailPanel"', 'id="dominanceMatrix"',
+                 'id="sampleDialog"', 'id="sampleDialogMetrics"',
+                 'id="sampleDialogClose"', 'id="dominanceMatrix"',
                  'id="dominanceSubjects"', 'id="subjectSearch"',
                  'id="subjectsCount"', 'id="firstTool"',
                  'id="diagnosticMetric"',
@@ -53,6 +54,14 @@ def validate_public_site(site=SITE):
             or 'button[data-tool]' not in js
             or "function drawDistribution()" not in js):
         raise ValueError("ranking bars must reveal metric distributions")
+    views = (source / "compare_views.js").read_text()
+    if ("BenchViews.sampleTable(" not in js
+            or "BenchViews.matrixPlots(" not in js
+            or "function matrixPlots(" not in views
+            or "function sampleTable(" not in views):
+        raise ValueError("missing all-metric sample dialog or paired density charts")
+    if 'id="realProgress"' in html:
+        raise ValueError("obsolete physical-progress banner reintroduced")
     if 'fetch("./data/mapping-diagnostics.json"' not in js:
         raise ValueError("mapping report must be fetched from same origin")
     if (any(name not in js for name in

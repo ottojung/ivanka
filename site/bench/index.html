@@ -10,6 +10,7 @@
   <script src="./subjects.js" defer></script>
   <script src="./rankings.js" defer></script>
   <script src="./distribution.js" defer></script>
+  <script src="./compare_views.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -43,7 +44,6 @@
           <span class="meta-label">QUALIFICATION</span><strong id="runStatus">—</strong>
         </div>
         <p class="subtle" id="progressStatus" role="status">Refresh to see the latest results.</p>
-        <p class="subtle" id="realProgress" role="status"></p>
       </section>
       <section class="overview" aria-label="Run overview">
         <div class="section-heading"><div><span class="overline">01 / OVERVIEW</span><h2>At a glance</h2></div><span class="date" id="runDate">—</span></div>
@@ -144,13 +144,22 @@
           </table>
         </div>
         <div class="table-footer"><span id="resultCount"></span><span>Click a row for details</span></div>
-        <aside id="detailPanel" class="detail-panel" aria-live="polite" hidden></aside>
       </section>
       <section class="provenance" aria-label="Provenance">
         <div class="section-heading"><div><span class="overline">05 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
         <div id="provenanceContent"></div>
       </section>
     </main>
+    <dialog id="sampleDialog" aria-labelledby="sampleDialogTitle">
+      <div class="sample-dialog-content">
+        <header class="sample-dialog-header">
+          <h2 id="sampleDialogTitle"></h2>
+          <button type="button" id="sampleDialogClose" class="outline-button" aria-label="Close sample details">Close</button>
+        </header>
+        <p id="sampleDialogSummary" class="subtle"></p>
+        <div id="sampleDialogMetrics"></div>
+      </div>
+    </dialog>
     <footer>
       <span><b>ASSEMBLER BENCH</b> · MiCall comparisons</span>
       <span>MiCall benchmark results · No patient-level data</span>

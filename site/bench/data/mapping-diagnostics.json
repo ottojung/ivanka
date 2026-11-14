@@ -12,20 +12,20 @@
       "unit": "nt"
     },
     "average_concordance": {
-      "denominator": "Original MiCall measurement rule: unweighted genome_coverage.csv concordance row mean. No imputed values when source artifacts are absent.",
-      "description": "Average concordance: unweighted genome_coverage.csv concordance row mean. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Sum of valid concordance values / count of valid concordance rows.",
+      "description": "Unweighted arithmetic mean of the concordance column in genome_coverage.csv, ignoring nonnumeric and 'unknown' contig rows.",
       "label": "Average concordance",
       "stage": "MiCall coverage summary",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "concordance value"
     },
     "average_read_depth": {
-      "denominator": "Original MiCall measurement rule: coverage per genome_coverage.csv row. No imputed values when source artifacts are absent.",
-      "description": "Average read depth: coverage per genome_coverage.csv row. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Sum of coverage / number of eligible rows with numeric coverage.",
+      "description": "Arithmetic mean of numeric coverage values in genome_coverage.csv. Rows whose contig name contains 'unknown' are excluded.",
       "label": "Average read depth",
       "stage": "MiCall coverage summary",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "reads / row"
     },
     "clipped_read_fraction": {
       "denominator": "Soft-clipped primary reads / all mapped primary reads.",
@@ -44,7 +44,7 @@
       "unit": "nt"
     },
     "duplicates": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Primary mapped records with SAM duplicate flag 0x400 / records examined (count, not a rate).",
       "description": "Primary mapped alignments marked duplicate by SAM flag 0x400. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Primary duplicate alignments",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -52,340 +52,340 @@
       "unit": "reads"
     },
     "exact_coverage_breadth_ge_1": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Coverage for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "Positive-depth bases / all consensus bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Count of consensus bases with exact depth at least 1, divided by total sequence length.",
       "label": "Exact read coverage",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "exact_coverage_breadth_ge_10": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Coverage at \u226510 for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "Bases with depth \u226510 / all consensus bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Count of consensus bases with exact depth at least 10, divided by total sequence length.",
       "label": "Exact read coverage at \u226510",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "exact_coverage_breadth_ge_100": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Coverage at \u2265100 for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "Bases with depth \u2265100 / all consensus bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Count of consensus bases with exact depth at least 100, divided by total sequence length.",
       "label": "Exact read coverage at \u2265100",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "exact_coverage_breadth_ge_3": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Coverage at \u22653 for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "Bases with depth \u22653 / all consensus bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Count of consensus bases with exact depth at least 3, divided by total sequence length.",
       "label": "Exact read coverage at \u22653",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "exact_coverage_length": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Sequence length for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "One sequence selected by length; no sum across final contigs. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Number of bases in the selected longest final MAX consensus.",
       "label": "Exact read sequence length",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "bases"
     },
     "exact_coverage_longest_zero_run": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Longest zero-depth stretch for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "A run ends when a base has positive depth; measured in bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Length of the longest consecutive stretch of zero-depth bases along the selected consensus.",
       "label": "Exact read longest zero-depth stretch",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "lower",
       "unit": "bases"
     },
     "exact_coverage_maximum": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Maximum depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All bases; multiple exact read placements contribute separately. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Largest per-base exact depth over the selected consensus.",
       "label": "Exact read maximum depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "unspecified",
       "unit": "reads / base"
     },
     "exact_coverage_mean": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Mean depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All consensus bases, including those with zero exact matches. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Sum the exact-match read placement depth at every consensus base, then divide by sequence length.",
       "label": "Exact read mean depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_median": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Median depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All bases in the selected consensus, including zeros. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Median of exact depth values over all consensus bases; for an even number of bases, average the two central sorted depths.",
       "label": "Exact read median depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_minimum": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Minimum depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All bases, including zeros; not the minimum among covered bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Smallest per-base exact depth over the selected consensus.",
       "label": "Exact read minimum depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_breadth_ge_1": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Coverage for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "Positive-depth bases / all consensus bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Count of consensus bases with exact depth at least 1, divided by total sequence length.",
       "label": "Exact interior read coverage",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "exact_coverage_overlapped_breadth_ge_10": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Coverage at \u226510 for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "Bases with depth \u226510 / all consensus bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Count of consensus bases with exact depth at least 10, divided by total sequence length.",
       "label": "Exact interior read coverage at \u226510",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "exact_coverage_overlapped_breadth_ge_100": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Coverage at \u2265100 for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "Bases with depth \u2265100 / all consensus bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Count of consensus bases with exact depth at least 100, divided by total sequence length.",
       "label": "Exact interior read coverage at \u2265100",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "exact_coverage_overlapped_breadth_ge_3": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Coverage at \u22653 for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "Bases with depth \u22653 / all consensus bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Count of consensus bases with exact depth at least 3, divided by total sequence length.",
       "label": "Exact interior read coverage at \u22653",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "exact_coverage_overlapped_length": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Sequence length for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "One sequence selected by length; no sum across final contigs. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Number of bases in the selected longest final MAX consensus.",
       "label": "Exact interior read sequence length",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "bases"
     },
     "exact_coverage_overlapped_longest_zero_run": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Longest zero-depth stretch for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "A run ends when a base has positive depth; measured in bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Length of the longest consecutive stretch of zero-depth bases along the selected consensus.",
       "label": "Exact interior read longest zero-depth stretch",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "lower",
       "unit": "bases"
     },
     "exact_coverage_overlapped_maximum": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Maximum depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All bases; multiple exact read placements contribute separately. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Largest per-base exact depth over the selected consensus.",
       "label": "Exact interior read maximum depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "unspecified",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_mean": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Mean depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All consensus bases, including those with zero exact matches. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Sum the exact-match read placement depth at every consensus base, then divide by sequence length.",
       "label": "Exact interior read mean depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_median": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Median depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All bases in the selected consensus, including zeros. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Median of exact depth values over all consensus bases; for an even number of bases, average the two central sorted depths.",
       "label": "Exact interior read median depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_minimum": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Minimum depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All bases, including zeros; not the minimum among covered bases. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Smallest per-base exact depth over the selected consensus.",
       "label": "Exact interior read minimum depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_p10": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "10th-percentile depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. 10th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.10).",
       "label": "Exact interior read 10th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_p25": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "25th-percentile depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. 25th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.25).",
       "label": "Exact interior read 25th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_p50": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "50th-percentile depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. 50th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.50). This may differ from the median.",
       "label": "Exact interior read 50th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_p75": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "75th-percentile depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. 75th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.75).",
       "label": "Exact interior read 75th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_p90": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "90th-percentile depth for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. 90th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.90).",
       "label": "Exact interior read 90th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_overlapped_zero_count": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Zero-depth bases for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "Every base is evaluated, not only bases where reads map. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Count of consensus bases with exact-match depth equal to zero.",
       "label": "Exact interior read zero-depth bases",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "lower",
       "unit": "bases"
     },
     "exact_coverage_overlapped_zero_fraction": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Zero-depth fraction for the interior exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Read ends are excluded by 70 bases at each end.",
+      "denominator": "Zero-depth bases / all consensus bases, including uncovered ends. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Interior: the same exact matching, but the 70 bases at each read end do not contribute to depth. Number of zero-depth consensus bases divided by sequence length.",
       "label": "Exact interior read zero-depth fraction",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "lower",
       "unit": "fraction"
     },
     "exact_coverage_p10": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "10th-percentile depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. 10th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.10).",
       "label": "Exact read 10th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_p25": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "25th-percentile depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. 25th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.25).",
       "label": "Exact read 25th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_p50": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "50th-percentile depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. 50th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.50). This may differ from the median.",
       "label": "Exact read 50th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_p75": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "75th-percentile depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. 75th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.75).",
       "label": "Exact read 75th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_p90": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "90th-percentile depth for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "All bases including zeros; nearest-index quantile, no interpolation. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. 90th percentile of sorted per-base depths using index round((length \u2212 1) \u00d7 0.90).",
       "label": "Exact read 90th-percentile depth",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "higher",
       "unit": "reads / base"
     },
     "exact_coverage_zero_count": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Zero-depth bases for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "Every base is evaluated, not only bases where reads map. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Count of consensus bases with exact-match depth equal to zero.",
       "label": "Exact read zero-depth bases",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "lower",
       "unit": "bases"
     },
     "exact_coverage_zero_fraction": {
-      "denominator": "Bases in the selected longest final MAX consensus; read placements are not unique molecules or approximate mapper alignments.",
-      "description": "Zero-depth fraction for the full-span exact-match depth per base, computed by MiCall from original R1/R2 reads against the longest final MAX consensus. Full read matching must have no substitutions or indels, includes both orientations and all exact placements. Depth is counted across the whole matched read.",
+      "denominator": "Zero-depth bases / all consensus bases, including uncovered ends. These are read placements, not unique molecules or approximate SAM mappings.",
+      "description": "Full read: exact no-substitution, no-indel matching of original R1/R2 reads to the longest final MiCall MAX sequence, across both orientations and every exact placement. Number of zero-depth consensus bases divided by sequence length.",
       "label": "Exact read zero-depth fraction",
       "stage": "Final MiCall consensus / exact paired-FASTQ read matching",
       "suggested_direction": "lower",
       "unit": "fraction"
     },
     "exact_uncovered_bases": {
-      "denominator": "Original MiCall measurement rule: zero exact_coverage bases across all contigs. No imputed values when source artifacts are absent.",
-      "description": "Exact uncovered bases: zero exact_coverage bases across all contigs. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Eligible positions on the single longest represented contig, not summed across contigs.",
+      "description": "Count of exact_coverage.csv positions with exact_coverage = 0 on the contig having the most valid full-read coverage rows.",
       "label": "Exact uncovered bases",
       "stage": "Exact-read coverage CSV when available",
       "suggested_direction": "lower",
-      "unit": "count"
+      "unit": "bases"
     },
     "exact_uncovered_fraction": {
-      "denominator": "Original MiCall measurement rule: zero exact_coverage rows / all exact_coverage rows. No imputed values when source artifacts are absent.",
-      "description": "Exact uncovered fraction: zero exact_coverage rows / all exact_coverage rows. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Zero-depth full-read positions / valid positions on that contig.",
+      "description": "Fraction of valid exact_coverage.csv positions with full-read exact_coverage = 0, on the longest represented contig.",
       "label": "Exact uncovered fraction",
       "stage": "Exact-read coverage CSV when available",
       "suggested_direction": "lower",
-      "unit": "measurement"
+      "unit": "fraction"
     },
     "exact_uncovered_overlapped_bases": {
-      "denominator": "Original MiCall measurement rule: zero inner/overlapped exact_coverage rows. No imputed values when source artifacts are absent.",
-      "description": "Exact uncovered overlapped bases: zero inner/overlapped exact_coverage rows. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Eligible positions with numeric interior depth on that contig; interior matching excludes 70 read-end bases.",
+      "description": "Count of positions with exact_coverage_overlapped = 0 for the same longest contig selected by full-read positions.",
       "label": "Exact uncovered overlapped bases",
       "stage": "Exact-read coverage CSV when available",
       "suggested_direction": "lower",
-      "unit": "count"
+      "unit": "bases"
     },
     "final_contig_31mer_redundancy_fraction": {
-      "denominator": "Repeated 31-mer instances / eligible 31-mer instances.",
-      "description": "Proportion of assembled 31-mer instances repeated in other contigs. A heuristic indicator of redundancy, not misassembly.",
+      "denominator": "Valid 31-mer windows across nonempty contigs; repeated windows count repeatedly in the denominator.",
+      "description": "One minus the number of distinct canonical A/C/G/T 31-mers divided by all valid 31-mer instances across final contig sequences. A reverse complement shares a canonical 31-mer.",
       "label": "Redundant contig 31-mer fraction",
-      "stage": "MiCall assembler output",
+      "stage": "MiCall assembled contig output",
       "suggested_direction": "lower",
       "unit": "fraction"
     },
     "final_contig_count": {
-      "denominator": "Number of final contig records.",
-      "description": "Number of assembled contigs passed to downstream MiCall processing. Neither more nor fewer alone proves correctness.",
+      "denominator": "Nonempty 'contig' or 'sequence' entries; missing/empty files do not contribute a fabricated zero.",
+      "description": "Count of nonempty sequence rows in contigs.csv, including duplicate and unknown-reference contigs.",
       "label": "Final contig count",
-      "stage": "MiCall assembler output",
+      "stage": "MiCall assembled contig output",
       "suggested_direction": "unspecified",
       "unit": "contigs"
     },
     "final_contig_exact_duplicates": {
-      "denominator": "Original MiCall measurement rule: repeated exact final sequences; redundant mapping hypotheses. No imputed values when source artifacts are absent.",
-      "description": "Final contig exact duplicates: repeated exact final sequences; redundant mapping hypotheses. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Nonempty sequences; exact matches only, without reverse-complement normalization.",
+      "description": "Number of contigs.csv sequences identical to a previously observed sequence after uppercase normalization; the first copy is not counted.",
       "label": "Final contig exact duplicates",
       "stage": "MiCall assembled contig output",
       "suggested_direction": "lower",
-      "unit": "measurement"
+      "unit": "contigs"
     },
     "final_contig_total_bases": {
-      "denominator": "Sum of assembled contig sequence lengths.",
-      "description": "Sum of lengths of all final assembled contigs. Overlapping and duplicate segments are counted repeatedly.",
+      "denominator": "Nonempty contig rows; not unique genome coverage.",
+      "description": "Sum of lengths of all nonempty contig sequences in contigs.csv. Overlapping and repeated sequences each contribute their length.",
       "label": "Total contig bases",
-      "stage": "MiCall assembler output",
+      "stage": "MiCall assembled contig output",
       "suggested_direction": "unspecified",
       "unit": "nt"
     },
     "final_contig_unknown_count": {
-      "denominator": "Original MiCall measurement rule: final contig rows classified as unknown; runtime burden proxy. No imputed values when source artifacts are absent.",
-      "description": "Final contig unknown count: final contig rows classified as unknown; runtime burden proxy. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "All nonempty contig rows; status is based on ref, not sequence.",
+      "description": "Count of nonempty contigs.csv sequences whose ref field contains 'unknown' (case insensitive).",
       "label": "Final contig unknown count",
       "stage": "MiCall assembled contig output",
       "suggested_direction": "lower",
-      "unit": "count"
+      "unit": "contigs"
     },
     "inserted_bases": {
       "denominator": "Count of CIGAR I query bases.",
@@ -396,7 +396,7 @@
       "unit": "nt"
     },
     "left_clip_events": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Count of primary mapped alignments whose leftmost non-hard-clipped CIGAR operation is S.",
       "description": "Primary mapped CIGAR soft clips at the left read end. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Left soft-clip events",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -404,7 +404,7 @@
       "unit": "events"
     },
     "left_clipped_bases": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Sum of lengths of the left terminal S operations across primary mapped alignments.",
       "description": "Query bases removed by left-end CIGAR S operations. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Left soft-clipped bases",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -412,15 +412,15 @@
       "unit": "nt"
     },
     "mapped_fragments": {
-      "denominator": "Original MiCall measurement rule: distinct mapped QNAME pairs. No imputed values when source artifacts are absent.",
-      "description": "Mapped fragments: distinct mapped QNAME pairs. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "The single remap-fragments entry; missing summary is unavailable.",
+      "description": "Count from the remap-fragments row of remap_counts.csv. This counts mapped original QNAME pairs, not mapped SAM records.",
       "label": "Mapped fragments",
       "stage": "MiCall multi-placement remapping",
       "suggested_direction": "higher",
-      "unit": "count"
+      "unit": "fragments"
     },
     "mapq_unknown": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Primary mapped records whose MAPQ field is 255 (unknown); secondary and supplementary are excluded.",
       "description": "Primary mapped SAM alignments with mapping quality 255. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Primary reads with unknown MAPQ",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -444,7 +444,7 @@
       "unit": "phred score"
     },
     "mean_soft_clip_event_length": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Sum of all terminal CIGAR S operation lengths / number of those S operations; no events is unavailable.",
       "description": "Mean number of clipped query bases per primary CIGAR S event. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Mean soft-clip event length",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -452,88 +452,88 @@
       "unit": "nt / event"
     },
     "multimap_avg_depth_mean": {
-      "denominator": "Original MiCall measurement rule: mean Q15 fractional depth across contig positions. No imputed values when source artifacts are absent.",
-      "description": "Multimap avg depth mean: mean Q15 fractional depth across contig positions. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Sum of valid avg_depth / number of positions with valid max and avg depth.",
+      "description": "Arithmetic mean of fractional avg_depth from valid multimap_depth.csv position rows.",
       "label": "Multimap avg depth mean",
       "stage": "MiCall multi-placement remapping",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "reads / site"
     },
     "multimap_avg_depth_total": {
-      "denominator": "Original MiCall measurement rule: sum of Q15 fractional depth across contig positions. No imputed values when source artifacts are absent.",
-      "description": "Multimap avg depth total: sum of Q15 fractional depth across contig positions. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "All valid multimap_depth.csv rows; ambiguous placements contribute fractional rather than independent read counts.",
+      "description": "Sum of fractional avg_depth in multimap_depth.csv at positions where both max_depth and avg_depth are valid.",
       "label": "Multimap avg depth total",
       "stage": "MiCall multi-placement remapping",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "reads / site, summed"
     },
     "multimap_capped_pairs": {
-      "denominator": "Original MiCall measurement rule: pairs at Bowtie2 -k limit; a diagnostic of incompleteness. No imputed values when source artifacts are absent.",
-      "description": "Multimap capped pairs: pairs at Bowtie2 -k limit; a diagnostic of incompleteness. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "One remap-count entry or a warning-derived lower bound; two remapping passes may overlap.",
+      "description": "Mapped pairs reaching the Bowtie2 -k reporting limit, taken from remap_counts.csv when present. Otherwise the maximum count among per-pass warnings is used as a lower bound, not their sum.",
       "label": "Multimap capped pairs",
       "stage": "MiCall multi-placement remapping",
       "suggested_direction": "lower",
-      "unit": "count"
+      "unit": "pairs"
     },
     "multimap_max_depth_mean": {
-      "denominator": "Original MiCall measurement rule: mean Q15 maximum depth across contig positions. No imputed values when source artifacts are absent.",
-      "description": "Multimap max depth mean: mean Q15 maximum depth across contig positions. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Sum of valid max_depth / number of positions with valid max and avg depth.",
+      "description": "Arithmetic mean of max_depth from valid multimap_depth.csv position rows.",
       "label": "Multimap max depth mean",
       "stage": "MiCall multi-placement remapping",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "reads / site"
     },
     "multimap_max_depth_total": {
-      "denominator": "Original MiCall measurement rule: sum of Q15 maximum depth across contig positions. No imputed values when source artifacts are absent.",
-      "description": "Multimap max depth total: sum of Q15 maximum depth across contig positions. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "All valid multimap_depth.csv position rows; no length normalization.",
+      "description": "Sum of max_depth from multimap_depth.csv for contig positions where both max_depth and avg_depth are valid.",
       "label": "Multimap max depth total",
       "stage": "MiCall multi-placement remapping",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "reads / site, summed"
     },
     "multimap_oversized_pairs": {
-      "denominator": "Original MiCall measurement rule: pairs omitted by SAM record group size limit. No imputed values when source artifacts are absent.",
-      "description": "Multimap oversized pairs: pairs omitted by SAM record group size limit. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "One validated remap count entry; no entry means unavailable.",
+      "description": "Number of pairs rejected by the SAM record-group size limit, from the multimap-oversized-pairs row of remap_counts.csv.",
       "label": "Multimap oversized pairs",
       "stage": "MiCall multi-placement remapping",
       "suggested_direction": "lower",
-      "unit": "count"
+      "unit": "pairs"
     },
     "nuc_q15_covered_fraction": {
-      "denominator": "Q15-covered positions / positions examined.",
-      "description": "Fraction of expected positions with supported Q15 nucleotide coverage, as available in MiCall's nucleotide summary.",
+      "denominator": "Positive-depth Q15 seed/positions / all valid Q15 seed/positions.",
+      "description": "Proportion of deduplicated Q15 nuc.csv seed/position entries whose maximum observed coverage is positive.",
       "label": "Q15 breadth",
       "stage": "MiCall nucleotide summary",
       "suggested_direction": "higher",
       "unit": "fraction"
     },
     "nuc_q15_mean_depth": {
-      "denominator": "Mean depth over represented Q15 nucleotide positions.",
-      "description": "Average nucleotide read depth among the positions represented in MiCall's quality-cutoff-15 nucleotide summary.",
+      "denominator": "Sum of deduplicated Q15 coverage / number of distinct valid (seed, position) entries, including zero-depth entries.",
+      "description": "For q-cutoff 15 nuc.csv rows, keep the greatest numeric coverage per (seed, refseq.nuc.pos), then average those retained depths.",
       "label": "Mean Q15 depth",
       "stage": "MiCall nucleotide summary",
       "suggested_direction": "higher",
       "unit": "reads / site"
     },
     "nuc_q15_positions_covered": {
-      "denominator": "Original MiCall measurement rule: Q15 positions with depth above zero across deduplicated seeds. No imputed values when source artifacts are absent.",
-      "description": "Nuc Q15 positions covered: Q15 positions with depth above zero across deduplicated seeds. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "All distinct valid Q15 seed/position entries.",
+      "description": "Count of distinct (seed, refseq.nuc.pos) entries with Q15 coverage greater than zero, after retaining maximum depth for duplicates.",
       "label": "Nuc Q15 positions covered",
       "stage": "MiCall nucleotide summary",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "positions"
     },
     "nuc_q15_total_depth": {
-      "denominator": "Original MiCall measurement rule: sum of Q15 depth across deduplicated (seed,reference position). No imputed values when source artifacts are absent.",
-      "description": "Nuc Q15 total depth: sum of Q15 depth across deduplicated (seed,reference position). Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "All distinct valid Q15 seed/position entries; not normalized.",
+      "description": "Sum of greatest Q15 nuc.csv coverage per (seed, refseq.nuc.pos); overlapping region rows at the same seed/position count once.",
       "label": "Nuc Q15 total depth",
       "stage": "MiCall nucleotide summary",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "read-depth sum"
     },
     "nuc_soft_clips_count": {
-      "denominator": "Sum or deduplicated per-position nuc.csv clip aggregate.",
-      "description": "MiCall's aggregated per-position nuc.csv clip count. This quantity has different inclusion and duplication rules than SAM soft clips.",
+      "denominator": "Sum of max(clip) over distinct valid seed/reference positions.",
+      "description": "For each (seed, refseq.nuc.pos) in nuc.csv, take the maximum nonnegative integer clip count across overlapping region rows, then sum these maxima. This is not the SAM CIGAR S event count.",
       "label": "MiCall per-position clip aggregate",
       "stage": "MiCall nucleotide summary",
       "suggested_direction": "unspecified",
@@ -564,7 +564,7 @@
       "unit": "reads"
     },
     "read_bases": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Sum of SEQ lengths in primary mapped SAM records; bases include those subsequently soft-clipped.",
       "description": "Query sequence bases in primary mapped SAM alignments. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Primary mapped sequenced bases",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -572,7 +572,7 @@
       "unit": "nt"
     },
     "records": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Number of SAM non-header records, including mapped, unmapped, secondary and supplementary alignments.",
       "description": "All mapped, unmapped, secondary and supplementary SAM records. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "SAM alignment records",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -580,31 +580,31 @@
       "unit": "records"
     },
     "reference_bases_ge_100": {
-      "denominator": "Original MiCall measurement rule: genome_coverage.csv rows with coverage >=100. No imputed values when source artifacts are absent.",
-      "description": "Reference bases ge 100: genome_coverage.csv rows with coverage >=100. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Eligible position rows, not the length of a common reference genome.",
+      "description": "Count of genome_coverage.csv positions with numeric coverage at least 100 after excluding 'unknown' contigs.",
       "label": "Reference bases ge 100",
       "stage": "MiCall coverage summary",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "positions"
     },
     "region_concordance_covered_mean": {
-      "denominator": "Original MiCall measurement rule: unweighted pct_concordance where pct_covered > 0. No imputed values when source artifacts are absent.",
-      "description": "Region concordance covered mean: unweighted pct_concordance where pct_covered > 0. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Valid concordance rows with positive pct_covered; no weighting by region length or coverage.",
+      "description": "Unweighted mean of numeric concordance.csv pct_concordance only where pct_covered is also numeric and greater than zero.",
       "label": "Region concordance covered mean",
       "stage": "MiCall regional concordance",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "percent"
     },
     "region_concordance_mean": {
-      "denominator": "Mean of valid region concordance percentages.",
-      "description": "Mean MiCall regional concordance between the final result and the aligned reference panel, evaluated only after assembly.",
+      "denominator": "Sum of valid pct_concordance / count of valid concordance rows; zero-coverage rows are included when they have numeric concordance.",
+      "description": "Unweighted mean of numeric pct_concordance in concordance.csv; rows without valid concordance are ignored.",
       "label": "Mean region concordance",
       "stage": "MiCall regional concordance",
       "suggested_direction": "higher",
       "unit": "percentage"
     },
     "right_clip_events": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Count of primary mapped alignments whose rightmost non-hard-clipped CIGAR operation is S.",
       "description": "Primary mapped CIGAR soft clips at the right read end. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Right soft-clip events",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -612,7 +612,7 @@
       "unit": "events"
     },
     "right_clipped_bases": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Sum of lengths of the right terminal S operations across primary mapped alignments.",
       "description": "Query bases removed by right-end CIGAR S operations. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Right soft-clipped bases",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -644,7 +644,7 @@
       "unit": "events / 1000 reads"
     },
     "soft_clip_length_max": {
-      "denominator": "Original primary aligned SAM records; counts are alignments, not unique molecules.",
+      "denominator": "Maximum single CIGAR S operation length across primary mapped alignments; no clips yields zero.",
       "description": "Maximum CIGAR S operation length on primary mapped reads. This is a primary-alignment record statistic from the actual MiCall SAM CIGAR output.",
       "label": "Longest soft-clip event",
       "stage": "MiCall read-to-contig SAM mapping",
@@ -676,12 +676,12 @@
       "unit": "reads"
     },
     "stitched_contig_count": {
-      "denominator": "Original MiCall measurement rule: stitched_contigs.csv rows; fewer is only a runtime burden proxy. No imputed values when source artifacts are absent.",
-      "description": "Stitched contig count: stitched_contigs.csv rows; fewer is only a runtime burden proxy. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Nonempty contig rows in this specific intermediate MiCall file.",
+      "description": "Number of rows with a nonempty contig field in stitched_contigs.csv.",
       "label": "Stitched contig count",
       "stage": "MiCall assembled contig output",
       "suggested_direction": "lower",
-      "unit": "count"
+      "unit": "contigs"
     },
     "supplementary": {
       "denominator": "Count of SAM supplementary alignment records.",
@@ -692,28 +692,28 @@
       "unit": "records"
     },
     "total_read_depth": {
-      "denominator": "Original MiCall measurement rule: sum of coverage across genome_coverage.csv rows. No imputed values when source artifacts are absent.",
-      "description": "Total read depth: sum of coverage across genome_coverage.csv rows. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "All eligible numeric genome_coverage.csv coverage rows; not normalized by contig span.",
+      "description": "Sum of numeric coverage values across genome_coverage.csv rows, excluding rows with an 'unknown' contig.",
       "label": "Total read depth",
       "stage": "MiCall coverage summary",
       "suggested_direction": "higher",
-      "unit": "measurement"
+      "unit": "read-depth sum"
     },
     "unique_aligned_fragments": {
-      "denominator": "Original MiCall measurement rule: distinct original QNAME pairs with accepted Q15 merged placement. No imputed values when source artifacts are absent.",
-      "description": "Unique aligned fragments: distinct original QNAME pairs with accepted Q15 merged placement. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "One validated summary row; counts distinct original fragments, not placements.",
+      "description": "The unique_aligned_fragments field from the single summary row in unique_aligned_fragments.csv: original pairs with accepted Q15 placement.",
       "label": "Unique aligned fragments",
       "stage": "MiCall multi-placement remapping",
       "suggested_direction": "higher",
-      "unit": "count"
+      "unit": "fragments"
     },
     "unstitched_contig_count": {
-      "denominator": "Original MiCall measurement rule: unstitched_contigs.csv rows; fewer is only a runtime burden proxy. No imputed values when source artifacts are absent.",
-      "description": "Unstitched contig count: unstitched_contigs.csv rows; fewer is only a runtime burden proxy. Reported by the named MiCall output stage only when a valid source file is retained.",
+      "denominator": "Nonempty contig rows in this specific intermediate MiCall file.",
+      "description": "Number of rows with a nonempty contig field in unstitched_contigs.csv.",
       "label": "Unstitched contig count",
       "stage": "MiCall assembled contig output",
       "suggested_direction": "lower",
-      "unit": "count"
+      "unit": "contigs"
     }
   },
   "note": "One independently verified case's current mapping metrics.",

@@ -7,7 +7,8 @@ fn select(sequences: &[Vec<u8>]) -> Vec<usize> {
         pairs: vec![50; sequences.len()],
         coverage: sequences.iter().map(|s| s.len() - 30).collect(),
     };
-    ranking::complements(sequences, &stats, &hits, 0)
+    let links = (0..sequences.len()).map(|i| ((i, i), 3)).collect();
+    ranking::complements(sequences, &stats, &hits, 0, &links)
 }
 
 #[test]

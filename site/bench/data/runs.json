@@ -3,8 +3,8 @@
   "real_progress": {
     "candidates": {
       "abyss": {
-        "failed": 54,
-        "finished": 89
+        "failed": 55,
+        "finished": 90
       },
       "haploflow": {
         "failed": 23,
@@ -19,8 +19,8 @@
         "finished": 136
       },
       "spades": {
-        "failed": 18,
-        "finished": 92
+        "failed": 19,
+        "finished": 93
       },
       "velvet": {
         "failed": 34,
@@ -247201,8 +247201,8 @@
       },
       "physical_progress": {
         "abyss": {
-          "failed": 54,
-          "finished": 89
+          "failed": 55,
+          "finished": 90
         },
         "haploflow": {
           "failed": 23,
@@ -247217,8 +247217,8 @@
           "finished": 136
         },
         "spades": {
-          "failed": 18,
-          "finished": 92
+          "failed": 19,
+          "finished": 93
         },
         "velvet": {
           "failed": 34,
@@ -337724,6 +337724,7 @@
             }
           },
           "failures": [
+            "abyss",
             "velvet"
           ],
           "floor_ok": null,
@@ -343740,6 +343741,7 @@
           "failures": [
             "haploflow",
             "megahit",
+            "spades",
             "velvet"
           ],
           "floor_ok": null,
@@ -735875,6 +735877,7 @@
             }
           },
           "failures": [
+            "abyss",
             "velvet"
           ],
           "family": "Physical real",
@@ -741900,6 +741903,7 @@
           "failures": [
             "haploflow",
             "megahit",
+            "spades",
             "velvet"
           ],
           "family": "Physical real",

@@ -13,6 +13,7 @@ import subprocess
 
 from benchmarks.assembler_bench.image_source_attestation import verify
 from benchmarks.expanded.real_matrix import MANIFEST, PANEL
+from benchmarks.expanded.strict_fork_physical198_evidence import authenticate_records
 from psi_acceptance import summarize
 
 SCHEMA = "ivanka.strict_fork_physical198.v1"
@@ -157,7 +158,8 @@ def qualify(root, dataset, runner, images_path, attestation, sources, base):
     if sha(dataset / "manifest.tsv") != MANIFEST:
         raise ValueError("original real FASTQ manifest changed")
     with (dataset / "manifest.tsv").open(newline="") as file:
-        names = [r["sample"] for r in csv.DictReader(file, delimiter="\t")]
+        original_rows = list(csv.DictReader(file, delimiter="\t"))
+    names = [r["sample"] for r in original_rows]
     if len(names) != 198 or len(set(names)) != 198:
         raise ValueError("original 198 sample IDs changed")
     source = subprocess.check_output(
@@ -167,8 +169,13 @@ def qualify(root, dataset, runner, images_path, attestation, sources, base):
     if source != manifest["source_commit"]:
         raise ValueError("native Rust source does not match image")
     records, journal_sha = read_records(root / "results.jsonl", set(names))
+    # Rehash original read pairs and actual MiCall artifacts rather than
+    # trusting the already-serialized result journal.
+    hxb2_sha = authenticate_records(records, original_rows, dataset, root, images)
     report = evaluate(records, images, set(names))
     report["provenance"] = {
+        "hxb2_sha256": hxb2_sha,
+        "original_reads_and_final_outputs_reverified": True,
         "run_manifest_sha256": sha(root / "run_manifest.json"),
         "result_journal_sha256": journal_sha,
         "attestation_sha256": sha(attestation),

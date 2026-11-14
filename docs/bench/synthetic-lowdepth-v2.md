@@ -73,3 +73,65 @@ audited, individually source-identical set of v2 case observations.
 **This proposal does not claim a passing benchmark.** The historical
 v1 experiment remains preserved, and the new v2 complete seven-way
 experiment must run and pass independently before release.
+
+## Historical execution inventory
+
+The read-only inventory preserves exact original-case evidence rather
+than rerunning every unchanged assembler calculation immediately:
+
+    PYTHONPATH=.:benchmarks python3 -m benchmarks.expanded.v2_reuse_inventory \
+      --original /path/to/verified-v1-cohort \
+      --revised /path/to/verified-v2-cohort \
+      --previous-run /path/to/source-attested-v1-seven-way-results \
+      --source-attestation /path/to/verified-seven-image-attestation.json \
+      --output /path/to/new-reuse-inventory.json
+
+It independently validates both cohort certificates, the unchanged
+FASTQ/truth provenance, the old run's frozen manifest, all seven
+image identifiers, every retained original matrix/arm execution,
+MiCall output CSV SHA-256, and original in-container timing.json.
+No old file is changed. The output deliberately marks
+qualification=NOT_EVALUATED and distinguishes successful evidence
+candidates, failed arms, changed inputs and yet-unstarted cases.
+A subsequent release gate must independently re-score and verify the
+source of every reused case, and must never count failed/missing
+source arms as successes.
+
+An initial November 14, 2026 inventory of the first 90 completed v1
+seven-way cases found **597 successful arm evidence candidates and 33
+failed arms**. The 16 changed low-depth cases all require fresh
+seven-assembler measurements. The inventory is a snapshot; counts
+continue to grow as the original benchmarks run.
+
+## Independently pinned changed-case MiCall pilot
+
+The module benchmarks.expanded.v2_lowdepth_probe runs exactly the 16
+*changed* read sets through all seven originally attested MiCall OCI
+images. It preserves each immutable execution record, records original
+1800-second in-container timing, and evaluates every final MAX consensus
+using the same post-assembly local scorer. It is **not** an automatic
+full 400-case qualification and never rewrites the original results.
+
+The pilot checks source-image attestations at startup, records a frozen
+cohort proof and exact runner source hashes, and independently commits
+each case before removing bulky intermediate files. An exclusive lock
+protects its result directory; interrupted cases are archived rather
+than overwritten. Run at most one new seven-way case per invocation:
+
+    PYTHONPATH=.:benchmarks python3 -m benchmarks.expanded.v2_lowdepth_probe \
+      --data /path/to/attested-hxb2-v2 \
+      --out /path/to/separate-v2-only-pilot \
+      --images /path/to/seven-immutable-image-ids.json \
+      --source-attestation /path/to/seven-image-attestation.json \
+      --fork /path/to/seven-source-roots.json \
+      --base BASE_IMAGE_SHA256 \
+      --max-new 1 --timeout 1800
+
+A max-new=0 invocation verifies image/source/cohort preflight and pins
+a manifest without executing an assembler. Subsequent calls with
+the same immutable inputs resume the original v2 pilot instead of
+silently merging results from another generation.
+
+The full v2 gate additionally requires source-verified carryover of
+**unchanged** original cases and fresh measurements for any failed
+or unattempted arm. This pilot alone never declares a release pass.

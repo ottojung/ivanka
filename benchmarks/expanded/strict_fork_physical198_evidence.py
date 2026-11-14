@@ -7,8 +7,29 @@ import csv
 import hashlib
 import json
 from pathlib import Path
+import re
 
 TIMING = "micall_in_container_monotonic_v1"
+SAFE_PART = re.compile(r"[A-Za-z0-9_.-]+")
+
+
+def safe_part(value):
+    if (not isinstance(value, str) or value in ("", ".", "..")
+            or SAFE_PART.fullmatch(value) is None):
+        raise ValueError("unsafe evidence path component")
+    return value
+
+
+def direct_directory(path):
+    """Reject symlink substitution at any path component, not just leaf."""
+    path = Path(path)
+    for part in (path, *path.parents):
+        if part.is_symlink():
+            raise ValueError("redirected evidence directory")
+    if not path.is_dir():
+        raise ValueError("missing evidence directory")
+    return path
+
 
 
 def digest(path):
@@ -20,8 +41,7 @@ def digest(path):
 
 
 def sample_provenance(sample, row, record, dataset, images, hxb2_sha):
-    if not sample or Path(sample).name != sample or sample in (".", ".."):
-        raise ValueError("unsafe sample identifier")
+    safe_part(sample)
     if record.get("sample") != sample or record.get("hxb2_sha256") != hxb2_sha:
         raise ValueError("wrong sample or HXB2 provenance")
     if record.get("sample_time_limit_seconds") != 1800:
@@ -30,9 +50,10 @@ def sample_provenance(sample, row, record, dataset, images, hxb2_sha):
         raise ValueError("non-fresh IVA control flag")
     if record.get("baseline_error") or record.get("evaluation_error"):
         raise ValueError("reported baseline or evaluation error")
-    original = Path(dataset) / "samples" / sample
+    original = direct_directory(Path(dataset) / "samples" / sample)
     fastqs = [original / f"{sample}_L001_R{i}_001.fastq.gz" for i in (1, 2)]
-    if not all(p.is_file() and p.stat().st_size > 0 for p in fastqs):
+    if not all(p.is_file() and not p.is_symlink() and p.stat().st_size > 0
+               for p in fastqs):
         raise ValueError("original paired FASTQ unavailable")
     expected = {
         "iva_image_id": images["iva"],
@@ -48,12 +69,13 @@ def sample_provenance(sample, row, record, dataset, images, hxb2_sha):
 def check_retained_arm(sample, record, arm, root, image):
     """Require exact per-invocation output path, timer and final MAX CSV."""
     reported = record[arm]
-    invocation = record["invocation"]
-    folder = Path(root) / invocation / sample / arm
+    invocation = safe_part(record["invocation"])
+    safe_part(sample)
+    safe_part(arm)
+    folder = direct_directory(Path(root) / invocation / sample / arm)
     if (reported.get("image") != image
             or reported.get("image_id") != image
-            or Path(reported.get("artifact_dir", "")) != folder
-            or not folder.is_dir() or folder.is_symlink()):
+            or Path(reported.get("artifact_dir", "")) != folder):
         raise ValueError("retained source-pinned arm directory mismatch")
     files = [folder / name for name in ("micall_internal_timing.json", "conseq.csv")]
     if any(not f.is_file() or f.is_symlink() for f in files):

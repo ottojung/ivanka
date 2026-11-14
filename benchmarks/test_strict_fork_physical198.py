@@ -53,6 +53,16 @@ class PhysicalGateTests(unittest.TestCase):
         self.records[next(iter(NAMES))]["iva_baseline_reused"] = True
         self.assertFalse(evaluate(self.records, IMAGES, NAMES)["pass"])
 
+    def test_reject_nonboolean_reused_control_and_overcap_sample(self):
+        name = next(iter(NAMES))
+        self.records[name]["iva_baseline_reused"] = "truthy"
+        self.assertFalse(evaluate(self.records, IMAGES, NAMES)["pass"])
+        self.records[name]["iva_baseline_reused"] = False
+        self.records[name]["total_seconds"] = 1800.01
+        out = evaluate(self.records, IMAGES, NAMES)
+        self.assertFalse(out["pass"])
+        self.assertEqual(out["invalid_arms"], 1)
+
     def test_reject_wrong_image_timer_and_panel(self):
         name = next(iter(NAMES))
         for arm_key, new in (

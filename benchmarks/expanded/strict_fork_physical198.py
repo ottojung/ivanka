@@ -90,7 +90,8 @@ def evaluate(records, images, expected):
         try:
             if record.get("status") != "finished" or record.get("failed") is not False:
                 raise ValueError("failed execution")
-            if record.get("iva_baseline_reused") is True:
+            if (record.get("iva_baseline_reused") is not None
+                    and record.get("iva_baseline_reused") is not False):
                 raise ValueError("imported IVA baseline")
             iva, ivanka = record["iva"], record["ivanka"]
             ta = check_arm(iva, images["iva"])
@@ -109,8 +110,8 @@ def evaluate(records, images, expected):
             if not passed:
                 report["floor_failures"] += 1
             elapsed = record.get("total_seconds")
-            if not finite(elapsed) or elapsed <= 0:
-                raise ValueError("missing sample wall evidence")
+            if not finite(elapsed) or not 0 < elapsed <= 1800:
+                raise ValueError("missing or over-cap sample wall evidence")
             scores.append(second - first)
             times.append(ta - tb)
             report["samples_valid"] += 1

@@ -7,8 +7,8 @@
         "finished": 101
       },
       "haploflow": {
-        "failed": 25,
-        "finished": 123
+        "failed": 26,
+        "finished": 124
       },
       "ivanka": {
         "failed": 0,
@@ -293039,8 +293039,8 @@
           "finished": 101
         },
         "haploflow": {
-          "failed": 25,
-          "finished": 123
+          "failed": 26,
+          "finished": 124
         },
         "ivanka": {
           "failed": 0,
@@ -410102,9 +410102,11 @@
               "selected_sequence_sha256": "0e83fcd212e14a287939385c551cefae75ed8a71cacd8e1ca0aa4f421239099e"
             }
           },
-          "failures": [],
+          "failures": [
+            "haploflow"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": null,
             "haploflow": null,
@@ -866585,10 +866587,12 @@
               "selected_sequence_sha256": "0e83fcd212e14a287939385c551cefae75ed8a71cacd8e1ca0aa4f421239099e"
             }
           },
-          "failures": [],
+          "failures": [
+            "haploflow"
+          ],
           "family": "Physical real",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": null,
             "haploflow": null,

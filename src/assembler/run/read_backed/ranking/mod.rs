@@ -1,4 +1,4 @@
-use super::scoring::Statistics;
+use super::{index::Hits, scoring::Statistics, K};
 use std::cmp::Ordering;
 
 /// Read-covered breadth squared, weighted by supporting original fragments.
@@ -23,3 +23,6 @@ pub(super) fn best(contigs: &[Vec<u8>], stats: &Statistics) -> usize {
         .min_by(|&a, &b| compare(a, b, contigs, stats))
         .expect("caller requires at least one contig")
 }
+
+mod distinct;
+pub(super) use distinct::complement;

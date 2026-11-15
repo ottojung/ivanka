@@ -31,3 +31,6 @@ pub(super) use distinct::complements;
 
 mod molecules;
 pub(super) use molecules::{links, PairLinks};
+
+#[cfg(test)]
+mod test_molecule_anchor;

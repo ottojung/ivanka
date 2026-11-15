@@ -33,6 +33,11 @@ pub(super) fn repair(sequence: &[u8], depth: &[u32], reads: &Reads) -> Option<(V
     rotate::at(sequence, depth, cut, overlap, K)
 }
 
+/// Recognize an evidence-backed divergent tail using only its own sequence.
+pub(super) fn alternative_tail_cut(sequence: &[u8], depth: &[u32], k: usize) -> Option<usize> {
+    overlap::alternative_tail_cut(sequence, depth, k)
+}
+
 /// Withhold a long unsupported internal adjacency while retaining both pieces.
 pub(super) fn unbridged_cut(sequence: &[u8], reads: &Reads) -> Option<usize> {
     if reads.max_read_len < support::SPAN {

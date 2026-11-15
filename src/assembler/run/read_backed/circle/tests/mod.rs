@@ -1,4 +1,4 @@
-use super::{breakpoint, rotate};
+use super::{alternative_tail_cut, breakpoint, rotate};
 
 #[test]
 fn one_unsupported_junction_selects_read_only_reopening() {
@@ -48,3 +48,6 @@ fn rotation_preserves_exact_original_31_mer_depth() {
     };
     assert_eq!(scores.last(), depth.get(last));
 }
+
+mod alternative;
+mod rotated;

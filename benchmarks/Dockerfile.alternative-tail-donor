@@ -1,0 +1,18 @@
+# Build exactly the committed Rust source in a compatible offline toolchain.
+ARG DONOR_BASE
+FROM docker.io/library/rust:1.93-bookworm AS native_assembler
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY build.rs ./
+COPY source_lints ./source_lints
+COPY src ./src
+RUN CARGO_NET_OFFLINE=true cargo build --release --locked --offline
+FROM ${DONOR_BASE}
+ARG SOURCE_COMMIT
+ARG DONOR_BASE
+COPY --from=native_assembler /src/target/release/ivanka /usr/local/bin/ivanka
+RUN /usr/local/bin/ivanka --help >/dev/null
+LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.ivanka.execution="rust-direct-default-alternative-tail"
+LABEL org.ottojung.ivanka.donor-base-image="${DONOR_BASE}"
+LABEL org.opencontainers.image.source="https://github.com/ottojung/ivanka"

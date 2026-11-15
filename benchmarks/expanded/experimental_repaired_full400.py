@@ -45,6 +45,7 @@ def freeze(data, images_manifest):
     files = (
         ROOT / "benchmarks/expanded/experimental_repaired_full400.py",
         ROOT / "benchmarks/expanded/micall_synthetic.py",
+        ROOT / "benchmarks/expanded/micall_synthetic_scheduler.py",
         ROOT / "benchmarks/expanded/micall_checkpoint.py",
         ROOT / "benchmarks/expanded/micall_retention.py",
         ROOT / "benchmarks/expanded/micall_dominant.py",

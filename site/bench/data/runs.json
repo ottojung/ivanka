@@ -23,8 +23,8 @@
         "finished": 146
       },
       "velvet": {
-        "failed": 62,
-        "finished": 178
+        "failed": 63,
+        "finished": 179
       }
     },
     "expected_samples": 198,
@@ -470703,8 +470703,8 @@
           "finished": 146
         },
         "velvet": {
-          "failed": 62,
-          "finished": 178
+          "failed": 63,
+          "finished": 179
         }
       },
       "psi": {},
@@ -664357,7 +664357,8 @@
           },
           "failures": [
             "haploflow",
-            "megahit"
+            "megahit",
+            "velvet"
           ],
           "floor_ok": null,
           "outcome": "failure",
@@ -1338893,7 +1338894,8 @@
           },
           "failures": [
             "haploflow",
-            "megahit"
+            "megahit",
+            "velvet"
           ],
           "family": "Physical real",
           "floor_ok": null,

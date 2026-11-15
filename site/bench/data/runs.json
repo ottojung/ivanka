@@ -19,8 +19,8 @@
         "finished": 196
       },
       "spades": {
-        "failed": 52,
-        "finished": 172
+        "failed": 53,
+        "finished": 173
       },
       "velvet": {
         "failed": 66,
@@ -588454,8 +588454,8 @@
           "finished": 196
         },
         "spades": {
-          "failed": 52,
-          "finished": 172
+          "failed": 53,
+          "finished": 173
         },
         "velvet": {
           "failed": 66,
@@ -763906,9 +763906,11 @@
               "selected_sequence_sha256": "63e0a036df08b2726a7652cfd910bda8dbed0c6ac72f2598bd55ac167f6b2271"
             }
           },
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": 221.0,
             "haploflow": 169.0,
@@ -1566170,10 +1566172,12 @@
               "selected_sequence_sha256": "63e0a036df08b2726a7652cfd910bda8dbed0c6ac72f2598bd55ac167f6b2271"
             }
           },
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "family": "Physical real",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": 221.0,
             "haploflow": 169.0,

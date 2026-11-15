@@ -5,12 +5,12 @@ pub(super) fn locate(core: &[u8], present: impl FnMut(&[u8]) -> bool) -> Option<
     locate_with_minimum(core, present, 3)
 }
 
-/// Linear paths need stronger evidence before withholding a claimed join.
+/// Only one dominant read-unbridged internal adjacency is eligible.
 pub(super) fn locate_strict(core: &[u8], present: impl FnMut(&[u8]) -> bool) -> Option<usize> {
-    let cut = locate_with_minimum(core, present, SPAN / 2)?;
-    // An unsupported edge is not evidence for discarding a long linear join.
-    (cut * 5 >= core.len() && (core.len() - cut) * 5 >= core.len()).then_some(cut)
+    strict::locate_strict(core, present)
 }
+
+mod strict;
 
 fn locate_with_minimum(
     core: &[u8],
@@ -52,3 +52,6 @@ fn locate_with_minimum(
     }
     Some(cut)
 }
+
+#[cfg(test)]
+mod test_dominant;

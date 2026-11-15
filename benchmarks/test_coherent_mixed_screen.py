@@ -1,0 +1,100 @@
+"""Hermetic source/identity tests; never require private HXB2 FASTQs in CI."""
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from expanded import coherent_mixed_screen as screen
+
+
+def cases():
+    return [
+        (f"{family}-s{i:03d}", Path(f"/fake/{family}-s{i:03d}"),
+         {"family": family})
+        for family in screen.FAMILIES for i in range(16)
+    ]
+
+
+class MixedSourceTests(unittest.TestCase):
+    def test_frozen_two_family_set_is_complete(self):
+        with patch.object(screen, "cohort_rows", return_value=cases()):
+            selected = screen.inputs()
+        self.assertEqual(len(selected), 32)
+        self.assertEqual(len({x[0] for x in selected}), 32)
+        for family in screen.FAMILIES:
+            self.assertEqual(sum(c[2]["family"] == family for c in selected), 16)
+
+    def test_missing_mixed_sample_refuses_a_partial_gate(self):
+        with patch.object(screen, "cohort_rows", return_value=cases()[:-1]):
+            with self.assertRaisesRegex(ValueError, "all 32"):
+                screen.inputs()
+
+    def test_duplicate_mixed_identity_is_rejected(self):
+        erroneous = cases()
+        erroneous[-1] = erroneous[0]
+        with patch.object(screen, "cohort_rows", return_value=erroneous):
+            with self.assertRaisesRegex(ValueError, "identity mismatch"):
+                screen.inputs()
+
+    def test_nominal_tie_reports_arbitrary_fixed_truth(self):
+        note = screen.dominance_note({
+            "nominal_fractions": [0.5, 0.5],
+            "sampled_haplotype_pairs": [4974, 5026],
+        })
+        self.assertTrue(note["nominal_tie"])
+        self.assertEqual(note["fixed_truth_index"], 0)
+        self.assertEqual(note["observed_pair_majority_index"], 1)
+        self.assertTrue(note["fixed_truth_not_observed_majority"])
+        self.assertTrue(note["acceptance_score_unchanged"])
+
+    def test_clear_dominant_haplotype_is_distinct_from_tie(self):
+        note = screen.dominance_note({
+            "nominal_fractions": [0.7, 0.3],
+            "sampled_haplotype_pairs": [7010, 2990],
+        })
+        self.assertFalse(note["nominal_tie"])
+        self.assertEqual(note["fixed_truth_index"], 0)
+        self.assertEqual(note["observed_pair_majority_index"], 0)
+        self.assertFalse(note["fixed_truth_not_observed_majority"])
+
+    def test_observed_exact_tie_has_no_empirical_majority(self):
+        note = screen.dominance_note({
+            "nominal_fractions": [0.5, 0.5],
+            "sampled_haplotype_pairs": [5000, 5000],
+        })
+        self.assertIsNone(note["observed_pair_majority_index"])
+        self.assertFalse(note["fixed_truth_not_observed_majority"])
+
+    def test_invalid_count_does_not_create_a_majority(self):
+        with self.assertRaisesRegex(ValueError, "authentic"):
+            screen.dominance_note({
+                "nominal_fractions": [0.5, 0.5],
+                "sampled_haplotype_pairs": [5000, -1],
+            })
+
+    def test_freeze_rejects_changed_original_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pilot = Path(directory)
+            frozen = {
+                "rust_commit": screen.IVANKA_COMMIT,
+                "fork_commit": screen.FORK_COMMIT,
+                "ivanka_image_id": screen.IMAGE,
+                "common_image": screen.BASE,
+                "common_commit": screen.COMMON_COMMIT,
+                "release_qualified": False,
+            }
+            (pilot / "run_manifest.json").write_text(json.dumps(frozen))
+            with patch.object(screen, "PILOT", pilot), patch.object(
+                    screen, "commit", side_effect=ValueError("dirty source")):
+                with self.assertRaisesRegex(ValueError, "dirty source"):
+                    screen.freeze()
+
+    def test_invalid_image_cannot_replay_without_manifest(self):
+        self.assertEqual(len(screen.IMAGE), 64)
+        self.assertEqual(len(screen.FORK_COMMIT), 40)
+        self.assertNotEqual(screen.FORK_COMMIT, screen.IVANKA_COMMIT)
+
+
+if __name__ == "__main__":
+    unittest.main()

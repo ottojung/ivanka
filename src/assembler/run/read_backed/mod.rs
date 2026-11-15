@@ -34,6 +34,14 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
             selected.extend(extra);
         }
     }
+    let original_pairs = output::observed(&reads.seqs, &selected);
+    if !original_pairs.is_empty() {
+        eprintln!(
+            "IVANKA_ORIGINAL_PAIR_FRAGMENTS retained={}",
+            original_pairs.len()
+        );
+        selected.extend(original_pairs);
+    }
     eprintln!(
         "IVANKA_READ_BACKED_SELECTION native {} selected [{}] covered_31mers [{}] supporting_pairs [{}] read_support_products [{}]",
         contigs.len(), chosen, statistics.coverage[chosen], statistics.pairs[chosen],

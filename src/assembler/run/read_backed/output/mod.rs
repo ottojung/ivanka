@@ -15,6 +15,9 @@ pub(super) fn write(path: &str, entries: &[Entry]) -> io::Result<()> {
 }
 
 mod fragment;
+mod pairs;
 pub(super) use fragment::component;
 #[cfg(test)]
 pub(super) use fragment::part_header;
+
+pub(super) use pairs::observed;

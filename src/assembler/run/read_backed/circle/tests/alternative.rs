@@ -1,6 +1,6 @@
 use super::alternative_tail_cut;
 
-fn dna(size: usize) -> Vec<u8> {
+pub(super) fn dna(size: usize) -> Vec<u8> {
     let mut state = 782_013_417_u64;
     (0..size)
         .map(|_| {

@@ -12,16 +12,18 @@ pub(super) fn alternative_tail_cut(sequence: &[u8], depth: &[u32], k: usize) -> 
     if sequence.len() < 2 * MIN_TAIL || depth.len() != sequence.len() - k + 1 {
         return None;
     }
+    let prefix = &sequence[..ANCHOR];
     let suffix = &sequence[sequence.len() - ANCHOR..];
     let mut chosen = None;
-    for (start, window) in sequence[..sequence.len() - ANCHOR]
-        .windows(ANCHOR)
-        .enumerate()
-    {
-        if window != suffix {
+    for (start, window) in sequence.windows(ANCHOR).enumerate() {
+        // Reordering a circular or branched path can move the same anchor.
+        let cut = if window == prefix {
+            start
+        } else if window == suffix {
+            sequence.len() - ANCHOR - start
+        } else {
             continue;
-        }
-        let cut = sequence.len() - ANCHOR - start;
+        };
         let tail = sequence.len() - cut;
         if tail < MIN_TAIL || tail >= cut {
             continue;

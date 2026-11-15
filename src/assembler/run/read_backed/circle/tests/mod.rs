@@ -50,3 +50,4 @@ fn rotation_preserves_exact_original_31_mer_depth() {
 }
 
 mod alternative;
+mod rotated;

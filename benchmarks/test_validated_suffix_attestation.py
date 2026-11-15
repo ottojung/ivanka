@@ -17,6 +17,12 @@ class BranchIdentityTests(unittest.TestCase):
             internal.assert_called_once_with(
                 {}, {}, "base", "-validated-20261115")
 
+    def test_no_distance_alias_is_explicitly_diagnostic_only(self):
+        with patch.object(attest, "_verify", return_value={}) as internal:
+            attest.verify_diagnostic({}, {}, "base", "-unlinked-20261115")
+            internal.assert_called_once_with(
+                {}, {}, "base", "-unlinked-20261115")
+
     def test_rejects_arbitrary_branch_suffixes(self):
         for suffix in ("", "-test", "-validated-20261114", "../../main"):
             with self.subTest(suffix=suffix), self.assertRaisesRegex(

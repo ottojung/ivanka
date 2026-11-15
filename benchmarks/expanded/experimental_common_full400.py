@@ -15,10 +15,10 @@ from .hxb2_cohort import attestation
 from .micall_checkpoint import digest
 from .micall_synthetic import run as run_seven
 
-ROOT = Path("/workspace/ivanka-validated-common-full400-20261115")
-SOURCE = "1903c8dcd40d5d37dce9cb5d07dd3da100fbe2af"
+ROOT = Path("/workspace/ivanka-nodistance-seven-full400-20261115")
+SOURCE = "3ac24bf460c049553f5b6a564833a668a26a1559"
 NATIVE = "c6869ae6b64385bc4b2922f2f67ed6150e8f9bb3"
-SCHEMA = "ivanka.experimental.common_micall_full400.v1"
+SCHEMA = "ivanka.experimental.common_unlinked_full400.v1"
 
 
 def freeze(data, images_manifest):
@@ -31,7 +31,7 @@ def freeze(data, images_manifest):
         raise ValueError("experimental seven-source pin mismatch")
     image_proof = verify_diagnostic(
         build["images"], build["source_roots"],
-        build["common_micall_image_id"], "-validated-20261115")
+        build["common_micall_image_id"], "-unlinked-20261115")
     if (image_proof["status"] !=
             "SEVEN_EXPERIMENTAL_BRANCH_IMAGES_VERIFIED_NOT_QUALIFIED"
             or image_proof["qualified"] is not False):

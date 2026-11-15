@@ -161,7 +161,7 @@ def verify(images, roots, base_image):
 
 def verify_diagnostic(images, roots, base_image, branch_suffix):
     """Check experimental branches without granting production qualification."""
-    if branch_suffix != "-validated-20261115":
+    if branch_suffix not in ("-validated-20261115", "-unlinked-20261115"):
         raise ValueError("unsupported experimental branch suffix")
     return _verify(images, roots, base_image, branch_suffix)
 

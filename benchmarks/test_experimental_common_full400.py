@@ -8,7 +8,7 @@ from expanded import experimental_common_full400 as full
 class ExperimentalFull400Tests(unittest.TestCase):
     def test_release_status_cannot_use_provisional_suffix(self):
         self.assertEqual(full.SCHEMA,
-                         "ivanka.experimental.common_micall_full400.v1")
+                         "ivanka.experimental.common_unlinked_full400.v1")
 
     def test_refuse_preexisting_source_mismatch(self):
         with patch.object(full, "freeze", side_effect=ValueError(

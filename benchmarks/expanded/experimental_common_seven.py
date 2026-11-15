@@ -21,9 +21,9 @@ CASES = (
     "pcr_jackpot-s011", "minority_30pct-s010", "equal_strains-s014",
     "clonal-s013", "iid_errors-s000",
 )
-SOURCE_SHA = "1903c8dcd40d5d37dce9cb5d07dd3da100fbe2af"
+SOURCE_SHA = "3ac24bf460c049553f5b6a564833a668a26a1559"
 RUST_SHA = "c6869ae6b64385bc4b2922f2f67ed6150e8f9bb3"
-SCHEMA = "ivanka.experimental.common_micall_seven.v1"
+SCHEMA = "ivanka.experimental.common_micall_unlinked_seven.v1"
 
 
 def manifest(data, images, report, source):
@@ -67,7 +67,7 @@ def run(output, data, images_manifest, *, timeout=1800):
         raise ValueError("diagnostic timeout must remain 1800 seconds")
     os.environ["CONTAINERS_STORAGE_CONF"] = (
         "/workspace/ivanka-podman-overlay-20261103/storage.conf")
-    repo = Path("/workspace/ivanka-validated-common-pilot-20261115")
+    repo = Path("/workspace/ivanka-nodistance-seven-pilot-20261115")
     source = subprocess.check_output(
         ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
     if subprocess.check_output(
@@ -81,7 +81,7 @@ def run(output, data, images_manifest, *, timeout=1800):
     images, roots = build["images"], build["source_roots"]
     evidence = verify_diagnostic(images, roots,
                                  build["common_micall_image_id"],
-                                 "-validated-20261115")
+                                 "-unlinked-20261115")
     proof_path = output / "source-attestation.json"
     if proof_path.exists():
         if json.loads(proof_path.read_text()) != evidence:

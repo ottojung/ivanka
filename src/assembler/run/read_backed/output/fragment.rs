@@ -37,6 +37,9 @@ pub(crate) fn component(
         );
         return left.into_iter().chain(right).collect();
     }
+    if let Some(parts) = super::terminal_repeat::split(chosen, core, reads.max_read_len) {
+        return parts;
+    }
     tiling::partition(&header, core, observed)
 }
 

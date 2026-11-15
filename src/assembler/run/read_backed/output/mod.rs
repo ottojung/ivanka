@@ -16,6 +16,7 @@ pub(super) fn write(path: &str, entries: &[Entry]) -> io::Result<()> {
 
 mod fragment;
 mod pairs;
+mod terminal_repeat;
 pub(super) use fragment::component;
 #[cfg(test)]
 pub(super) use fragment::part_header;

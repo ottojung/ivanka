@@ -1,5 +1,5 @@
 use super::{Hits, K};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Only a consistent read-to-contig offset can establish a mate anchor.
 pub(crate) fn anchor(read: &[u8], hits: &Hits) -> Option<usize> {
@@ -21,9 +21,12 @@ pub(crate) fn anchor(read: &[u8], hits: &Hits) -> Option<usize> {
             }
         }
     }
-    let candidates = paths
+    // A single unique contig is not enough: multiple qualifying offset
+    // paths within that contig (e.g. across a repeat) are ambiguous and
+    // must not anchor mate evidence. Require exactly one qualifying path.
+    let qualifying: Vec<usize> = paths
         .into_iter()
         .filter_map(|((i, _, _), (count, low, high))| (count >= 2 && high - low >= 20).then_some(i))
-        .collect::<HashSet<_>>();
-    (candidates.len() == 1).then(|| *candidates.iter().next().unwrap())
+        .collect();
+    (qualifying.len() == 1).then(|| qualifying[0])
 }

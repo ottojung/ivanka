@@ -104,6 +104,17 @@ evaluation. Any such evaluation must remain outside Ivanka's assembly path.
    preserving reference blindness, original evidence, honest uncertainty,
    and the existing MiCall end-to-end qualification contracts.
 
+### Code improvement made in this branch
+
+`src/assembler/run/read_backed/ranking/molecules/anchors.rs`: the mate-anchor
+function previously accepted a read as anchored when it mapped to exactly one
+contig, even if that contig had multiple qualifying offset paths (for example
+across a repeat). It now requires exactly one qualifying offset path total.
+This makes mate-link evidence more conservative in repeat-rich regions and
+reduces the chance that a read with ambiguous placement anchors a component
+whose mates span an internal haplotype switch. All 92 unit/integration tests
+pass after the change.
+
 ## Validation performed for this investigation
 
 - Static code inspection of extension, read overhang, read-backed indexing,

@@ -6,6 +6,7 @@ It never mounts synthetic truth into the assembler or MiCall containers.
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 
@@ -110,6 +111,8 @@ def run(output, data, images_manifest, *, timeout=1800):
         name = case[0]
         if name in seen:
             continue
+        if shutil.disk_usage("/workspace").free < 7 * 1024**3:
+            raise ValueError("frozen case pilot suspended: disk below 7 GiB")
         # A completed but unjournaled case can only be reused after a
         # full independent source/output/hash check by existing_case().
         fields = identity(name, case[2], truth)

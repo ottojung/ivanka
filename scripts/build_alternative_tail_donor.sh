@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+tag=${1:?expected an immutable research image tag}
+cd "$(dirname "$0")/.."
+rev=$(git rev-parse HEAD)
+case "$tag" in localhost/ivanka:alternative-tail-"$rev"*) ;; *)
+ echo "refusing incorrect source-tag" >&2;exit 2;;esac
+test -z "$(git status --porcelain)" || { echo "dirty source" >&2;exit 1; }
+export CONTAINERS_STORAGE_CONF=/workspace/ivanka-podman-overlay-20261103/storage.conf
+base=06edf903b2acf8fcdb9c4e8dc9a71f47061464c04ab94719e0c4353e74b19e26
+test "$(podman image inspect --format '{{.Id}}' "$base")" = "$base"
+test "$(podman image inspect --format '{{index .Config.Labels "org.ottojung.ivanka.execution"}}' "$base")" = rust-direct-default-read-backed-tile512
+podman build --pull=never --network=none \
+ --build-arg SOURCE_COMMIT="$rev" --build-arg DONOR_BASE="$base" \
+ -f benchmarks/Dockerfile.alternative-tail-donor -t "$tag" .
+actual=$(podman image inspect --format '{{.Id}}' "$tag")
+test "$(podman image inspect --format '{{index .Config.Labels "org.ottojung.ivanka.source-commit"}}' "$actual")" = "$rev"
+test "$(podman image inspect --format '{{index .Config.Labels "org.ottojung.ivanka.donor-base-image"}}' "$actual")" = "$base"
+echo "SOURCE_PINNED_ALTERNATIVE_TAIL_RUST_DONOR $actual $rev"

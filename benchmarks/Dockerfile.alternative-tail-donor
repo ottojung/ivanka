@@ -1,0 +1,18 @@
+# The paired-molecule assembler is built from the committed Rust sources.
+FROM docker.io/library/rust:1.93-bookworm AS native_assembler
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY build.rs ./
+COPY source_lints ./source_lints
+COPY src ./src
+RUN cargo build --release --locked
+ARG DONOR_BASE
+FROM ${DONOR_BASE}
+ARG SOURCE_COMMIT
+ARG DONOR_BASE
+COPY --from=native_assembler /src/target/release/ivanka /usr/local/bin/ivanka
+RUN test -x /usr/local/bin/ivanka
+LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.ivanka.execution="rust-direct-default-alternative-tail"
+LABEL org.ottojung.ivanka.donor-base-image="${DONOR_BASE}"
+LABEL org.opencontainers.image.source="https://github.com/ottojung/ivanka"

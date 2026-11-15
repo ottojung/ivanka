@@ -25,17 +25,15 @@ pub(crate) fn component(
             cut,
             core.len()
         );
-        let left = tiling::partition(
-            &part_header(chosen, 1, cut),
-            &core[..cut],
-            &observed[..cut - K + 1],
+        return super::split::at(chosen, core, observed, cut);
+    }
+    if let Some(cut) = circle::alternative_tail_cut(core, observed, K) {
+        eprintln!(
+            "IVANKA_READ_BACKED_ALTERNATIVE_TAIL cut={} len={}",
+            cut,
+            core.len()
         );
-        let right = tiling::partition(
-            &part_header(chosen, 2, core.len() - cut),
-            &core[cut..],
-            &observed[cut..],
-        );
-        return left.into_iter().chain(right).collect();
+        return super::split::at(chosen, core, observed, cut);
     }
     tiling::partition(&header, core, observed)
 }

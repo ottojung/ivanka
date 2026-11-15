@@ -4,7 +4,6 @@ This diagnostic never satisfies the canonical dedicated-branch release gate.
 It never mounts synthetic truth into the assembler or MiCall containers.
 """
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path

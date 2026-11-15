@@ -11,10 +11,10 @@ from .micall_source_guard import fork_commit_url
 SCHEMA = "ivanka.assembler-bench.dedicated-fork-images.v1"
 
 
-def _source(name, root, baseline):
+def _source(name, root, baseline, branch_suffix=""):
     root = Path(root)
     source = checkout_info(root)
-    branch = "bench/assembler-" + name
+    branch = "bench/assembler-" + name + branch_suffix
     if _git(root, "symbolic-ref", "--short", "HEAD") != branch:
         raise ValueError(f"{name}: wrong source branch")
     if (root/"assembler-bench/selected").read_text().strip() != name:
@@ -52,7 +52,7 @@ def _program_probe(image, names):
     return json.loads(result.stdout)
 
 
-def verify(images, roots, base_image):
+def _verify(images, roots, base_image, branch_suffix=""):
     """Refuse mixed branches, duplicate images, extra tools and source changes."""
     if set(images) != set(ASSEMBLERS) or set(roots) != set(ASSEMBLERS):
         raise ValueError("requires exactly seven pinned images and source branches")
@@ -83,7 +83,8 @@ def verify(images, roots, base_image):
     results = {}
     seen_commits = set()
     for name in ASSEMBLERS:
-        src = _source(name, roots[name], baseline)
+        src = (_source(name, roots[name], baseline) if not branch_suffix
+               else _source(name, roots[name], baseline, branch_suffix))
         if src["commit"] in seen_commits:
             raise ValueError(f"{name}: two assembler branches share one commit")
         seen_commits.add(src["commit"])
@@ -98,7 +99,8 @@ def verify(images, roots, base_image):
         required = {
             "org.opencontainers.image.source": SOURCE_REPO,
             "org.opencontainers.image.revision": src["commit"],
-            "org.ottojung.micall.source-branch": "bench/assembler-"+name,
+            "org.ottojung.micall.source-branch":
+                "bench/assembler-"+name+branch_suffix,
             "org.ottojung.micall.assembler": name,
             "org.ottojung.micall.common-base": base_id,
             "org.ottojung.micall.common-baseline-commit": baseline,
@@ -124,7 +126,7 @@ def verify(images, roots, base_image):
             raise ValueError(f"{name}: invalid executable SHA")
         results[name] = {
             "source_repository":SOURCE_REPO,
-            "source_branch":"bench/assembler-"+name,
+            "source_branch":"bench/assembler-"+name+branch_suffix,
             "source_commit":src["commit"],
             "source_url":fork_commit_url(src["commit"]),
             "baseline_commit":baseline,
@@ -135,7 +137,7 @@ def verify(images, roots, base_image):
             "executables_sha256":probe["programs"],
             "selected_assembler":name,
         }
-    return {"schema":SCHEMA,
+    report = {"schema":SCHEMA,
             "status":"SEVEN_INDEPENDENT_BRANCH_IMAGES_VERIFIED",
             "source_repository":SOURCE_REPO,
             "base_image_sha256":base_id,
@@ -143,6 +145,25 @@ def verify(images, roots, base_image):
             "baseline_url":fork_commit_url(baseline),
             "installed_modules_sha256":common["files"],
             "images":results}
+    if branch_suffix:
+        report.update({
+            "schema":"ivanka.assembler-bench.experimental-fork-images.v1",
+            "status":"SEVEN_EXPERIMENTAL_BRANCH_IMAGES_VERIFIED_NOT_QUALIFIED",
+            "qualified":False, "branch_suffix":branch_suffix,
+        })
+    return report
+
+
+def verify(images, roots, base_image):
+    """Official verification requires the canonical branch names exactly."""
+    return _verify(images, roots, base_image)
+
+
+def verify_diagnostic(images, roots, base_image, branch_suffix):
+    """Check experimental branches without granting production qualification."""
+    if branch_suffix != "-validated-20261115":
+        raise ValueError("unsupported experimental branch suffix")
+    return _verify(images, roots, base_image, branch_suffix)
 
 
 def main():

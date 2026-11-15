@@ -6,6 +6,8 @@ mod support;
 #[cfg(test)]
 mod test_junction;
 #[cfg(test)]
+mod test_sparse;
+#[cfg(test)]
 mod test_variable;
 #[cfg(test)]
 mod tests;
@@ -24,6 +26,8 @@ pub(super) fn repair(sequence: &[u8], depth: &[u32], reads: &Reads) -> Option<(V
     }
     let overlap = overlap::length(sequence, MIN_OVERLAP, MAX_OVERLAP)?;
     let core = &sequence[..sequence.len() - overlap];
+    // Full-read junction presence uses the complete index; the 80k-pair
+    // selection-depth sample must not suppress genuine seam evidence.
     if !seam::supported(core, |word| support::present(word, reads)) {
         return None;
     }

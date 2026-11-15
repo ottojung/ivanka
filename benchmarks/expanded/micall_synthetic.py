@@ -4,7 +4,8 @@ Source attestations, final MiCall dominant consensus, monotonic container
 timings and full failure accounting are mandatory. Partial runs never pass.
 """
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
+import shutil
 import hashlib
 import json
 from pathlib import Path
@@ -25,6 +26,7 @@ from .micall_dominant import SCORE_ORIGIN, evaluate_final_alignment
 from .micall_retention import prune_case
 from .micall_synthetic_constants import TIMING_ORIGIN
 from .micall_lock import exclusive_lock
+from .micall_synthetic_scheduler import execute
 from .run_real import verify_images
 from .run_synthetic import cohort_rows
 
@@ -189,18 +191,21 @@ def _run(data, output, images, *, jobs=5, timeout=MAX_SECONDS,
                                          buffering=1) as stream:
         with ThreadPoolExecutor(max_workers=jobs) as pool:
             pending = [case for case in cohort if case[0] not in completed]
-            futures = [pool.submit(run_case, case, output, images,
-                                   proof, timeout, resume=resume)
-                       for case in pending]
-            for future in as_completed(futures):
-                row = future.result()
+
+            def worker(case):
+                return run_case(case, output, images, proof, timeout,
+                                resume=resume)
+
+            def commit(row):
                 stream.write(json.dumps(row, sort_keys=True)+"\n")
-                # The checkpoint has been committed and the streamed row
-                # flushed. Reuse its independent evidence verifier.
+                # The checkpoint is committed before deleting verified scratch.
                 prune_case(output, row, images, proof)
                 print("MICALL_SYNTHETIC_CASE", row["id"], "failures",
                       [name for name, result in row["results"].items()
                        if result["status"] != "success"], flush=True)
+
+            execute(pool, pending, jobs, worker, commit,
+                    lambda: shutil.disk_usage("/workspace").free)
     final = output / "results.jsonl"
     completed_rows = [json.loads(line) for line in final.read_text().splitlines()
                       if line.strip()]
@@ -222,7 +227,8 @@ def _run(data, output, images, *, jobs=5, timeout=MAX_SECONDS,
 def run_manifest(proof, images, limit):
     """Pin all scoring, wrapper and timing sources across restarts."""
     root = Path(__file__).resolve().parent
-    sources = ("micall_synthetic.py", "micall_checkpoint.py",
+    sources = ("micall_synthetic.py", "micall_synthetic_scheduler.py",
+               "micall_checkpoint.py",
                "micall_retention.py",
                "micall_synthetic_constants.py", "micall_lock.py",
                "micall_dominant.py",

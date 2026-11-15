@@ -5,12 +5,12 @@ const BenchRanks = (() => {
   const CORE = {
     score:{label:"Final MiCall alignment",unit:"alignment points",direction:"higher",
       stage:"Final MiCall dominant consensus",
-      description:"Maximum local-alignment points across final MiCall MAX sequences and the reference panel.",
-      denominator:"Observed successful, individually scored cases"},
+      description:"For each sample, score each final MiCall MAX consensus against the fixed independent viral reference panel using local alignment (match +1, mismatch −1, gap open −2, gap extension −1); report the largest score. These are alignment points, not percent identity or a measure of the assembler's raw FASTA.",
+      denominator:"Maximum local alignment over final MAX sequences and references, separately for each successful case; no length normalization."},
     seconds:{label:"MiCall runtime",unit:"seconds",direction:"lower",
       stage:"In-container MiCall monotonic timer",
-      description:"Wall-clock runtime inside the same MiCall pipeline. Lower means faster. Historical exploratory runtime with invalid timing is not displayed as valid.",
-      denominator:"Observed successful, individually timed MiCall runs"}
+      description:"Elapsed monotonic wall-clock seconds measured inside each MiCall execution, including assembly and downstream pipeline work. Failed or missing timings are not treated as fast successful results. Lower is faster.",
+      denominator:"One independently recorded in-container elapsed time per successful MiCall sample/assembler; not CPU time or assembler-only time."}
   };
   const finite = x => typeof x==="number"&&Number.isFinite(x);
   const isCore = key => key==="score"||key==="seconds";

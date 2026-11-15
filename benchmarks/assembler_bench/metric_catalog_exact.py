@@ -31,19 +31,23 @@ def catalog():
 
 
 def explanations():
+    from .metric_catalog_exact_rules import STATISTICS
+    method = (
+        "Full read: exact no-substitution, no-indel matching of original "
+        "R1/R2 reads to the longest final MiCall MAX sequence, across "
+        "both orientations and every exact placement. "
+    )
+    interior = (
+        "Interior: the same exact matching, but the 70 bases at "
+        "each read end do not contribute to depth. "
+    )
     return {track + "_" + key: (
-        f"{label} for the {scope.lower()} exact-match depth per base, "
-        "computed by MiCall from original R1/R2 reads against the longest "
-        "final MAX consensus. Full read matching must have no substitutions "
-        "or indels, includes both orientations and all exact placements. "
-        + ("Depth is counted across the whole matched read."
-           if scope == "Full-span" else
-           "Read ends are excluded by 70 bases at each end."),
-        "Bases in the selected longest final MAX consensus; read placements "
-        "are not unique molecules or approximate mapper alignments.",
-        "Final MiCall consensus / exact paired-FASTQ read matching", direction)
+        (method if scope == "Full-span" else interior) + STATISTICS[key][0],
+        STATISTICS[key][1] + " These are read placements, not unique "
+        "molecules or approximate SAM mappings.",
+        "Final MiCall consensus / exact paired-FASTQ read matching",direction)
         for track, _, scope in TRACKS
-        for key, label, _, direction in FIELDS}
+        for key, _, _, direction in FIELDS}
 
 
 def values(report):

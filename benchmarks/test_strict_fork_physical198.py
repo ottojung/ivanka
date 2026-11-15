@@ -1,12 +1,14 @@
 """Synthetic public fixtures for fresh physical-198 qualification."""
-from pathlib import Path
 import json
 import tempfile
 import unittest
+from pathlib import Path
 
 from benchmarks.expanded.real_matrix import PANEL
 from benchmarks.expanded.strict_fork_physical198 import (
-    check_arm, evaluate, read_records,
+    check_arm,
+    evaluate,
+    read_records,
 )
 
 IMAGES = {"iva": "a" * 64, "ivanka": "b" * 64}
@@ -20,9 +22,9 @@ def arm(which, seconds):
 
 
 def result(sample):
-    return {"sample": sample, "invocation": "once", "status": "finished",
+    return {"sample": sample, "invocation": "1794650000-1000", "status": "finished",
             "failed": False, "total_seconds": 122.0,
-            "iva_baseline_reused": False,
+            "iva_baseline_reused": None, "sample_time_limit_seconds": 1800,
             "iva": arm("iva", 120.0), "ivanka": arm("ivanka", 100.0),
             "best_contig_acceptance": {
                 "method": "best_final_max_contig_local_alignment_over_reference_panel",
@@ -75,6 +77,7 @@ class PhysicalGateTests(unittest.TestCase):
         e.update({"ivanka_score": 101.0, "pass": True})
         self.records[name]["ivanka"]["seconds"] = 161.0
         self.records[name]["ivanka"]["container_wall_seconds"] = 162.0
+        self.records[name]["total_seconds"] = 164.0
         out = evaluate(self.records, IMAGES, NAMES)
         self.assertFalse(out["time_psi"]["positive_all_nonnegative"])
         self.assertFalse(out["pass"])
@@ -84,7 +87,7 @@ class PhysicalGateTests(unittest.TestCase):
             path = Path(work) / "results.jsonl"
             lines = []
             for name in sorted(NAMES):
-                lines.append({"sample": name, "invocation": "once",
+                lines.append({"sample": name, "invocation": "1794650000-1000",
                               "status": "started"})
                 lines.append(result(name))
             path.write_text("".join(json.dumps(x) + "\n" for x in lines))
@@ -95,11 +98,42 @@ class PhysicalGateTests(unittest.TestCase):
             path.write_text("".join(json.dumps(x) + "\n" for x in lines))
             with self.assertRaisesRegex(ValueError, "invocation"):
                 read_records(path, NAMES)
-            lines[-1] = result(sorted(NAMES)[-1])
+            lines[-1] = result(max(NAMES))
             lines.append(lines[-1])
             path.write_text("".join(json.dumps(x) + "\n" for x in lines))
             with self.assertRaisesRegex(ValueError, "duplicate terminal"):
                 read_records(path, NAMES)
+
+    def test_non_none_cache_flags_never_pass(self):
+        name = next(iter(NAMES))
+        for value in (True, False, 0, 1, "false"):
+            with self.subTest(value=value):
+                self.records[name]["iva_baseline_reused"] = value
+                self.assertFalse(evaluate(self.records, IMAGES, NAMES)["pass"])
+        self.records[name]["iva_baseline_reused"] = None
+        self.assertTrue(evaluate(self.records, IMAGES, NAMES)["pass"])
+
+    def test_sample_wall_is_bounded_and_consistent_with_arm_walls(self):
+        name = next(iter(NAMES))
+        for value in (1800.1, 120.5, 0, float("nan"), True):
+            with self.subTest(value=value):
+                self.records[name]["total_seconds"] = value
+                self.assertFalse(evaluate(self.records, IMAGES, NAMES)["pass"])
+        self.records[name]["total_seconds"] = 122.0
+        self.records[name]["sample_time_limit_seconds"] = 2000
+        self.assertFalse(evaluate(self.records, IMAGES, NAMES)["pass"])
+
+    def test_invocation_path_traversal_is_rejected(self):
+        with tempfile.TemporaryDirectory() as work:
+            path = Path(work) / "results.jsonl"
+            event = {"sample": next(iter(NAMES)), "status": "started"}
+            for invocation in ("../../escape", ".", "..", "once",
+                               "1794650000-1000/other", "1794650000-1000\\other"):
+                event["invocation"] = invocation
+                path.write_text(json.dumps(event) + "\n")
+                with (self.subTest(invocation=invocation),
+                      self.assertRaisesRegex(ValueError, "invocation")):
+                    read_records(path, NAMES)
 
     def test_fail_closed_arm_clock(self):
         broken = arm("iva", 3.0)

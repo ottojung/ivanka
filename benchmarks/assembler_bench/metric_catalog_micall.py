@@ -1,5 +1,6 @@
 """Complete numeric MiCall CSV and primary SAM diagnostic catalog."""
 from benchmarks.diagnostic_metrics import DIRECTIONS, UNITS
+from .metric_catalog_micall_rules import RULES
 
 SAM_FIELDS = {
     "records": ("SAM alignment records", "records", "unspecified",
@@ -23,6 +24,20 @@ SAM_FIELDS = {
     "mean_soft_clip_event_length": (
         "Mean soft-clip event length", "nt / event", "lower",
         "Mean number of clipped query bases per primary CIGAR S event."),
+}
+
+
+SAM_DENOMINATORS = {
+    "records": "Number of SAM non-header records, including mapped, unmapped, secondary and supplementary alignments.",
+    "duplicates": "Primary mapped records with SAM duplicate flag 0x400 / records examined (count, not a rate).",
+    "mapq_unknown": "Primary mapped records whose MAPQ field is 255 (unknown); secondary and supplementary are excluded.",
+    "read_bases": "Sum of SEQ lengths in primary mapped SAM records; bases include those subsequently soft-clipped.",
+    "left_clip_events": "Count of primary mapped alignments whose leftmost non-hard-clipped CIGAR operation is S.",
+    "right_clip_events": "Count of primary mapped alignments whose rightmost non-hard-clipped CIGAR operation is S.",
+    "left_clipped_bases": "Sum of lengths of the left terminal S operations across primary mapped alignments.",
+    "right_clipped_bases": "Sum of lengths of the right terminal S operations across primary mapped alignments.",
+    "soft_clip_length_max": "Maximum single CIGAR S operation length across primary mapped alignments; no clips yields zero.",
+    "mean_soft_clip_event_length": "Sum of all terminal CIGAR S operation lengths / number of those S operations; no events is unavailable.",
 }
 
 
@@ -50,9 +65,10 @@ def human(key):
 
 def catalog():
     return {
-        **{key:(human(key),"count" if key.endswith(
-            ("count","pairs","fragments","bases")) else
-             "measurement") for key in DIRECTIONS
+        **{key:(human(key),RULES[key][0] if key in RULES else
+                ("count" if key.endswith(("count","pairs","fragments",
+                                           "bases")) else "measurement"))
+            for key in DIRECTIONS
            if key not in ("soft_clips_count",)},
         **{key:(label,unit) for key,(label,unit,_,_) in SAM_FIELDS.items()},
     }
@@ -65,17 +81,15 @@ def explanations():
             continue
         raw_unit=UNITS[key]
         direction="higher" if DIRECTIONS[key] == 1 else "lower"
-        result[key]=(
-            f"{human(key)}: {raw_unit}. Reported by the named MiCall "
-            "output stage only when a valid source file is retained.",
-            f"Original MiCall measurement rule: {raw_unit}. "
-            "No imputed values when source artifacts are absent.",
-            stage(key),direction)
+        description,denominator=(RULES[key][1:]
+            if key in RULES else (
+                f"{human(key)}: {raw_unit}. Computed from recorded MiCall files.",
+                f"Original measurement basis: {raw_unit}."))
+        result[key]=(description,denominator,stage(key),direction)
     for key,(label,unit,direction,description) in SAM_FIELDS.items():
         result[key]=(
             f"{description} This is a primary-alignment record statistic "
             "from the actual MiCall SAM CIGAR output.",
-            "Original primary aligned SAM records; counts are alignments, "
-            "not unique molecules.", "MiCall read-to-contig SAM mapping",
+            SAM_DENOMINATORS[key], "MiCall read-to-contig SAM mapping",
             direction)
     return result

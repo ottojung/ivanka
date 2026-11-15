@@ -101,17 +101,6 @@ function syncUrl() {
 
 function drawOverview() {
   const run=state.run, previous=!!run.archive;
-  const progress=previous?null:state.data.real_progress;
-  el("realProgress").textContent=progress
-    ?"Physical 198 · current source-attested MiCall attempt: "+
-      Object.entries(progress.candidates)
-        .sort(([a],[b])=>a==="ivanka"?-1:b==="ivanka"?1:a.localeCompare(b))
-        .map(([name,value])=>(names[name]||name)+" "+
-          value.finished+"/198 finished"+
-          (value.failed?" ("+value.failed+" failed)":"")).join(" · ")+
-      "."
-    :previous?"Earlier MiCall executions, with their original source and image identities."
-    :"Physical sample results are being collected.";
   const expected=run.expected_sample_count;
   const label=run.cohort==="combined"?"Combined · both cohorts":
     run.cohort==="real"?"Physical · MiCall":"HXB2 · MiCall";
@@ -343,29 +332,19 @@ function drawTable() {
 }
 function showDetail(row) {
   if(!row)return;
-  const detail=row.detail;
-  const info=metricInfo();
-  let note="";
-  if(state.run.hxb2_truth_verified&&detail) {
-    note="HXB2-derived family: "+detail.family+
-      ". Failed tool arms: "+(detail.failures?.join(", ")||"none")+".";
-  } else if(state.run.cohort==="real"&&detail) {
-    note="Source-attested real MiCall sample; 90%-alignment floor: "+
-      (detail.floor_ok===null?"unresolved":detail.floor_ok?"met":"not met")+".";
-  } else if(detail) {
-    note=state.run.cohort==="combined"?
-      "Alignment score · "+detail.family:
-      "Scores for the selected cases.";
-  } else {
-    note="Source-attested diagnostic snapshot for one HXB2 case.";
-  }
-  el("detailPanel").innerHTML='<h3>'+esc(row.id)+' · '+
-    esc(info.label)+'</h3><p>'+esc(state.firstTool)+": "+
-    fmt(row.first,6)+" "+esc(info.unit)+"; "+esc(state.tool)+": "+
-    fmt(row.rival,6)+" "+esc(info.unit)+".</p>"+
-    '<p>Numeric A advantage: '+fmt(row.delta,6)+" "+esc(info.unit)+
-    ". "+esc(note)+'</p>';
-  el("detailPanel").hidden=false;
+  const dialog=el("sampleDialog"),detail=row.detail;
+  const a=state.firstTool,b=state.tool;
+  el("sampleDialogTitle").textContent=row.id+" · All recorded metrics";
+  const failures=detail?.failures||[];
+  const provenance=detail?.family?" · Family: "+detail.family:"";
+  const floor=detail?.floor_ok===null||detail?.floor_ok===undefined
+    ?"unresolved":detail.floor_ok?"met":"not met";
+  el("sampleDialogSummary").textContent=(names[a]||a)+" vs "+
+    (names[b]||b)+provenance+" · 90% alignment floor: "+floor+
+    " · Failed arms: "+(failures.length?failures.join(", "):"none")+".";
+  el("sampleDialogMetrics").innerHTML=BenchViews.sampleTable(
+    state.run,state.diagnostics,row.id,a,b);
+  if(!dialog.open)dialog.showModal();
 }
 
 function drawProvenance() {
@@ -629,7 +608,8 @@ function drawDominance() {
           '<article><strong>'+esc(item.label)+'</strong>'+
           '<span>'+esc(item.direction)+" · "+esc(item.status)+
           " · "+item.paired+"/"+item.expected+" samples</span>"+
-          '<p>'+esc(proofDescription(item))+'</p></article>').join("")+'</div>';
+          '<p>'+esc(proofDescription(item))+'</p></article>').join("")+'</div>'+BenchViews.matrixPlots(
+          state.run,state.diagnostics,selected,a,b);
       state.firstTool=a;state.tool=b;
       el("firstTool").value=a;
       const choices=state.run.tools.filter(name=>name!==a);
@@ -692,6 +672,7 @@ function exportCsv() {
 }
 
 function bind() {
+  el("sampleDialogClose").addEventListener("click",()=>el("sampleDialog").close());
   el("distributionClose").addEventListener("click",()=>{
     state.distributionTool=null;
     el("distributionPanel").hidden=true;
@@ -701,13 +682,13 @@ function bind() {
     state.firstTool=null;state.tool=null;state.distributionTool=null;
     el("search").value="";
     el("outcomeFilter").value="all";
-    el("detailPanel").hidden=true;render();
+    el("sampleDialog").close();render();
   });
   el("diagnosticMetric").addEventListener("change",()=>{
     state.metric=el("diagnosticMetric").value;
     state.direction=preferredDirection(state.metric);
     state.sort="id";state.reverse=false;state.distributionTool=null;
-    el("detailPanel").hidden=true;
+    el("sampleDialog").close();
     render();
   });
   el("singleDirection").addEventListener("change",()=>{

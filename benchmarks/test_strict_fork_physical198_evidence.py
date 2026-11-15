@@ -2,12 +2,14 @@
 import csv
 import hashlib
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from benchmarks.expanded.strict_fork_physical198_evidence import (
-    check_retained_arm, digest, sample_provenance,
+    check_retained_arm,
+    digest,
+    sample_provenance,
 )
 
 SAMPLE = "synthetic-sample"
@@ -29,7 +31,7 @@ class RetainedSourceEvidenceTests(unittest.TestCase):
         self.row = {"sample": SAMPLE, "micall_project_code": "HIV"}
         self.record = {
             "sample": SAMPLE, "hxb2_sha256": HXB2,
-            "sample_time_limit_seconds": 1800, "invocation": "invocation",
+            "sample_time_limit_seconds": 1800, "invocation": "1794650000-1000",
             "provenance": {
                 "iva_image_id": IMAGES["iva"], "hxb2_sha256": HXB2,
                 "all_projects": True,
@@ -37,7 +39,7 @@ class RetainedSourceEvidenceTests(unittest.TestCase):
                 "micall_project_code": "HIV",
             },
         }
-        self.folder = self.root / "invocation" / SAMPLE / "iva"
+        self.folder = self.root / "1794650000-1000" / SAMPLE / "iva"
         self.folder.mkdir(parents=True)
         self.conseq = self.folder / "conseq.csv"
         with self.conseq.open("w", newline="") as file:
@@ -94,6 +96,23 @@ class RetainedSourceEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "timing"):
             check_retained_arm(SAMPLE, self.record, "iva", self.root,
                                IMAGES["iva"])
+
+    def test_reject_parent_directory_symlink(self):
+        parent = self.folder.parent
+        redirected = self.root / "real-evidence"
+        parent.rename(redirected)
+        parent.symlink_to(redirected, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "directory"):
+            check_retained_arm(SAMPLE, self.record, "iva", self.root,
+                               IMAGES["iva"])
+
+    def test_reject_untrusted_invocation_paths(self):
+        for name in ("../../escape", "..", "invocation"):
+            with self.subTest(invocation=name):
+                self.record["invocation"] = name
+                with self.assertRaisesRegex(ValueError, "invocation"):
+                    check_retained_arm(SAMPLE, self.record, "iva",
+                                       self.root, IMAGES["iva"])
 
     def test_reject_wrong_artifact_dir(self):
         self.record["iva"]["artifact_dir"] = str(self.root)

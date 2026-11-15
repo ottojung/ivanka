@@ -6,6 +6,7 @@ Outputs are actual post-MiCall files, not fields copied from a results journal.
 import csv
 import hashlib
 import json
+import re
 from pathlib import Path
 
 TIMING = "micall_in_container_monotonic_v1"
@@ -49,7 +50,15 @@ def check_retained_arm(sample, record, arm, root, image):
     """Require exact per-invocation output path, timer and final MAX CSV."""
     reported = record[arm]
     invocation = record["invocation"]
-    folder = Path(root) / invocation / sample / arm
+    if not isinstance(invocation, str) or not re.fullmatch(
+            r"[0-9]{10}-[0-9]{1,10}", invocation):
+        raise ValueError("unsafe original invocation path")
+    root = Path(root)
+    sample_dir = root / invocation / sample
+    folder = sample_dir / arm
+    lineage = (root, root / invocation, sample_dir, folder)
+    if any(not p.is_dir() or p.is_symlink() for p in lineage):
+        raise ValueError("unsafe retained evidence directory")
     if (reported.get("image") != image
             or reported.get("image_id") != image
             or Path(reported.get("artifact_dir", "")) != folder
@@ -65,7 +74,7 @@ def check_retained_arm(sample, record, arm, root, image):
         raise ValueError("in-container timing file contradicts the journal")
     metrics = reported["metrics"]
     if not isinstance(metrics, dict):
-        raise ValueError("missing retained MiCall metrics")
+        raise TypeError("missing retained MiCall metrics")
     outputs = metrics.get("outputs", {})
     conseq = outputs.get("conseq.csv", {})
     if conseq.get("exists") is not True or conseq.get("sha256") != digest(files[1]):

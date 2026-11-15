@@ -8,15 +8,18 @@ import csv
 import hashlib
 import json
 import math
-from pathlib import Path
+import re
 import subprocess
+from pathlib import Path
 
-from benchmarks.assembler_bench.image_source_attestation import verify
-from benchmarks.expanded.strict_fork_physical198_evidence import authenticate_records
-from benchmarks.expanded.strict_fork_physical198_scoring import authenticate_scores
-from benchmarks.expanded.real_matrix import MANIFEST, PANEL
 from psi_acceptance import summarize
 
+from benchmarks.assembler_bench.image_source_attestation import verify
+from benchmarks.expanded.real_matrix import MANIFEST, PANEL
+from benchmarks.expanded.strict_fork_physical198_evidence import authenticate_records
+from benchmarks.expanded.strict_fork_physical198_scoring import authenticate_scores
+
+INVOCATION = re.compile(r"^[0-9]{10}-[0-9]{1,10}$")
 SCHEMA = "ivanka.strict_fork_physical198.v1"
 TIMING = "micall_in_container_monotonic_v1"
 METHOD = "best_final_max_contig_local_alignment_over_reference_panel"
@@ -32,7 +35,7 @@ def finite(value):
 
 def check_arm(arm, expected):
     if not isinstance(arm, dict):
-        raise ValueError("missing arm evidence")
+        raise TypeError("missing arm evidence")
     if (arm.get("image_id") != expected
             or type(arm.get("exit_code")) is not int
             or arm["exit_code"] != 0):
@@ -56,8 +59,9 @@ def read_records(path, expected):
         event = json.loads(line)
         sample, status = event.get("sample"), event.get("status")
         invocation = event.get("invocation")
-        if sample not in expected or not invocation:
-            raise ValueError("unknown sample or invocation")
+        if (sample not in expected or not isinstance(invocation, str)
+                or not INVOCATION.fullmatch(invocation)):
+            raise ValueError("unknown sample or invalid invocation identifier")
         invocations.add(invocation)
         if status == "started":
             if sample in starts:
@@ -90,8 +94,10 @@ def evaluate(records, images, expected):
         try:
             if record.get("status") != "finished" or record.get("failed") is not False:
                 raise ValueError("failed execution")
-            if record.get("iva_baseline_reused") is True:
-                raise ValueError("imported IVA baseline")
+            if record.get("iva_baseline_reused") is not None:
+                raise ValueError("non-fresh IVA baseline flag")
+            if record.get("sample_time_limit_seconds") != 1800:
+                raise ValueError("changed sample cap")
             iva, ivanka = record["iva"], record["ivanka"]
             ta = check_arm(iva, images["iva"])
             tb = check_arm(ivanka, images["ivanka"])
@@ -109,8 +115,10 @@ def evaluate(records, images, expected):
             if not passed:
                 report["floor_failures"] += 1
             elapsed = record.get("total_seconds")
-            if not finite(elapsed) or elapsed <= 0:
-                raise ValueError("missing sample wall evidence")
+            if (not finite(elapsed) or not 0 < elapsed <= 1800
+                    or elapsed < max(iva["container_wall_seconds"],
+                                     ivanka["container_wall_seconds"])):
+                raise ValueError("sample wall violates 1800-second cap")
             scores.append(second - first)
             times.append(ta - tb)
             report["samples_valid"] += 1

@@ -1,10 +1,13 @@
-from .metric_catalog_exact import explanations as exact_explanations
-from .metric_catalog_micall import explanations as micall_explanations
 """Scientific meaning of public MiCall metrics, including units and denominators.
 
 Preference describes a *conventional* direction, not biological certainty.
 Users must choose a direction when constructing diagnostic dominance tests.
 """
+from .metric_catalog_exact import explanations as exact_explanations
+from .metric_catalog_micall import explanations as micall_explanations
+from .metric_catalog_micall import stage
+from .metric_catalog_micall_rules import RULES
+
 # Metric key -> (definition, denominator, MiCall stage, suggested direction).
 INFO = {
     "soft_clipped_reads": (
@@ -130,7 +133,5 @@ INFO.update({key: value for key, value in micall_explanations().items()
              if key not in INFO})
 # The calculation rules take precedence over older generic summaries.
 INFO.update(exact_explanations())
-from .metric_catalog_micall_rules import RULES
-from .metric_catalog_micall import stage
 for key,(_,description,denominator) in RULES.items():
     INFO[key]=(description,denominator,stage(key),INFO[key][3])

@@ -1,3 +1,5 @@
+mod emit;
+mod graph;
 mod merge;
 mod select;
 #[cfg(test)]

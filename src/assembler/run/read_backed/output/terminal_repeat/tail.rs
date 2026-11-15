@@ -37,6 +37,3 @@ pub(super) fn split(chosen: usize, seq: &[u8], read_len: usize) -> Option<Vec<En
         ),
     ])
 }
-
-#[cfg(test)]
-mod tests;

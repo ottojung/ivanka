@@ -51,6 +51,26 @@ def inputs():
     return sorted(cases)
 
 
+def dominance_note(meta):
+    """Expose nominal ties without changing the fixed-truth score."""
+    fractions = meta["nominal_fractions"]
+    observed = meta["sampled_haplotype_pairs"]
+    if (len(fractions) != 2 or len(observed) != 2
+            or any(not isinstance(x, int) or x < 0 for x in observed)):
+        raise ValueError("expected two authentic sampled haplotype counts")
+    fixed = max(range(2), key=lambda i: fractions[i])
+    actual = None if observed[0] == observed[1] else max(
+        range(2), key=lambda i: observed[i])
+    return {
+        "nominal_tie": fractions[0] == fractions[1],
+        "fixed_truth_index": fixed,
+        "sampled_haplotype_pairs": observed,
+        "observed_pair_majority_index": actual,
+        "fixed_truth_not_observed_majority": actual is not None and fixed != actual,
+        "acceptance_score_unchanged": True,
+    }
+
+
 def freeze():
     os.environ["CONTAINERS_STORAGE_CONF"] = (
         "/workspace/ivanka-podman-overlay-20261103/storage.conf")
@@ -83,8 +103,9 @@ def freeze():
     originals = [
         {"id": name, "manifest_sha256": sha(folder / "manifest.json"),
          "read1_sha256": sha(folder / "reads/R1.fastq.gz"),
-         "read2_sha256": sha(folder / "reads/R2.fastq.gz")}
-        for name, folder, _ in cases
+         "read2_sha256": sha(folder / "reads/R2.fastq.gz"),
+         "dominance_diagnostic": dominance_note(meta)}
+        for name, folder, meta in cases
     ]
     return {
         "schema": "ivanka.experimental.coherent_mixed32.v1",

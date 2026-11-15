@@ -37,6 +37,42 @@ class MixedSourceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "identity mismatch"):
                 screen.inputs()
 
+    def test_nominal_tie_reports_arbitrary_fixed_truth(self):
+        note = screen.dominance_note({
+            "nominal_fractions": [0.5, 0.5],
+            "sampled_haplotype_pairs": [4974, 5026],
+        })
+        self.assertTrue(note["nominal_tie"])
+        self.assertEqual(note["fixed_truth_index"], 0)
+        self.assertEqual(note["observed_pair_majority_index"], 1)
+        self.assertTrue(note["fixed_truth_not_observed_majority"])
+        self.assertTrue(note["acceptance_score_unchanged"])
+
+    def test_clear_dominant_haplotype_is_distinct_from_tie(self):
+        note = screen.dominance_note({
+            "nominal_fractions": [0.7, 0.3],
+            "sampled_haplotype_pairs": [7010, 2990],
+        })
+        self.assertFalse(note["nominal_tie"])
+        self.assertEqual(note["fixed_truth_index"], 0)
+        self.assertEqual(note["observed_pair_majority_index"], 0)
+        self.assertFalse(note["fixed_truth_not_observed_majority"])
+
+    def test_observed_exact_tie_has_no_empirical_majority(self):
+        note = screen.dominance_note({
+            "nominal_fractions": [0.5, 0.5],
+            "sampled_haplotype_pairs": [5000, 5000],
+        })
+        self.assertIsNone(note["observed_pair_majority_index"])
+        self.assertFalse(note["fixed_truth_not_observed_majority"])
+
+    def test_invalid_count_does_not_create_a_majority(self):
+        with self.assertRaisesRegex(ValueError, "authentic"):
+            screen.dominance_note({
+                "nominal_fractions": [0.5, 0.5],
+                "sampled_haplotype_pairs": [5000, -1],
+            })
+
     def test_freeze_rejects_changed_original_source(self):
         with tempfile.TemporaryDirectory() as directory:
             pilot = Path(directory)

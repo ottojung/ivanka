@@ -24,6 +24,26 @@ pub(super) fn best(contigs: &[Vec<u8>], stats: &Statistics) -> usize {
         .expect("caller requires at least one contig")
 }
 
+/// Prefer a coherent path only with comparable original-pair support.
+pub(super) fn best_coherent(
+    contigs: &[Vec<u8>],
+    stats: &Statistics,
+    ambiguous: impl Fn(usize) -> bool,
+) -> usize {
+    let first = best(contigs, stats);
+    if !ambiguous(first) {
+        return first;
+    }
+    (0..contigs.len())
+        .filter(|&i| {
+            !ambiguous(i)
+                && (stats.pairs[i] as u128) * 10 >= (stats.pairs[first] as u128) * 9
+                && (stats.coverage[i] as u128) * 5 >= (stats.coverage[first] as u128) * 3
+        })
+        .min_by(|&a, &b| compare(a, b, contigs, stats))
+        .unwrap_or(first)
+}
+
 mod distinct;
 #[cfg(test)]
 pub(super) use distinct::complement;

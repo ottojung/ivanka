@@ -1,4 +1,4 @@
-use super::{alternative_tail_cut, breakpoint, rotate};
+use super::{alternative_tail_cut, ambiguous_tail, breakpoint, rotate};
 
 #[test]
 fn one_unsupported_junction_selects_read_only_reopening() {
@@ -50,4 +50,5 @@ fn rotation_preserves_exact_original_31_mer_depth() {
 }
 
 mod alternative;
+mod ambiguous;
 mod rotated;

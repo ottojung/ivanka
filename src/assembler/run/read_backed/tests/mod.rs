@@ -1,4 +1,5 @@
 use super::{index, island, output, ranking, scoring, tiling, trimming};
+mod coherent;
 mod complement_cases;
 mod complement_many;
 mod complement_negative;

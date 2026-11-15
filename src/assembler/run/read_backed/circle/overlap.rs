@@ -6,10 +6,14 @@ pub(super) fn length(sequence: &[u8], min: usize, max: usize) -> Option<usize> {
 }
 
 /// Split a divergent copied tail rather than assert unobserved long-range phase.
-pub(super) fn alternative_tail_cut(sequence: &[u8], depth: &[u32], k: usize) -> Option<usize> {
+pub(super) fn divergent_tail_cut(
+    sequence: &[u8],
+    depth: &[u32],
+    k: usize,
+    min_tail: usize,
+) -> Option<usize> {
     const ANCHOR: usize = 256;
-    const MIN_TAIL: usize = 2000;
-    if sequence.len() < 2 * MIN_TAIL || depth.len() != sequence.len() - k + 1 {
+    if sequence.len() < 2 * min_tail || depth.len() != sequence.len() - k + 1 {
         return None;
     }
     let prefix = &sequence[..ANCHOR];
@@ -25,7 +29,7 @@ pub(super) fn alternative_tail_cut(sequence: &[u8], depth: &[u32], k: usize) -> 
             continue;
         };
         let tail = sequence.len() - cut;
-        if tail < MIN_TAIL || tail >= cut {
+        if tail < min_tail || tail >= cut {
             continue;
         }
         let matched = sequence[..tail]

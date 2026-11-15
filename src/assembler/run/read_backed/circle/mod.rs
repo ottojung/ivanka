@@ -35,7 +35,12 @@ pub(super) fn repair(sequence: &[u8], depth: &[u32], reads: &Reads) -> Option<(V
 
 /// Recognize an evidence-backed divergent tail using only its own sequence.
 pub(super) fn alternative_tail_cut(sequence: &[u8], depth: &[u32], k: usize) -> Option<usize> {
-    overlap::alternative_tail_cut(sequence, depth, k)
+    overlap::divergent_tail_cut(sequence, depth, k, 2000)
+}
+
+/// A substantial divergent self-copy makes long-range phase uncertain.
+pub(super) fn ambiguous_tail(sequence: &[u8], depth: &[u32], k: usize) -> bool {
+    overlap::divergent_tail_cut(sequence, depth, k, 600).is_some()
 }
 
 /// Withhold a long unsupported internal adjacency while retaining both pieces.

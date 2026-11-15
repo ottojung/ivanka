@@ -21,7 +21,9 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
     }
     let hits = index::build(contigs);
     let statistics = scoring::count(contigs, reads, &hits);
-    let chosen = ranking::best(contigs, &statistics);
+    let chosen = ranking::best_coherent(contigs, &statistics, |i| {
+        circle::ambiguous_tail(&contigs[i], &statistics.depth[i], K)
+    });
     let mut selected = output::component(contigs, &statistics, reads, chosen);
     let linked = ranking::links(reads, &hits);
     for other in ranking::complements(contigs, &statistics, &hits, chosen, &linked) {

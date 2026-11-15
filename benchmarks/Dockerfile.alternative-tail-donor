@@ -1,4 +1,5 @@
 # Build exactly the committed Rust source in a compatible offline toolchain.
+ARG DONOR_BASE
 FROM docker.io/library/rust:1.93-bookworm AS native_assembler
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
@@ -6,7 +7,6 @@ COPY build.rs ./
 COPY source_lints ./source_lints
 COPY src ./src
 RUN CARGO_NET_OFFLINE=true cargo build --release --locked --offline
-ARG DONOR_BASE
 FROM ${DONOR_BASE}
 ARG SOURCE_COMMIT
 ARG DONOR_BASE

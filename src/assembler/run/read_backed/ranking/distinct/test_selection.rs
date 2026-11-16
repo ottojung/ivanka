@@ -1,5 +1,19 @@
-use super::super::super::index::build;
-use super::{select::complements, selection_fixture::fixture, K};
+use super::{select::complements, selection_fixture::fixture, Hits, K};
+
+/// Test-only forward-locus index; no import outside the sibling module.
+fn build(contigs: &[Vec<u8>]) -> Hits {
+    let mut index = Hits::new();
+    for (candidate, sequence) in contigs.iter().enumerate() {
+        for (position, word) in sequence.windows(K).enumerate() {
+            index
+                .entry(word.try_into().expect("31 bases"))
+                .or_default()
+                .push((candidate, position));
+        }
+    }
+    index.retain(|_, loci| loci.len() <= 8);
+    index
+}
 
 #[test]
 fn suppresses_competing_alternative_but_retains_disjoint_path() {

@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 import json
+import os
 import unittest
 
 import benchmarks
@@ -60,7 +61,8 @@ class RealComparatorIntegrationTests(unittest.TestCase):
                 "seconds": 1.25, "error": "genuine tool failure" if failed else ""}
 
     def execute(self):
-        with patch.object(physical, "freeze", return_value=(
+        with patch.dict(os.environ, {}, clear=False), \
+             patch.object(physical, "freeze", return_value=(
                 self.frozen, self.rows, [("HXB2", "ACTG")], "ACTG")), \
              patch.object(physical, "TOOLS", ("iva", "spades")), \
              patch.object(physical.shutil, "disk_usage",
@@ -98,6 +100,13 @@ class RealComparatorIntegrationTests(unittest.TestCase):
         self.execute()
         self.assertEqual(len(self.calls), 4)
         self.assertEqual(len((self.output / "results.jsonl").read_text().splitlines()), 4)
+
+    def test_runner_restores_benchmark_environment(self):
+        keys = ("IVANKA_DATA", "IVANKA_PODMAN_RESULTS",
+                "IVANKA_PODMAN_LIFECYCLE")
+        before = {key: os.environ.get(key) for key in keys}
+        self.execute()
+        self.assertEqual({key: os.environ.get(key) for key in keys}, before)
 
     def test_changed_source_manifest_fails_before_rerun(self):
         self.execute()

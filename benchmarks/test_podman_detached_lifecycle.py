@@ -243,11 +243,44 @@ class DetachedLifecycleTests(unittest.TestCase):
                 with patch.object(lifecycle, "_run_command",
                                   side_effect=corrupted):
                     outcome = lifecycle.run_detached(
-                        self.command, io.StringIO(), io.StringIO(), 1800)
+                        self.command, io.StringIO(), io.StringIO(), 1)
                 self.assertEqual((outcome.returncode, outcome.stage),
                                  (1, "wait"))
                 self.assertNotIn("logs", [row[1] for row in observed])
                 self.assertEqual(sum(row[1] == "start" for row in observed), 1)
+
+    def test_invalid_wait_preserves_authentically_running_same_container(self):
+        commands, wait_calls = [], [0]
+        running = {
+            "Status": "running", "Running": True, "OOMKilled": False,
+            "Dead": False, "ExitCode": 0,
+            "StartedAt": "2026-11-16T10:00:00Z",
+        }
+
+        def spurious_not_finished(argv, **kwargs):
+            commands.append(list(argv))
+            if argv[1] == "wait":
+                wait_calls[0] += 1
+                data = b"-1\n" if wait_calls[0] <= 3 else b"0\n"
+                return subprocess.CompletedProcess(argv, 0, data)
+            if argv[1] == "inspect":
+                return subprocess.CompletedProcess(
+                    argv, 0, json.dumps(running).encode())
+            return self.fake(argv, **kwargs)
+
+        with patch.object(lifecycle, "_run_command",
+                          side_effect=spurious_not_finished), \
+             patch.object(lifecycle.time, "sleep", return_value=None):
+            result = lifecycle.run_detached(
+                self.command, self.stdout, self.stderr, 25)
+        self.assertEqual((result.returncode, result.stage), (0, "complete"))
+        self.assertEqual(sum(x[1] == "start" for x in commands), 1)
+        self.assertEqual(sum(x[1] == "wait" for x in commands), 4)
+        self.assertEqual(sum(x[1] == "inspect" for x in commands), 1)
+        self.assertEqual(sum(x[1] == "rm" for x in commands), 1)
+        self.assertNotIn("--force", str(commands))
+        self.assertIn("still running", self.stderr.getvalue())
+        self.assertIn("Done", self.stdout.getvalue())
 
     def test_inspect_unreadable_state_remains_unqualified(self):
         def unreadable(argv, **kwargs):

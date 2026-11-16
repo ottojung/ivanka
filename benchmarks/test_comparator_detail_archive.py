@@ -41,6 +41,14 @@ class ComparatorDetailArchiveTests(unittest.TestCase):
         }
         (self.root / "run_manifest.json").write_text(json.dumps(self.frozen))
         (self.root / "results.jsonl").write_text("")
+        manifest_sha = sha_file(self.root / "run_manifest.json")
+        images_sha = sha_file(self.images)
+        patch_manifest = patch.object(cold, "EXPECTED_MANIFEST_SHA", manifest_sha)
+        patch_images = patch.object(cold, "EXPECTED_IMAGES_SHA", images_sha)
+        patch_manifest.start()
+        patch_images.start()
+        self.addCleanup(patch_manifest.stop)
+        self.addCleanup(patch_images.stop)
         self.old_mtime = 1000000000
 
     def arm(self, index, name="iva", state="success"):

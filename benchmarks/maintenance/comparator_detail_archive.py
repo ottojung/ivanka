@@ -20,6 +20,8 @@ from benchmarks.expanded.comparator_real_first import INVOCATION, validate
 
 
 EXPECTED_SOURCE = "b634bce15f6f1dfae0cf482de35436ffd5af72e0"
+EXPECTED_MANIFEST_SHA = "3dc341c2e49e2e3ed7fbcec73bbf5984566e6c55e7549999cc3cdcca6ca8231e"
+EXPECTED_IMAGES_SHA = "93a30fd1cc8fdcb15a6e8c46d5dcacbdee39d44cb690cf9109cc30aad807b145"
 MIN_FREE = 7 * 1024**3
 MIN_AGE = 180
 
@@ -32,7 +34,9 @@ def frozen_source(root, images_file):
             or not manifest_file.is_file() or manifest_file.is_symlink()):
         raise ValueError("missing genuine physical comparator results")
     frozen = json.loads(manifest_file.read_text())
-    if (frozen.get("source_commit") != EXPECTED_SOURCE
+    if (sha_file(manifest_file) != EXPECTED_MANIFEST_SHA
+            or sha_bytes(image_bytes) != EXPECTED_IMAGES_SHA
+            or frozen.get("source_commit") != EXPECTED_SOURCE
             or frozen.get("schema")
             != "ivanka.comparator_first.stitched_counts_real198.v1"
             or frozen.get("qualified") is not False
@@ -155,8 +159,10 @@ def run(root, images_file, audit, maximum=10, cutoff_seconds=MIN_AGE):
             for line in rows.splitlines():
                 item = json.loads(line)
                 key = (item["sample"], item["assembler"])
-                if key in done or key not in records:
-                    raise ValueError("duplicate or foreign archival action")
+                if (key in done or key not in records
+                        or records[key][0]["status"] != "success"
+                        or item.get("failed_arm") is not False):
+                    raise ValueError("duplicate, failed, or foreign archival action")
                 if records[key][1] != item["record_jsonl_sha256"]:
                     raise ValueError("original comparator result changed")
                 done[key] = item

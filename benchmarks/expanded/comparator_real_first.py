@@ -253,12 +253,13 @@ def run(data, output, images_file, jobs):
                         lambda: shutil.disk_usage(output).free,
                         reserve_per_arm=512 * 1024**2)
         complete = history(output, frozen)
-        if len(complete) != 1188:
+        if len(complete) != frozen["expected_arms"]:
             raise ValueError("incomplete physical comparator cohort")
         summary = {
             "schema": frozen["schema"], "qualified": False,
-            "status": "ATTEMPTED_1188_NOT_RELEASE_QUALIFIED",
-            "cases": 198, "arms": len(complete),
+            "status": (
+                f"ATTEMPTED_{frozen['expected_arms']}_NOT_RELEASE_QUALIFIED"),
+            "cases": frozen["expected_samples"], "arms": len(complete),
             "failed_arms": sum(x["status"] != "success"
                                for x in complete.values()),
             "results_sha256": digest(output / "results.jsonl"),

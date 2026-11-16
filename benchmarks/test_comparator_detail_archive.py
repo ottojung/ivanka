@@ -207,6 +207,19 @@ class ComparatorDetailArchiveTests(unittest.TestCase):
             restore_to(good, self.home / "restored")
         self.assertFalse((self.home / "restored").exists())
 
+    def test_biggest_recoverable_detail_earns_disk_priority(self):
+        small, _ = self.arm(0)
+        big, _ = self.arm(1)
+        (big / DETAILS[0]).write_bytes(b"A" * 2_000_000)
+        os.utime(big / DETAILS[0],
+                 ns=(self.old_mtime, self.old_mtime))
+        result = self.execute(maximum=1)
+        self.assertEqual(result["processed_new_arms"], 1)
+        self.assertTrue((big / ARCHIVE).is_file())
+        self.assertFalse((big / DETAILS[0]).exists())
+        self.assertTrue((small / DETAILS[0]).is_file())
+        self.assertFalse((small / PROOF).exists())
+
     def test_recent_success_is_not_archived(self):
         good, _ = self.arm(0)
         os.utime(good / DETAILS[0], None)

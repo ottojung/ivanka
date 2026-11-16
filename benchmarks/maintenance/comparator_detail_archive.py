@@ -12,7 +12,7 @@ import shutil
 import time
 
 from .comparator_detail_storage import (
-    ARCHIVE, PROOF, make_archive, preserve_files, restore_to,
+    ARCHIVE, DETAILS, PROOF, make_archive, preserve_files, restore_to,
     retire_originals, select_details, sha_bytes, sha_file, write_json,
 )
 from benchmarks.expanded.comparator_first import TOOLS
@@ -136,6 +136,23 @@ def archive_arm(root, frozen, manifest_sha, record, line_sha, cutoff):
     }
 
 
+def approximate_savings(root, item):
+    (sample, assembler), (record, _) = item
+    if record["status"] != "success":
+        return -1
+    arm = root / INVOCATION / sample / assembler
+    proof_file = arm / PROOF
+    if proof_file.is_file() and not proof_file.is_symlink():
+        proof = json.loads(proof_file.read_text())
+        return sum(v["bytes"] for v in proof.get("details", {}).values())
+    total = 0
+    for name in DETAILS:
+        candidate = arm / name
+        if candidate.is_file() and not candidate.is_symlink():
+            total += candidate.stat().st_size
+    return total
+
+
 def run(root, images_file, audit, maximum=10, cutoff_seconds=MIN_AGE):
     original_root, audit = Path(root), Path(audit)
     if original_root.is_symlink():
@@ -168,9 +185,11 @@ def run(root, images_file, audit, maximum=10, cutoff_seconds=MIN_AGE):
                 done[key] = item
         archived = 0
         now = time.time()
-        for key, (record, line_sha) in records.items():
-            if record["status"] != "success" or key in done:
-                continue
+        pending = [(key, item) for key, item in records.items()
+                   if item[0]["status"] == "success" and key not in done]
+        pending.sort(key=lambda item: approximate_savings(root, item),
+                     reverse=True)
+        for key, (record, line_sha) in pending:
             if shutil.disk_usage(root).free < MIN_FREE + 512 * 1024**2:
                 break
             action = archive_arm(root, frozen, manifest_sha, record,

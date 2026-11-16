@@ -43,6 +43,16 @@ coverage maps are retained. **Failed-arm scratch is never pruned.**
 This prevents the 1,188 real comparator arms from exhausting the
 benchmark disk while still preserving genuine failure evidence.
 
+In addition to the original service-level **12 GiB free-space startup
+guard** and streaming **7 GiB minimum reserve**, this source-pinned
+runner admits a new MiCall arm only if a further **512 MiB per
+concurrently running arm** is available. When free space is insufficient
+the next sample remains pending and verified committed arms are reused
+after disk space has been reclaimed. This is an admission-budget
+heuristic, not an absolute cap on per-arm disk use; failure scratch
+remains retained for diagnosis, so the operator must provide more
+storage if the full fixed comparator cohort cannot fit.
+
 The output `attempt-finished.json` means **1,188 authentic terminal
 attempts across six fixed comparators**, with explicit failure count.
 It is not evidence of a passing release or a clean benchmark; a

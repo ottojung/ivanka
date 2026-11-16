@@ -250,7 +250,8 @@ def run(data, output, images_file, jobs):
 
             with ThreadPoolExecutor(max_workers=jobs) as pool:
                 execute(pool, pending, jobs, worker, commit,
-                        lambda: shutil.disk_usage(output).free)
+                        lambda: shutil.disk_usage(output).free,
+                        reserve_per_arm=512 * 1024**2)
         complete = history(output, frozen)
         if len(complete) != 1188:
             raise ValueError("incomplete physical comparator cohort")

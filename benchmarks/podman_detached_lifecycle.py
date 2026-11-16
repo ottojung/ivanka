@@ -164,31 +164,37 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
                 time.sleep(0.2)
         return result
 
-    def persisted_exit_status():
-        # An invalid wait response is not evidence that a container ran.
-        # Only the exact created ID's persisted terminal state can supply it.
+    def authenticated_wait_state():
+        # Neither Podman wait=-1 nor a partial inspect establishes success.
+        # A read-only inspect of this exact immutable ID can establish either
+        # a completed exit code or that MiCall is STILL genuinely running.
         try:
             inspected = call(
                 ["podman", "inspect", "--format", "{{json .State}}", cid],
                 lock=True)
             if inspected.returncode:
-                return None
+                return None, False
             state = json.loads(inspected.stdout)
-            code = state.get("ExitCode")
-            if (state.get("Status") != "exited"
-                    or state.get("Running") is not False
-                    or state.get("OOMKilled") is not False
-                    or state.get("Dead") is not False
-                    or type(code) is not int or not 0 <= code <= 255):
-                return None
             started = state.get("StartedAt")
             if (not isinstance(started, str) or not started
                     or started.startswith("0001-")):
-                return None
-            return code
+                return None, False
+            if (state.get("Status") == "running"
+                    and state.get("Running") is True
+                    and state.get("OOMKilled") is False
+                    and state.get("Dead") is False):
+                return None, True
+            code = state.get("ExitCode")
+            if (state.get("Status") == "exited"
+                    and state.get("Running") is False
+                    and state.get("OOMKilled") is False
+                    and state.get("Dead") is False
+                    and type(code) is int and 0 <= code <= 255):
+                return code, False
         except (OSError, TypeError, ValueError, KeyError,
                 subprocess.TimeoutExpired, TimeoutError):
-            return None
+            pass
+        return None, False
 
     try:
         created = call(create, lock=True)
@@ -216,7 +222,8 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
         # Podman may return zero while its wait stdout is malformed under
         # SQLite contention. A second wait on *this exact container ID*
         # reads its persisted status without restarting MiCall.
-        for attempt in range(3):
+        invalid_waits = 0
+        while True:
             waited = retry_read_or_remove(["podman", "wait", cid])
             if waited.returncode:
                 raise RuntimeError("Podman wait failed after container start")
@@ -224,14 +231,26 @@ def run_detached(command: list[str], stdout, stderr, remaining: float):
             if re.fullmatch(rb"[0-9]{1,3}", raw) and int(raw) <= 255:
                 container_exit = int(raw)
                 break
-            if attempt == 2 or time.monotonic() + 0.2 >= deadline:
-                verified_code = persisted_exit_status()
+            invalid_waits += 1
+            if invalid_waits >= 3 or time.monotonic() + 0.2 >= deadline:
+                verified_code, still_running = authenticated_wait_state()
                 if verified_code is not None:
                     container_exit = verified_code
                     stderr.write(
                         "Benchmark: verified terminal exit from exact Podman ID\n")
                     stderr.flush()
                     break
+                if still_running and deadline - time.monotonic() > 1:
+                    # -1 with a still-running exact ID is NOT a terminal
+                    # assembler result. Retain the original 1800 s budget,
+                    # and never destroy an ongoing source-pinned MiCall job.
+                    stderr.write(
+                        "Benchmark: verified same Podman ID still running; "
+                        "wait without restarting MiCall\n")
+                    stderr.flush()
+                    time.sleep(min(2, max(0, deadline - time.monotonic() - 1)))
+                    invalid_waits = 0
+                    continue
                 # No raw Podman bytes appear in logs; they may contain
                 # accidentally emitted private execution arguments.
                 digest = hashlib.sha256(raw).hexdigest()[:16]

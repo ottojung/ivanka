@@ -205,7 +205,7 @@ def _run(data, output, images, *, jobs=5, timeout=MAX_SECONDS,
                        if result["status"] != "success"], flush=True)
 
             execute(pool, pending, jobs, worker, commit,
-                    lambda: shutil.disk_usage("/workspace").free)
+                    lambda: shutil.disk_usage(output.parent).free)
     final = output / "results.jsonl"
     completed_rows = [json.loads(line) for line in final.read_text().splitlines()
                       if line.strip()]

@@ -4,22 +4,25 @@ from concurrent.futures import FIRST_COMPLETED, wait
 MIN_AVAILABLE_BYTES = 7 * 1024**3
 
 
-def execute(pool, cases, jobs, worker, commit, free_bytes):
-    """Stream checkpoints without queueing all 400 workloads at once."""
+def execute(pool, cases, jobs, worker, commit, free_bytes, reserve_per_arm=0):
+    """Checkpoint bounded work; never consume a case under a disk guard."""
+    if jobs < 1 or reserve_per_arm < 0:
+        raise ValueError("invalid benchmark job count or disk reservation")
     iterator = iter(cases)
+    sentinel = object()
+    pending = next(iterator, sentinel)
     inflight = set()
     blocked = False
 
     def fill():
-        nonlocal blocked
-        while len(inflight) < jobs and not blocked:
-            try:
-                case = next(iterator)
-            except StopIteration:
-                return
-            if free_bytes() < MIN_AVAILABLE_BYTES:
+        nonlocal blocked, pending
+        while len(inflight) < jobs and pending is not sentinel and not blocked:
+            needed = MIN_AVAILABLE_BYTES + reserve_per_arm * (len(inflight) + 1)
+            if free_bytes() < needed:
                 blocked = True
                 return
+            case = pending
+            pending = next(iterator, sentinel)
             inflight.add(pool.submit(worker, case))
 
     fill()
@@ -28,5 +31,5 @@ def execute(pool, cases, jobs, worker, commit, free_bytes):
         for future in finished:
             commit(future.result())
         fill()
-    if blocked:
-        raise OSError("checkpointed experiment paused: free workspace below 7 GiB")
+    if blocked and pending is not sentinel:
+        raise OSError("checkpointed experiment paused: insufficient free workspace")

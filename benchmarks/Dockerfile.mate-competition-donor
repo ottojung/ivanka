@@ -1,0 +1,18 @@
+# Compile the exact checked-out Rust source, independently of MiCall.
+FROM docker.io/library/rust:1.93-bookworm AS native_assembler
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY build.rs ./
+COPY source_lints ./source_lints
+COPY src ./src
+# Cargo.lock fixes every dependency and checksum; the pinned builder may fetch cache misses.
+RUN cargo build --release --locked
+
+# Donor contains no MiCall code, sequences, source references, or evaluator.
+FROM scratch
+ARG SOURCE_COMMIT
+COPY --from=native_assembler /src/target/release/ivanka /usr/local/bin/ivanka
+LABEL org.opencontainers.image.source="https://github.com/ottojung/ivanka"
+LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.ivanka.execution="rust-direct-default-mate-competition"
+LABEL org.ottojung.ivanka.tool-only="true"

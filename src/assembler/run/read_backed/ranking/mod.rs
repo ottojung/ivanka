@@ -1,4 +1,4 @@
-use super::{index::Hits, scoring::Statistics, Reads, K};
+use super::{index::Hits, scoring::Statistics, Entry, Reads, K};
 use std::cmp::Ordering;
 
 /// Read-covered breadth squared, weighted by supporting original fragments.
@@ -51,3 +51,9 @@ pub(super) use distinct::complements;
 
 mod molecules;
 pub(super) use molecules::{links, PairLinks};
+
+mod retain;
+pub(super) use retain::should_add;
+
+#[cfg(test)]
+mod test_retention;

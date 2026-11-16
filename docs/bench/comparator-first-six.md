@@ -44,6 +44,17 @@ manifest is identical, and every prior checkpoint still matches its
 original execution record and final MAX output. Complete arms are
 never re-executed. Invalid evidence and duplicate records fail closed.
 
+The streaming dispatcher keeps at most ten concurrent tools and now
+reserves a further **512 MiB for every active MiCall arm**, in addition
+to the 7 GiB workspace reserve. This is a bounded *admission guard*,
+not a guarantee about each tool's actual disk usage; the independent
+service startup guard still requires 12 GiB of free space. If the
+disk check fails the next unscheduled arm stays pending for the next
+source-identical, journal-verified resume. All admitted arms finish
+or fail explicitly before the dispatcher reports a low-disk pause.
+Crucially, no task may be silently consumed by checking space after
+advancing the work iterator.
+
 A completed 400×6 run creates `attempt-finished.json` with a
 conjunctive record count of 2,400 and **explicit failed-arm counts**.
 This indicates *all six fixed comparator runs attempted*, not seven-way

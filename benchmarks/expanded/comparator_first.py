@@ -259,7 +259,8 @@ def run(data, output, images_file, jobs):
 
             with ThreadPoolExecutor(max_workers=jobs) as pool:
                 execute(pool, pending, jobs, worker, commit,
-                        lambda: shutil.disk_usage("/workspace").free)
+                        lambda: shutil.disk_usage(output).free,
+                        reserve_per_arm=512 * 1024**2)
         completed = history(output, source_cases, frozen["images"])
         if len(completed) != 2400:
             raise ValueError("incomplete comparator set")

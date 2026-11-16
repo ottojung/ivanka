@@ -6,7 +6,8 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from benchmarks.expanded.comparator_real_first import (
-    INVOCATION, PANEL_SHA, history, input_hash, preserve_orphan, validate,
+    INVOCATION, PANEL_SHA, discard_success_scratch, history, input_hash,
+    preserve_orphan, validate,
 )
 
 
@@ -78,6 +79,30 @@ class ComparatorRealFirstTests(unittest.TestCase):
         record["image_id"] = "other"
         with self.assertRaisesRegex(ValueError, "altered frozen physical"):
             validate(record, self.frozen, self.root)
+
+    def test_prune_only_fsynced_success_preserves_failure_scratch(self):
+        saved = self.fake(True)
+        scratch = self.arm / "scratch"
+        scratch.mkdir()
+        (scratch / "unstitched_remap.csv").write_bytes(b"temporary" * 800)
+        discard_success_scratch(saved, self.frozen, self.root)
+        self.assertFalse(scratch.exists())
+        self.assertEqual(len(history(self.root, self.frozen)), 1)
+        failed = self.fake(False)
+        scratch.mkdir()
+        (scratch / "unstitched_remap.csv").write_bytes(b"failed-diagnostics")
+        discard_success_scratch(failed, self.frozen, self.root)
+        self.assertTrue((scratch / "unstitched_remap.csv").is_file())
+
+    def test_prune_refuses_symlink_to_external_scratch(self):
+        saved = self.fake(True)
+        external = self.root / "external"
+        external.mkdir()
+        (external / "preserve-me").write_text("raw")
+        (self.arm / "scratch").symlink_to(external, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "unsafe scratch"):
+            discard_success_scratch(saved, self.frozen, self.root)
+        self.assertTrue((external / "preserve-me").is_file())
 
     def test_replay_rejects_truncated_or_duplicate_results(self):
         self.fake()

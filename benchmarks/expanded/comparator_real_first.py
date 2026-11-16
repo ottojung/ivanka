@@ -143,6 +143,19 @@ def history(output, frozen):
     return seen
 
 
+def discard_success_scratch(record, frozen, output):
+    """Only prune reproducible scratch after authentic, fsynced final output."""
+    if record["status"] != "success":
+        return
+    validate(record, frozen, output)
+    folder = output / INVOCATION / record["sample"] / record["assembler"]
+    scratch = folder / "scratch"
+    if scratch.exists():
+        if not scratch.is_dir() or scratch.is_symlink():
+            raise ValueError("unsafe scratch cleanup path")
+        shutil.rmtree(scratch)
+
+
 def preserve_orphan(output, sample, name):
     arm = output / INVOCATION / sample / name
     if not arm.exists():
@@ -173,6 +186,8 @@ def run(data, output, images_file, jobs):
             output.mkdir()
             manifest.write_text(json.dumps(frozen, sort_keys=True, indent=2)+"\n")
         old = history(output, frozen)
+        for verified in old.values():
+            discard_success_scratch(verified, frozen, output)
         pending = [(row, name) for name in TOOLS for row in rows
                    if (row["sample"], name) not in old]
         print("PHYSICAL_COMPARATORS_ONLY", "verified", len(old),
@@ -229,12 +244,13 @@ def run(data, output, images_file, jobs):
                 stream.write(json.dumps(outcome, sort_keys=True)+"\n")
                 stream.flush()
                 os.fsync(stream.fileno())
+                discard_success_scratch(outcome, frozen, output)
                 print("PHYSICAL_COMPARATOR_ARM", outcome["assembler"],
                       outcome["sample"], outcome["status"], flush=True)
 
             with ThreadPoolExecutor(max_workers=jobs) as pool:
                 execute(pool, pending, jobs, worker, commit,
-                        lambda: shutil.disk_usage("/workspace").free)
+                        lambda: shutil.disk_usage(output).free)
         complete = history(output, frozen)
         if len(complete) != 1188:
             raise ValueError("incomplete physical comparator cohort")

@@ -34,7 +34,14 @@ execution diagnostics, final consensus CSV digest, panel score and
 run time are checkpointed to `results.jsonl` after fsynced per-arm
 execution evidence. Restarts verify all cached source, image, original
 inputs, outputs and timings before reuse, and preserve unjournaled
-interrupted work separately. Failures remain failures.
+interrupted work separately. **Successful-arm scratch is removed only
+after the arm's execution evidence and result journal have both been
+fsynced and its original final output checksum verified;** the same
+cleanup is idempotently repeated for already-verified checkpointed
+successes on restart. Original final MiCall results, source FASTQs and
+coverage maps are retained. **Failed-arm scratch is never pruned.**
+This prevents the 1,188 real comparator arms from exhausting the
+benchmark disk while still preserving genuine failure evidence.
 
 The output `attempt-finished.json` means **1,188 authentic terminal
 attempts across six fixed comparators**, with explicit failure count.

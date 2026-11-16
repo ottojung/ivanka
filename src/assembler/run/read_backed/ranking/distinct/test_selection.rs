@@ -34,3 +34,16 @@ fn short_region_complement_survives_strong_cross_anchors() {
     let hits = build(&contigs);
     assert_eq!(complements(&contigs, &stats, &hits, 0, &links), vec![1]);
 }
+
+#[test]
+fn sparse_alternative_is_excluded_even_without_shared_mate_anchors() {
+    let (contigs, mut stats, mut links) = fixture();
+    links.remove(&(0, 1));
+    links.remove(&(1, 0));
+    stats.pairs = vec![402, 47];
+    stats.coverage = vec![286, 222];
+    let hits = build(&contigs);
+    assert!(complements(&contigs, &stats, &hits, 0, &links).is_empty());
+    stats.pairs[1] = 200;
+    assert_eq!(complements(&contigs, &stats, &hits, 0, &links), vec![1]);
+}

@@ -1,4 +1,4 @@
-use super::{mate_linked, novelty::novel, redundant::competing};
+use super::{mate_linked, novelty::novel, redundant::not_independent};
 use super::{Hits, PairLinks, Statistics};
 use std::cmp::Reverse;
 
@@ -17,7 +17,9 @@ pub(crate) fn complements(
                 if picked.contains(&i)
                     || stats.coverage[i] == 0
                     || !mate_linked(i, &picked, links)
-                    || picked.iter().any(|&j| competing(i, j, contigs, links))
+                    || picked
+                        .iter()
+                        .any(|&j| not_independent(i, j, contigs, links, stats))
                 {
                     return None;
                 }

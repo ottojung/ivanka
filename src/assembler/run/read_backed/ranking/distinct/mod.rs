@@ -19,3 +19,6 @@ mod test_selection;
 
 #[cfg(test)]
 mod selection_fixture;
+
+#[cfg(test)]
+mod test_weak;

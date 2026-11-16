@@ -24,6 +24,16 @@ This experiment withholds a supplementary path only when:
   deliberately conservative; repeat multi-placement is not proof of
   haplotype phase.
 
+A second conservative trigger considers a near-full-length supplementary
+path **under 20% of the already selected path's original pair counts**
+when the selected path has at least 30 supporting pairs and the
+supplementary path covers no more well-supported 31-mer positions.
+This targets low-abundance alternative paths even when no individual
+original pair anchors across both paths; it is a heuristic, not
+evidence that a minority strain does not exist. Original reads remain
+intact for downstream minority-allele reporting, but source-specific
+MiCall regression checks must verify that the filtering is safe.
+
 All counts come from original paired sequencing reads, never from
 HXB2, scoring truth, genotype references or benchmark feedback. The
 test is independent of sample IDs and sequence families. The

@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from benchmarks.expanded.comparator_first import (
-    TOOLS, history, preserve_orphan, prune, verify_record,
+    TOOLS, history, preserve_orphan, prune,
 )
 from benchmarks.expanded.micall_checkpoint import identity
 from benchmarks.expanded.micall_dominant import SCORE_ORIGIN

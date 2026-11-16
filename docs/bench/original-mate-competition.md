@@ -34,6 +34,17 @@ evidence that a minority strain does not exist. Original reads remain
 intact for downstream minority-allele reporting, but source-specific
 MiCall regression checks must verify that the filtering is safe.
 
+**Post-split rule:** do not apply these heuristics to an unsplit
+assembly path. `output::component` first resolves read-backed splits,
+including unphased long repeats; if either the already selected output
+or a proposed addition contains multiple emitted fragments, retain
+the addition for independent downstream analysis. For single emitted
+components, also verify their **actual emitted lengths** differ by at
+most 10% before considering suppression. This guard is essential:
+a long original candidate in `minority_30pct` can legitimately
+produce two shorter separately supported fragments and must not
+be treated as a competing full-length haplotype.
+
 All counts come from original paired sequencing reads, never from
 HXB2, scoring truth, genotype references or benchmark feedback. The
 test is independent of sample IDs and sequence families. The

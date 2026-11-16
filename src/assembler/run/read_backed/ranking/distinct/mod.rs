@@ -22,3 +22,5 @@ mod selection_fixture;
 
 #[cfg(test)]
 mod test_weak;
+
+pub(crate) use redundant::not_independent;

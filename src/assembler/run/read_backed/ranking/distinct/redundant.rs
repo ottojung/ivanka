@@ -33,7 +33,7 @@ pub(super) fn weak_alternative(
 }
 
 /// Both competing original molecules and sparse alternative support matter.
-pub(super) fn not_independent(
+pub(crate) fn not_independent(
     i: usize,
     j: usize,
     contigs: &[Vec<u8>],

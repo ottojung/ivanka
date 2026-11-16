@@ -22,3 +22,15 @@ pub(super) use fragment::component;
 pub(super) use fragment::part_header;
 
 pub(super) use pairs::observed;
+
+/// Keep complete observed pairs and the diagnostic count together.
+pub(super) fn append_observed(reads: &Reads, selected: &mut Vec<Entry>) {
+    let original_pairs = observed(&reads.seqs, selected);
+    if !original_pairs.is_empty() {
+        eprintln!(
+            "IVANKA_ORIGINAL_PAIR_FRAGMENTS retained={}",
+            original_pairs.len()
+        );
+        selected.extend(original_pairs);
+    }
+}

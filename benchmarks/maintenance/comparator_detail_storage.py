@@ -50,7 +50,7 @@ def write_json(path, data):
     flush_dir(path.parent)
 
 
-def preserve_files(arm, selected):
+def preserve_files(arm, selected, required=("conseq.csv", "comparator_execution.json")):
     """Hash every non-archived MiCall artifact, including coverage maps."""
     ignored = set(selected) | {ARCHIVE, PROOF, TEMP}
     result = {}
@@ -63,9 +63,9 @@ def preserve_files(arm, selected):
                 result[rel] = sha_file(path)
         elif not path.is_dir():
             raise ValueError("unrecognized MiCall output entry")
-    for required in ("conseq.csv", "comparator_execution.json"):
-        if required not in result:
-            raise ValueError("missing protected original MiCall artifact: "+required)
+    for filename in required:
+        if filename not in result:
+            raise ValueError("missing protected original MiCall artifact: "+filename)
     return result
 
 
@@ -125,7 +125,7 @@ def verify_archive(archive, selected):
         raise ValueError("archived scientific diagnostic does not match source")
 
 
-def make_archive(arm, proof):
+def make_archive(arm, proof, required=("conseq.csv", "comparator_execution.json")):
     out = arm / ARCHIVE
     partial = arm / TEMP
     selected = proof["details"]
@@ -145,24 +145,24 @@ def make_archive(arm, proof):
         flush_dir(arm)
     verify_archive(out, selected)
     verify_originals(arm, selected)
-    if preserve_files(arm, selected) != proof["protected"]:
+    if preserve_files(arm, selected, required) != proof["protected"]:
         raise ValueError("protected final metrics changed during compression")
     return sha_file(out)
 
 
-def retire_originals(arm, proof):
+def retire_originals(arm, proof, required=("conseq.csv", "comparator_execution.json")):
     """Remove originals only after complete verified, durable archive."""
     selected = proof["details"]
     verify_archive(arm / ARCHIVE, selected)
     verify_originals(arm, selected)
-    if preserve_files(arm, selected) != proof["protected"]:
+    if preserve_files(arm, selected, required) != proof["protected"]:
         raise ValueError("original final MiCall evidence changed")
     for name in selected:
         file = arm / name
         if file.exists():
             file.unlink()
     flush_dir(arm)
-    if preserve_files(arm, selected) != proof["protected"]:
+    if preserve_files(arm, selected, required) != proof["protected"]:
         raise ValueError("final MiCall evidence changed during archival")
     verify_archive(arm / ARCHIVE, selected)
 

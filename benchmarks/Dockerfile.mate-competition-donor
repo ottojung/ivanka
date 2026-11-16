@@ -5,7 +5,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY build.rs ./
 COPY source_lints ./source_lints
 COPY src ./src
-RUN CARGO_NET_OFFLINE=true cargo build --release --locked --offline
+# Cargo.lock fixes every dependency and checksum; the pinned builder may fetch cache misses.
+RUN cargo build --release --locked
 
 # Donor contains no MiCall code, sequences, source references, or evaluator.
 FROM scratch

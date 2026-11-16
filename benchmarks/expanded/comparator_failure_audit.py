@@ -30,9 +30,11 @@ def classify(row):
     return "unclassified_failed_attempt"
 
 
-def verify(root):
-    """Verify a bounded journal snapshot, not a mutable completion claim."""
+def verify(root, expected_source, images_file):
+    """Anchor a live journal snapshot to independently frozen source/images."""
     root = Path(root).resolve()
+    images_bytes = Path(images_file).read_bytes()
+    build = json.loads(images_bytes)
     manifest_file, journal = root / "run_manifest.json", root / "results.jsonl"
     if not manifest_file.is_file() or not journal.is_file():
         raise ValueError("unstarted or unproven comparator real198 cohort")
@@ -42,8 +44,13 @@ def verify(root):
             or proof.get("expected_arms") != 1188
             or set(proof.get("images", {})) != set(TOOLS)
             or len(proof.get("original_inputs", {})) != 198
-            or proof.get("qualified") is not False):
-        raise ValueError("invalid frozen original six-comparator source")
+            or proof.get("qualified") is not False
+            or proof.get("source_commit") != expected_source
+            or proof.get("image_manifest_sha256")
+            != hashlib.sha256(images_bytes).hexdigest()
+            or proof["images"] != build.get("images")
+            or proof.get("patched_micall_tree") != build.get("source_tree")):
+        raise ValueError("invalid frozen source or independent image provenance")
     if original and not original.endswith(b"\n"):
         raise ValueError("journal snapshot interrupted; retry audit")
     records = {}
@@ -61,8 +68,8 @@ def verify(root):
     }
 
 
-def summarize(root):
-    proof, records, hashes = verify(root)
+def summarize(root, expected_source, images_file):
+    proof, records, hashes = verify(root, expected_source, images_file)
     by_tool = {}
     for name in TOOLS:
         selected = [r for (_, assembler), r in records.items()
@@ -103,8 +110,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--images", required=True, type=Path)
     args = parser.parse_args()
-    result = summarize(args.results)
+    result = summarize(args.results, args.source_commit, args.images)
     if args.report.exists() or args.report.is_symlink():
         raise ValueError("refusing to overwrite a prior source-bound audit")
     if not args.report.parent.is_dir():

@@ -9,13 +9,17 @@ remove scratch or correct failed outputs.
 ```sh
 python3 -m benchmarks.expanded.comparator_failure_audit \
   --results /workspace/ivanka-comparators-real198-20261116/results \
-  --report /workspace/ivanka-maintenance-20261115/comparator-priority-20261116/real198-comparator-readonly-diagnosis-20261116T1459Z.json
+  --images /workspace/ivanka-maintenance-20261115/comparator-priority-20261116/comparator-images-built.json \
+  --source-commit b634bce15f6f1dfae0cf482de35436ffd5af72e0 \
+  --report /workspace/ivanka-maintenance-20261115/comparator-priority-20261116/real198-comparator-readonly-diagnosis-20261116T1501Z.json
 ```
 
 Only use an unused output path for a new snapshot. The runner refuses
 to overwrite an old report, and verifies all observed terminal arm
 records against the *actual frozen* 198 physical sample fingerprints,
-six original image IDs, fsynced per-arm execution records, authentic
+six original image IDs, independently supplied **six-image ledger bytes,
+patched MiCall source-tree identity and expected full Git commit**,
+fsynced per-arm execution records, authentic
 MiCall image and artifact paths, final consensus SHA256 and independent
 post-assembly score. It also records SHA256 of the original frozen
 run manifest and journal snapshot. If a journal line is partially

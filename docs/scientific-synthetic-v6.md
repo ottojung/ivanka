@@ -53,7 +53,8 @@ physical reference-panel scorer*: +1 match, −1 mismatch, −2 gap open,
 synthetic_score = 10000 × (1/|T|) × Σ[t∈T] (A_t / L_t)
 ```
 
-Store per-truth `A_t`, `L_t`, normalized recovery, raw
+Store per-truth sequence SHA-256, prescribed abundance, `A_t`, `L_t`,
+normalized recovery, raw
 `Σ A_t`, qualifying truth count and source provenance. Do not
 discard a short required V3 target because HCV is much longer.
 The theoretical full score is 10,000 regardless of genome lengths

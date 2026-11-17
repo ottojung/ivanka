@@ -11,9 +11,11 @@ def outcome(first, second):
         "score": score,
         "per_truth": {
             "truth_0": {"score": first * 9646, "length": 9646,
-                        "fraction": first},
+                        "fraction": first,
+                        "truth_sha256": "a"*64, "nominal_abundance": .85},
             "truth_1": {"score": second * 550, "length": 550,
-                        "fraction": second},
+                        "fraction": second,
+                        "truth_sha256": "b"*64, "nominal_abundance": .15},
         },
     }
 
@@ -37,6 +39,19 @@ class MultitruthGateV6(unittest.TestCase):
         mismatch["ivanka"]["per_truth"].pop("truth_1")
         self.assertIn("s2:iva:inconsistent_truth_panel",
                       check_sample("s2", mismatch, rivals, 0.9))
+
+    def test_truth_identity_drift_across_assembler_arms_fails(self):
+        rivals = {"iva": outcome(.9, .9)}
+        changed = {"ivanka": outcome(.9, .9), **rivals}
+        changed["ivanka"]["per_truth"]["truth_1"]["truth_sha256"] = "f"*64
+        self.assertTrue(any("inconsistent_truth_panel" in x
+                            for x in check_sample("identity", changed,
+                                                  rivals, .9)))
+        changed["ivanka"]["per_truth"]["truth_1"]["truth_sha256"] = "b"*64
+        changed["ivanka"]["per_truth"]["truth_1"]["nominal_abundance"] = .14
+        self.assertTrue(any("invalid_truth_alignment" in x
+                            for x in check_sample("identity", changed,
+                                                  rivals, .9)))
 
     def test_bad_combined_score_or_fabricated_raw_alignment_fails(self):
         rivals = {"iva": outcome(0.9, 0.9)}

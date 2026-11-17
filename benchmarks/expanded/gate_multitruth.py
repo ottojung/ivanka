@@ -21,7 +21,14 @@ def check_sample(sample, results, competitors, minimum_ratio):
                 break
             raw, length, fraction = (item.get("score"), item.get("length"),
                                      item.get("fraction"))
-            if (type(raw) not in (float, int) or not math.isfinite(raw)
+            digest, abundance = (item.get("truth_sha256"),
+                                 item.get("nominal_abundance"))
+            if (not isinstance(digest, str) or len(digest) != 64
+                    or any(c not in "0123456789abcdef" for c in digest)
+                    or type(abundance) not in (int, float)
+                    or not math.isfinite(abundance)
+                    or not 0.15 <= abundance <= 1.0
+                    or type(raw) not in (float, int) or not math.isfinite(raw)
                     or type(length) is not int or length <= 0
                     or not -1e-7 <= raw <= length + 1e-7
                     or type(fraction) not in (float, int)
@@ -29,7 +36,7 @@ def check_sample(sample, results, competitors, minimum_ratio):
                     or abs(fraction - raw / length) > 1e-7):
                 errors.append(f"{sample}:{name}:invalid_truth_alignment")
                 break
-            identities[key] = length
+            identities[key] = (length, digest, abundance)
             values[key] = raw / length
         else:
             if known is not None and identities != known:

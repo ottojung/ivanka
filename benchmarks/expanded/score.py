@@ -1,6 +1,7 @@
 """Evaluate DNA evidence with the final MiCall local-alignment scorer."""
 from pathlib import Path
 from math import isfinite
+import hashlib
 import zlib
 
 # Import libz before scientific alignment packages on Guix hosts.
@@ -84,7 +85,10 @@ def score_sequences(manifest, truth_path, assembled):
                   if assembled else {"score": 0., "contig_length": 0})
         per_truth[name] = {
             "score": result["score"], "length": len(sequence),
-            "fraction": result["score"] / len(sequence)}
+            "fraction": result["score"] / len(sequence),
+            "truth_sha256": hashlib.sha256(sequence.encode()).hexdigest(),
+            "nominal_abundance": manifest["nominal_fractions"][
+                int(name.split("_")[1])],}
     combined = sum(v["score"] for v in per_truth.values())
     balanced = SCORE_SCALE * sum(v["fraction"] for v in per_truth.values()) / len(truths)
     # Legacy scores remain historically interpretable; the versioned

@@ -24,9 +24,10 @@ documented adapter operation rather than a bespoke benchmark rewrite.
    and its mandatory [upstream read-only policy](010-upstream-micall-read-only.md).
    For Ivanka, preserve [Intents 001](001-rust-only-execution.md) and
    [002](002-default-invocation-parity.md): its Rust ELF is called directly
-   by MiCall, with an empty child environment and exactly three necessary
-   input/output flags. Benchmark-only wrappers or reference-conditioned
-   tuning are prohibited.
+   by MiCall, with an empty child environment, the three required
+   input/output flags and optional verified same-sample read-derived G2P
+   `--seeds` under ordinary MiCall forwarding rules. Benchmark-only wrappers
+   or reference-conditioned tuning are prohibited.
 2. The bench supports both frozen authentic **real MiCall samples** and
    **synthetic samples** satisfying [Intent 008](008-hxb2-synthetic-truth.md).
    The generator, its hidden truth, the read simulation, assembler execution,

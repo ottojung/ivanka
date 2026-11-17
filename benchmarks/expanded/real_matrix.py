@@ -15,7 +15,7 @@ PANEL = "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8"
 MANIFEST = "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192"
 
 
-def source_rows(path):
+def source_rows(path, proof=None, images=None, name=None, source_manifest=None):
     rows = []
     invocations = set()
     for line in Path(path).read_text().splitlines():
@@ -26,10 +26,20 @@ def source_rows(path):
             continue
         rows.append(record)
         invocations.add(record.get("invocation"))
-    if len(invocations) != 1 or None in invocations or len(rows) != EXPECTED:
-        raise ValueError("requires exactly 198 terminal results from one invocation")
+    if (len(rows) != EXPECTED or None in invocations or
+            (proof is None and len(invocations) != 1)):
+        raise ValueError("requires exactly 198 authenticated terminal results")
     if len({r.get("sample") for r in rows}) != EXPECTED:
         raise ValueError("missing or duplicate physical samples")
+    if proof is not None:
+        from .real_resume import verify_collection
+        folder=Path(path).parent
+        if Path(proof).resolve()!=folder.joinpath("checkpoints.json").resolve():
+            raise ValueError("real per-sample checkpoint must accompany its results")
+        authenticated=verify_collection(folder,{r["sample"] for r in rows},
+                                        images,name,source_manifest)
+        if authenticated!={r["sample"]:r for r in rows}:
+            raise ValueError("per-sample real source journal differs")
     return {r["sample"]: r for r in rows}
 
 
@@ -41,7 +51,10 @@ def join_real_runs(specification):
     for tool, spec in specification.items():
         if not isinstance(spec, dict) or len(spec.get("image_id", "")) != 64:
             raise ValueError(f"{tool}: requires pinned image ID")
-        runs[tool] = source_rows(spec["results_jsonl"])
+        runs[tool] = source_rows(spec["results_jsonl"],
+                                 spec.get("checkpoint_manifest"),
+                                 spec.get("images"),tool,
+                                 spec.get("source_manifest"))
     sample_ids = set(runs["ivanka"])
     if any(set(rows) != sample_ids for rows in runs.values()):
         raise ValueError("candidate runs have unequal sample sets")

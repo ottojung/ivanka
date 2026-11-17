@@ -335,9 +335,11 @@ This currently available supplementary runner executes all seven candidates as s
 source-labeled images descended from the identical updated-MiCall base,
 never gives a container access to its hidden reference truth, and records
 the exact image ID and command for each run. Native Ivanka uses the exact
-ordinary three arguments with Podman's `--unsetenv-all`; no
-`IVANKA_*` environment variable, wrapper, or optional CLI flag exists
-inside that assembly call.
+ordinary read/output arguments with Podman's `--unsetenv-all`. This
+**standalone diagnostic** has no MiCall G2P stage, so it has no G2P seeds.
+The qualifying **MiCall-integrated** path passes `--seeds` when nonempty
+same-sample, read-derived G2P contigs are available, with no `IVANKA_*`
+tuning or reference-derived seeds.
 
 ```sh
 python3 -m benchmarks.expanded.podman_synthetic \
@@ -500,8 +502,9 @@ change nor resumability constitutes a PASS.
 
 The fresh full-MiCall real-data runner distinguishes **two audited
 executable classes**. Ordinary Ivanka must remain the exact native Rust
-ELF with empty child environment and only `--reads1`, `--reads2`,
-`--output`; the native verification mode is **unchanged**.
+ELF with empty child environment and required `--reads1`, `--reads2`,
+`--output`, plus `--seeds` **only** for same-sample read-derived G2P contigs.
+The benchmark must match ordinary MiCall behavior.
 
 The five other external assemblers use a source-pinned Python adapter
 installed at the same MiCall entry point **only inside their explicitly

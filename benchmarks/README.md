@@ -24,8 +24,9 @@ for exact inputs, image hashes and all-real-exponent acceptance semantics.
 ## Production path versus experiments
 
 The default Ivanka production execution path is the **native Rust ELF**
-invoked directly by MiCall with an empty child environment and only the
-three necessary paired-read/output arguments. The old
+invoked directly by MiCall with an empty child environment, three required
+paired-read/output arguments and conditional same-sample G2P `--seeds`.
+The external benchmark must use the identical MiCall decision rule. The old
 `ivanka_read_support_selector.py`, `ivanka_read_*.py` modules and other
 Python postselection scripts are **historical benchmarking evidence, not
 runtime dependencies**. The native Rust assembler has no access to viral

@@ -72,6 +72,10 @@ descriptions of what the existing qualifying image already implements:
   tool-only container, immutable distinct image ID and full fork-commit
   provenance, sharing only the pinned downstream MiCall base. A combined
   all-contenders image is forbidden even with separate run containers.
+  Runtime images contain only necessary clinical MiCall functionality and
+  minimal assembler-specific changes. Unavoidable assembler compatibility
+  fixes must be justified. All preflight, checks, smoke tests and scoring
+  run externally; do not embed benchmark helpers in candidate images.
 - **[Intent 012: comprehensive diagnostics](docs/intents/012-assembler-diagnostic-metrics.md).**
   All assemblers must have comparable final MiCall quality, mapping,
   coverage/depth, contig structure, runtime/resource and failure metrics,

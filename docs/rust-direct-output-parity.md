@@ -30,8 +30,9 @@ execution under real host contention and is not a definitive runtime
 benchmark.
 
 **Remaining obligations:** Verify the source-pinned, committed Rust image
-as MiCall's direct ELF subprocess with `env={}` and exactly three CLI
-arguments; run the complete authentic 198-sample MiCall comparison and
+as MiCall's direct ELF subprocess with `env={}` and conditional G2P
+`--seeds` forwarding (the historical parity comparison above supplied
+no optional seeds); run the complete authentic 198-sample MiCall comparison and
 strict alignment/runtime Ψ(r)>0 verification for every real r≥0;
 also pass the mandatory expanded seven-assembler benchmark. Historical
 wrapped-image numerical success is not automatically inherited.

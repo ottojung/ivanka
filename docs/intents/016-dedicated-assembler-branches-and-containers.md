@@ -42,6 +42,35 @@ assembler in its committed configuration and image environment:
 image. Compatibility dependencies belong only in the appropriate
 tool image or subprocess.
 
+## Minimal runtime images, external qualification
+
+Each dedicated image is the smallest functional change to the frozen
+clinical MiCall baseline: retain its genuine pipeline and dependencies,
+add only the designated assembler, necessary runtime libraries, and a
+minimal committed adapter. Targeted compatibility or stability repairs
+for unreliable assemblers are permitted only when justified, source-pinned,
+tested externally, and limited to that assembler. Do not introduce unrelated
+MiCall behavior changes or alternate benchmarking execution paths.
+
+**No benchmark checkers, probes, smoke-test scripts, diagnostics, monitoring
+agents, scorers, or preflight tools may be included in or invoked during an
+image build or at image runtime.** Do not add custom health checks, test
+stages, copied benchmark scripts, or unnecessary packages. Ordinary baseline
+MiCall initialization essential for clinical execution is not a test.
+
+Before any full cohort run, the **external benchmark supervisor** must
+independently verify seven exact source commits and immutable image IDs,
+the common MiCall baseline, installed tool identity, seed provenance and
+ordinary MiCall invocation, output correctness on small real and synthetic
+smokes, tool-specific failure cases, storage capacity, resource limits and
+checkpoint/restart safety. All validation and scoring code remains outside
+the candidate images and outside the timed MiCall workload. A missing or
+failed check blocks launch; it never silently suppresses a competitor.
+Freeze images and source/binary hashes after successful external preflight.
+Do not rebuild, retag or alter them mid-run. Persist independently hashed
+attempt evidence so an interruption does not require repeating verified
+completed cases; changed code, images or cohorts invalidate resumption.
+
 ## Reproducibility and acceptance
 
 1. Build the common downstream MiCall base from an exact, clean

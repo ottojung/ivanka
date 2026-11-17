@@ -45,9 +45,10 @@ executable directly, without Python selector, trimmer, tiler or wrapper.
 Python remains confined to MiCall itself and benchmark/testing tools;
 no Python component participates in Ivanka's assembly logic.
 
-MiCall passes an **empty Ivanka child environment** and exactly
-`--reads1`, `--reads2`, `--output`, using the same default
-executable and algorithm as the benchmark. The old Python-wrapped
+MiCall passes an **empty Ivanka child environment**, the required
+`--reads1`, `--reads2`, `--output`, and optional `--seeds` when verified
+read-derived G2P contigs exist for the same sample. Qualification uses
+the exact same native executable and ordinary MiCall seed-forwarding rule. The old Python-wrapped
 passing image is historical evidence, **not qualification** for the new
 Rust-only execution path. The new candidate requires fresh physical
 and expanded benchmark results before any completion claim.

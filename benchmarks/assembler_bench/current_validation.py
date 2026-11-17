@@ -9,6 +9,7 @@ from .combined_public import (
     preview as combined_preview)
 from .real_public import ID as REAL_ID, DEDICATED_ID as DEDICATED_REAL
 from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
+from .minimal_image_attestation import SCHEMA as MINIMAL_SCHEMA
 from .real_progress import validate_public
 from .public_case_metrics import validate_sample
 
@@ -102,12 +103,14 @@ def check_current(report):
     if active == DEDICATED_EXPECTED:
         proof = synthetic["micall_fork_provenance"]
         source = proof.get("images", {})
-        if (proof.get("attestation_schema") != DEDICATED_SCHEMA
+        schema = proof.get("attestation_schema")
+        if (schema not in (DEDICATED_SCHEMA, MINIMAL_SCHEMA)
                 or len({item.get("source_commit") for item in
                         source.values()}) != 7
-                or any(source[tool].get("source_branch")
-                       != "bench/assembler-" + tool
-                       for tool in ASSEMBLERS)):
+                or any(source[tool].get("source_branch") != (
+                    "bench/assembler-" + tool) if schema==DEDICATED_SCHEMA
+                    else not source[tool].get("source_branch","").startswith(
+                        "bench/minimal-") for tool in ASSEMBLERS)):
             raise ValueError("qualifying run needs seven dedicated source branches")
     check_physical(real, progress)
     expected = combined_preview(synthetic, real)

@@ -935,10 +935,14 @@ def _run_main():
         if args.qualify_198 else None)
     if args.jobs<1 or not 1<=args.sample_time_limit<=1800 or args.timeout_per_arm<1:
         parser.error("jobs and arm timeout must be positive; sample limit must be 1..1800 seconds")
+    from fork_micall_binding import SHARED_CONTROL_MANIFEST
+    sharing=(requested() and args.mode=="ivanka" and
+             os.environ.get(SHARED_CONTROL_MANIFEST))
     if args.candidate_assembler and (
-            args.mode != "both" or args.qualify or args.qualify_198
-            or args.cache_status or args.import_iva_from or args.resume_from):
-        parser.error("external adapter is only allowed in a fresh expanded comparison")
+            (args.mode!="both" and not sharing)
+            or args.qualify or args.qualify_198 or args.cache_status
+            or args.import_iva_from or args.resume_from):
+        parser.error("external adapter requires freshly attested shared controls or paired arms")
     images={"iva":IVA_IMAGE,"ivanka":IVANKA_IMAGE}
     checked={}
     for arm,img in images.items():

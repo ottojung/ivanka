@@ -16,7 +16,9 @@ documented adapter operation rather than a bespoke benchmark rewrite.
 1. Execute each assembler through its **actual MiCall integration** on the
    same pinned MiCall source/base, original paired reads, downstream stages,
    resource limits, and evaluation rules. Verify the assembler executable,
-   version, immutable source/image identity, CLI, and effective environment.
+   version, immutable source/image identity, CLI, and effective environment
+   **outside immutable candidate images**. All checks, smoke tests and
+   scoring must run in the external supervisor, not inside runtime images.
    All MiCall integrations and runtime images **must come from exact
    committed revisions of [`ottojung/MiCall`](https://github.com/ottojung/MiCall)**;
    no runtime monkeypatching of MiCall or images built from upstream

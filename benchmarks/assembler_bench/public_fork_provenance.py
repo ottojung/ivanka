@@ -3,7 +3,9 @@ import json
 import re
 
 from .hxb2_preview import sha
+from .minimal_image_attestation import SCHEMA as MINIMAL_SCHEMA
 
+SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA = re.compile(r"^[0-9a-f]{64}$")
 SOURCE = re.compile(r"^https://github\.com/ottojung/MiCall/tree/[0-9a-f]{40}$")
 
@@ -26,7 +28,16 @@ def check(site, run):
                         "bench/assembler-" + name
                         for name, entry in att["images"].items()))):
         raise ValueError("public dedicated fork branches not independent")
-    if (att.get("base_image_sha256") != proof.get("base_image_sha256")
+    minimal=att.get("schema")==MINIMAL_SCHEMA
+    if (minimal and (not SHA40.fullmatch(att.get("baseline_commit",""))
+                     or att.get("baseline_commit")!=proof.get("baseline_commit")
+                     or len({x.get("source_commit") for x in
+                             att.get("images",{}).values()})!=7
+                     or any(not x.get("source_branch","").startswith("bench/minimal-")
+                            for x in att.get("images",{}).values()))):
+        raise ValueError("public minimally changed fork source baseline mismatch")
+    if ((not minimal and att.get("base_image_sha256") !=
+         proof.get("base_image_sha256"))
             or set(att.get("images", {})) != set(run["tools"])
             or set(run["images"]) != set(run["tools"])
             or set(proof.get("images", {})) != set(run["tools"])):
@@ -40,5 +51,6 @@ def check(site, run):
                 or shown.get("source_branch") != image.get("source_branch")
                 or not SOURCE.fullmatch(image["source_url"])
                 or not SHA.fullmatch(image["image_sha256"])
-                or not SHA.fullmatch(proof["base_image_sha256"])):
+                or (not minimal and not SHA.fullmatch(
+                    proof.get("base_image_sha256", "")))):
             raise ValueError(f"{tool}: forged public source-attestation fields")

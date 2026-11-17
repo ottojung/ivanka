@@ -5,6 +5,8 @@ from pathlib import Path
 from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
 from .dedicated_image_attestation import verify as verify_dedicated
 from .fork_image_attestation import verify as verify_shared
+from .minimal_image_attestation import SCHEMA as MINIMAL_SCHEMA
+from .minimal_image_attestation import verify as verify_minimal
 
 SHARED_SCHEMA = "ivanka.assembler-bench.fork-oci-attestation.v1"
 
@@ -18,6 +20,8 @@ def verify(images, attestation, source, base):
         actual = verify_dedicated(images, roots, base)
     elif schema == SHARED_SCHEMA:
         actual = verify_shared(images, base, source)
+    elif schema == MINIMAL_SCHEMA:
+        actual = verify_minimal(images, json.loads(Path(source).read_text()), base)
     else:
         raise ValueError("unsupported MiCall image attestation schema")
     if actual != expected:

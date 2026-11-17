@@ -8,6 +8,7 @@ from benchmarks.expanded.micall_checkpoint import existing_case, identity
 from .hxb2_preview import format_preview, pinned_truth, sha
 from .image_source_attestation import verify
 from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
+from .minimal_image_attestation import SCHEMA as MINIMAL_SCHEMA
 from .public_case_metrics import synthetic as published_metrics
 from .exact_cache import append as exact_metrics
 
@@ -26,7 +27,8 @@ def checked(directory, runner, attestation, fork, base):
             or frozen["truth_proof"] != proof
             or frozen["cohort_sha256"] != sha(cohort_path())
             or frozen["fork_attestation_sha256"] != sha(attestation)
-            or att["base_image_sha256"] != base
+            or (att.get("baseline_commit") if att.get("schema")==MINIMAL_SCHEMA
+                else att.get("base_image_sha256")) != base
             or set(images) != set(att["images"])
             or any(att["images"][name]["image_sha256"] != image
                    for name, image in images.items())):
@@ -94,7 +96,7 @@ def preview(directory, runner, attestation, fork, base, *,
             sample["diagnostics"][name] = values
             if profile is not None:
                 sample["exact_profiles"][name] = profile
-    dedicated = att["schema"] == DEDICATED_SCHEMA
+    dedicated = att["schema"] in (DEDICATED_SCHEMA, MINIMAL_SCHEMA)
     result.update(
         id=("hxb2-v4-dedicated-source-live" if dedicated
             else "hxb2-v4-fork-source-attested-live"),
@@ -114,7 +116,8 @@ def preview(directory, runner, attestation, fork, base, *,
         "message": "Independently matched all seven fork-commit sources and installed binaries. This is partial data, not a qualification.",
         "attestation_sha256": sha(attestation),
         "attestation_schema": att["schema"],
-        "base_image_sha256": base,
+        **({"baseline_commit":base} if att["schema"] == MINIMAL_SCHEMA
+           else {"base_image_sha256":base}),
         "images": {name: {
             "source_commit": v["source_commit"],
             "source_url": v["source_url"],

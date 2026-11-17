@@ -335,9 +335,11 @@ This currently available supplementary runner executes all seven candidates as s
 source-labeled images descended from the identical updated-MiCall base,
 never gives a container access to its hidden reference truth, and records
 the exact image ID and command for each run. Native Ivanka uses the exact
-ordinary three arguments with Podman's `--unsetenv-all`; no
-`IVANKA_*` environment variable, wrapper, or optional CLI flag exists
-inside that assembly call.
+ordinary read/output arguments with Podman's `--unsetenv-all`. This
+**standalone diagnostic** has no MiCall G2P stage, so it has no G2P seeds.
+The qualifying **MiCall-integrated** path passes `--seeds` when nonempty
+same-sample, read-derived G2P contigs are available, with no `IVANKA_*`
+tuning or reference-derived seeds.
 
 ```sh
 python3 -m benchmarks.expanded.podman_synthetic \
@@ -500,8 +502,9 @@ change nor resumability constitutes a PASS.
 
 The fresh full-MiCall real-data runner distinguishes **two audited
 executable classes**. Ordinary Ivanka must remain the exact native Rust
-ELF with empty child environment and only `--reads1`, `--reads2`,
-`--output`; the native verification mode is **unchanged**.
+ELF with empty child environment and required `--reads1`, `--reads2`,
+`--output`, plus `--seeds` **only** for same-sample read-derived G2P contigs.
+The benchmark must match ordinary MiCall behavior.
 
 The five other external assemblers use a source-pinned Python adapter
 installed at the same MiCall entry point **only inside their explicitly
@@ -587,3 +590,25 @@ the whole 400-case benchmark has passed. Source-identity differences,
 mixed rival images, modified final MAX output, or a mismatched HXB2
 truth manifest abort the join. Failed arms are retained exactly as
 recorded; they cannot become successful measurements.
+
+## Frozen seven-image restart and one-time physical IVA controls
+
+The host-only `benchmarks.expanded.restart_preflight` verifies exact source
+commits and installed seven-image identities; the original 198 physical
+read pairs; 400 synthetic truths; complete original, adversarial, and
+shared-IVA MiCall smoke tests; exact-coverage sidecars; and disk capacity.
+It never starts the full benchmark, and owner authorization is still required.
+
+The resumable physical runner `benchmarks.expanded.fork_micall_real` runs
+the pinned IVA control once per sample as part of the first paired Ivanka
+comparison, then externally certifies `shared-iva-controls.json`. The other
+five candidates execute only their own MiCall arms, using exactly that
+verified IVA result. MiCall outputs, in-container timing, FASTQ fingerprints,
+source and image hashes, and interrupted attempts remain individually
+auditable. `--resume` rejects changed images, cohorts, runner code and
+control evidence. An original IVA failure blocks uncontrolled reuse rather
+than triggering six new control runs.
+
+Run no more than ten simultaneous MiCall containers and keep the minimal
+assembler images immutable after external preflight. Only full physical
+198 and synthetic 400 case gates can establish formal qualification.

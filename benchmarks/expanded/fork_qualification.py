@@ -11,6 +11,7 @@ from .adapters import ASSEMBLERS
 from .gate import summarize_gate
 from .real_matrix import join_real_runs
 from benchmarks.assembler_bench.dedicated_image_attestation import SCHEMA
+from benchmarks.assembler_bench.minimal_image_attestation import SCHEMA as MINIMAL_SCHEMA
 
 NAME = "ivanka.expanded.dedicated-qualification.v1"
 
@@ -19,7 +20,7 @@ def evaluate(synthetic, real, physical_data, runner, attestation,
              source_roots, base):
     """Full qualification is impossible before six complete physical arms."""
     att = json.loads(Path(attestation).read_text())
-    if att.get("schema") != SCHEMA:
+    if att.get("schema") not in (SCHEMA, MINIMAL_SCHEMA):
         raise ValueError("qualification requires seven dedicated MiCall branches")
     frozen, synthetic_rows, _, verified = checked(
         synthetic, runner, attestation, source_roots, base)
@@ -50,9 +51,13 @@ def evaluate(synthetic, real, physical_data, runner, attestation,
     if (len(synthetic_rows) != 400 or
             any(item["finished"] != 198 for item in counters.values())):
         return result
+    resumable = att["schema"] == MINIMAL_SCHEMA
     specification = {name: {
         "image_id": images[name],
         "results_jsonl": str(Path(real) / name / "results.jsonl"),
+        **({"checkpoint_manifest": str(Path(real) / name / "checkpoints.json"),
+            "source_manifest": str(Path(real) / "run_manifest.json"),
+            "images": images} if resumable else {}),
     } for name in ASSEMBLERS if name != "iva"}
     try:
         physical_rows = join_real_runs(specification)

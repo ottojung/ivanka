@@ -84,15 +84,19 @@ class ForkRealRunnerTests(unittest.TestCase):
             output=root/"new_run"
             def simulated(argv,**kwargs):
                 target=Path(kwargs["env"]["IVANKA_PODMAN_RESULTS"])
-                (target/"results.jsonl").write_text(
-                    '{"status":"finished","sample":"simulated"}\n')
+                self.assertEqual(target,output/"ivanka"/"attempt-000")
                 self.assertIn("--mode",argv)
-                self.assertEqual(kwargs["env"][
-                    "IVANKA_FORK_IMAGE_MAP"],
-                    str(output/"source_verified_images.json"))
+                self.assertEqual(argv[-2:],["--sample","sample"])
+                self.assertEqual(kwargs["env"]["IVANKA_FORK_IMAGE_MAP"],
+                                 str(output/"source_verified_images.json"))
                 return Mock(returncode=0)
+            recovered={"sample":{"sample":"sample","failed":False}}
             with (patch.object(runner,"checked_images",return_value={}),
                   patch.object(runner,"validate_real",return_value=MANIFEST),
+                  patch.object(runner,"collect",side_effect=[
+                      ({},{}),(recovered,{"attempt-000":{"sha256":"e"*64,
+                                                         "samples":["sample"]}})]),
+                  patch.object(runner,"commit",return_value={"results_sha256":"f"*64}),
                   patch.object(runner,"subprocess") as sub):
                 sub.run.side_effect=simulated
                 outcome=runner.run(
@@ -106,6 +110,85 @@ class ForkRealRunnerTests(unittest.TestCase):
             self.assertFalse(frozen["qualified"])
             self.assertEqual(frozen["selected_sample"],"sample")
             self.assertEqual(frozen["images"],self.images)
+
+    def test_interrupt_resume_runs_only_unfinished_samples(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            data=root/"data"
+            data.mkdir()
+            (data/"manifest.tsv").write_text("sample\na\nb\n")
+            evidence=root/"proof.json"
+            evidence.write_text("{}")
+            output=root/"run"
+            original={"a":{"sample":"a","failed":False}}
+            complete={**original,"b":{"sample":"b","failed":False}}
+            scans=iter([({},{}),(original,{}),(original,{}),
+                        (complete,{})])
+            seen=[]
+            def run_fake(argv,**kwargs):
+                seen.append((argv,kwargs["env"]["IVANKA_PODMAN_RESULTS"]))
+                return Mock(returncode=0)
+            with (patch.object(runner,"checked_images",return_value={}),
+                  patch.object(runner,"source_manifest",
+                               return_value={"schema":"pinned","qualified":False}),
+                  patch.object(runner,"samples_in_cohort",return_value={"a","b"}),
+                  patch.object(runner,"collect",side_effect=lambda *args:next(scans)),
+                  patch.object(runner,"commit",return_value={"results_sha256":"e"*64}),
+                  patch.object(runner.subprocess,"run",side_effect=run_fake)):
+                first=runner.run(data,output,self.images,"/fork","a"*40,evidence,
+                                 jobs=2,selected=["ivanka"])
+                resumed=runner.run(data,output,self.images,"/fork","a"*40,evidence,
+                                   jobs=2,selected=["ivanka"],resume=True)
+            self.assertEqual(first["tools"]["ivanka"]["sample_count"],1)
+            self.assertEqual(resumed["tools"]["ivanka"]["sample_count"],2)
+            self.assertEqual(len(seen),2)
+            self.assertEqual(seen[0][0][-4:],
+                             ["--sample","a","--sample","b"])
+            self.assertEqual(seen[1][0][-2:],["--sample","b"])
+            self.assertTrue(seen[0][1].endswith("attempt-000"))
+            self.assertTrue(seen[1][1].endswith("attempt-001"))
+
+    def test_shared_control_runs_exactly_one_iva_pair_before_comparators(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            data=root/"data"
+            data.mkdir()
+            (data/"manifest.tsv").write_text("sample\na\n")
+            proof=root/"proof.json"
+            proof.write_text("{}")
+            output=root/"fresh"
+            calls=[]
+            def tool(name,destination,sample_ids,jobs,images,env,pinned,
+                     shared_controls=None,control_manifest=None):
+                calls.append((name,jobs,shared_controls,control_manifest))
+                return {"image_id":images[name],"complete":True}
+            shared={"a":{"image_id":self.images["iva"]}}
+            control=output/"shared-iva-controls.json"
+            with (patch.object(runner,"checked_images",return_value={}),
+                  patch.object(runner,"source_manifest",return_value={"source":"x"}),
+                  patch.object(runner,"samples_in_cohort",return_value={"a"}),
+                  patch.object(runner,"one_tool",side_effect=tool),
+                  patch.object(runner,"certify",return_value=control),
+                  patch.object(runner,"load",return_value=shared)):
+                result=runner.run(
+                    data,output,self.images,"/fork","base",proof,
+                    jobs=10,selected=["spades","ivanka","velvet"])
+            self.assertEqual([c[0] for c in calls],
+                             ["ivanka","spades","velvet"])
+            self.assertEqual([c[1] for c in calls],[5,10,10])
+            self.assertIsNone(calls[0][2])
+            self.assertIsNone(calls[0][3])
+            self.assertTrue(all(c[2]==shared and c[3]==control
+                                for c in calls[1:]))
+            self.assertEqual(len(result["tools"]),3)
+            self.assertTrue(runner.command("spades",jobs=10,shared=True)[
+                0].endswith("python") or runner.command(
+                "spades",jobs=10,shared=True)[0])
+            self.assertNotIn("--parallel-arms",runner.command(
+                "spades",jobs=10,shared=True))
+            self.assertIn("--mode",runner.command("spades",jobs=10,shared=True))
+            self.assertIn("ivanka",runner.command(
+                "spades",jobs=10,shared=True))
 
     def test_invalid_tool_or_worker_refused(self):
         with self.assertRaisesRegex(ValueError,"worker"):

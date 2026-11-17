@@ -36,7 +36,9 @@ seed-forwarding rule, even when a particular sample has no seeds. The
 built-in Rust defaults must pass unmodified.
 The benchmark may configure its **own** runner, image selection, timeouts,
 scoring and output paths, but may not change the Ivanka child environment or
-invocation contract.
+invocation contract. Seed provenance, invocation parity and all image checks
+must be verified by the external benchmark infrastructure, not by adding
+checkers or diagnostic scripts inside the MiCall candidate containers.
 
 ## Acceptance evidence
 

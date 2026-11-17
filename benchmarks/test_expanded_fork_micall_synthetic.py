@@ -62,7 +62,7 @@ class SourceVerifiedForkRunnerTests(unittest.TestCase):
             attestor.write_text("{}")
             cases=[(f"s{i}", data/f"s{i}", {"family": "clonal"})
                    for i in range(len(ACTIVE_FAMILIES)*16)]
-            def fake_run(case, root, images, proof, timeout):
+            def fake_run(case, root, images, proof, timeout, *, resume=False):
                 identifier=case[0]
                 return {"id": identifier,
                         "results": {

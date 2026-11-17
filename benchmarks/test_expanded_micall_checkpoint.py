@@ -181,7 +181,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
                                          home, images, proof, 40, resume=True)
             self.assertEqual(mock.call_count, 7)
             self.assertEqual(len(result["results"]), 7)
-            self.assertEqual((home / "_interrupted/clonal-s000-001/old-logs.txt")
+            self.assertEqual((home / "clonal-s000/old-logs.txt")
                              .read_text(), "do not destroy evidence")
             self.assertTrue((home / "clonal-s000/matrix.json").is_file())
             self.assertFalse((home / "clonal-s000/matrix.json.partial").exists())
@@ -293,3 +293,81 @@ class SyntheticFullResumeTests(unittest.TestCase):
             self.assertEqual(json.loads(
                 (output / "attempt_completion.json").read_text())["status"],
                 "ATTEMPTED_NOT_QUALIFIED")
+
+class MultitruthV6CheckpointTests(unittest.TestCase):
+    def test_v6_partial_case_recovers_completed_arms_without_reexecution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            case, manifest, _, images = make_case(root)
+            manifest["score_model_revision"] = 2
+            proof = {"schema": "ivanka.mixed_viral_truth_validation.v4",
+                     "valid": True}
+            cached = root / "clonal-s000/iva"
+            cached.mkdir(parents=True)
+            (cached / "conseq.csv").write_text("final MiCall result\n")
+            prior = {
+                "status": "success",
+                "score_origin": runner.MULTITRUTH_SCORE_ORIGIN,
+                "timing_origin": runner.TIMING_ORIGIN,
+                "sha256": images["iva"],
+                "argv": ["podman", "run", images["iva"], "--all_projects"],
+                "exit_code": 0, "seconds": 2.0, "score": 9000,
+                "final_dominant": {
+                    "source_output": "conseq.csv",
+                    "conseq_csv_sha256": digest(cached / "conseq.csv")}}
+            (cached / "execution.json").write_text(json.dumps(prior))
+            called = []
+            def fake_attempt(_case, dest, name, image, timeout):
+                called.append(name)
+                dest.mkdir()
+                value = {"status": "failed", "score": 0.0,
+                         "score_origin": runner.MULTITRUTH_SCORE_ORIGIN,
+                         "timing_origin": runner.TIMING_ORIGIN,
+                         "sha256": image, "argv": ["podman", "run", image,
+                                                 "--all_projects"]}
+                (dest / "execution.json").write_text(json.dumps(value))
+                return value
+            with patch.object(runner, "attempt", side_effect=fake_attempt):
+                result = runner.run_case(("clonal-s000", case, manifest),
+                                         root, images, proof, 40, resume=True)
+            self.assertEqual(len(called), 6)
+            self.assertNotIn("iva", called)
+            self.assertEqual(result["results"]["iva"], prior)
+            self.assertTrue((root / "clonal-s000/matrix.json").exists())
+
+    def test_v6_completed_arms_are_reused_with_pinned_score_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            case, manifest, _, images = make_case(root)
+            proof = {"schema": "ivanka.mixed_viral_truth_validation.v4",
+                     "valid": True}
+            fields = identity("clonal-s000", manifest, proof)
+            folder = root / "clonal-s000"
+            folder.mkdir()
+            row = {**fields, "execution_order": list(ASSEMBLERS),
+                   "results": {}}
+            for name in ASSEMBLERS:
+                arm = folder / name
+                arm.mkdir()
+                final = arm / "conseq.csv"
+                final.write_text("final sequence\n")
+                result = {
+                    "status": "success",
+                    "score_origin": runner.MULTITRUTH_SCORE_ORIGIN,
+                    "timing_origin": runner.TIMING_ORIGIN,
+                    "sha256": images[name], "exit_code": 0,
+                    "seconds": 2.0, "score": 9800.0,
+                    "final_dominant": {
+                        "source_output": "conseq.csv",
+                        "conseq_csv_sha256": digest(final)}}
+                (arm / "execution.json").write_text(json.dumps(result))
+                row["results"][name] = result
+            write_case(folder, row)
+            self.assertEqual(existing_case(folder, fields, images), row)
+            modified = dict(row["results"]["iva"])
+            modified["score_origin"] = runner.SCORE_ORIGIN
+            (folder / "iva/execution.json").write_text(json.dumps(modified))
+            row["results"]["iva"] = modified
+            (folder / "matrix.json").write_text(json.dumps(row))
+            with self.assertRaisesRegex(ValueError, "invalid cached"):
+                existing_case(folder, fields, images)

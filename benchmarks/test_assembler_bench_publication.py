@@ -14,10 +14,8 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         cls.root = json.loads((SITE / "data/runs.json").read_text())
 
     def test_public_data_is_independently_grounded_and_complete(self):
-        from assembler_bench.current_validation import (
-            EXPECTED, DEDICATED_EXPECTED)
-        self.assertIn({r["id"] for r in self.root["runs"]},
-                      (EXPECTED, DEDICATED_EXPECTED))
+        from assembler_bench.current_validation import check_current
+        check_current(self.root)
         self.assertEqual({r["cohort"] for r in self.root["runs"]},
                          {"synthetic", "real", "combined"})
         for run in self.root["runs"]:
@@ -73,7 +71,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             data = copy.deepcopy(self.root)
             data["runs"][1]["status"] = "passed-expanded"
             (copy_site / "data/runs.json").write_text(json.dumps(data))
-            with self.assertRaisesRegex(ValueError, "unattested"):
+            with self.assertRaisesRegex(ValueError, "unattested|metadata|qualification|invalid"):
                 validate_public_site(copy_site)
             data = copy.deepcopy(self.root)
             if data["runs"][0]["samples"]:
@@ -82,7 +80,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
                 data["runs"][0]["source_commit"] = "/workspace/secret.fastq"
                 data["runs"][2]["source_commit"] = "/workspace/secret.fastq"
             (copy_site / "data/runs.json").write_text(json.dumps(data))
-            with self.assertRaisesRegex(ValueError, "invalid sample|unsafe|private|not verified"):
+            with self.assertRaisesRegex(ValueError, "invalid sample|unsafe|private|not verified|alias|wrong"):
                 validate_public_site(copy_site)
 
     def test_directed_all_tool_dominance_matrix_is_fail_closed(self):

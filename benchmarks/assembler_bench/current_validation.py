@@ -72,6 +72,13 @@ def check_physical(run, progress):
 
 
 def check_current(report):
+    schema="ivanka.assembler-bench.active-progress.v1"
+    tagged=[r.get("progress_schema")==schema for r in report.get("runs",[])]
+    if any(tagged):
+        if not all(tagged):
+            raise ValueError("current and historical progress sources mixed")
+        from .current_validation_v2 import check_current as validate_active
+        return validate_active(report)
     runs = {run["id"]: run for run in report["runs"]}
     active = set(runs)
     if len(runs) != 3 or active not in (EXPECTED, DEDICATED_EXPECTED):

@@ -62,6 +62,12 @@ def validate_public_site(site=SITE):
         raise ValueError("missing all-metric sample dialog or paired density charts")
     if 'id="realProgress"' in html:
         raise ValueError("obsolete physical-progress banner reintroduced")
+    if ('id="toolProgress"' not in html or "run.tool_progress" not in js):
+        raise ValueError("all runs require the same per-assembler progress view")
+    if ('id="comparatorProgress"' in html
+            or (source / "comparator-progress.js").exists()
+            or (source / "data/comparator-progress.json").exists()):
+        raise ValueError("rerun-specific dashboard must not diverge from runs.json")
     if 'fetch("./data/mapping-diagnostics.json"' not in js:
         raise ValueError("mapping report must be fetched from same origin")
     if (any(name not in js for name in
@@ -154,7 +160,11 @@ def validate_public_site(site=SITE):
             if run["eligible_for_expanded"] or run.get("psi"):
                 raise ValueError("ineligible run falsely presented as passing")
         if run["status"] == "incomplete" and run["cohort"] == "synthetic":
-            verify_hxb2_preview(run)
+            if run.get("progress_schema") == "ivanka.assembler-bench.active-progress.v1":
+                from .current_validation_v2 import check_run
+                check_run(run)
+            else:
+                verify_hxb2_preview(run)
         check_fork_provenance(source, run)
     check_current(report)
     check_matrices(report)

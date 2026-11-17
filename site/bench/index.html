@@ -12,7 +12,6 @@
   <script src="./distribution.js" defer></script>
   <script src="./compare_views.js" defer></script>
   <script src="./app.js" defer></script>
-  <script src="./comparator-progress.js" defer></script>
 </head>
 <body>
   <div class="site-shell">
@@ -46,14 +45,11 @@
         </div>
         <p class="subtle" id="progressStatus" role="status">Refresh to see the latest results.</p>
       </section>
-      <section class="comparator-progress" id="comparatorProgress"
-               aria-label="Current comparator-first benchmark progress" role="region">
-        Preparing source-verified comparator-first progress…
-      </section>
       <section class="overview" aria-label="Run overview">
         <div class="section-heading"><div><span class="overline">01 / OVERVIEW</span><h2>At a glance</h2></div><span class="date" id="runDate">—</span></div>
         <p class="run-description" id="runDescription"></p>
         <div class="metric-grid" id="metricCards"></div>
+        <div id="toolProgress" class="table-scroll" aria-label="Per-assembler sample progress"></div>
       </section>
       <section class="compare" aria-label="Assembler comparison">
         <div class="section-heading"><div><span class="overline">02 / SINGLE-METRIC ORDER</span><h2>Rank by one metric</h2></div>

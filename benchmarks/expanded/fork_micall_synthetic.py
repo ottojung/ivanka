@@ -36,6 +36,7 @@ def checked_images(images, attestation_file, fork, base):
 def manifest(data, proof, images, attestation_file, limit):
     here = Path(__file__).resolve()
     sources = (here, here.with_name("micall_synthetic.py"),
+               here.parents[1] / "retained_artifacts.py",
                here.with_name("micall_checkpoint.py"),
                here.with_name("micall_retention.py"),
                here.with_name("micall_dominant.py"),

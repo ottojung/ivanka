@@ -90,5 +90,38 @@ class RetainedArtifactsTests(unittest.TestCase):
             self.assertTrue((source_scratch / "precious").is_file())
 
 
+    def test_large_outputs_removed_but_small_sample_files_survive(self):
+        from retained_artifacts import MAX_FILE_BYTES
+        with TemporaryDirectory() as d:
+            arm = Path(d) / "arm"
+            scratch = arm / "scratch"
+            scratch.mkdir(parents=True)
+            (scratch / "conseq.csv").write_text("MAX,ACGT\n")
+            (scratch / "genome_coverage.csv").write_bytes(
+                b"C" * (MAX_FILE_BYTES + 1))
+            (arm / "big_intermediate.csv").write_bytes(
+                b"X" * (MAX_FILE_BYTES + 1))
+            (arm / "metrics.json").write_text('{"depth": 42}\n')
+            (arm / "execution.json").write_text('{"status":"success"}\n')
+            outcome = retain_arm(arm)
+            self.assertFalse((arm / "scratch").exists())
+            self.assertEqual((arm / "conseq.csv").read_text(), "MAX,ACGT\n")
+            self.assertFalse((arm / "genome_coverage.csv").exists())
+            self.assertFalse((arm / "big_intermediate.csv").exists())
+            self.assertTrue((arm / "metrics.json").exists())
+            self.assertTrue((arm / "execution.json").exists())
+            self.assertIn("big_intermediate.csv", outcome["discarded_oversize"])
+
+    def test_oversized_log_is_bounded_and_keeps_error_tail(self):
+        from retained_artifacts import MAX_FILE_BYTES, LOG_TAIL_BYTES
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            log = arm / "stderr.log"
+            log.write_bytes(b"Q" * MAX_FILE_BYTES + b"LAST FAILURE\n")
+            outcome = retain_arm(arm)
+            self.assertLess(log.stat().st_size, LOG_TAIL_BYTES + 100)
+            self.assertTrue(log.read_bytes().endswith(b"LAST FAILURE\n"))
+            self.assertIn("stderr.log", outcome["trimmed_logs"])
+
 if __name__ == "__main__":
     unittest.main()

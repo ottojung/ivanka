@@ -22,6 +22,10 @@ FINAL_EXTENSIONS = {".csv", ".fasta", ".fa", ".json", ".svg"}
 PRESERVED_SUBDIRS = {"coverage_maps", "resistance_reports"}
 ARM_NAMES = {"iva", "ivanka", "haploflow", "megahit",
              "abyss", "spades", "velvet"}
+MAX_FILE_BYTES = 8 * 1024 * 1024
+LOG_TAIL_BYTES = 256 * 1024
+CRITICAL_FILES = {"conseq.csv", "scratch_conseq.csv", "execution.json",
+                  "timing.json", "micall_internal_timing.json"}
 
 
 def _hash(path):
@@ -46,6 +50,37 @@ def _safe_existing(dst, src):
         raise ValueError(f"conflicting final artifact: {dst}")
 
 
+def _compact_retained(arm):
+    """Keep small per-sample artifacts; measured bulky files are reproducible."""
+    discarded = []
+    trimmed = []
+    essential = []
+    for file in sorted(arm.rglob("*")):
+        relative = file.relative_to(arm)
+        if "scratch" in relative.parts or file.is_symlink() or not file.is_file():
+            continue
+        if any(parent.is_symlink() for parent in file.parents if parent != arm):
+            continue
+        if file.stat().st_size <= MAX_FILE_BYTES:
+            continue
+        if file.name in CRITICAL_FILES:
+            essential.append(str(relative))
+            continue
+        if file.suffix.lower() == ".log":
+            with file.open("rb+") as stream:
+                stream.seek(-LOG_TAIL_BYTES, 2)
+                tail = stream.read()
+                stream.seek(0)
+                stream.write(b"[earlier oversized log content omitted]\n" + tail)
+                stream.truncate()
+            trimmed.append(str(relative))
+        else:
+            file.unlink()
+            discarded.append(str(relative))
+    return {"discarded_oversize": discarded, "trimmed_logs": trimmed,
+            "retained_large_essential": essential}
+
+
 def retain_arm(arm):
     """Promote terminal products before recursively removing scratch.
 
@@ -56,14 +91,16 @@ def retain_arm(arm):
     scratch = arm / "scratch"
     if not scratch.exists() and not scratch.is_symlink():
         return {"scratch_present": False, "removed": False,
-                "promoted": [], "bytes_before": 0}
+                "promoted": [], **_compact_retained(arm)}
     if arm.is_symlink() or scratch.is_symlink() or not scratch.is_dir():
         raise ValueError(f"unsafe benchmark scratch: {scratch}")
     chosen = []
     for item in sorted(scratch.iterdir()):
         if item.is_symlink():
             continue  # unlink during rmtree; never follow it
-        if item.is_file() and _retained(item.name):
+        if (item.is_file() and _retained(item.name)
+                and (item.stat().st_size <= MAX_FILE_BYTES
+                     or item.name in CRITICAL_FILES)):
             target = arm / item.name
             if target.exists() and not target.is_symlink() and target.is_file():
                 if _hash(target) != _hash(item):
@@ -90,7 +127,7 @@ def retain_arm(arm):
     # Remaining scratch is transient mapping, temporary FASTQ and indexes.
     shutil.rmtree(scratch)
     return {"scratch_present": True, "removed": True,
-            "promoted": promoted}
+            "promoted": promoted, **_compact_retained(arm)}
 
 
 def _candidate_arms(root):

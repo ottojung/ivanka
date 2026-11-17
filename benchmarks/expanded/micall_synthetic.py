@@ -16,6 +16,7 @@ import time
 from benchmarks.podman_detached_lifecycle import run_detached
 from benchmarks.assembler_bench.sam_metrics import public_diagnostics
 from benchmarks.podman_full_micall import verify_ivanka_image_binding
+from benchmarks.retained_artifacts import retain_arm
 from .adapters import ASSEMBLERS
 from .hxb2_cohort import attestation
 from .micall_checkpoint import (
@@ -99,6 +100,21 @@ def attempt(case, destination, name, image, timeout):
     # All outcomes retain available downstream diagnostics. Partial/failed
     # artifacts do not turn into successful comparisons.
     record["diagnostics"] = public_diagnostics(destination)
+    try:
+        record["artifact_retention"] = retain_arm(destination)
+    except (OSError, ValueError) as exc:
+        record["retention_error"] = f"{type(exc).__name__}: {exc}"
+    if record["status"] == "success":
+        expected = record["final_dominant"]["conseq_csv_sha256"]
+        source = record["final_dominant"]["source_output"]
+        candidates = (source, "conseq.csv", "scratch_conseq.csv") if (
+            source.startswith("scratch/")) else (source,)
+        matched = next((candidate for candidate in candidates
+                        if (destination / candidate).is_file() and
+                        digest(destination / candidate) == expected), None)
+        if matched is None:
+            raise ValueError("retention lost the scored final MiCall output")
+        record["final_dominant"]["source_output"] = matched
     (destination / "execution.json").write_text(
         json.dumps(record, sort_keys=True, indent=2) + "\n")
     return record
@@ -243,6 +259,7 @@ def run_manifest(proof, images, limit):
                 root.parent / "diagnostic_metrics.py"),
         },
         "benchmark_sources_sha256": {
+            "retained_artifacts.py": digest(root.parent / "retained_artifacts.py"),
             **{name: digest(root / name) for name in sources},
             **{name: digest(root.parent / name)
                for name in ("reference_panel.py", "project_references.py")},

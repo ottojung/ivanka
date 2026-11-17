@@ -20,7 +20,7 @@ from .adapters import ASSEMBLERS
 from .synthetic import ACTIVE_FAMILIES
 from .hxb2_cohort import attestation
 from .micall_checkpoint import (
-    digest, existing_case, identity, preserve_interrupted, reusable_arm, write_case,
+    digest, existing_case, identity, reusable_arm, write_case,
 )
 from .micall_dominant import (
     SCORE_ORIGIN, MULTITRUTH_SCORE_ORIGIN, evaluate_final_alignment)

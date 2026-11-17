@@ -8,7 +8,7 @@ import tempfile
 from .hxb2_cohort import attestation, verify_cohort
 from .synthetic import (
     ACTIVE_FAMILIES, FAMILIES, MIXED_FAMILIES,
-    fingerprint, generate_case, generate_cohort,
+    generate_case,
 )
 
 

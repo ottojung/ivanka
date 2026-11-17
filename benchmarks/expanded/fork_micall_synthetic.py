@@ -13,7 +13,7 @@ from .adapters import ASSEMBLERS
 from .synthetic import ACTIVE_FAMILIES
 from .hxb2_cohort import attestation
 from .micall_checkpoint import (
-    digest, existing_case, identity, preserve_interrupted,
+    digest, existing_case, identity,
 )
 from .micall_retention import prune_case
 from .micall_lock import exclusive_lock

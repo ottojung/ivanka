@@ -169,11 +169,14 @@ def real_arm(source,tool,sample_name,image,pair,retries=None):
             or type(raw.get("failed")) is not bool):
         raise ValueError("unaligned physical MiCall source checkpoint")
     raw,recovery=select_retry(raw,path,retries,tool,sample_name,image)
+    if (tool=="ivanka" and
+            (raw.get("resource_timeout_seconds")!=3000 or recovery)):
+        raise ValueError("deferred physical Ivanka must have its own 50m evidence")
     arm=raw.get("arm")
     if not isinstance(arm,dict) or arm.get("image_id")!=image:
         raise ValueError("physical MiCall image identity mismatch")
     evidence_root=Path(retries).resolve() if recovery else source
-    budget=3000 if recovery else 1800
+    budget=3000 if recovery or tool=="ivanka" else 1800
     provenance={"time_budget_seconds":budget,
                 "container_name":physical_name(arm,tool,sample_name,sha_bytes),
                 "recovery":recovery}

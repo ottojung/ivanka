@@ -40,8 +40,9 @@ Prior data, a different mapping implementation, cached incomplete results,
 or different panels must not be relabeled as a fresh comparison.
 
 The Ivanka candidate for qualification is precisely the Rust executable
-invoked directly by MiCall with **no child environment** and only the three
-arguments required by [Intent 002](002-default-invocation-parity.md).
+invoked directly by MiCall with **no child environment**, the three required
+read/output arguments and optional verified same-sample read-derived G2P
+`--seeds` under [Intent 002](002-default-invocation-parity.md).
 The executable itself must satisfy [Intent 001](001-rust-only-execution.md).
 Any earlier passing result obtained through a Python-wrapped image remains
 historical evidence, **not proof** that this new invocation passes.

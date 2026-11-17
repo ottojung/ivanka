@@ -43,9 +43,9 @@ def synthetic(root):
     for name in TOOLS:
         records=[]
         for case in cases:
-            result=verify_arm(case/name,name,info["images"][name])
-            if result is not None:
-                records.append(result)
+            arm=verify_arm(case/name,name,info["images"][name])
+            if arm is not None:
+                records.append(arm)
         result[name]=count(records,SYN_EXPECTED)
     return result
 

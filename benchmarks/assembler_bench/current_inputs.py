@@ -197,6 +197,11 @@ def real_arm(source,tool,sample_name,image,pair,retries=None):
             **provenance}
 
 
+def physical_tool_allowed(name, original_manifest):
+    """The sixth-comparator manifest intentionally omitted deferred Ivanka."""
+    return name in original_manifest["images"] or name == "ivanka"
+
+
 def physical(root,data,images,proof,runner,witness_file,physical_attestation,
              resources=None,retries=None):
     manifest=freeze(root,REAL_SCHEMA,images,proof,runner)
@@ -219,7 +224,11 @@ def physical(root,data,images,proof,runner,witness_file,physical_attestation,
     for index,name in enumerate(names,1):
         row=sample(f"R{index:03d}",images)
         for tool in images:
-            if tool not in manifest["images"]:
+            # The original six-way manifest deliberately deferred Ivanka.
+            # Its new physical stage uses the seventh independently pinned
+            # image and the same 198 read pairs/reference panel. The arm
+            # reader validates each final MAX output before publication.
+            if not physical_tool_allowed(tool, manifest):
                 continue
             arm=real_arm(source,tool,name,images[tool],pairs[name],retries)
             if arm is not None:

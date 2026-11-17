@@ -12,6 +12,13 @@ from assembler_bench.site_validation import check_mapping_snapshot
 
 
 class CurrentMappingTests(unittest.TestCase):
+    def test_deferred_physical_ivanka_is_visible_with_source_checked_arm(self):
+        from assembler_bench.current_inputs import physical_tool_allowed
+        frozen = {"images": {"iva": "a"*64, "spades": "b"*64}}
+        self.assertTrue(physical_tool_allowed("ivanka", frozen))
+        self.assertTrue(physical_tool_allowed("iva", frozen))
+        self.assertFalse(physical_tool_allowed("unverified_other", frozen))
+
     def test_missing_complete_seven_arm_case_has_no_fabricated_diagnostics(self):
         tools = ("iva", "ivanka", "haploflow", "megahit",
                  "abyss", "spades", "velvet")
@@ -41,7 +48,7 @@ class CurrentMappingTests(unittest.TestCase):
                 "schema": "assembler-bench.public-mapping-diagnostics.v1",
                 "run_id": run["id"], "sample_alias": None,
                 "status": "INCOMPLETE", "cases_measured": 0,
-                "expected_cases": 400,
+                "expected_cases": run["expected_sample_count"],
                 "cohort": "Source-attested HXB2-derived synthetic MiCall",
                 "note": "No completed mapped case",
                 "metric_catalog": catalog(),

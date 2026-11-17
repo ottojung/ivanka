@@ -15,11 +15,11 @@ seven-way gate is not optional or deferred.
 | [001 — Rust-only production execution](001-rust-only-execution.md) | The entire read-to-FASTA implementation is Rust; MiCall directly invokes its binary | Implemented in native alpha.3; 198 gate passed, expanded pending |
 | [002 — unconfigured, identical invocation](002-default-invocation-parity.md) | Empty child environment, three required read/output arguments plus optional same-sample read-derived G2P `--seeds`, built-in defaults, same MiCall execution during benchmarks | Verified on native alpha.3 with original 198; expanded pending |
 | [003 — reference blindness and evidence](003-reference-blindness.md) | No known/reference-derived genomes, reference panel, or scoring feedback influence assembly or contig selection | Binding now; continue enforcing |
-| [004 — pipeline-level dominant haplotype](004-dominant-sequence.md) | Ivanka need not reconstruct any haplotype by itself; MiCall with Ivanka must recover the most abundant identifiable haplotype; preserve original evidence | Binding now; clarified |
+| [004 — numerical benchmark objective](004-dominant-sequence.md) | Maximize source-attested MiCall benchmark scores; synthetic evaluation scores every generating truth at ≥15% abundance, without a contig-count mandate | Binding now; quantitative |
 | [005 — authentic 198-sample qualification](005-physical-198-qualification.md) | ≥90% IVA per sample, no failures/timeouts, positive alignment and runtime signed-power Ψ(r) for every real r≥0 with genuine pinned MiCall inputs | Binding now; the previous passing *wrapped* image is historical, not a pass for 001/002 |
-| [006 — expanded seven-assembler qualification](006-expanded-qualification.md) | 198 original real + 400 diverse synthetic samples; beat all six competitors with strict, separate, all-r alignment and runtime gates | **Required now for completion/release; not yet passed** |
+| [006 — expanded seven-assembler qualification](006-expanded-qualification.md) | 198 original real + 464 diverse synthetic samples; beat all six competitors with strict, separate, all-r alignment and runtime gates | **Required now for completion/release; not yet passed** |
 | [007 — public MiCall Assembler Bench](007-assembler-bench.md) | Reusable MiCall-integrated multi-assembler testing, independent review, versioned results publicly navigable on Ivanka GitHub Pages under `/bench/` | **Required; not yet built/published** |
-| [008 — HXB2-derived synthetic truth](008-hxb2-synthetic-truth.md) | HXB2 or random HXB2/other-HIV-subtype recombinants, optionally ≤5% uniformly random noncluster-targeted substitutions; no random A/C/G/T truth | **HXB2 generator and 400-case cohort implemented; full enhanced gate remains unpassed** |
+| [008 — source-pinned viral truth](008-hxb2-synthetic-truth.md) | HXB2/recombinant HIV plus four source-pinned mutated HCV/HIV and HCV/V3 families, each with ≤5% untargeted mutations | **464-case source model implemented; expanded gate pending** |
 | [009 — assembler-neutral framework](009-neutral-metrics-and-pairwise-dominance.md) | General evaluation and presentation contract for any MiCall-integrated assembler; no privileged Ivanka baseline; delegates specialist requirements to 012–015 | **Required; neutral UI work incomplete** |
 | [010 — cfe-lab/MiCall read-only](010-upstream-micall-read-only.md) | Never push anything or create/modify PRs on `cfe-lab/MiCall`; allow fetch/read only, guard all push/PR destinations | **Binding immediately** |
 | [011 — fork MiCall integrations and builds](011-ottojung-micall-fork-provenance.md) | All assembler integrations and MiCall runtime images built from exact commits of `ottojung/MiCall`; commit-bound provenance and public source links | **Required; image/fork migration unverified** |
@@ -32,7 +32,7 @@ seven-way gate is not optional or deferred.
 ## Rules for changes and claims
 
 - **Score the right output.** The biological reconstruction target is
-  MiCall's **final dominant sequence**, not the assembler's raw contigs.
+  MiCall's **final MAX sequences** and every required ≥15%-abundant synthetic truth, not the assembler's raw contigs.
   Standalone de novo genome fraction, completeness and haplotype recovery
   are diagnostics, not additional gates. Ivanka may validly emit no contigs,
   but MiCall's mandatory end-to-end gates must still pass.
@@ -43,7 +43,7 @@ seven-way gate is not optional or deferred.
 - **Distinguish evidence from intent.** The old alpha.2 passing image
   used a Python wrapper and cannot establish 001/002. The tagged
   Rust-only alpha.3 subsequently passed the original 198 gate, but
-  neither release satisfies the *expanded* 598-case completion gate.
+  neither release satisfies the *expanded* 662-case completion gate.
   Both releases and their evidence remain immutable.
 - **No benchmark leakage.** Real-data tuning does not constitute independent
   held-out validation. Preserve provenance and report negative results.
@@ -53,7 +53,7 @@ seven-way gate is not optional or deferred.
   unpublished local CSV/JSON report is not sufficient.
 - **No grandfathering synthetic truth.** A historical run on arbitrary
   random genomes is diagnostic evidence, **not a qualifying cohort**
-  under Intent 008. A replacement HXB2-derived cohort must be generated
+  under Intent 008. A replacement source-pinned mixed-virus cohort must be generated
   and independently validated before use in the strict expanded gate.
 - **Never mutate upstream MiCall.** `cfe-lab/MiCall` is strictly
   read-only; no pushes, branches, tags, PRs or indirect writes.

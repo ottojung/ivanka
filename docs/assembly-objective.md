@@ -1,128 +1,88 @@
-# Primary objective: enable dominant haplotype recovery in the MiCall pipeline
+# Ivanka objective: maximize MiCall-integrated benchmark performance
 
-**Read this before proposing an Ivanka algorithm, contig filter, benchmark
-or MiCall integration change.** The primary biological product is the
-**end-to-end MiCall result**, not Ivanka's intermediate FASTA.
+Ivanka is a **reference-blind Rust assembler component** of MiCall, not a
+standalone oracle for a single consensus or an exhaustive biological
+haplotype enumerator. Its output may contain zero, one or several
+read-supported contigs. The objective is to **maximize the prespecified
+end-to-end MiCall benchmark scores** under the existing hard constraints,
+rather than satisfy new qualitative reconstruction intents.
 
-## Separation of responsibilities
+## Quantitative optimization target
 
-**Ivanka itself is not required to reconstruct a haplotype at all.**
-It is a reference-blind assembly component used within MiCall or an
-equivalent pipeline. It can return zero contigs, short or overlapping
-fragments, alternative read-supported paths, or a full-length contig.
-These are evidence for downstream processing, not assertions that any
-particular physical viral genome has been reconstructed.
+The mandatory expanded qualification compares **seven assemblers**
+on **198 unchanged physical cases** and **464 synthetic cases**
+(25 historical HXB2/read-stress families plus four HCV/HIV and HCV/V3
+mixtures, each at 16 fixed seeds). A total of **662 paired-input cases**
+must be attributable across all seven MiCall integrations.
 
-**MiCall, with Ivanka integrated, is required to recover the most
-abundant viral haplotype** when the original paired reads identify it.
-A full-length physical haplotype cannot always be inferred from short
-reads or from an unphased mixture. Where phase is not identifiable,
-the pipeline must honestly distinguish its predominant consensus from
-a proven physical haplotype rather than fabricate certainty.
+- **Physical:** maximize the final MiCall MAX local alignment against the
+  fixed, independently verified 33-reference panel. Preserve the
+  authentic 198-case MiCall-versus-IVA acceptance gate.
+- **Synthetic:** each generator declares all true viral sequences with
+  abundance fractions. **Every truth with nominal abundance ≥15% counts**;
+  every truth below 15% is excluded from the required alignment score.
+  For each eligible truth independently, align its full sequence to
+  the best final MiCall MAX consensus using the same local aligner:
+  match +1, mismatch −1, gap-open −2, gap-extension −1, either strand.
+  Let `a_i` be this local score and `L_i` the truth length.
+  The synthetic benchmark quality score is
 
-Recovering every minority haplotype is **not** a requirement for Ivanka,
-and it is not a separate acceptance gate for the complete pipeline.
-MiCall's established minority-variant/genotype outputs still matter;
-optional minority assembly does not license destroying original
-molecular or allele evidence.
+  ```text
+  S = 10000 × mean(a_i / L_i for each truth with abundance >= 0.15)
+  ```
 
-For example, in a 90%-A / 10%-B mixture, the final MiCall result should
-identify the dominant A sequence where the data support that call.
-Ivanka may contribute pieces of A, pieces of B, or other honest
-intermediate contigs; it is **not** separately required to output a
-complete A contig, to output B, or to reconstruct anything complete.
-A zero-contig Ivanka output is allowed **as a component result**, but
-if MiCall consequently fails the numerical pipeline gate the integrated
-candidate still fails.
+  The score ranges from 0 to 10,000. Each abundant sequence has equal
+  weight, regardless of its length: a ~550-nt V3 target cannot be
+  outweighed by a ~9,600-nt HCV genome. Also record each `a_i`,
+  `a_i/L_i`, the number of eligible truths, and the raw `sum(a_i)`.
+  Multiple truths may align to the same MiCall contig: MiCall can
+  legitimately preserve closely related variation as mixtures/indels.
+- **Efficiency:** minimize complete measured MiCall runtime. Record
+  resource/memory metrics and retain the independently pinned
+  50-minute/5-GiB synthetic arm policy.
 
-## Absolute reference boundary
+The strict existing *comparison methodology* remains: for **each of six
+competitors, separately on real and synthetic data**, both alignment
+advantage and inverse runtime advantage must satisfy **Ψ(r)>0 for all
+r≥0**; additionally, every sample's Ivanka quality score must be
+at least **90% of the best competitor**. For new multi-truth synthetic
+cases, enforce this 90% floor **separately for every abundant truth**,
+not just the combined score. Zero, failed or missing results never
+count as victories.
 
-Ivanka must not know **any** viral reference sequences. Its assembly,
-candidate prioritization, pruning, tiling, or postselection may not use
-HXB2, subtype/HCV references, benchmark truth, or reference-conditioned
-feedback. The caller may supply `--seeds` only when every seed was
-independently derived from that sample's reads; ordinary MiCall may forward
-nonempty same-sample read-derived G2P contigs under Intent 002, including
-during mandatory benchmark qualification.
+## Interpretation: MiCall-sufficient diversity
 
-MiCall may use references downstream for mapping/stitching and the
-independent evaluator may use reference or HXB2-derived truth **only
-after** the assembler's FASTA is frozen. Their information must never
-flow back into Ivanka. Previously rejected reference-21-mer ranking
-and diagonal reference support remain prohibited; see
-[Intent 003](intents/003-reference-blindness.md).
+A distinct biological sequence does **not** automatically need a
+separate contig. If MiCall's remapping can preserve its nucleotide
+mixtures and indels on another contig, an extra contig may have no
+measurable value. Conversely, an abundant HIV/HCV or HCV/V3 component
+lost by mapping to the wrong seed must lower the new combined score.
 
-## Engineering implications
+This is a justification for the benchmark methodology, **not an extra
+vague release gate**. The actual objective is the numerical benchmark
+score and established strict qualification. No arbitrary minimum contig
+count, contig length, or full-haplotype requirement is introduced.
 
-- **Optimize the full pipeline, not appearance of standalone FASTA.**
-  Larger contigs, more complete de novo reconstruction, broader
-  haplotype recall and more emitted contigs are optional intermediate
-  characteristics. They are not scientific success criteria on their
-  own. A contig-trimming or tiling change must be judged by its actual
-  effect on MiCall, not by its isolated global alignment to a truth.
-- **No fabricated molecules or phase.** Unsupported joins and
-  read-pair-contradicted recombinants must not be presented as
-  observed haplotypes. A major consensus is not necessarily a physical
-  genome. Preserve original-pair Q15 phase/allele safety checks.
-- **Preserve original evidence.** Ivanka must not rewrite input reads,
-  misattribute independent molecule counts, or accidentally erase
-  downstream minority-allele, genotype and variant evidence. Different
-  alignments to competing contigs must not imply duplicated original
-  observations.
-- **Empty output is a normal assembler result.** The Rust CLI must
-  exit successfully with an empty FASTA where no supported contigs
-  exist. Genuine malformed inputs and execution failures remain
-  errors. The pipeline must handle absence of candidate contigs
-  explicitly, and still pass its acceptance criteria.
-- **No external tuning/wrapper.** MiCall must call the same direct
-  Rust ELF as the benchmark, with an empty child environment and
-  only `--reads1`, `--reads2`, and `--output`.
+## Data and provenance
 
-## Current implementation caveats and prior experiments
+The 464-case source truths are independent of the assemblers. Existing
+HXB2 recombinant truths remain restricted to real HXB2 and pinned
+HIV subtype parents, optionally ≤5% untargeted uniformly sampled
+substitutions. New mixed cases use a pinned real HCV-1a MiCall reference,
+the same allowed HXB2-derived HIV sequence, or the pinned 550-base HXB2
+V3-region amplicon (V3 loop plus flanks); each component may have up
+to 5% deterministic, nonclustered substitutions. The exact FASTQs and
+reference panel stay outside the assembler containers. Generator,
+scorer, reference metadata, case identities and output provenance
+must all be source-attested and versioned.
 
-Ivanka's native extension currently indexes individual reads and their
-reverse complements, while validating original mate identifiers and
-order. Mate validity alone does not establish joint fragment placement
-or long-range physical phase. The read-backed ranking stage uses
-original-pair observations but does not retroactively make every
-extension vote proper-pair-aware. Improvements to joint mate placement
-require independent phase, genotype and end-to-end MiCall validation.
-
-Earlier reference-21-mer ranking and diagonal-reference support
-experiments (PRs #202 and #203) violated the scientific boundary;
-their apparent numerical improvements cannot qualify. A positive
-reference-panel alignment measures a useful downstream proxy, **not**
-molecular abundance or proof of full-length phase. The non-stealing
-mapper must preserve per-original-fragment Q15 accounting rather
-than treating multiple alignments as independent molecules.
-
-## What to evaluate
-
-The original authentic physical-198 comparison, and the mandatory
-expanded 198-real + 400-HXB2-derived synthetic, seven-assembler
-qualification, remain unchanged **numerical gates**:
-per-sample 90% alignment floors, no disallowed failure/timeouts,
-and positive alignment **and runtime Ψ(r) for every real r≥0**.
-Both are properties of **MiCall after integrating each assembler**.
-
-On synthetic inputs, independent known truth must evaluate the **final
-MiCall dominant sequence/consensus**, not a raw assembler's most
-truth-like contig. A standalone alignment, a complete contig, a
-tile-fragmentation score, and minority haplotype recall remain useful
-engineering diagnostics, never proof of pipeline success or additional
-release requirements. Preserve comparator and provenance isolation.
-
-When evaluating any change, ask:
-
-1. Did the *complete MiCall pipeline* recover the dominant identifiable
-   viral sequence more reliably?
-2. Were molecular evidence, minority variant measurements and uncertain
-   phase handled honestly?
-3. Were all reference and benchmark-truth boundaries maintained?
-4. Did the original and expanded integrated MiCall gates pass, with
-   independently verified all-exponent Ψ and per-sample floors?
+The prior 400-case source and its single-dominant/tie-aware scores remain
+**historical**, never silently upgraded to new 464-case evidence.
+The 198 physical samples are unaffected. The reserved 116-case
+seed-900–903 holdout (29 families × 4) is a supplemental, once-only
+post-freeze evaluation and does not replace qualification.
 
 See [Intent 004](intents/004-dominant-sequence.md),
-[assembler design](assembler-design.md),
-[testing procedure](testing-improvement-procedure.md) and
-[MiCall pipeline scope](mutable-pipeline-scope.md).
+[expanded benchmark qualification](intents/006-expanded-qualification.md),
+[truth provenance](intents/008-hxb2-synthetic-truth.md) and
+[synthetic v6 methodology](scientific-synthetic-v6.md).

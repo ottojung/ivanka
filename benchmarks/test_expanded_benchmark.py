@@ -10,7 +10,7 @@ from expanded.adapters import (ASSEMBLERS, PROGRAMS, binary_hash,
                                interleave_fastq, require_programs, steps)
 from expanded.gate import (BASELINES, SCORE_ORIGINS, TIMING_ORIGIN,
                            TRUTH_SCHEMA, summarize_gate)
-from expanded.synthetic import FAMILIES, generate_case, generate_cohort
+from expanded.synthetic import ACTIVE_FAMILIES, FAMILIES, generate_case, generate_cohort
 
 
 class ExpandedSyntheticTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class ExpandedSyntheticTests(unittest.TestCase):
     def test_many_diverse_reproducible_cases(self):
         with tempfile.TemporaryDirectory() as temp:
             manifest = generate_cohort(Path(temp) / "cases", seeds=2, pairs=65)
-            self.assertEqual(manifest["samples"], 2 * len(FAMILIES))
+            self.assertEqual(manifest["samples"], 2 * len(ACTIVE_FAMILIES))
             self.assertGreaterEqual(manifest["samples"], 40)
             self.assertEqual(len(set(x["id"] for x in manifest["cases"])),
                              manifest["samples"])
@@ -55,7 +55,9 @@ class ExpandedSyntheticTests(unittest.TestCase):
             self.assertTrue(all(x > 0 for x in minor["sampled_haplotype_pairs"]))
             self.assertGreater(chimeras["chimeric_mates"], 0)
             self.assertGreater(contamination["contamination_pairs"], 0)
-            self.assertEqual(low["pairs"], 75)
+            self.assertEqual(low["low_depth_target_x"], 6)
+            self.assertLess(low["pairs"], 300)
+            self.assertLess(low["nominal_coverage_x"], 7)
             self.assertEqual(deep["pairs"], 900)
 
     def test_strand_bias_changes_fragment_orientation(self):
@@ -450,7 +452,7 @@ class ExpandedTruthScoringTests(unittest.TestCase):
             perfect_result = dominant_truth_score(meta, truth, perfect)
             damaged = dominant_truth_score(meta, truth, incorrect)
             nothing = dominant_truth_score(meta, truth, empty)
-            self.assertEqual(perfect_result["score"], len(reference))
+            self.assertEqual(perfect_result["score"], 10000.)
             self.assertTrue(perfect_result["dominant_exact"])
             from expanded.score import reverse_complement
             reverse = root / "reverse.fa"

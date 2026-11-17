@@ -1,0 +1,23 @@
+{
+  "hcv": {
+    "fasta_sha256": "61391ff45705fbd0df529113dc2d8678d45d390f6aa9630d32d1b5e1588e9bb2",
+    "file": "hcv-1a-micall-fork-8511b5d.fasta",
+    "length": 9646,
+    "sequence_sha256": "ae890914689f2425ffa302496923fe8f8c4864b1659c1ddf5ab9fe068b2438a1",
+    "source_path": "micall/projects.json",
+    "source_region": "HCV-1a"
+  },
+  "mutation_policy": "Uniform without replacement; up to 5 percent substitutions per generating truth; fully deterministic per seed and truth",
+  "schema": "ivanka.synthetic.mixed_sources.v1",
+  "source_commit": "8511b5da2e85f76a2d13d2a4c311c78d915f2fa4",
+  "source_repository": "https://github.com/ottojung/MiCall",
+  "v3": {
+    "description": "550-nt HXB2 V3-region amplicon including V3 loop and flanks, not the 35-aa MiCall V3LOOP",
+    "length": 550,
+    "sequence_sha256": "6c4f90d471df63f26fd8a5b3eb89abcc53898c5631b8de91de61bfc0fceed25f",
+    "source_accession": "K03455.1",
+    "source_file": "K03455.1.fasta",
+    "zero_based_end_exclusive": 7450,
+    "zero_based_start_inclusive": 6900
+  }
+}

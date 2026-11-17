@@ -1,24 +1,52 @@
-"""Create or verify an HXB2-anchored 25-family viral benchmark cohort."""
+"""Generate and replay-attest source-pinned HIV and mixed-virus cohorts."""
 import argparse
 import hashlib
 import json
 from pathlib import Path
 
 from .hxb2_truth import haplotypes, validate, references
-from .synthetic import FAMILIES, generate_cohort, fingerprint
+from .synthetic import ACTIVE_FAMILIES, FAMILIES, generate_cohort, fingerprint
+from .read_model import PROFILE
 
 
-def verify_cohort(directory, *, expected=400):
+def verify_cohort(directory, *, expected=None):
     directory = Path(directory)
     manifest = json.loads((directory / "cohort.json").read_text())
     schema = manifest.get("schema")
+    if expected is None:
+        expected = len(ACTIVE_FAMILIES) * 16
+    v4 = schema == "ivanka.expanded.cohort.hxb2.v4"
+    family_set = ACTIVE_FAMILIES if v4 else FAMILIES
     if (schema not in ("ivanka.expanded.cohort.hxb2.v1",
-                      "ivanka.expanded.cohort.hxb2.v2")
+                      "ivanka.expanded.cohort.hxb2.v2",
+                      "ivanka.expanded.cohort.hxb2.v3",
+                      "ivanka.expanded.cohort.hxb2.v4")
             or len(manifest["cases"]) != expected
             or manifest.get("samples") != expected
-            or set(manifest["families"]) != set(FAMILIES)
+            or set(manifest["families"]) != set(family_set)
             or len({x["id"] for x in manifest["cases"]}) != expected):
-        raise ValueError("wrong HXB2 synthetic cohort schema or count")
+        raise ValueError("wrong versioned viral synthetic cohort schema or count")
+    if schema in ("ivanka.expanded.cohort.hxb2.v3",
+                  "ivanka.expanded.cohort.hxb2.v4"):
+        split = manifest.get("split")
+        seed_start = 0 if split == "development" else 900 if split == "validation" else -1
+        if (seed_start < 0 or manifest.get("seed_start") != seed_start
+                or manifest.get("quality_profile_sha256") != fingerprint(PROFILE)
+                or expected != len(family_set) * manifest.get("seeds_per_family", -1)
+                or not isinstance(manifest.get("normal_pairs"), int)
+                or manifest["normal_pairs"] < 20):
+            raise ValueError("invalid versioned cohort split or quality profile")
+        canonical = len(family_set) * 16
+        if expected == canonical and (split != "development"
+                                     or manifest["normal_pairs"] != 10000
+                                     or manifest["seeds_per_family"] != 16):
+            raise ValueError("canonical synthetic gate needs full development cases")
+        intended = {f"{family}-s{seed:03d}"
+                    for family in family_set
+                    for seed in range(seed_start,
+                                      seed_start+manifest["seeds_per_family"])}
+        if {row["id"] for row in manifest["cases"]} != intended:
+            raise ValueError("versioned cohort seeds differ from split")
     if schema == "ivanka.expanded.cohort.hxb2.v2":
         from .hxb2_lowdepth_v2 import verify_metadata
         verify_metadata(directory, manifest)
@@ -26,7 +54,7 @@ def verify_cohort(directory, *, expected=400):
     for row in manifest["cases"]:
         case = directory / row["id"]
         if not validate(case):
-            raise ValueError("invalid HXB2 truth")
+            raise ValueError("invalid replayed viral truth")
         reads = []
         for mate in (1, 2):
             with gzip.open(case / f"reads/R{mate}.fastq.gz", "rt") as file:
@@ -42,6 +70,21 @@ def verify_cohort(directory, *, expected=400):
                 for a, b in zip(*reads)):
             raise ValueError("paired-read identity mismatch")
         recorded = json.loads((case / "manifest.json").read_text())
+        if (schema in ("ivanka.expanded.cohort.hxb2.v3",
+                       "ivanka.expanded.cohort.hxb2.v4")
+                and ((recorded.get("schema") !=
+                      ("ivanka.expanded.synthetic.multi_viral.v1"
+                       if row["id"].split("-s")[0] in ACTIVE_FAMILIES[len(FAMILIES):]
+                       else "ivanka.expanded.synthetic.hxb2.v2"))
+                     or recorded.get("truth_model_revision") !=
+                        (3 if recorded.get("family") in ACTIVE_FAMILIES[len(FAMILIES):] else 2)
+                     or recorded.get("read_model_revision") != 2
+                     or (v4 and recorded.get("score_model_revision") != 2)
+                     or recorded.get("requested_normal_pairs")
+                     != manifest["normal_pairs"]
+                     or recorded.get("quality_profile_sha256")
+                     != manifest["quality_profile_sha256"])):
+            raise ValueError("mixed versioned simulation or wrong quality profile")
         if (recorded["sha256"] != row["sha256"]
                 or recorded.get("pairs") != len(reads[0])
                 or recorded.get("read_length") != 150
@@ -51,16 +94,26 @@ def verify_cohort(directory, *, expected=400):
     return fingerprint(directory / "cohort.json")
 
 
-def attestation(directory, *, expected=400):
+def attestation(directory, *, expected=None):
     """Provide a deterministic digest of a fully replay-validated cohort."""
     digest = verify_cohort(directory, expected=expected)
     panel = fingerprint(Path(__file__).parent / "references/manifest.json")
     cohort = json.loads((Path(directory) / "cohort.json").read_text())
-    variant = ("v2" if cohort["schema"].endswith(".v2") else "v1")
-    material = (digest + panel + "ivanka.expanded.hxb2_ancestry." + variant).encode()
+    variant = ("v4" if cohort["schema"].endswith(".v4") else
+               "v3" if cohort["schema"].endswith(".v3") else
+               "v2" if cohort["schema"].endswith(".v2") else "v1")
+    extra = (fingerprint(Path(__file__).parent / "references/mixed-sources-20261117.json")
+             if variant == "v4" else "")
+    material = (digest + panel + extra +
+                "ivanka.expanded.hxb2_ancestry." + variant).encode()
     return {
-        "schema": "ivanka.hxb2_truth_validation." + variant,
+        "schema": ("ivanka.mixed_viral_truth_validation.v4" if variant == "v4"
+                   else "ivanka.hxb2_truth_validation." + variant),
         "valid": True, "samples_validated": expected,
+        **({"split": cohort["split"], "seed_start": cohort["seed_start"],
+            "normal_pairs": cohort["normal_pairs"]} if variant in ("v3", "v4") else {}),
+        **({"min_abundance": 0.15, "scoring_method": "balanced_abundant_truths_v1",
+            "mixed_source_sha256": extra} if variant == "v4" else {}),
         "cohort_sha256": digest,
         "reference_manifest_sha256": panel,
         "verification_sha256": hashlib.sha256(material).hexdigest(),
@@ -71,7 +124,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--seeds", type=int, default=16)
-    parser.add_argument("--pairs", type=int, default=900)
+    parser.add_argument("--resume", action="store_true",
+                        help="verify completed cases and recover interrupted generation")
+    parser.add_argument("--split", choices=("development", "validation"),
+                        default="development")
+    parser.add_argument("--pairs", type=int, default=10000)
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--derive-low-depth-v2-from", type=Path,
                         help="derive a new immutable v2 cohort from an attested v1")
@@ -79,12 +136,14 @@ def main():
                         help="write a strict independent validation attestation")
     args = parser.parse_args()
     if args.verify_only:
-        proof = attestation(args.directory, expected=25 * args.seeds)
+        proof = attestation(args.directory, expected=(
+            len(ACTIVE_FAMILIES) if json.loads((args.directory / "cohort.json").read_text())
+            ["schema"].endswith(".v4") else len(FAMILIES)) * args.seeds)
         if args.certificate:
             with args.certificate.open("x") as output:
                 json.dump(proof, output, sort_keys=True, indent=2)
                 output.write("\n")
-        print("HXB2_COHORT_VALIDATED", 25 * args.seeds,
+        print("VIRAL_COHORT_VALIDATED", proof["samples_validated"],
               proof["cohort_sha256"])
         return
     if args.seeds not in range(1, 129) or args.pairs < 20:
@@ -95,7 +154,7 @@ def main():
         manifest = derive(args.derive_low_depth_v2_from, args.directory)
     else:
         manifest = generate_cohort(args.directory, args.seeds, args.pairs,
-                                   truth_model=haplotypes)
+                                   split=args.split, resume=args.resume)
     proof = attestation(args.directory, expected=manifest["samples"])
     if args.certificate:
         with args.certificate.open("x") as output:

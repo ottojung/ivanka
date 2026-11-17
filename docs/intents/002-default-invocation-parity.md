@@ -54,7 +54,7 @@ invocation contract.
 4. Both mandatory numerical gates must be passed using this identical
    default executable and invocation: the **full unchanged physical
    198-sample MiCall/IVA benchmark** and the **expanded 198-real +
-   400-synthetic seven-assembler benchmark**. Passing only one gate,
+   464-synthetic seven-assembler benchmark**. Passing only one gate,
    unit tests, or reproducing tuned image settings is **insufficient**.
 5. The default invocation is declared passing only when all required
    per-sample, runtime and alignment Ψ(r) criteria pass; any

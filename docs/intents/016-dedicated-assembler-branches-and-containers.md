@@ -66,8 +66,8 @@ tool image or subprocess.
    images on Assembler Bench `/bench/`. Historical combined-image
    results remain usable for diagnostics but do not qualify.
 
-The mandatory original 198-sample and enhanced 598-case seven-way
-scientific gates remain unchanged. This intent is cumulative with
+The mandatory original 198-sample and enhanced 662-case seven-way
+scientific gates remain binding. This intent is cumulative with
 [Intent 010](010-upstream-micall-read-only.md) and
 [Intent 011](011-ottojung-micall-fork-provenance.md), and never
 permits pushes or PRs to `cfe-lab/MiCall`.

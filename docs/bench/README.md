@@ -3,6 +3,15 @@
 Assembler Bench is a static, privacy-safe GitHub Pages website:
 https://ottojung.github.io/ivanka/bench/
 
+The public site currently displays the historical 400-HXB2-case
+MiCall cohort and the unchanged 198-physical-case cohort. The new
+**464-case mixed-virus qualification view is not published or qualified
+until its own 7-way execution and source validation complete.**
+The site retains historical runs. Once available, the new synthetic
+score is length-balanced over **every ≥15%-abundant generating truth**.
+The previous 400-case final-MAX metric is historical and must not be
+relabeled as the new score.
+
 The public site shows three current-cohort views and selectable
 earlier execution runs. Measurements remain attached to their
 source/image identities; a scoring change does not require
@@ -10,7 +19,8 @@ rerunning a retained MiCall consensus output. The three current
 cohort views are:
 
 - **400 HXB2-derived synthetic samples:** final dominant MiCall output
-  scored against withheld synthetic truth. Each of the seven assembler
+  scored against withheld synthetic truth (v5 generation and rescore
+  required; earlier synthetic runs remain historical). Each of the seven assembler
   arms runs its own source-attested fork container.
 - **198 physical samples:** the unchanged original reads and independent
   33-reference MAX scorer, for IVA, Ivanka, Haploflow, MEGAHIT, ABySS,
@@ -22,10 +32,16 @@ cohort views are:
 scores and timed seconds over all 598 cases, with the numeric scores
 preserved exactly. Every case uses the same local-alignment scorer:
 match +1, mismatch -1, gap-open -2, gap-extension -1, across all
-final MAX sequences. The synthetic reference panel is a single
-generating truth sequence. The physical reference panel contains
+final MAX sequences. The synthetic reference panel contains
+the generating majority truth, or the two tied generating truths in
+equal-abundance mixtures; it is identical across competing assemblers. The physical reference panel contains
 the fixed project references. All values are raw alignment points.
 
+
+For the new qualifying synthetic benchmark, see
+[scientific synthetic v6](../scientific-synthetic-v6.md). All previously
+finished synthetic arms must be run again against the new FASTQs; the
+source hashes do not permit silent reuse.
 
 ## Static progress publication
 
@@ -63,7 +79,7 @@ competitor scores are never converted to zero or Ivanka victories.
 ## Scientific status and checks
 
 The full expanded benchmark is **not qualified** until the separate
-400-synthetic and 198-real gates have all seven comparable MiCall
+464-synthetic and 198-real gates have all seven comparable MiCall
 assemblers, the required 90% per-sample floor and the separate strict
 all-real-r>=0 alignment and runtime Ψ tests. Combining the cohorts
 never substitutes for passing both independent gates. The original physical Ivanka-versus-IVA qualification remains a separate
@@ -107,8 +123,9 @@ with anonymized H-/R-style case aliases. The archive publisher
 checks the original result stream, immutable image IDs, fork commit
 attestation, HXB2 truth proof, MiCall execution records, final
 conseq.csv digests and in-container timers. Synthetic consensus
-sequences are scored by the current local scorer against their
-one generating truth sequence. Physical scores are recovered from
+sequences are scored against the majority generating truth, or both
+equally dominant generating truths for a 50:50 mixture. Physical scores
+are recovered from
 the original fixed 33-reference local alignments.
 
 The current source-pinned qualification cohort remains separate:

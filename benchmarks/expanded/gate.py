@@ -1,4 +1,4 @@
-"""Fail-closed 198-real + 400-synthetic, seven-assembler qualification gate.
+"""Fail-closed 198-real + 464-synthetic, seven-assembler qualification gate.
 
 All arms use the same final MAX local-alignment score. Qualification
 requires full evidence from every assembler and both sample cohorts.
@@ -10,20 +10,23 @@ from pathlib import Path
 import sys
 
 from .adapters import ASSEMBLERS
-from .synthetic import FAMILIES
+from .synthetic import ACTIVE_FAMILIES, FAMILIES
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from psi_acceptance import summarize as psi  # noqa: E402
 
 BASELINES = tuple(name for name in ASSEMBLERS if name != "ivanka")
 SCORE_FLOOR = 0.90
-MAX_WALL = 1800
+MAX_WALL = 3000
 # The gate scores downstream MiCall output, never the assembler's FASTA.
 SCORE_ORIGIN = "micall_final_max_reference_panel_v1"
 SCORE_ORIGINS = {"real": SCORE_ORIGIN, "synthetic": SCORE_ORIGIN}
 TIMING_ORIGIN = "micall_in_container_monotonic_v1"
 TRUTH_SCHEMA = "ivanka.hxb2_truth_validation.v1"
-TRUTH_SCHEMAS = {TRUTH_SCHEMA, "ivanka.hxb2_truth_validation.v2"}
+TRUTH_SCHEMAS = {TRUTH_SCHEMA, "ivanka.hxb2_truth_validation.v2",
+                 "ivanka.hxb2_truth_validation.v3",
+                 "ivanka.mixed_viral_truth_validation.v4"}
+MULTITRUTH_SCORE_ORIGIN = "micall_final_max_abundant_truths_balanced_v2"
 
 
 def eligible_truth(row):
@@ -35,6 +38,19 @@ def eligible_truth(row):
     proof = row.get("truth_validation")
     return (isinstance(proof, dict)
             and proof.get("schema") in TRUTH_SCHEMAS
+            and (proof.get("schema") != "ivanka.hxb2_truth_validation.v3"
+                 or (proof.get("split") == "development"
+                     and proof.get("seed_start") == 0
+                     and proof.get("normal_pairs") == 10000))
+            and (proof.get("schema") != "ivanka.mixed_viral_truth_validation.v4"
+                 or (proof.get("split") == "development"
+                     and proof.get("seed_start") == 0
+                     and proof.get("normal_pairs") == 10000
+                     and proof.get("min_abundance") == 0.15
+                     and proof.get("scoring_method") ==
+                         "balanced_abundant_truths_v1"
+                     and isinstance(proof.get("mixed_source_sha256"), str)
+                     and len(proof["mixed_source_sha256"]) == 64))
             and proof.get("valid") is True
             and all(isinstance(proof.get(key), str)
                     and len(proof[key]) == 64
@@ -48,16 +64,21 @@ def finite_positive(number):
 
 
 def summarize_gate(records, *, real_count=198, synthetic_seeds=16,
-                   families=FAMILIES):
+                   families=ACTIVE_FAMILIES):
     """Zero missing tools, zero missing samples, zero hidden score substitutions."""
     records = list(records)
     synthetic_count = synthetic_seeds * len(families)
     expected = {"real": real_count, "synthetic": synthetic_count}
+    canonical = (real_count == 198 and synthetic_seeds == 16
+                 and tuple(families) == ACTIVE_FAMILIES)
     report = {"schema": "ivanka.expanded.seven_way.v2", "pass": False,
               "assemblers": list(ASSEMBLERS), "expected": expected,
               "families_expected": list(families), "errors": [],
               "comparisons": {}, "worst_case_floor": SCORE_FLOOR,
-              "score_origins": SCORE_ORIGINS, "timing_origin": TIMING_ORIGIN,
+              "score_origins": ({**SCORE_ORIGINS,
+                                 "synthetic": MULTITRUTH_SCORE_ORIGIN}
+                                if canonical else SCORE_ORIGINS),
+              "timing_origin": TIMING_ORIGIN,
               "synthetic_truth_schema": TRUTH_SCHEMA}
     errors = report["errors"]
     ids = set()
@@ -89,6 +110,10 @@ def summarize_gate(records, *, real_count=198, synthetic_seeds=16,
         proof = groups["synthetic"][0].get("truth_validation")
         if isinstance(proof, dict) and proof.get("schema") in TRUTH_SCHEMAS:
             report["synthetic_truth_schema"] = proof["schema"]
+    if canonical and groups["synthetic"] and (
+            groups["synthetic"][0].get("truth_validation", {}).get("schema")
+            != "ivanka.mixed_viral_truth_validation.v4"):
+        errors.append("synthetic:canonical_requires_multitruth_v4")
     for cohort, count in expected.items():
         if len(groups[cohort]) != count:
             errors.append(f"{cohort}:expected_{count}_observed_{len(groups[cohort])}")
@@ -116,7 +141,12 @@ def summarize_gate(records, *, real_count=198, synthetic_seeds=16,
                    for x in values.values()):
                 errors.append(f"{name}:failed_or_unrun_assembler")
                 continue
-            if any(x.get("score_origin") != SCORE_ORIGINS[cohort]
+            multi = (cohort == "synthetic"
+                     and row.get("truth_validation", {}).get("schema")
+                         == "ivanka.mixed_viral_truth_validation.v4")
+            expected_origin = (MULTITRUTH_SCORE_ORIGIN if multi
+                               else SCORE_ORIGINS[cohort])
+            if any(x.get("score_origin") != expected_origin
                    or x.get("timing_origin") != TIMING_ORIGIN
                    for x in values.values()):
                 errors.append(f"{name}:not_final_MiCall_output_or_timing")
@@ -134,6 +164,9 @@ def summarize_gate(records, *, real_count=198, synthetic_seeds=16,
                    for x in values.values()):
                 errors.append(f"{name}:invalid_score_or_runtime")
                 continue
+            if multi:
+                from .gate_multitruth import check_sample
+                errors.extend(check_sample(name, values, BASELINES, SCORE_FLOOR))
             highest = max(values[other]["score"] for other in BASELINES)
             if values["ivanka"]["score"] < SCORE_FLOOR * highest:
                 errors.append(f"{name}:ivanka_below_90pct_best_competitor")

@@ -11,11 +11,14 @@ import json
 import random
 from pathlib import Path
 
+from .read_model import insert_length, low_depth_pair_count, quality_values, PROFILE
+
 DNA = "ACGT"
 COMP = str.maketrans("ACGT", "TGCA")
 READ_LENGTH = 150
 FRAGMENT = 270
-# 25 experimental families x 16 seeds = 400 synthetic samples by default.
+# Historical HXB2 families remain unchanged; four new mixed-virus cases
+# make the active benchmark 29 families x 16 seeds = 464 samples.
 FAMILIES = (
     "clonal", "iid_errors", "quality_decay", "cycle_bursts",
     "homopolymer_slippage", "systematic_errors", "gc_dropout",
@@ -25,6 +28,12 @@ FAMILIES = (
     "tandem_repeat", "inverted_repeat", "overlapping_mates",
     "long_inserts", "discordant_pairs", "complex_mixture",
 )
+
+MIXED_FAMILIES = (
+    "hcv_hiv_15pct", "hcv_hiv_30pct",
+    "hcv_v3_15pct", "hcv_v3_30pct",
+)
+ACTIVE_FAMILIES = (*FAMILIES, *MIXED_FAMILIES)
 
 
 def rc(sequence):
@@ -80,29 +89,35 @@ def haplotypes(rng, family):
     return variants, [0.65, 0.25, 0.08, 0.02]
 
 
-def read_errors(sequence, family, rng, *, mate, start):
-    """Sequencing errors: correlated cycles, context, indels and bad mate."""
+def read_errors(sequence, family, rng, *, mate, start, calibrated=True):
+    """Empirical Phred quantiles; controlled perturbations alter Q and errors."""
     bases = list(sequence)
+    qs = (quality_values(rng, mate) if calibrated
+          else [40] * len(bases))
     for i, base in enumerate(bases):
-        probability = 0.0 if family == "clonal" else 0.0004
-        if family == "iid_errors":
-            probability = 0.006
+        q = qs[i]
         if family == "quality_decay" and i > 90:
-            probability += 0.09 * (i-90)/max(1, len(bases)-90)
+            q = max(5, q - round(19 * (i-90) / (len(bases)-90)))
         if family == "cycle_bursts" and 65 <= i < 78:
-            probability = 0.15
+            q = 8
         if family == "mate_quality_asymmetry" and mate == 2:
-            probability = 0.045
+            q = min(q, 14)
+        if family == "iid_errors":
+            q = min(q, 22)
+        if family == "systematic_errors" and (start+i) % 193 == 71:
+            q = 2
+        qs[i] = q
+        probability = 0.0 if family == "clonal" else 10 ** (-q / 10)
+        if family == "iid_errors":
+            probability = max(probability, 0.006)
         if family == "systematic_errors" and (start+i) % 193 == 71:
             probability = 0.82
         if rng.random() < probability:
             bases[i] = pick_alt(base, rng)
     if family == "tandem_repeat" and rng.random() < 0.12:
-        # Read-level duplicate tract, never a fabricated repeat in truth.
         at = rng.randrange(40, len(bases)-35)
         bases[at:at+28] = bases[at-28:at]
     if family == "inverted_repeat" and rng.random() < 0.12:
-        # A library chimeric inversion artifact, not a truth-level inversion.
         at = rng.randrange(12, len(bases)-48)
         bases[at:at+32] = list(rc("".join(bases[at:at+32])))
     if family == "homopolymer_slippage":
@@ -116,25 +131,16 @@ def read_errors(sequence, family, rng, *, mate, start):
             else:
                 bases.insert(at, bases[at])
                 bases.pop()
-    quality = ["I"] * len(bases)
-    if family == "quality_decay":
-        for i in range(90, len(quality)):
-            quality[i] = chr(33 + max(8, 39 - (i-90)//2))
-    if family == "cycle_bursts":
-        for i in range(65, min(78, len(quality))):
-            quality[i] = "0"
-    if family == "mate_quality_asymmetry" and mate == 2:
-        quality = ["5"] * len(bases)
-    return "".join(bases), "".join(quality)
+    return "".join(bases), "".join(chr(33 + q) for q in qs)
 
 
 def choose_fragment(rng, genome, family, *, reusable):
-    insert = (185 if family == "overlapping_mates" else
-              rng.randrange(500, 641) if family == "long_inserts" else FRAGMENT)
+    insert = insert_length(rng, family)
     if family == "pcr_jackpot":
         # Repeated independent reads from one of just 13 original fragments.
         # The fixed pool stores (start, insert), in that order.
         return rng.choice(reusable)
+    insert = min(insert, len(genome))
     width = len(genome) - insert + 1
     if width < 1:
         raise ValueError("fragment longer than haplotype")
@@ -169,7 +175,7 @@ def _write_gzip(path, records):
 
 def generate_case(root, family, seed, pairs=900, *,
                   truth_model=None, historical_random=False):
-    if family not in FAMILIES or not isinstance(seed, int) or seed < 0:
+    if family not in ACTIVE_FAMILIES or not isinstance(seed, int) or seed < 0:
         raise ValueError("invalid synthetic case")
     if pairs < 20:
         raise ValueError("at least 20 pairs required")
@@ -182,8 +188,13 @@ def generate_case(root, family, seed, pairs=900, *,
     truth_dir.mkdir()
     rng = random.Random(int.from_bytes(
         hashlib.sha256(f"expanded-v1:{family}:{seed}".encode()).digest()[:8], "big"))
-    if truth_model is None and not historical_random:
-        from .hxb2_truth import haplotypes as truth_model
+    new_model = truth_model is None and not historical_random
+    mixed_model = new_model and family in MIXED_FAMILIES
+    if mixed_model:
+        from .mixed_truth import haplotypes as truth_model
+    elif new_model:
+        from .hxb2_truth import haplotypes as hxb2_haplotypes
+        truth_model = lambda family, seed: hxb2_haplotypes(family, seed, revision=2)
     if historical_random:
         if truth_model is not None:
             raise ValueError("cannot mix HXB2 and legacy truth generators")
@@ -195,8 +206,12 @@ def generate_case(root, family, seed, pairs=900, *,
         genomes, fractions, decoy, ancestry = truth_model(family, seed)
     reusable = [(rng.randrange(len(genomes[0])-FRAGMENT+1), FRAGMENT)
                 for _ in range(13)] if family == "pcr_jackpot" else []
-    total = max(20, pairs//4) if family == "low_depth" else (
-        3*pairs if family == "ultradeep" else pairs)
+    low_target = None
+    if new_model and family == "low_depth":
+        total, low_target = low_depth_pair_count(len(genomes[0]), seed, pairs)
+    else:
+        total = max(20, pairs//4) if family == "low_depth" else (
+            3*pairs if family == "ultradeep" else pairs)
     first, second = [], []
     counts = [0] * len(genomes)
     starts = set()
@@ -221,9 +236,11 @@ def generate_case(root, family, seed, pairs=900, *,
             new_start = rng.randrange(len(genome)-READ_LENGTH+1)
             r2 = rc(genome[new_start:new_start+READ_LENGTH])
             chimeras += 1
-        r1, q1 = read_errors(r1, family, rng, mate=1, start=start)
+        r1, q1 = read_errors(r1, family, rng, mate=1, start=start,
+                             calibrated=new_model)
         r2, q2 = read_errors(r2, family, rng, mate=2,
-                             start=start+insert-READ_LENGTH)
+                             start=start+insert-READ_LENGTH,
+                             calibrated=new_model)
         if family == "adapter_tails":
             # A shared technical tail can falsely join unrelated templates.
             r1, r2 = r1[:-18] + "AGATCGGAAGAGCACACG", r2[:-18] + "AGATCGGAAGAGCACACG"
@@ -239,16 +256,28 @@ def generate_case(root, family, seed, pairs=900, *,
     truth.write_text("".join(
         f">haplotype_{i+1}\n{genome}\n" for i, genome in enumerate(genomes)))
     data = {
-        "schema": ("ivanka.expanded.synthetic.hxb2.v1" if ancestry is not None
+        "schema": ("ivanka.expanded.synthetic.multi_viral.v1" if mixed_model
+                   else "ivanka.expanded.synthetic.hxb2.v2" if new_model
+                   else "ivanka.expanded.synthetic.hxb2.v1" if ancestry is not None
                    else "ivanka.expanded.synthetic.v1"),
         "family": family, "seed": seed,
+        **({"truth_model_revision": 3 if mixed_model else 2,
+            "read_model_revision": 2, "score_model_revision": 2,
+            "quality_profile_sha256": fingerprint(PROFILE),
+            "low_depth_target_x": low_target,
+            "requested_normal_pairs": pairs,
+            "nominal_coverage_x": round(total * 2 * READ_LENGTH /
+                                        len(genomes[0]), 4),
+            "fragment_sampling_model": "prespecified_three_mode_v1"}
+           if new_model else {}),
         "pairs": total, "read_length": READ_LENGTH, "haplotype_count": len(genomes),
         "nominal_fractions": fractions, "sampled_haplotype_pairs": counts,
         "unique_fragment_coordinates": len(starts), "chimeric_mates": chimeras,
         "contamination_pairs": contaminants, "truth_is_evaluation_only": True,
         "read_files": ["reads/R1.fastq.gz", "reads/R2.fastq.gz"],
         "hidden_truth_file": "hidden-truth/haplotypes.fasta",
-        **({"hxb2_ancestry": ancestry} if ancestry is not None else {}),
+        **({("mixed_ancestry" if mixed_model else "hxb2_ancestry"): ancestry}
+           if ancestry is not None else {}),
         "sha256": {str(path.relative_to(case)): fingerprint(path)
                    for path in (fq1, fq2, truth)},
     }
@@ -256,27 +285,64 @@ def generate_case(root, family, seed, pairs=900, *,
     return data
 
 
-def generate_cohort(root, seeds=16, pairs=900, *,
-                    truth_model=None, historical_random=False):
+def generate_cohort(root, seeds=16, pairs=10000, *,
+                    truth_model=None, historical_random=False,
+                    split="development", resume=False):
     root = Path(root)
-    if root.exists() and any(root.iterdir()):
+    if root.exists() and any(root.iterdir()) and not resume:
         raise FileExistsError(f"refusing nonempty cohort {root}")
     root.mkdir(parents=True, exist_ok=True)
-    if truth_model is None and not historical_random:
-        from .hxb2_truth import haplotypes as truth_model
-    records = [generate_case(root, family, seed, pairs,
-                             truth_model=truth_model,
-                             historical_random=historical_random)
-               for family in FAMILIES for seed in range(seeds)]
+    if resume and (root / "cohort.json").exists():
+        from .hxb2_cohort import verify_cohort
+        verify_cohort(root, expected=len(ACTIVE_FAMILIES) * seeds)
+        existing = json.loads((root / "cohort.json").read_text())
+        if (existing.get("split") != split
+                or existing.get("normal_pairs") != pairs
+                or existing.get("seeds_per_family") != seeds):
+            raise ValueError("resumed cohort parameters differ")
+        return existing
+    if split not in ("development", "validation"):
+        raise ValueError("unknown synthetic cohort split")
+    if split == "validation" and (historical_random or truth_model is not None):
+        raise ValueError("holdout requires versioned HXB2 generator")
+    seed_start = 900 if split == "validation" else 0
+    families = FAMILIES if truth_model is not None or historical_random else ACTIVE_FAMILIES
+    records = []
+    for family in families:
+        for seed in range(seed_start, seed_start + seeds):
+            case = root / f"{family}-s{seed:03d}"
+            if resume and case.exists():
+                from .hxb2_truth import validate
+                if not (case / "manifest.json").is_file():
+                    raise ValueError(f"incomplete synthetic case requires audit: {case}")
+                previous = json.loads((case / "manifest.json").read_text())
+                if (previous.get("family") != family
+                        or previous.get("seed") != seed
+                        or previous.get("requested_normal_pairs") != pairs
+                        or not validate(case)):
+                    raise ValueError(f"resumed synthetic case is not verified: {case}")
+                records.append(previous)
+            else:
+                records.append(generate_case(root, family, seed, pairs,
+                                             truth_model=truth_model,
+                                             historical_random=historical_random))
     manifest = {"schema": ("ivanka.expanded.cohort.v1"
-                           if historical_random else "ivanka.expanded.cohort.hxb2.v1"),
-                "families": list(FAMILIES),
+                           if historical_random else
+                           "ivanka.expanded.cohort.hxb2.v1" if truth_model
+                           else "ivanka.expanded.cohort.hxb2.v4"),
+                "families": list(families),
                 "seeds_per_family": seeds, "samples": len(records),
+                "seed_start": seed_start, "split": split,
+                "normal_pairs": pairs,
+                **({"quality_profile_sha256": fingerprint(PROFILE)}
+                   if not historical_random and truth_model is None else {}),
                 "cases": [{"id": f"{x['family']}-s{x['seed']:03d}",
                            "sha256": x["sha256"]} for x in records]}
-    with (root / "cohort.json").open("x") as out:
+    pending = root / "cohort.json.pending"
+    with pending.open("w" if resume else "x") as out:
         json.dump(manifest, out, indent=2, sort_keys=True)
         out.write("\n")
+    pending.replace(root / "cohort.json")
     return manifest
 
 
@@ -284,14 +350,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("out", type=Path)
     parser.add_argument("--seeds", type=int, default=16)
-    parser.add_argument("--pairs", type=int, default=900)
+    parser.add_argument("--pairs", type=int, default=10000)
+    parser.add_argument("--resume", action="store_true",
+                        help="verify completed cases and resume interrupted generation")
+    parser.add_argument("--split", choices=("development", "validation"),
+                        default="development")
     parser.add_argument("--historical-random-only", action="store_true",
                         help="reproduce ineligible v1 diagnostics; never qualify")
     args = parser.parse_args()
     if not (1 <= args.seeds <= 128):
         parser.error("--seeds must be 1..128")
     cohort = generate_cohort(args.out, args.seeds, args.pairs,
-                             historical_random=args.historical_random_only)
+                             historical_random=args.historical_random_only, split=args.split,
+                             resume=args.resume)
     print(json.dumps({"samples": cohort["samples"],
                       "families": len(cohort["families"])}, sort_keys=True))
 

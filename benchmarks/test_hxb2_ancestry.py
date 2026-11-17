@@ -48,14 +48,14 @@ class Hxb2AncestryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             a = generate_case(root, "minority_5pct", 8, pairs=40)
-            self.assertEqual(a["schema"], "ivanka.expanded.synthetic.hxb2.v1")
+            self.assertEqual(a["schema"], "ivanka.expanded.synthetic.hxb2.v2")
             self.assertTrue(validate(root / "minority_5pct-s008"))
             self.assertEqual(a["haplotype_count"], 2)
             self.assertTrue(all(x in a["sha256"] for x in (
                 "reads/R1.fastq.gz", "reads/R2.fastq.gz",
                 "hidden-truth/haplotypes.fasta")))
             self.assertEqual(a["hxb2_ancestry"]["schema"],
-                             "ivanka.expanded.hxb2_ancestry.v1")
+                             "ivanka.expanded.hxb2_ancestry.v2")
 
     def test_truth_and_ancestry_tampering_fail_even_if_hash_is_rewritten(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -101,8 +101,8 @@ class Hxb2AncestryTests(unittest.TestCase):
                 list(cohort_rows(old))
             new = Path(tmp) / "hxb2"
             generate_cohort(new, seeds=1, pairs=20)
-            self.assertEqual(len(list(cohort_rows(new))), 25)
-            self.assertEqual(len(verify_cohort(new, expected=25)), 64)
+            self.assertEqual(len(list(cohort_rows(new))), 29)
+            self.assertEqual(len(verify_cohort(new, expected=29)), 64)
 
 
 if __name__ == "__main__":

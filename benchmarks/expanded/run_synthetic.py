@@ -20,7 +20,9 @@ def cohort_rows(cohort_root):
     cohort = json.loads((root / "cohort.json").read_text())
     if cohort.get("schema") not in (
             "ivanka.expanded.cohort.hxb2.v1",
-            "ivanka.expanded.cohort.hxb2.v2"):
+            "ivanka.expanded.cohort.hxb2.v2",
+            "ivanka.expanded.cohort.hxb2.v3",
+            "ivanka.expanded.cohort.hxb2.v4"):
         raise ValueError("legacy random or invalid HXB2 synthetic cohort")
     if cohort["schema"].endswith(".v2"):
         from .hxb2_lowdepth_v2 import verify_metadata
@@ -33,7 +35,10 @@ def cohort_rows(cohort_root):
         if not directory.is_dir() or directory.parent != root:
             raise ValueError("unsafe or missing synthetic case directory")
         manifest = json.loads((directory / "manifest.json").read_text())
-        if manifest.get("schema") != "ivanka.expanded.synthetic.hxb2.v1":
+        if manifest.get("schema") not in (
+                "ivanka.expanded.synthetic.hxb2.v1",
+                "ivanka.expanded.synthetic.hxb2.v2",
+                "ivanka.expanded.synthetic.multi_viral.v1"):
             raise ValueError("non-HXB2 synthetic sample manifest")
         if not validate(directory):
             raise ValueError("unverified HXB2 source ancestry")

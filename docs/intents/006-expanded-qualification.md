@@ -1,104 +1,90 @@
-# Intent 006: Beat the additional assemblers on real and synthetic data
+# Intent 006: Beat six assemblers on the authentic MiCall benchmark
 
-**Status: REQUIRED completion and release gate, effective immediately; not yet passed.**
+**Binding numerical completion and release gate. Not yet passed.**
 
-The enhanced benchmark is **mandatory for all future claims that Ivanka
-is finished, benchmark-qualified, or ready for release**. It **adds to**,
-and does not replace, [Intent 005](005-physical-198-qualification.md).
-The original authentic 198-sample IVA gate and its strict criteria remain
-independently binding. A prior IVA-only pass is no longer sufficient.
+Use the same default, reference-blind Rust Ivanka in the unchanged MiCall
+pipeline, versus IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet.
+Every assembler has its own separately pinned MiCall fork branch/image;
+all seven must have attributable outcomes for every case.
 
-## Required comparison
+The current canonical benchmark comprises **198 physical cases + 464
+synthetic cases = 662 cases**. The synthetic cases contain the original
+25 HXB2-derived read-stress families and four new mixed-virus families
+at 16 fixed seeds each. The previous 400-case synthetic cohort is a
+separate historical experiment, not eligible for the new qualification.
+See [Intent 008](008-hxb2-synthetic-truth.md) for allowable sources.
 
-Compare the **same default, Rust-only Ivanka** invocation from
-[Intents 001](001-rust-only-execution.md) and
-[002](002-default-invocation-parity.md) against:
+## Numeric scores
 
-- IVA
-- Haploflow
-- MEGAHIT
-- ABySS
-- SPAdes
-- Velvet
+Only the complete **MiCall final MAX consensus output** may be scored;
+scoring standalone assembler FASTA cannot qualify. Every synthetic case
+contains one or more withheld generating truths with declared
+**nominal abundance fractions**.
 
-Use the **198 original real samples** and **400 synthetic samples**
-(25 distinct mechanism-driven families × 16 independently fixed seeds).
-**Every synthetic truth must satisfy
-[Intent 008: HXB2-anchored truth](008-hxb2-synthetic-truth.md)**:
-only HXB2, random HXB2/other-HIV-subtype recombinants and optional
-uniformly random, non-purposefully-clustered substitutions at ≤5%.
-**Generic randomly generated A/C/G/T genomes are prohibited.** The
-existing 400-case generic-random v1 cohort and its results remain
-historical diagnostics and cannot qualify this gate; construct a new
-HXB2-derived, cryptographically pinned cohort.
+1. **Select required truths** by **abundance ≥15% (inclusive)**. All
+   eligible truths count, even if they are not the dominant haplotype.
+   Below-threshold generating truths remain historical/diagnostic and
+   do not contribute to the required quality score.
+2. Align each required truth to every final MAX sequence, on both
+   orientations, with the exact common local scorer: match +1,
+   mismatch −1, gap-open −2, gap-extension −1. Let `a_i` be the
+   maximum alignment score to truth `i`; let `L_i` be its length.
+   **The primary synthetic score is**
+   `10000 × mean(a_i/L_i)` over all required truths.
+   This makes shorter abundant V3-region amplicons matter equally with
+   full HCV/HIV genomes, and bounds full recovery at 10,000 points.
+3. Retain **each** raw local score, truth length, recovery fraction,
+   number of eligible truths and the raw combined alignment sum
+   `sum(a_i)` as evidence. The maximum may reuse the same MiCall
+   consensus for multiple similar truths: MiCall's mixture/indel
+   mapping means these need not be distinct contigs.
+4. The **physical** 198-sample score remains the historical same
+   fixed 33-reference maximum local-alignment score in raw points.
+   Physical reads, scoring and qualification evidence are not changed.
+5. Full MiCall runtime is independently measured in-container.
+   The synthetic per-arm limit is 50 minutes and memory limit 5 GiB;
+   retain peak-memory telemetry as an additional diagnostic.
 
-Families may still vary **sequencing/read-level mechanisms**—correlated
-errors, homopolymer indels, cycle-specific errors, GC dropout, coverage
-holes, PCR jackpots, strain mixtures, repeats present in allowed
-reference-derived truths, contamination and discordant mates. Never
-engineer a forbidden truth-level repeat, inversion, GC profile or cluster
-just to create a difficult family. Synthetic truth is evaluator-only
-and must never be accessible to any assembler.
+The mixed-virus cases include **mutated HCV-1a + mutated HXB2-derived
+HIV** and **mutated HCV-1a + mutated 550-base HXB2 V3-region amplicon**
+(V3 loop with flanks), with 85:15 and 70:30 abundances in both
+combinations. Each truth has at most 5% independently sampled,
+nonclustered substitutions. Every source and every random choice is
+pinned and independently replay-validated. No known truths or
+references enter assembler containers.
 
-## Strict qualification
+## Strict comparative qualification
 
-**Benchmark the entire MiCall pipeline**, holding MiCall processing
-constant while changing only the integrated assembler. Score the
-final MiCall MAX consensus sequences by the same maximum local
-alignment function, against the independently fixed case reference
-panel (one generating truth sequence per synthetic case). Ivanka's raw contigs may be incomplete,
-overlapping or empty; **there is no independent assembler-only
-haplotype recovery, full-length global-alignment or contig-count gate**
-under [Intent 004](004-dominant-sequence.md). In particular, synthetic
-truth scoring of the best standalone assembler contig is only a
-diagnostic and is **ineligible** for the qualifying synthetic cohort.
-A successful zero-contig assembler invocation still leads to pipeline
-failure if the full MiCall result cannot meet the mandatory gates.
+For each competitor, **separately on real and synthetic cohorts**,
+require Ivanka's advantage in quality and its advantage in measured
+wall time each to satisfy **strict Ψ(r) > 0 for every real r ≥ 0**.
+This is the original twelve comparator/cohort pairs, with two
+independent metric conditions each.
 
-For **each** of the six alternatives, and **separately** on the real and
-synthetic cohorts:
+Additionally, for **each case**, Ivanka must score at least **90% of
+the best competitor's quality score**. For each *synthetic* case and
+**each required ≥15% truth individually**, Ivanka's normalized
+alignment fraction must be at least **90% of that truth's best
+competing normalized fraction**. A strong alignment to HCV cannot
+compensate for omitting V3, even if total alignment is high.
 
-1. The final **MiCall-with-Ivanka** local-alignment score
-   **signed-power Ψ(r)>0 for every real r≥0**.
-2. The full **MiCall-with-Ivanka** measured runtime
-   **signed-power Ψ(r)>0 for every real r≥0**.
-3. For **each sample**, MiCall with Ivanka achieves at least **90%
-   of the highest final MiCall score obtained with a competitor**,
-   not merely 90% of IVA. This is not a contig completeness threshold.
-4. No missing executables, samples, frozen truth, incomplete outputs,
-   unaccounted failure, substituted timings, timeout or missing hashes
-   may be counted as an Ivanka win. Record tool-specific results honestly.
-5. Use the exact same final MAX local-alignment function and
-   scoring parameters for every case: match +1, mismatch −1, gap
-   open −2, gap extension −1, both DNA orientations, and the
-   maximum over final MAX sequences and reference-panel members.
-   The synthetic panel is exactly one generating dominant truth sequence.
-   Retain raw alignment points in the combined 598-case view. Require
-   independent qualification on each cohort, and never substitute
-   assembler FASTA for the final MiCall output.
+All seven executions and exact source/image/score identities must be
+present. Failures, timeout, absent sources, unrun arms, mismatched
+reference panels, or missing per-truth metrics cannot be converted
+into benchmark wins. Per-truth inputs must be identical across the
+seven arms. Independent source attestation and observable failures
+remain mandatory.
 
-Prespecify tool versions, thread and memory budgets, container digests,
-read inputs and evaluation definitions. Apply the same MiCall infrastructure
-and authentic physical timing semantics to all real-data comparators.
-Retain the original reference-blindness and dominant-consensus objectives.
+The original **198-only authentic IVA gate** under
+[Intent 005](005-physical-198-qualification.md) must also pass,
+as must the published
+[Assembler Bench](007-assembler-bench.md) and all architectural
+requirements. No new vague contig-reconstruction acceptance tests are
+introduced. **The objective is to maximize measured benchmark scores**,
+not to mandate a particular number or shape of contigs.
 
-Execute and publish the authoritative comparisons through
-[Intent 007: Assembler Bench](007-assembler-bench.md), with real MiCall
-integration for every assembler, browsable independently verified results
-under Ivanka's public GitHub Pages `/bench/` subpath, and no exposed
-private sample data. **A local passing gate file without the required
-published Assembler Bench does not satisfy project completion.**
-
-The detailed current proposal and its implementation status are in
-[the expanded benchmark README](../../benchmarks/expanded/README.md).
-**Completion predicate:** The canonical expanded-gate result must certify
-**598/598 distinct samples** (198 unchanged real plus 400 predeclared
-synthetic), with an attributable outcome for **all seven assemblers per
-sample**, all per-sample floors satisfied, and the twelve independent
-competitor-by-cohort comparisons passing **both** strict all-r Ψ criteria.
-The 198-only gate must also independently pass under Intent 005. A failed
-or incomplete seven-way run is a blocker, not a waiver or an opportunity
-to silently downgrade the gate. This requirement applies to the exact
-Rust-only direct, empty-environment default MiCall execution stipulated
-by Intents 001 and 002. Benchmark-tuned wrappers and alternative flags
-cannot be accepted. **No seven-way pass is currently claimed.**
+**Completion requires 662/662 source-attested cases × 7 assemblers,
+all per-case and per-truth floors, both all-r Ψ gates per comparator
+and cohort, and correct public publication.**
+See [the assembly objective](../assembly-objective.md) and the
+[synthetic v6 specification](../scientific-synthetic-v6.md).

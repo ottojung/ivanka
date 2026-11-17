@@ -33,10 +33,11 @@ must not be reported as passing that narrower experiment.
 Filtering contigs **after stitching**, perhaps by the number of original read
 pairs supporting each path, is one possible experiment. It is **not** a
 prescribed design. The [primary objective](assembly-objective.md) is the
-**dominant read-supported viral sequence**, not exhaustive minor-haplotype
-recovery. Removing a legitimate but low-abundance contig can be acceptable
-if it does not remove the dominant assembly, fabricate phase, or damage
-required downstream MiCall allele measurements. Choosing few/long contigs
+**quantitative MiCall benchmark score over all ≥15%-abundant synthetic
+truths**, not exhaustive haplotype enumeration. Removing a contig can be
+acceptable only if the measured abundance-aware benchmark, original
+physical qualification, and downstream minority-allele reporting remain
+valid. Choosing few/long contigs
 blindly is still unsafe; test support-aware selection against the same
 unchanged scientific and runtime acceptance conditions.
 

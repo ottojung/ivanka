@@ -32,7 +32,7 @@ class MiCallSyntheticTests(unittest.TestCase):
                 self.assertNotIn("IVANKA_BENCH_", " ".join(argv))
                 self.assertIn("--network=none", argv)
                 self.assertIn("--cpus=2", argv)
-                self.assertIn("--memory=4g", argv)
+                self.assertIn("--memory=5g", argv)
 
     def test_repeated_sample_attempts_use_distinct_container_names(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -3,7 +3,8 @@ import math
 import re
 
 from benchmarks.expanded.adapters import ASSEMBLERS
-from benchmarks.expanded.micall_dominant import SCORE_ORIGIN
+from benchmarks.expanded.micall_dominant import (
+    SCORE_ORIGIN, MULTITRUTH_SCORE_ORIGIN)
 from .current_inputs import PROGRESS_SCHEMA
 from .public_case_metrics import validate_sample
 from .hxb2_preview import COHORT_SHA
@@ -14,6 +15,7 @@ SAMPLE={"synthetic":re.compile(r"H[0-9]{3}"),
         "real":re.compile(r"R[0-9]{3}"),
         "combined":re.compile(r"[SR]-[HR][0-9]{3}")}
 EXPECTED={"synthetic":400,"real":198,"combined":598}
+V6_COHORT_SHA="90990f6109553347d37f7754cde63398a4dce57c388f90c2ce4b648530bfdfe4"
 
 
 def check_sample(row,run):
@@ -27,13 +29,42 @@ def check_sample(row,run):
         raise ValueError("active case has wrong alias/assembler fields")
     validate_sample(row,tools)
     scores=row["score"]
+    if (run["cohort"] == "synthetic" and
+            run["expected_sample_count"] == 464):
+        recovered = row.get("truth_recovery")
+        references = row.get("truth_reference")
+        if (not isinstance(references, dict) or not references
+                or any(not re.fullmatch(r"truth_[0-9]+", name)
+                       or not isinstance(ref, dict)
+                       or type(ref.get("length")) is not int
+                       or ref["length"] < 1
+                       or not isinstance(ref.get("sequence_sha256"), str)
+                       or not re.fullmatch(r"[a-f0-9]{64}", ref["sequence_sha256"])
+                       or type(ref.get("nominal_abundance")) not in (float,int)
+                       or not .15 <= ref["nominal_abundance"] <= 1.
+                       for name, ref in references.items())
+                or not isinstance(recovered, dict)
+                or set(recovered) != {tool for tool in tools
+                                     if scores[tool] is not None}):
+            raise ValueError("missing recovered abundant-truth diagnostics")
+        for tool, per_truth in recovered.items():
+            if (not isinstance(per_truth, dict)
+                    or set(per_truth) != set(references)
+                    or any(not re.fullmatch(r"truth_[0-9]+", name)
+                           or type(value) not in (int, float)
+                           or not math.isfinite(value)
+                           or not 0 <= value <= 1
+                           for name, value in per_truth.items())
+                    or abs(10000 * sum(per_truth.values()) / len(per_truth)
+                           - scores[tool]) > 1e-5):
+                raise ValueError("fabricated per-abundant-truth recovery")
     for tool in tools:
         a,b=scores[tool],row["seconds"][tool]
         if (a is None)!=(b is None):
             raise ValueError("active score and timer are not paired")
         if a is not None and (type(a) not in (int,float)
             or type(b) not in (int,float) or not math.isfinite(a)
-            or not math.isfinite(b) or a<0 or not 0<b<=1800
+            or not math.isfinite(b) or a<0 or not 0<b<=3000
             or tool in row["failures"]):
             raise ValueError("invalid real MiCall timer or alignment")
     complete=all(scores[tool] is not None for tool in tools)
@@ -50,19 +81,26 @@ def check_run(run):
     if cohort not in EXPECTED:
         raise ValueError("active MiCall run has unexpected cohort")
     tools=run.get("tools")
-    expected=EXPECTED[cohort]
+    v6 = run.get("expected_sample_count") == (
+        464 if cohort == "synthetic" else 662 if cohort == "combined" else -1)
+    expected = (464 if cohort == "synthetic" else 662 if cohort == "combined"
+                else 198) if v6 else EXPECTED[cohort]
+    score_origin = (MULTITRUTH_SCORE_ORIGIN if cohort == "synthetic" else
+                    "mixed_alignment_score_units_diagnostic_v1"
+                    if cohort == "combined" else SCORE_ORIGIN) if v6 else SCORE_ORIGIN
     if (run.get("schema")!="ivanka.assembler-bench.public.v1"
             or run.get("progress_schema")!=PROGRESS_SCHEMA
             or run.get("status")!="incomplete"
             or run.get("expanded_status")!="incomplete"
             or run.get("eligible_for_expanded") is not False
-            or run.get("score_origin")!=SCORE_ORIGIN
+            or run.get("score_origin")!=score_origin
             or tools!=list(ASSEMBLERS)
             or set(run.get("images",{}))!=set(tools)
             or run.get("expected_sample_count")!=expected
             or run.get("psi")!={}
             or run.get("hxb2_truth_verified") is not (cohort=="synthetic")
-            or cohort=="synthetic" and run.get("cohort_manifest_sha256")!=COHORT_SHA):
+            or cohort=="synthetic" and run.get("cohort_manifest_sha256")!=(
+                V6_COHORT_SHA if v6 else COHORT_SHA)):
         raise ValueError("active MiCall cohort metadata/qualification invalid")
     rows=run.get("samples")
     if (not isinstance(rows,list) or len(rows)>expected
@@ -101,6 +139,12 @@ def check_current(report):
             raise ValueError("mismatched source image identities across cohorts")
     combined=data["combined"]
     sy=data["synthetic"]
+    if (sy["expected_sample_count"] == 464
+            and combined["expected_sample_count"] != 662):
+        raise ValueError("combined current view must include all 464 synthetic cases")
+    if (sy["expected_sample_count"] == 400
+            and combined["expected_sample_count"] != 598):
+        raise ValueError("historical combined synthetic count changed")
     re=data["real"]
     if (combined.get("cohorts")!={"synthetic":sy["sample_count"],
                                   "real":re["sample_count"]}
@@ -117,7 +161,10 @@ def check_current(report):
             if original is None or any(
                     row.get(k)!=original.get(k) for k in
                     ("score","seconds","failures","diagnostics",
-                     "exact_profiles","floor_ok","outcome")):
+                     "exact_profiles","floor_ok","outcome") +
+                    (("truth_reference","truth_recovery")
+                     if prefix == "S" and sy["expected_sample_count"] == 464
+                     else ())):
                 raise ValueError("combined source scientific values were changed")
     validate_activity(report.get("workload"),report)
     return True

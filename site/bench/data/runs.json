@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-17T10:59:02.119361+00:00",
+  "published_at": "2026-11-17T11:04:23.115483+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -29691,7 +29691,9 @@
           },
           "exact_profiles": {},
           "failures": [
-            "abyss"
+            "abyss",
+            "haploflow",
+            "velvet"
           ],
           "floor_ok": null,
           "outcome": "failure",
@@ -38485,8 +38487,8 @@
         },
         "haploflow": {
           "expected": 198,
-          "failed": 11,
-          "finished": 88
+          "failed": 12,
+          "finished": 89
         },
         "iva": {
           "expected": 198,
@@ -38510,8 +38512,8 @@
         },
         "velvet": {
           "expected": 198,
-          "failed": 16,
-          "finished": 88
+          "failed": 17,
+          "finished": 89
         }
       },
       "tools": [
@@ -55116,7 +55118,9 @@
           },
           "exact_profiles": {},
           "failures": [
-            "abyss"
+            "abyss",
+            "haploflow",
+            "velvet"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -72961,8 +72965,8 @@
         },
         "haploflow": {
           "expected": 598,
-          "failed": 11,
-          "finished": 118
+          "failed": 12,
+          "finished": 119
         },
         "iva": {
           "expected": 598,
@@ -72986,8 +72990,8 @@
         },
         "velvet": {
           "expected": 598,
-          "failed": 16,
-          "finished": 108
+          "failed": 17,
+          "finished": 109
         }
       },
       "tools": [

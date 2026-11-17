@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-17T14:57:41.558629+00:00",
+  "published_at": "2026-11-17T15:03:12.428250+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -23704,9 +23704,11 @@
             "velvet": {}
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "abyss"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": null,
             "haploflow": null,
@@ -28400,9 +28402,11 @@
             }
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": 408.0,
             "haploflow": 414.0,
@@ -41777,8 +41781,8 @@
       "tool_progress": {
         "abyss": {
           "expected": 198,
-          "failed": 67,
-          "finished": 123
+          "failed": 68,
+          "finished": 124
         },
         "haploflow": {
           "expected": 198,
@@ -41802,8 +41806,8 @@
         },
         "spades": {
           "expected": 198,
-          "failed": 22,
-          "finished": 122
+          "failed": 23,
+          "finished": 123
         },
         "velvet": {
           "expected": 198,
@@ -52357,10 +52361,12 @@
             "velvet": {}
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "abyss"
+          ],
           "family": "physical",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": null,
             "haploflow": null,
@@ -57091,10 +57097,12 @@
             }
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "family": "physical",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": 408.0,
             "haploflow": 414.0,
@@ -79550,8 +79558,8 @@
       "tool_progress": {
         "abyss": {
           "expected": 598,
-          "failed": 67,
-          "finished": 146
+          "failed": 68,
+          "finished": 147
         },
         "haploflow": {
           "expected": 598,
@@ -79575,8 +79583,8 @@
         },
         "spades": {
           "expected": 598,
-          "failed": 22,
-          "finished": 142
+          "failed": 23,
+          "finished": 143
         },
         "velvet": {
           "expected": 598,

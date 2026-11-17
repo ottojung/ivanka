@@ -21,8 +21,9 @@ descriptions of what the existing qualifying image already implements:
   scoring, and analysis—not Ivanka's production assembly path.
 - **[Intent 002: default direct invocation parity](docs/intents/002-default-invocation-parity.md).**
   MiCall and benchmark runs must use the **same Rust executable and defaults**,
-  with an **empty Ivanka child environment** and only `--reads1`,
-  `--reads2`, and `--output` arguments. Never rely on environment
+  with an **empty Ivanka child environment**, the required `--reads1`,
+  `--reads2`, `--output` arguments and, when available, verified same-sample
+  read-derived G2P contigs passed as `--seeds`. Never rely on environment
   tuning, wrappers, hidden configuration, or benchmark-only parameters.
 
 - **[Intent 003: reference blindness](docs/intents/003-reference-blindness.md).**
@@ -95,7 +96,7 @@ descriptions of what the existing qualifying image already implements:
 historical and does not comply with Intents 001/002. The tagged
 `v0.1.0-alpha.3` version implements direct Rust assembly and has
 independently passed the original physical 198-sample gate under the
-empty-environment, three-argument MiCall invocation. The mandatory
+empty-environment, ordinary MiCall invocation (including read-derived seeds when present). The mandatory
 expanded HXB2-derived seven-way benchmark and public `/bench/` site
 remain incomplete. Preserve all historical evidence and do not claim
 full qualification. **Intent 004 is end-to-end:** an isolated Ivanka

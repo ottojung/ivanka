@@ -17,6 +17,12 @@
     const tail=record.failed ? " · "+record.failed+" failed" : "";
     return count+tail;
   }
+  function mean(record) {
+    if(!record.successful) return "Not measured yet";
+    return record.mean_alignment.toLocaleString(undefined,{
+      maximumFractionDigits:1})+" points · "+
+      record.mean_seconds.toFixed(1)+" s";
+  }
   function render(report) {
     if(report.schema!=="ivanka.assembler-bench.comparators-first-progress.v1" ||
        report.ivanka!=="deliberately_deferred" || !report.tools ||
@@ -29,11 +35,14 @@
     place.append(text("p",
       "Six assembler images are being measured first on the frozen MiCall "+
       "inputs. Ivanka is intentionally deferred for later requalification. "+
-      "This is partial data, not a benchmark pass.","subtle"));
+      "This is partial data, not a benchmark pass. Synthetic scores " +
+      "use the single generating truth; physical scores use the 33-reference " +
+      "panel, so averages across cohorts are not directly comparable.","subtle"));
     const table=document.createElement("table");
     const head=document.createElement("thead");
     const hr=document.createElement("tr");
-    ["Assembler","Synthetic (of 400)","Physical (of 198)"].forEach(label =>
+    ["Assembler","Synthetic (of 400)","Physical (of 198)",
+      "Synthetic mean score · runtime","Physical mean score · runtime"].forEach(label =>
       hr.append(text("th",label)));
     head.append(hr);table.append(head);
     const body=document.createElement("tbody");
@@ -42,6 +51,8 @@
       row.append(text("th",NAMES[name]));
       row.append(text("td",value(report.tools[name].synthetic)));
       row.append(text("td",value(report.tools[name].real)));
+      row.append(text("td",mean(report.tools[name].synthetic)));
+      row.append(text("td",mean(report.tools[name].real)));
       body.append(row);
     });
     table.append(body);

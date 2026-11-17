@@ -77,19 +77,19 @@ class ScientificSyntheticV4(unittest.TestCase):
             root = Path(td) / "validation"
             cohort = generate_cohort(root, seeds=1, pairs=30,
                                      split="validation")
-            self.assertEqual(cohort["schema"], "ivanka.expanded.cohort.hxb2.v3")
+            self.assertEqual(cohort["schema"], "ivanka.expanded.cohort.hxb2.v4")
             self.assertEqual(cohort["split"], "validation")
             self.assertEqual(cohort["seed_start"], 900)
             self.assertTrue(all(row["id"].endswith("-s900")
                                 for row in cohort["cases"]))
-            self.assertEqual(len(verify_cohort(root, expected=25)), 64)
-            self.assertEqual(attestation(root, expected=25)["schema"],
-                             "ivanka.hxb2_truth_validation.v3")
+            self.assertEqual(len(verify_cohort(root, expected=29)), 64)
+            self.assertEqual(attestation(root, expected=29)["schema"],
+                             "ivanka.mixed_viral_truth_validation.v4")
             altered = json.loads((root / "cohort.json").read_text())
             altered["seed_start"] = 0
             (root / "cohort.json").write_text(json.dumps(altered))
             with self.assertRaisesRegex(ValueError, "split"):
-                verify_cohort(root, expected=25)
+                verify_cohort(root, expected=29)
 
     def test_completed_cohort_resume_is_verified_not_rewritten(self):
         with tempfile.TemporaryDirectory() as td:

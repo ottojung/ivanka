@@ -208,7 +208,7 @@ class SyntheticCheckpointTests(unittest.TestCase):
             pinned = runner.run_manifest(proof, images, None)
             pinned["images"] = dict(images, ivanka="f" * 64)
             (output / "run_manifest.json").write_text(json.dumps(pinned))
-            cohort = [("case-" + str(i), case, manifest) for i in range(400)]
+            cohort = [("case-" + str(i), case, manifest) for i in range(464)]
             with (patch.object(runner, "verify_images"),
                   patch.object(runner, "verify_ivanka_image_binding"),
                   patch.object(runner, "attestation", return_value=proof),
@@ -252,7 +252,7 @@ class SyntheticFullResumeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)
             case, manifest, proof, images = make_case(home)
-            cohort = [(f"case-{i:03d}", case, manifest) for i in range(400)]
+            cohort = [(f"case-{i:03d}", case, manifest) for i in range(464)]
             output = home / "run"
             calls = []
 

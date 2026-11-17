@@ -14,17 +14,32 @@ from .exact_cache import append as exact_metrics
 SCHEMA = "ivanka.expanded.fork_micall_synthetic.v1"
 
 
-def checked(directory, runner, attestation, fork, base):
+def checked(directory, runner, attestation, fork, base, *, data=None):
     folder, runner = Path(directory), Path(runner)
     manifest_file = folder / "run_manifest.json"
     frozen = json.loads(manifest_file.read_text())
-    cohort, proof = pinned_truth()
+    if frozen.get("expected") == 464:
+        if data is None:
+            raise ValueError("464-case source data path required for validation")
+        from benchmarks.expanded.hxb2_cohort import attestation as certify
+        cohort = json.loads((Path(data) / "cohort.json").read_text())
+        proof = certify(data, expected=464)
+        expected_sha = sha(Path(data) / "cohort.json")
+        if (frozen.get("score_origin") !=
+                "micall_final_max_abundant_truths_balanced_v2"
+                or frozen.get("min_abundance") != 0.15):
+            raise ValueError("v6 score contract changed")
+    else:
+        cohort, proof = pinned_truth()
+        expected_sha = sha(cohort_path())
+    expected_count = len(cohort["cases"])
     att = json.loads(Path(attestation).read_text())
     images = frozen["images"]
-    if (frozen["schema"] != SCHEMA or frozen["expected"] != 400
+    if (frozen["schema"] != SCHEMA or frozen["expected"] != expected_count
+            or expected_count not in (400, 464)
             or frozen["limit"] is not None or frozen["qualified"] is not False
             or frozen["truth_proof"] != proof
-            or frozen["cohort_sha256"] != sha(cohort_path())
+            or frozen["cohort_sha256"] != expected_sha
             or frozen["fork_attestation_sha256"] != sha(attestation)
             or att["base_image_sha256"] != base
             or set(images) != set(att["images"])
@@ -35,7 +50,8 @@ def checked(directory, runner, attestation, fork, base):
         raise ValueError("fork binaries differ from independent attestation")
     for name, digest in frozen["benchmark_source_sha256"].items():
         paths = [runner / "benchmarks" / part / name
-                 for part in ("expanded", "assembler_bench", "")]
+                 for part in ("expanded", "expanded/references",
+                             "assembler_bench", "")]
         source = next((path for path in paths if path.is_file()), None)
         if source is None or sha(source) != digest:
             raise ValueError(f"fork benchmark source changed: {name}")
@@ -45,7 +61,7 @@ def checked(directory, runner, attestation, fork, base):
     if contents and not contents.endswith(b"\n"):
         raise ValueError("incomplete synthetic checkpoint append")
     rows = [json.loads(line) for line in contents.splitlines() if line.strip()]
-    if len(rows) > 400 or len({r["id"] for r in rows}) != len(rows):
+    if len(rows) > expected_count or len({r["id"] for r in rows}) != len(rows):
         raise ValueError("invalid fork checkpoint count / duplicate case")
     cases = {r["id"]: r for r in cohort["cases"]}
     for row in rows:
@@ -74,6 +90,8 @@ def preview(directory, runner, attestation, fork, base, *,
         "images": manifest["images"], "source_truth": manifest["truth_proof"],
         "benchmark_sources_sha256": manifest["benchmark_source_sha256"],
     }
+    if manifest.get("expected", 400) != 400:
+        raise ValueError("v6 requires the new source-aware public presentation")
     result = format_preview(
         normalized, rows, result_hash, sha(Path(directory) / "run_manifest.json"))
     for sample, record in zip(result["samples"],
@@ -107,8 +125,8 @@ def preview(directory, runner, attestation, fork, base, *,
         source_manifest_sha256=sha(Path(directory) / "run_manifest.json"),
     )
     result["status_reason"] = (
-        f"{len(rows)}/400 source-attested fork MiCall cases recorded; "
-        "the 598-case expanded gate is NOT qualified.")
+        f"{len(rows)}/{manifest.get('expected', 400)} source-attested fork MiCall cases "
+        "recorded; seven-way expanded gate is NOT qualified.")
     result["micall_fork_provenance"] = {
         "status": "verified",
         "message": "Independently matched all seven fork-commit sources and installed binaries. This is partial data, not a qualification.",

@@ -53,12 +53,12 @@ contigs alone must not be mistaken for equivalent IVA functionality.
    Synthetic tests must catch spurious recovery and infinite cycles.
 4. **Overlap-based contig reconciliation.** Merge only when overlapping
    contigs have consistent bases *and* adequate read support. Preserve
-   alternative paths if they are needed to identify the dominant sequence
-   or for explicitly validated downstream measurements; cataloguing
-   every genuine minority haplotype is not an objective.
-5. **Selective re-seeding.** Re-seed from unexplained reads only when
-   there is evidence that the dominant assembly remains incomplete;
-   discovering every rare variant is not an obligation.
+   alternative paths when needed to recover benchmark-required
+   ≥15%-abundant variation through MiCall; contig count alone is
+   not an objective.
+5. **Selective re-seeding.** Treat unexplained read support as
+   potential evidence for missing benchmark-required diversity; the
+   measured MiCall score, not dominant-only completeness, is decisive.
 6. **Prune/score alternatives.** Prioritize abundant, original-pair-
    supported sequence rather than the number of emitted contigs.
    Use observed read and proper-pair support, not HXB2 or IVA outputs,

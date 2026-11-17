@@ -3,6 +3,15 @@
 Assembler Bench is a static, privacy-safe GitHub Pages website:
 https://ottojung.github.io/ivanka/bench/
 
+The public site currently displays the historical 400-HXB2-case
+MiCall cohort and the unchanged 198-physical-case cohort. The new
+**464-case mixed-virus qualification view is not published or qualified
+until its own 7-way execution and source validation complete.**
+The site retains historical runs. Once available, the new synthetic
+score is length-balanced over **every ≥15%-abundant generating truth**.
+The previous 400-case final-MAX metric is historical and must not be
+relabeled as the new score.
+
 The public site shows three current-cohort views and selectable
 earlier execution runs. Measurements remain attached to their
 source/image identities; a scoring change does not require
@@ -29,8 +38,8 @@ equal-abundance mixtures; it is identical across competing assemblers. The physi
 the fixed project references. All values are raw alignment points.
 
 
-For the planned synthetic restart, see
-[scientific synthetic v5](../scientific-synthetic-v5.md). All previously
+For the new qualifying synthetic benchmark, see
+[scientific synthetic v6](../scientific-synthetic-v6.md). All previously
 finished synthetic arms must be run again against the new FASTQs; the
 source hashes do not permit silent reuse.
 
@@ -70,7 +79,7 @@ competitor scores are never converted to zero or Ivanka victories.
 ## Scientific status and checks
 
 The full expanded benchmark is **not qualified** until the separate
-400-synthetic and 198-real gates have all seven comparable MiCall
+464-synthetic and 198-real gates have all seven comparable MiCall
 assemblers, the required 90% per-sample floor and the separate strict
 all-real-r>=0 alignment and runtime Ψ tests. Combining the cohorts
 never substitutes for passing both independent gates. The original physical Ivanka-versus-IVA qualification remains a separate

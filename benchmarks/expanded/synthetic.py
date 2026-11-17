@@ -17,7 +17,8 @@ DNA = "ACGT"
 COMP = str.maketrans("ACGT", "TGCA")
 READ_LENGTH = 150
 FRAGMENT = 270
-# 25 experimental families x 16 seeds = 400 synthetic samples by default.
+# Historical HXB2 families remain unchanged; four new mixed-virus cases
+# make the active benchmark 29 families x 16 seeds = 464 samples.
 FAMILIES = (
     "clonal", "iid_errors", "quality_decay", "cycle_bursts",
     "homopolymer_slippage", "systematic_errors", "gc_dropout",
@@ -27,6 +28,12 @@ FAMILIES = (
     "tandem_repeat", "inverted_repeat", "overlapping_mates",
     "long_inserts", "discordant_pairs", "complex_mixture",
 )
+
+MIXED_FAMILIES = (
+    "hcv_hiv_15pct", "hcv_hiv_30pct",
+    "hcv_v3_15pct", "hcv_v3_30pct",
+)
+ACTIVE_FAMILIES = (*FAMILIES, *MIXED_FAMILIES)
 
 
 def rc(sequence):
@@ -133,6 +140,7 @@ def choose_fragment(rng, genome, family, *, reusable):
         # Repeated independent reads from one of just 13 original fragments.
         # The fixed pool stores (start, insert), in that order.
         return rng.choice(reusable)
+    insert = min(insert, len(genome))
     width = len(genome) - insert + 1
     if width < 1:
         raise ValueError("fragment longer than haplotype")
@@ -167,7 +175,7 @@ def _write_gzip(path, records):
 
 def generate_case(root, family, seed, pairs=900, *,
                   truth_model=None, historical_random=False):
-    if family not in FAMILIES or not isinstance(seed, int) or seed < 0:
+    if family not in ACTIVE_FAMILIES or not isinstance(seed, int) or seed < 0:
         raise ValueError("invalid synthetic case")
     if pairs < 20:
         raise ValueError("at least 20 pairs required")
@@ -181,7 +189,10 @@ def generate_case(root, family, seed, pairs=900, *,
     rng = random.Random(int.from_bytes(
         hashlib.sha256(f"expanded-v1:{family}:{seed}".encode()).digest()[:8], "big"))
     new_model = truth_model is None and not historical_random
-    if new_model:
+    mixed_model = new_model and family in MIXED_FAMILIES
+    if mixed_model:
+        from .mixed_truth import haplotypes as truth_model
+    elif new_model:
         from .hxb2_truth import haplotypes as hxb2_haplotypes
         truth_model = lambda family, seed: hxb2_haplotypes(family, seed, revision=2)
     if historical_random:
@@ -245,11 +256,13 @@ def generate_case(root, family, seed, pairs=900, *,
     truth.write_text("".join(
         f">haplotype_{i+1}\n{genome}\n" for i, genome in enumerate(genomes)))
     data = {
-        "schema": ("ivanka.expanded.synthetic.hxb2.v2" if new_model else
-                   "ivanka.expanded.synthetic.hxb2.v1" if ancestry is not None
+        "schema": ("ivanka.expanded.synthetic.multi_viral.v1" if mixed_model
+                   else "ivanka.expanded.synthetic.hxb2.v2" if new_model
+                   else "ivanka.expanded.synthetic.hxb2.v1" if ancestry is not None
                    else "ivanka.expanded.synthetic.v1"),
         "family": family, "seed": seed,
-        **({"truth_model_revision": 2, "read_model_revision": 2,
+        **({"truth_model_revision": 3 if mixed_model else 2,
+            "read_model_revision": 2, "score_model_revision": 2,
             "quality_profile_sha256": fingerprint(PROFILE),
             "low_depth_target_x": low_target,
             "requested_normal_pairs": pairs,
@@ -263,7 +276,8 @@ def generate_case(root, family, seed, pairs=900, *,
         "contamination_pairs": contaminants, "truth_is_evaluation_only": True,
         "read_files": ["reads/R1.fastq.gz", "reads/R2.fastq.gz"],
         "hidden_truth_file": "hidden-truth/haplotypes.fasta",
-        **({"hxb2_ancestry": ancestry} if ancestry is not None else {}),
+        **({("mixed_ancestry" if mixed_model else "hxb2_ancestry"): ancestry}
+           if ancestry is not None else {}),
         "sha256": {str(path.relative_to(case)): fingerprint(path)
                    for path in (fq1, fq2, truth)},
     }
@@ -280,7 +294,7 @@ def generate_cohort(root, seeds=16, pairs=10000, *,
     root.mkdir(parents=True, exist_ok=True)
     if resume and (root / "cohort.json").exists():
         from .hxb2_cohort import verify_cohort
-        verify_cohort(root, expected=25 * seeds)
+        verify_cohort(root, expected=len(ACTIVE_FAMILIES) * seeds)
         existing = json.loads((root / "cohort.json").read_text())
         if (existing.get("split") != split
                 or existing.get("normal_pairs") != pairs
@@ -292,8 +306,9 @@ def generate_cohort(root, seeds=16, pairs=10000, *,
     if split == "validation" and (historical_random or truth_model is not None):
         raise ValueError("holdout requires versioned HXB2 generator")
     seed_start = 900 if split == "validation" else 0
+    families = FAMILIES if truth_model is not None or historical_random else ACTIVE_FAMILIES
     records = []
-    for family in FAMILIES:
+    for family in families:
         for seed in range(seed_start, seed_start + seeds):
             case = root / f"{family}-s{seed:03d}"
             if resume and case.exists():
@@ -314,8 +329,8 @@ def generate_cohort(root, seeds=16, pairs=10000, *,
     manifest = {"schema": ("ivanka.expanded.cohort.v1"
                            if historical_random else
                            "ivanka.expanded.cohort.hxb2.v1" if truth_model
-                           else "ivanka.expanded.cohort.hxb2.v3"),
-                "families": list(FAMILIES),
+                           else "ivanka.expanded.cohort.hxb2.v4"),
+                "families": list(families),
                 "seeds_per_family": seeds, "samples": len(records),
                 "seed_start": seed_start, "split": split,
                 "normal_pairs": pairs,

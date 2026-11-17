@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from expanded import fork_micall_synthetic as runner
 from expanded.adapters import ASSEMBLERS
+from expanded.synthetic import ACTIVE_FAMILIES
 
 
 class SourceVerifiedForkRunnerTests(unittest.TestCase):
@@ -44,7 +45,7 @@ class SourceVerifiedForkRunnerTests(unittest.TestCase):
                   patch.object(runner, "attestation", return_value={}),
                   patch.object(runner, "cohort_rows", return_value=[
                       ("only", data/"only", {})])):
-                with self.assertRaisesRegex(ValueError, "incomplete HXB2"):
+                with self.assertRaisesRegex(ValueError, "incomplete mixed-viral"):
                     runner._run(data, output, self.images, "/fork", "base",
                                 attestor, jobs=1, timeout=1800, limit=1,
                                 resume=False)
@@ -60,7 +61,7 @@ class SourceVerifiedForkRunnerTests(unittest.TestCase):
             attestor=directory/"attestation.json"
             attestor.write_text("{}")
             cases=[(f"s{i}", data/f"s{i}", {"family": "clonal"})
-                   for i in range(400)]
+                   for i in range(len(ACTIVE_FAMILIES)*16)]
             def fake_run(case, root, images, proof, timeout):
                 identifier=case[0]
                 return {"id": identifier,
@@ -84,7 +85,7 @@ class SourceVerifiedForkRunnerTests(unittest.TestCase):
             record=json.loads((output/"results.jsonl").read_text())
             self.assertEqual(record["results"]["abyss"]["status"],"failed")
             frozen=json.loads((output/"run_manifest.json").read_text())
-            self.assertEqual(frozen["expected"],400)
+            self.assertEqual(frozen["expected"],len(ACTIVE_FAMILIES)*16)
             self.assertFalse(frozen["qualified"])
             self.assertEqual(frozen["schema"],runner.SCHEMA)
 
@@ -100,7 +101,7 @@ class SourceVerifiedForkRunnerTests(unittest.TestCase):
             attestor=root/"attestation.json"
             attestor.write_text("{}")
             cases=[(f"s{i}",data/f"s{i}",{"family":"clonal"})
-                   for i in range(400)]
+                   for i in range(len(ACTIVE_FAMILIES)*16)]
             with (patch.object(runner, "checked_images", return_value={}),
                   patch.object(runner, "attestation", return_value={
                       "valid": True}),
@@ -122,7 +123,7 @@ class SourceVerifiedForkRunnerTests(unittest.TestCase):
             proof_file.write_text("{}")
             truth={"valid":True}
             selected=[(f"s{i}",data/f"s{i}",{"family":"clonal"})
-                      for i in range(400)]
+                      for i in range(len(ACTIVE_FAMILIES)*16)]
             prior='{"corrupted":"old-stream"}\n'
             (output/"results.jsonl").write_text(prior)
             frozen=runner.manifest(data,truth,self.images,proof_file,None)
@@ -137,15 +138,15 @@ class SourceVerifiedForkRunnerTests(unittest.TestCase):
                 report=runner._run(data,output,self.images,"/fork","base",
                                    proof_file,jobs=1,timeout=1800,
                                    limit=None,resume=True)
-            assert report["cases_attempted"]==400
+            assert report["cases_attempted"]==len(ACTIVE_FAMILIES)*16
             rows=(output/"results.jsonl").read_text().splitlines()
-            self.assertEqual(len(rows),400)
-            self.assertEqual(len({json.loads(x)["id"] for x in rows}),400)
+            self.assertEqual(len(rows),len(ACTIVE_FAMILIES)*16)
+            self.assertEqual(len({json.loads(x)["id"] for x in rows}),len(ACTIVE_FAMILIES)*16)
             audit=json.loads((output/"resume_history.jsonl").read_text())
             import hashlib
             self.assertEqual(audit["prior_results_sha256"],
                              hashlib.sha256(prior.encode()).hexdigest())
-            self.assertEqual(audit["recovered_cases"],400)
+            self.assertEqual(audit["recovered_cases"],len(ACTIVE_FAMILIES)*16)
 
     def test_preflight_bounds_and_missing_fork_sha_fail_closed(self):
         with tempfile.TemporaryDirectory() as root:
@@ -154,7 +155,7 @@ class SourceVerifiedForkRunnerTests(unittest.TestCase):
                            root, jobs=11)
             with self.assertRaisesRegex(ValueError, "development"):
                 runner.run(root, root, self.images, root, "base",
-                           root, limit=401)
+                           root, limit=len(ACTIVE_FAMILIES)*16+1)
 
 
 if __name__=="__main__":

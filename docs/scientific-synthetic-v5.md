@@ -1,3 +1,9 @@
+> **Historical generation/scoring plan only.** The current required
+> numerical objective is [scientific v6](scientific-synthetic-v6.md),
+> with 464 synthetic cases, a ≥15% abundance threshold, and
+> length-balanced recovery of *all* qualifying truths. Earlier
+> 400-case evidence must not be presented as a v6 result.
+
 # Synthetic v5: versioned scientific benchmark redesign
 
 Status: **implementation candidate, not qualified**. This document changes only

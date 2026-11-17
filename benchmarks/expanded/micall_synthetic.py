@@ -17,11 +17,13 @@ from benchmarks.podman_detached_lifecycle import run_detached
 from benchmarks.assembler_bench.sam_metrics import public_diagnostics
 from benchmarks.podman_full_micall import verify_ivanka_image_binding
 from .adapters import ASSEMBLERS
+from .synthetic import ACTIVE_FAMILIES
 from .hxb2_cohort import attestation
 from .micall_checkpoint import (
     digest, existing_case, identity, preserve_interrupted, write_case,
 )
-from .micall_dominant import SCORE_ORIGIN, evaluate_final_alignment
+from .micall_dominant import (
+    SCORE_ORIGIN, MULTITRUTH_SCORE_ORIGIN, evaluate_final_alignment)
 from .micall_retention import prune_case
 from .micall_synthetic_constants import TIMING_ORIGIN
 from .micall_lock import exclusive_lock
@@ -62,7 +64,9 @@ def attempt(case, destination, name, image, timeout):
     argv = command(name, image, case_dir, destination,
                    case_dir.name, timeout)
     record = {"status": "failed", "score": 0.0,
-              "score_origin": SCORE_ORIGIN,
+              "score_origin": (MULTITRUTH_SCORE_ORIGIN
+                               if manifest.get("score_model_revision") == 2
+                               else SCORE_ORIGIN),
               "timing_origin": TIMING_ORIGIN, "sha256": image,
               "seconds": None, "argv": argv}
     started = time.monotonic()
@@ -86,12 +90,13 @@ def attempt(case, destination, name, image, timeout):
         metrics = evaluate_final_alignment(
             manifest, case_dir / manifest["hidden_truth_file"],
             destination)
-        if metrics["score_origin"] != SCORE_ORIGIN:
+        if metrics["score_origin"] != record["score_origin"]:
             raise ValueError("wrong final MiCall score origin")
         record["status"] = "success"
         record["score"] = metrics["score"]
         record["final_dominant"] = metrics["source"]
         record["dominant_exact"] = metrics["dominant_exact"]
+        record["per_truth"] = metrics["source"]["per_truth"]
     except (OSError, ValueError, KeyError, TypeError,
             subprocess.TimeoutExpired) as exc:
         record["error"] = f"{type(exc).__name__}: {exc}"
@@ -142,12 +147,13 @@ def _run(data, output, images, *, jobs=5, timeout=MAX_SECONDS,
         raise ValueError("invalid concurrency or sample lifetime")
     verify_images(images)
     verify_ivanka_image_binding(images["ivanka"])
-    proof = attestation(data, expected=400)
+    expected = 16 * len(ACTIVE_FAMILIES)
+    proof = attestation(data, expected=expected)
     cohort = list(cohort_rows(data))
-    if len(cohort) != 400:
-        raise ValueError("full 400-case HXB2 cohort required")
+    if len(cohort) != expected:
+        raise ValueError("full 464-case mixed-viral cohort required")
     if limit is not None:
-        if not 1 <= limit <= 400:
+        if not 1 <= limit <= expected:
             raise ValueError("invalid development limit")
         cohort = cohort[:limit]
     output = Path(output).resolve()
@@ -227,15 +233,16 @@ def run_manifest(proof, images, limit):
                "micall_synthetic_constants.py", "micall_lock.py",
                "micall_dominant.py",
                "score.py", "adapters.py", "hxb2_cohort.py",
-               "hxb2_truth.py", "synthetic.py", "read_model.py")
+               "hxb2_truth.py", "mixed_truth.py", "gate_multitruth.py",
+               "synthetic.py", "read_model.py")
     return {
         "schema": "ivanka.expanded.micall_synthetic.v2",
         "status": "INCOMPLETE", "qualified": False,
         "source_truth": proof, "images": images,
-        "limit": limit, "expected": 400,
+        "limit": limit, "expected": 16 * len(ACTIVE_FAMILIES),
         "threads_per_arm": 2, "memory_limit": "5g",
         "network": "none", "timer": TIMING_ORIGIN,
-        "score": SCORE_ORIGIN,
+        "score": MULTITRUTH_SCORE_ORIGIN,
         "instrumentation_sha256": digest(TIMER),
         "diagnostic_sources_sha256": {
             "sam_metrics.py": digest(
@@ -249,6 +256,10 @@ def run_manifest(proof, images, limit):
                for name in ("reference_panel.py", "project_references.py")},
             "real-read-quality-20261117.json": digest(
                 root / "references/real-read-quality-20261117.json"),
+            "mixed-sources-20261117.json": digest(
+                root / "references/mixed-sources-20261117.json"),
+            "hcv-1a-source.fasta": digest(
+                root / "references/hcv-1a-micall-fork-8511b5d.fasta"),
         },
     }
 

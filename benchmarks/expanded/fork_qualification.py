@@ -16,13 +16,14 @@ NAME = "ivanka.expanded.dedicated-qualification.v1"
 
 
 def evaluate(synthetic, real, physical_data, runner, attestation,
-             source_roots, base):
+             source_roots, base, *, synthetic_data=None):
     """Full qualification is impossible before six complete physical arms."""
     att = json.loads(Path(attestation).read_text())
     if att.get("schema") != SCHEMA:
         raise ValueError("qualification requires seven dedicated MiCall branches")
     frozen, synthetic_rows, _, verified = checked(
-        synthetic, runner, attestation, source_roots, base)
+        synthetic, runner, attestation, source_roots, base,
+        **({"data": synthetic_data} if synthetic_data is not None else {}))
     if verified != att:
         raise ValueError("synthetic attestation drift")
     images = frozen["images"]
@@ -31,7 +32,7 @@ def evaluate(synthetic, real, physical_data, runner, attestation,
     progress = {
         "synthetic": len(synthetic_rows),
         "real_candidates": counters,
-        "expected": {"synthetic": 400, "real": 198},
+        "expected": {"synthetic": 464, "real": 198},
     }
     result = {
         "schema": NAME, "pass": False, "status": "incomplete",
@@ -47,7 +48,7 @@ def evaluate(synthetic, real, physical_data, runner, attestation,
     }
     if result["provenance"]["unique_fork_commits"] != 7:
         raise ValueError("dedicated qualification requires seven distinct commits")
-    if (len(synthetic_rows) != 400 or
+    if (len(synthetic_rows) != 464 or
             any(item["finished"] != 198 for item in counters.values())):
         return result
     specification = {name: {
@@ -76,6 +77,8 @@ def main():
     for name in ("synthetic", "real", "physical-data", "runner",
                  "attestation", "source-roots", "base"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--synthetic-data", type=Path,
+                        help="required attested input directory for v6 464-case source")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     report = evaluate(args.synthetic, args.real, args.physical_data,

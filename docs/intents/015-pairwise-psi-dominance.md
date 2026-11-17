@@ -56,7 +56,7 @@ complete same-case evidence; it is **unresolved** when only numerical
 uncertainty or undefined direction prevents a verdict. It is **dominates**
 only when *all* selected subjects are independently certified positive
 for every r≥0. A one-case diagnostic preview cannot produce a valid
-400-case Ψ proof; the UI must show it as incomplete. Include support
+464-case Ψ proof; the UI must show it as incomplete. Include support
 for precomputing the two directions of every diagnostic using the same
 independent all-r prover, without using averages or browser-side
 approximations to assert dominance.
@@ -133,7 +133,7 @@ verdicts), with subtle matching cell tints. These colours distinguish
 mathematical dominance outcomes, not an assembler execution success or
 failure; retain explicit text labels so colour is not the sole cue. **OBS YES is not
 full-cohort YES** and must never affect acceptance of the 198-real or
-400-synthetic seven-way scientific gates. Never turn missing data into
+464-synthetic seven-way scientific gates. Never turn missing data into
 zero or a failed arm into a victory.
 
 The matrix and proof evidence must be visible under public

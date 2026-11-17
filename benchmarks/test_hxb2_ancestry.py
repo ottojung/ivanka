@@ -101,8 +101,8 @@ class Hxb2AncestryTests(unittest.TestCase):
                 list(cohort_rows(old))
             new = Path(tmp) / "hxb2"
             generate_cohort(new, seeds=1, pairs=20)
-            self.assertEqual(len(list(cohort_rows(new))), 25)
-            self.assertEqual(len(verify_cohort(new, expected=25)), 64)
+            self.assertEqual(len(list(cohort_rows(new))), 29)
+            self.assertEqual(len(verify_cohort(new, expected=29)), 64)
 
 
 if __name__ == "__main__":

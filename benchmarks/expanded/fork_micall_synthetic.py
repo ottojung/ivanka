@@ -1,4 +1,4 @@
-"""Replay-verified 400 HXB2 cases through seven exact fork-built MiCall images.
+"""Replay-verified 464 viral cases through seven fork-built MiCall images.
 
 Fork source and installed binaries must match their immutable attestations.
 The independently pinned run manifest controls safe checkpoint recovery.
@@ -10,6 +10,7 @@ from pathlib import Path
 
 from benchmarks.assembler_bench.image_source_attestation import verify
 from .adapters import ASSEMBLERS
+from .synthetic import ACTIVE_FAMILIES
 from .hxb2_cohort import attestation
 from .micall_checkpoint import (
     digest, existing_case, identity, preserve_interrupted,
@@ -41,6 +42,10 @@ def manifest(data, proof, images, attestation_file, limit):
                here.with_name("micall_dominant.py"),
                here.with_name("score.py"),
                here.with_name("hxb2_truth.py"),
+               here.with_name("mixed_truth.py"),
+               here.with_name("gate_multitruth.py"),
+               here.parent / "references/mixed-sources-20261117.json",
+               here.parent / "references/hcv-1a-micall-fork-8511b5d.fasta",
                here.with_name("hxb2_cohort.py"),
                here.with_name("synthetic.py"),
                here.with_name("read_model.py"),
@@ -54,8 +59,10 @@ def manifest(data, proof, images, attestation_file, limit):
     return {
         "schema": SCHEMA,
         "status": "ATTEMPTED_NOT_QUALIFIED",
-        "qualified": False, "expected": 400, "limit": limit,
+        "qualified": False, "expected": len(ACTIVE_FAMILIES) * 16, "limit": limit,
         "cohort_sha256": digest(Path(data) / "cohort.json"),
+        "score_origin": "micall_final_max_abundant_truths_balanced_v2",
+        "min_abundance": 0.15,
         "truth_proof": proof,
         "fork_attestation_sha256": digest(attestation_file),
         "images": images,
@@ -80,7 +87,7 @@ def run(data, output, images, fork, base, attestation_file, *,
         jobs=5, timeout=3000, limit=None, resume=False):
     if jobs not in range(1, 11) or timeout not in range(1, 3001):
         raise ValueError("jobs must be <=10 and timeout <=3000 seconds")
-    if limit is not None and not 1 <= limit <= 400:
+    if limit is not None and not 1 <= limit <= len(ACTIVE_FAMILIES) * 16:
         raise ValueError("development limit must be 1..400")
     output = Path(output).resolve()
     with exclusive_lock(output):
@@ -91,10 +98,11 @@ def run(data, output, images, fork, base, attestation_file, *,
 def _run(data, output, images, fork, base, attestation_file, *,
          jobs, timeout, limit, resume):
     checked_images(images, attestation_file, fork, base)
-    truth = attestation(data, expected=400)
+    expected = len(ACTIVE_FAMILIES) * 16
+    truth = attestation(data, expected=expected)
     cohort = list(cohort_rows(data))
-    if len(cohort) != 400:
-        raise ValueError("incomplete HXB2 truth cohort")
+    if len(cohort) != expected:
+        raise ValueError("incomplete mixed-viral truth cohort")
     if limit is not None:
         cohort = cohort[:limit]
     frozen = manifest(data, truth, images, attestation_file, limit)
@@ -143,7 +151,7 @@ def _run(data, output, images, fork, base, attestation_file, *,
         "schema": SCHEMA,
         "source_manifest_sha256": digest(source_manifest),
         "result_sha256": digest(log),
-        "cases_attempted": len(records), "expected_cases": 400,
+        "cases_attempted": len(records), "expected_cases": len(ACTIVE_FAMILIES) * 16,
         "failed_arms": sum(arm["status"] != "success"
                            for row in records for arm in row["results"].values()),
         "status": "ATTEMPTED_NOT_QUALIFIED",

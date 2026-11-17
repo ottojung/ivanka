@@ -57,6 +57,8 @@ class LocalAlignmentTests(unittest.TestCase):
                 result = evaluate_final_alignment(manifest, truth, root)
                 self.assertEqual(result["score"], len(candidate))
                 self.assertEqual(result["source"]["reference_count"], 2)
+                key = "truth_0" if candidate == a else "truth_1"
+                self.assertEqual(result["source"]["per_truth"][key]["fraction"], 1.)
                 self.assertTrue(result["dominant_exact"])
 
     def test_local_alignment_does_not_normalize_to_one(self):

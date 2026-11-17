@@ -1,96 +1,72 @@
-# Intent 008: HXB2-anchored synthetic truth and random mutations
+# Intent 008: Biological truth provenance for synthetic benchmarks
 
-**Status: implemented HXB2-derived generator and 400-case cohort;
-the complete seven-way MiCall qualification is not yet passed.**
+**Status: binding; 464-case mixed-virus source contract implemented,
+seven-way MiCall qualification pending.**
 
-For **every new or active biological synthetic test** (development,
-regression, exploratory or qualifying), the generating **truth genome(s)**
-may be **only**:
+All synthetic *biological* truths must derive reproducibly from pinned,
+real viral nucleotide sequences. Arbitrary, independently generated
+random A/C/G/T genomic truth is never permitted.
 
-1. The real HIV-1 **HXB2 reference sequence**, or
-2. A **random homologous recombinant** made from HXB2 and one or more real,
-   explicitly identified **other HIV-1 subtype reference sequences**,
+## Allowed genomic truths
 
-with **optional random substitutions at no more than 5% of nucleotide
-positions** applied to either type of truth. No independently generated
-random A/C/G/T (or A/C/T/G) truth genome is allowed. No unrelated,
-engineered or synthetic template may act as a truth genome.
+For the **25 HXB2-derived read-stress families**, retain the original
+rules: each truth starts from the real HXB2 nucleotide reference,
+optionally recombined along homology-aligned coordinates with pinned
+HIV-1 subtype A/C reference sequences. Every recombinant begins with an
+HXB2-derived segment. Up to **5% uniformly and independently sampled
+nucleotide substitutions**, without replacement or targeted clusters,
+may be applied to each truth.
 
-## Provenance and sampling
+The **four additional mixed-virus families** use exactly two truths:
+one HCV-1a genome from the pinned `ottojung/MiCall` source
+`micall/projects.json`, and either (a) an allowed HXB2-derived HIV
+truth, or (b) the **550-nt HXB2 V3-region amplicon**, including the
+V3 loop and flanks, derived from zero-based HXB2 positions
+`[6900,7450)`. The V3-region template is nucleotide sequence,
+not the 35-amino-acid `V3LOOP` project reference. Each HCV or V3
+truth may independently receive up to **5% uniformly sampled,
+nonclustered random substitutions**. HCV is allowed only in these
+explicit source-pinned families; a disallowed arbitrary sequence
+does not become eligible by labeling it HCV.
 
-- Obtain HXB2 and the other HIV subtype templates from named,
-  versioned biological sequence records. Pin their accession/version,
-  complete input sequence and SHA-256 digest. Use comparable, homology-
-  aligned viral coordinates to combine parental segments. Recombination
-  breakpoints and parent choices must be drawn from a predeclared random
-  procedure, **independent of Ivanka's output and scoring results**.
-  A no-crossover HXB2 truth is explicitly valid.
-- The total count of truth-level random substitutions must be **≤5% of
-  the derived sequence length** (counting all successive mutation steps,
-  not granting a new 5% allowance for each step). Choose mutated
-  positions **uniformly without replacement** from eligible sites;
-  choose alternative bases randomly from the three nucleotides other
-  than the current base. Do **not** intentionally cluster positions,
-  target hard/repetitive/homopolymer regions, prescribe hot spots,
-  introduce adversarial sequence motifs, or tune the mutations against
-  assembler weaknesses. A prespecified random seed and the exact
-  sampled mutation sites/bases must be reproducible in the hidden
-  provenance.
-- A multi-haplotype mixture may use several independently sampled
-  **allowed** HXB2-derived truths and prespecified abundance fractions.
-  All haplotypes, contaminants modeled as separate viral genomes, and
-  other *truth-level* sequences used to generate reads must satisfy
-  the same restrictions. Neither an unmodified other-subtype reference
-  alone nor an arbitrary random genome is an allowed truth; each
-  recombinant must be HXB2-anchored.
-- These restrictions concern **genomic truth**, not the read-generation
-  process. Error distributions, quality decay, PCR jackpotting,
-  fragment sizes, coverage holes, read strand bias, sample depth,
-  adapter contamination, read-level indels and discordant pairs may
-  vary to stress assemblers, provided they do **not edit the hidden
-  generating truth** or introduce a new disallowed truth genome.
-  Retain the existing 25 mechanism families × 16 seeds = 400 cases
-  where compatible; a family requiring unauthorized repeat insertions,
-  inversions, or random genomic composition must be redesigned at the
-  **read/sampling level**, not exempted from this intent.
+| Family | Generating truths | Nominal proportions |
+| --- | --- | --- |
+| `hcv_hiv_15pct` | mutated HCV-1a + mutated HIV | 85:15 |
+| `hcv_hiv_30pct` | mutated HCV-1a + mutated HIV | 70:30 |
+| `hcv_v3_15pct` | mutated HCV-1a + mutated V3-region | 85:15 |
+| `hcv_v3_30pct` | mutated HCV-1a + mutated V3-region | 70:30 |
 
-## Scientific boundary and acceptance
+The two abundance levels of each biological combination use the
+same pair of underlying genomic truths for each seed, isolating
+frequency effects from source-genome differences.
 
-- Truth and its subtype references exist **only inside benchmark
-  generation and independent post-assembly scoring**. Keep HXB2,
-  subtype templates, crossover coordinates, sampled mutations, and
-  truth files completely inaccessible to Ivanka and **all** competing
-  assemblers or postselection stages. Reference-derived `--seeds`,
-  config flags, environment parameters or reference-conditioned contig
-  ranking remain absolutely prohibited by
-  [Intent 003](003-reference-blindness.md).
-- Store a cryptographically pinned generator version, source reference
-  digests, alignments/recombination ancestry, random seed, mutation
-  count/rate and sites, generated FASTQ digests, and withheld truth
-  digests. A **separate deterministic validator** must check every
-  truth's ancestry, valid HXB2 contribution, mutation bound and uniform
-  random sampling procedure before a case can enter a qualifying run.
-  Output-only sequence resemblance to HXB2 is **not** sufficient proof.
-- All new synthetic-virus generators and regression tests must use the
-  same rules; disallow active random-A/C/G/T genome fixtures. Arbitrary
-  short test strings used only for parsing or internal algorithm mechanics
-  are not synthetic *biological truth*.
-- The benchmark preflight must **fail closed** if any qualifying
-  synthetic case uses an unpinned template, arbitrary random A/C/G/T
-  genome, forbidden truth edit, mutation rate above 5%, deliberately
-  clustered mutations, missing ancestry, or leaked truth.
-- Existing `benchmarks/expanded/synthetic.py` generates independent
-  random A/C/G/T templates. Its frozen **v1 400-case dataset and
-  diagnostic results remain preserved for historical analysis but
-  are NOT eligible** for the required expanded qualification. A
-  new pinned, independently replay-validated HXB2-derived 400-case
-  cohort is generated by `benchmarks.expanded.hxb2_cohort`, using
-  reference panel `benchmarks/expanded/references/manifest.json`.
-  The old cohort is not accepted by the new mandatory preflight.
+Technical read-level errors, coverage/dropout, fragment lengths,
+quality decay, adapter artifacts and indels may vary independently.
+They must never mutate a hidden genomic truth or leak it into MiCall
+assembly.
 
-This intent changes **which synthetic data are eligible**, not the
-original unchanged 198 real FASTQs, the set of seven assemblers, the
-per-sample alignment floors, the independent strict all-r Ψ conditions,
-or the direct default Rust/MiCall invocation. The completed benchmark
-must satisfy [Intent 006](006-expanded-qualification.md) as well as
-[Intent 007](007-assembler-bench.md).
+## Pinned evidence and verification
+
+- Pin exact original FASTA/reference bytes, source identifiers and
+  commit/accession versions, individual SHA-256 digests, recombinant
+  parent segments, mutation seeds/sites/bases, generated FASTQs,
+  withheld FASTA, per-case abundance fractions and cohort manifest.
+- The HCV-1a input is pinned to an exact fork commit and stored in
+  `benchmarks/expanded/references/hcv-1a-micall-fork-8511b5d.fasta`;
+  the HXB2/V3 template and start/end indices are pinned in
+  `mixed-sources-20261117.json`.
+- A separate deterministic replay validator must reconstruct each
+  genomic truth and verify all FASTQ/truth SHA-256 values before
+  qualifying any sample. Altering the manifest's claimed hash is
+  insufficient to forge evidence.
+- All assemblers receive only the same original paired FASTQs; source
+  references, truth FASTAs, mutation recipes and genomic panel metadata
+  remain inaccessible. No reference-conditioned assembler ranking,
+  filtering, seed selection or tuning is permitted.
+
+The new qualifying cohort is **29 families × 16 seeds = 464 cases**.
+The previous 400-case HXB2-only datasets and their scores remain
+historical, immutable evidence; they are not eligible for the new
+numeric objective. The original 198 physical cases, seven-assembler
+comparison, source boundaries and strict Ψ requirements remain
+unchanged. See [Intent 006](006-expanded-qualification.md).

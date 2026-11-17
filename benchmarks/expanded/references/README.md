@@ -142,3 +142,40 @@ Only a new v3-schema 400-case cohort with ordinary 10,000-pair samples,
 eligible for renewed qualification; see
 [scientific synthetic v5](../../../docs/scientific-synthetic-v5.md).
 No v5 generated FASTQ/results SHA256 is claimed until generation finishes.
+
+
+## v6: Mixed HCV/HIV and HCV/V3 benchmark truths (November 17, 2026)
+
+The new 464-case experiment adds four independently attested
+HCV/HIV and HCV/V3 mixed-virus families, 16 cases each. The HCV-1a
+nucleotide template comes from `ottojung/MiCall` commit
+`8511b5da2e85f76a2d13d2a4c311c78d915f2fa4`, region
+`HCV-1a` in `micall/projects.json`; the source has SHA-256
+`ae890914689f2425ffa302496923fe8f8c4864b1659c1ddf5ab9fe068b2438a1`.
+The V3-region target consists of HXB2 bases `[6900:7450]`
+in zero-based Python half-open coordinates (550 nt including V3
+loop and flanks), derived from the already pinned `K03455.1`
+FASTA. Full sources and hashes are in
+`mixed-sources-20261117.json`; HCV FASTA is pinned in
+`hcv-1a-micall-fork-8511b5d.fasta`. Truths and all sources are
+**never mounted in assembler containers**. No unrelated or
+uniform-random DNA genomes may be generated.
+
+The new numerical score aligns every truth with nominal abundance
+≥15%, length-normalizes each independent local MAX alignment,
+and averages on a 10,000-point scale. The current source-generation
+procedure is [scientific v6](../../../docs/scientific-synthetic-v6.md).
+
+
+### Frozen v6 mixed-virus inputs
+
+All **464** new source cases have been independently replay-validated.
+The frozen `mixed-464-v6-cohort.json` SHA-256 is
+`90990f6109553347d37f7754cde63398a4dce57c388f90c2ce4b648530bfdfe4`.
+The independent certificate is `mixed-464-v6-validation.json`
+(verification digest
+`8ee4967caa8c69fe6f3d64fb57427588724612976de8404e2f524fc2f726b85e`).
+The original 400 verified HXB2/read-stress cases are preserved with
+byte-identical paired FASTQs and truth FASTAs, while scoring metadata
+is versioned; only the four new mixture families required generating
+64 extra cases. **Source validation is not assembler qualification.**

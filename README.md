@@ -60,58 +60,50 @@ for the precise contracts and acceptance evidence.
 
 **These are additions, not substitutes** for Ivanka's
 [complete set of binding intents](docs/intents/README.md): reference-blind
-assembly, the dominant viral sequence, the authentic 198-sample
+assembly, abundant viral diversity, the authentic 198-sample
 ≥90%-of-IVA alignment floor, and positive alignment **and runtime Ψ(r) for
 every real r≥0**. The expanded seven-assembler benchmark adds a further
 real-plus-synthetic **mandatory completion gate**, effective now; neither
 numerical gate can be waived because the Rust-only architecture is completed.
-Until Ivanka passes the full seven-assembler benchmark on all 598 samples
+Until Ivanka passes the full seven-assembler benchmark on all 662 samples
 with both strict all-r Ψ gates per competitor and cohort, the expanded
 qualification is **NOT PASSED**, regardless of previous IVA-only results.
 
 **Public Assembler Bench is also mandatory:** all assemblers must be tested
 as integrated into MiCall, with useful, independently verifiable comparisons
 published on Ivanka's GitHub Pages site under `/bench/`. Synthetic
-biological truth must come **only** from HXB2, random HXB2/other-HIV-subtype
-recombinants, and optional uniformly random substitutions up to 5%;
+biological truth must come from pinned HXB2-derived/recombinant
+HIV templates or the explicitly permitted pinned HCV-1a/V3 mixture
+components, each with at most 5% uniformly sampled substitutions;
 **generic random A/C/G/T truth genomes are prohibited**. The previous
 generic-random 400-case synthetic dataset is historical diagnostic evidence,
 **not eligible** for expanded benchmark qualification. See
 [Assembler Bench](docs/intents/007-assembler-bench.md) and
 [HXB2 synthetic truth](docs/intents/008-hxb2-synthetic-truth.md).
 
-## Pipeline objective: enable dominant recovery in MiCall
+## Objective: maximize end-to-end MiCall benchmark scores
 
-**Ivanka by itself is not required to reconstruct any viral haplotype.**
-That means not just that recovering *every* haplotype is unnecessary:
-even reconstructing **one complete haplotype, including the dominant
-one, is not an independent requirement on the Ivanka Rust assembler**.
+**Ivanka is a reference-blind assembly component**, not an executable
+that must reconstruct one consensus or enumerate every viral haplotype.
+The objective is to **maximize prespecified MiCall-integrated benchmark
+scores** under the source/algorithm restrictions and strict Ψ gates.
 
-Ivanka contributes honest read-derived intermediate assembly evidence to
-MiCall. It may produce fragments, overlapping candidates, several
-contigs, or a legitimately empty FASTA. These are **not** automatically
-claims of physical full-length viral haplotypes. It is the **integrated
-MiCall pipeline** that must recover the **most abundant identifiable
-haplotype**, or report a defensible predominant consensus with phase
-uncertainty when the original reads cannot resolve a physical haplotype.
+The current expanded benchmark uses **198 unchanged physical cases
+and 464 synthetic cases**: 25 historical HXB2/read-stress families
+plus 4 new HCV/HIV and HCV/V3 mixtures. Synthetic evaluation aligns
+MiCall's final MAX sequences independently against **all generating
+truths with abundance ≥15%**, then takes the **equal-weight average of
+each truth's length-normalized local-alignment score ×10,000**.
+This prevents a long HCV genome from dominating a short V3 target.
+Every abundant truth also has its own 90%-of-best-competitor floor.
+MiCall may represent closely related truths using mixtures and indels;
+a contig-per-haplotype rule is not imposed.
 
-For a 90% haplotype A / 10% haplotype B mixture, **MiCall's final
-sequence** should recover A where supported; Ivanka need not emit a
-complete A contig, a B contig, or any complete reconstruction. There is
-no exhaustive minority-haplotype recall requirement. Ivanka must still
-respect original pairs, avoid fabricating recombinants and preserve
-MiCall's downstream variant/genotype evidence.
-
-**Only the final MiCall output can satisfy the mandatory biological
-benchmark gates.** Alignments of raw Ivanka FASTA to synthetic truth,
-full-length contig scores, and tile/reconstruction statistics are useful
-*diagnostics*, not standalone qualification criteria. An allowed empty
-assembler output does not excuse an unsuccessful MiCall pipeline.
-
-See [Intent 004](docs/intents/004-dominant-sequence.md) and the
-[pipeline-level assembly objective](docs/assembly-objective.md).
-The existing strict physical-198 and expanded 598-sample Ψ requirements,
-reference isolation, and direct Rust execution rules remain binding.
+See [Intent 004](docs/intents/004-dominant-sequence.md),
+[the numeric qualification](docs/intents/006-expanded-qualification.md)
+and [the assembly objective](docs/assembly-objective.md).
+**The new 662-case qualification is not yet passed.** Historical
+400-case scores remain identifiable as historical evidence.
 
 ## Current development milestone: both benchmark gates must pass
 
@@ -122,8 +114,8 @@ the Rust-only, reference-blind, unconfigured MiCall invocation contract:
   each sample ≥90% of IVA, ≤1,800-second containers, and strictly positive
   alignment and runtime signed-power Ψ(r) for every real r≥0.
 - **Enhanced seven-assembler benchmark:** the unchanged 198 real samples
-  plus 400 diverse synthetic cases **generated only from the permitted
-  HXB2/subtype-recombinant truths** under Intent 008, against IVA,
+  plus 464 diverse synthetic cases from pinned HXB2/subtype,
+  HCV/HIV and HCV/V3 truths under Intent 008, against IVA,
   Haploflow, MEGAHIT, ABySS, SPAdes and Velvet. On both cohorts
   separately, **MiCall with Ivanka** must beat MiCall with **each** competitor
   on final-output alignment/known-truth and runtime all-r Ψ, meeting
@@ -138,7 +130,7 @@ IVA-only pass nor a synthetic-only pass suffices. These requirements are
 
 Other experiments—including minority-haplotype reconstruction, separate
 phase studies, coverage diagnostics and synthetic investigations outside
-the fixed 400-sample cohort—may guide changes without adding further
+the fixed 464-sample cohort—may guide changes without adding further
 performance gates; **their biological synthetic truths must still satisfy
 Intent 008**. Preserve paired input and result provenance. A benchmark
 pass is not a separate clinical production authorization.
@@ -310,8 +302,8 @@ remapping. The implementation may live in MiCall Python.
 
 **Post-stitch filtering by read support is an idea to test, not a mandated
 algorithm.** Missing a low-abundance contig is not intrinsically a failure:
-recovering the dominant supported sequence is the priority, not enumerating
-all haplotypes. Pruning may improve remapping performance, but verify that
+maximizing the integrated abundance-aware benchmark score is the
+priority, not enumerating all haplotypes. Pruning may improve remapping performance, but verify that
 it does not remove the dominant supported output, fabricate recombinants,
 or corrupt downstream minority-allele measurements. Do not infer biological
 validity from contig count, canonical k-mer diversity, or maximum final

@@ -128,6 +128,9 @@ def validate(case):
     """Fail closed if hidden truth or sampled ancestry drifted."""
     case = Path(case)
     manifest = json.loads((case / "manifest.json").read_text())
+    if manifest.get("schema") == "ivanka.expanded.synthetic.multi_viral.v1":
+        from .mixed_truth import validate as validate_mixed
+        return validate_mixed(case)
     family, sample = manifest["family"], manifest["seed"]
     revision = manifest.get("truth_model_revision", 1)
     genomes, fractions, contamination, expected = haplotypes(

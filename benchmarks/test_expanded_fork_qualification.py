@@ -52,7 +52,7 @@ class DedicatedQualificationTests(unittest.TestCase):
             join.assert_not_called()
             summary.assert_not_called()
             result,join,summary=self.call(
-                Path(folder),att,proof,images,synth,[{}]*400,197)
+                Path(folder),att,proof,images,synth,[{}]*464,197)
             self.assertFalse(result["pass"])
             join.assert_not_called()
             summary.assert_not_called()
@@ -61,12 +61,12 @@ class DedicatedQualificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             att,proof,images,synth=self.fixture(folder)
             result,join,summary=self.call(
-                Path(folder),att,proof,images,synth,[{}]*400,198)
+                Path(folder),att,proof,images,synth,[{}]*464,198)
             self.assertEqual(result["status"],"passed")
             self.assertTrue(result["pass"])
             self.assertEqual(result["provenance"]["unique_fork_commits"],7)
             rows=summary.call_args.args[0]
-            self.assertEqual(len(rows),401)
+            self.assertEqual(len(rows),465)
             self.assertEqual(rows[-1]["id"],"R001")
             join.assert_called_once()
 
@@ -77,11 +77,11 @@ class DedicatedQualificationTests(unittest.TestCase):
             proof["images"]["ivanka"]["source_commit"]=old
             att.write_text(json.dumps(proof))
             with self.assertRaisesRegex(ValueError,"seven distinct"):
-                self.call(Path(folder),att,proof,images,synth,[{}]*400,198)
+                self.call(Path(folder),att,proof,images,synth,[{}]*464,198)
             proof["schema"]="shared-commit"
             att.write_text(json.dumps(proof))
             with self.assertRaisesRegex(ValueError,"seven dedicated"):
-                self.call(Path(folder),att,proof,images,synth,[{}]*400,198)
+                self.call(Path(folder),att,proof,images,synth,[{}]*464,198)
 
     def test_invalid_physical_pair_cannot_reach_gate(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -90,7 +90,7 @@ class DedicatedQualificationTests(unittest.TestCase):
             counter={tool:{"finished":198,"failed":0}
                      for tool in ASSEMBLERS if tool!="iva"}
             with (patch.object(gate,"checked",return_value=(
-                      {"images":images},[{}]*400,"sha",proof)),
+                      {"images":images},[{}]*464,"sha",proof)),
                   patch.object(gate,"snapshot",return_value={
                       "run_manifest_sha256":"a"*64,"candidates":counter}),
                   patch.object(gate,"join_real_runs",

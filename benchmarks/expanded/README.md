@@ -1,5 +1,18 @@
 # Expanded seven-assembler benchmark — mandatory v2 acceptance gate
 
+> **Current objective: scientific v6 (November 17, 2026).**
+> Optimize the integrated MiCall benchmark score over **every
+> generating truth at ≥15% nominal abundance**. Four source-pinned
+> HCV/HIV and HCV/V3 mixture families join the existing 25 families:
+> **29 × 16 = 464 synthetic**; with the 198 physical inputs there
+> are **662 qualifying cases**. The synthetic score is
+> `10000 × mean(best_local_alignment_i / truth_length_i)`;
+> each required truth has its own additional 90%-of-best-comparator
+> floor. See [Intent 006](../../docs/intents/006-expanded-qualification.md)
+> and [scientific v6](../../docs/scientific-synthetic-v6.md).
+> Historical 400-case pipelines, source identities and raw scores
+> remain separately inspectable, but can never count as v6.
+>
 > **November 17, 2026 scientific v5 restart:** The default HXB2
 > generator has been redesigned (matched biological truths across
 > read-stress families, empirically aggregated per-cycle quality,
@@ -47,7 +60,7 @@ MiCall base. The previous combined all-tools image is historical-only.
 **This benchmark is required now for Ivanka completion and future releases.**
 It is an additional strict qualification, **not** a replacement for the
 original 198-sample IVA comparison or its all-r Ψ conditions. Every one of
-the 598 cases and all seven tools must be accounted for; incomplete runs
+the 662 cases and all seven tools must be accounted for; incomplete runs
 **do not pass**. **No seven-way pass has yet been established.**
 
 ## Scope and acceptance
@@ -57,8 +70,9 @@ the 598 cases and all seven tools must be accounted for; incomplete runs
   1,800-second per-arm limit. Each assembler must be exposed through the same
   MiCall reads1/reads2/output boundary using an image with immutable source,
   binary and MiCall-base provenance.
-- **Synthetic:** 25 mechanistically distinct **read/sampling** families ×
-  16 fixed seeds = **400** paired-read cases. All hidden truth genomes
+- **Synthetic:** 29 prespecified families × 16 fixed seeds = **464**
+  cases: 25 HXB2-derived stress/mixture families plus four mixed-virus
+  HCV/HIV and HCV/V3 families. All hidden truth genomes
   satisfy Intent 008: HXB2, random homologous HXB2/other-subtype recombinants,
   and optional ≤5% uniformly sampled substitutions; no arbitrary random
   genome generation or truth-level engineered repeats, inversions, GC

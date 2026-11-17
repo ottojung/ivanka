@@ -65,7 +65,7 @@ links to `cfe-lab/MiCall`, moving branches, bare SHAs with no fork
 repository identity, or non-reproducible locally patched images are
 not acceptable provenance for new qualifying runs.
 
-The original inputs, original real 198-sample gate, HXB2-derived 400
+The original inputs, original real 198-sample gate, source-pinned 464
 synthetic cases, seven-assembler comparison, independent PSI proofs,
 reference-blindness and default direct Rust Ivanka invocation remain
 unchanged. Fork provenance applies to the **MiCall integration and

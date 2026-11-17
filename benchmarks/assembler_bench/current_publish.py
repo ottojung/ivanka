@@ -9,6 +9,7 @@ import tempfile
 from .current_inputs import PROGRESS_SCHEMA
 from .current_runs import current,write
 from .site_build import validate_public_site
+from .workload_activity import snapshot as worker_snapshot
 
 
 def frozen_date(root):
@@ -50,10 +51,13 @@ def monotone(prior,current):
                     raise ValueError("old verified arm failure disappeared")
 
 
-def update(site,synth,physical,data,runner,attestation,images,physical_witness,physical_attestation,*,migrate=False):
+def update(site,synth,physical,data,runner,attestation,images,physical_witness,physical_attestation,*,migrate=False,include_workload=False,cohort_order=("real","synthetic")):
     site=Path(site)
     when=frozen_date(synth)
     generated=current(synth,physical,data,runner,attestation,images,when,physical_witness,physical_attestation)
+    if include_workload:
+        generated["workload"]=worker_snapshot(synth,physical,images,
+                                             order=cohort_order)
     target=site/"data/runs.json"
     old=json.loads(target.read_text())
     before=all(run.get("progress_schema")==PROGRESS_SCHEMA
@@ -94,11 +98,14 @@ def main():
                  "attestation","images","physical-witness","physical-attestation"):
         parser.add_argument("--"+name,required=True)
     parser.add_argument("--migrate",action="store_true")
+    parser.add_argument("--with-activity",action="store_true")
+    parser.add_argument("--cohort-order",default="real,synthetic")
     args=parser.parse_args()
     images=json.loads(Path(args.images).read_text())
     update(args.site,args.synthetic,args.real,args.real_data,args.runner,
            args.attestation,images,args.physical_witness,args.physical_attestation,
-           migrate=args.migrate)
+           migrate=args.migrate,include_workload=args.with_activity,
+           cohort_order=tuple(args.cohort_order.split(",")))
 
 
 if __name__=="__main__":

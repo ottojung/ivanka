@@ -62,8 +62,15 @@ def validate_public_site(site=SITE):
         raise ValueError("missing all-metric sample dialog or paired density charts")
     if 'id="realProgress"' in html:
         raise ValueError("obsolete physical-progress banner reintroduced")
-    if ('id="toolProgress"' not in html or "run.tool_progress" not in js):
-        raise ValueError("all runs require the same per-assembler progress view")
+    if ('id="toolProgress"' in html or "Completed MiCall arms" in js
+            or "Cases with results" in js or "run.status_reason" in js):
+        raise ValueError("benchmark overview cannot be an execution dashboard")
+    if ('src="./overview.js"' not in html
+            or not (source / "overview.js").is_file()
+            or "BenchOverview.summary(" not in js
+            or "BenchOverview.notice(" not in js
+            or "BenchOverview.coverage(" not in js):
+        raise ValueError("missing results-based overview or minimal top notice")
     if ('id="comparatorProgress"' in html
             or (source / "comparator-progress.js").exists()
             or (source / "data/comparator-progress.json").exists()):

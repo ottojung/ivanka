@@ -101,55 +101,43 @@ function syncUrl() {
 
 function drawOverview() {
   const run=state.run,previous=!!run.archive;
-  const expected=run.expected_sample_count||run.sample_count;
-  const label=run.cohort==="combined"?"Combined · both cohorts":
+  const cohort=run.cohort==="combined"?"Combined · both cohorts":
     run.cohort==="real"?"Physical · MiCall":"HXB2 · MiCall";
-  const progress=run.tool_progress||Object.fromEntries(
-    run.tools.map(tool=>[tool,{
-      expected,finished:run.samples.filter(s=>
-        Number.isFinite(s.score?.[tool])||s.failures?.includes(tool)).length,
-      failed:run.samples.filter(s=>s.failures?.includes(tool)).length
-    }]));
-  const finished=Object.values(progress).reduce((n,r)=>n+r.finished,0);
-  const failures=Object.values(progress).reduce((n,r)=>n+r.failed,0);
-  const complete=Object.values(progress).every(r=>r.finished===r.expected);
-  const planned=Object.values(progress).reduce((n,r)=>n+r.expected,0);
+  const descriptions={
+    synthetic:"Final MiCall MAX sequences scored by local alignment to their HXB2-derived generating truth; runtime measured in-container.",
+    real:"Final MiCall MAX sequences scored against the fixed HIV/HCV reference panel; runtime measured in-container.",
+    combined:"Physical and synthetic MiCall scores and runtimes combined without changing the per-case measurements."
+  };
   el("runSelect").value=run.id;
-  el("runCohort").textContent=label;
+  el("runCohort").textContent=cohort;
   el("runStatus").textContent=previous?"Historical":
     run.eligible_for_expanded?"Qualified":
-    complete?"Complete · unqualified":finished?"In progress":"Not started";
+    run.status==="incomplete"?"Pending evaluation":"Not qualified";
   el("runStatus").className=previous?"status-neutral":"status-no";
-  el("runDate").textContent=run.date;
-  el("runDescription").textContent=run.status_reason||
-    (previous?"Retained earlier measurements":"Source-attested current MiCall measurements");
-  el("globalNotice").textContent=previous
-    ?"Earlier measurements · "+run.sample_count+" recorded cases."
-    :"Current verified results · "+run.sample_count+"/"+expected+
-      " samples observed · "+finished+"/"+planned+
-      " arms completed. Missing measurements are not zero or failures.";
-  const floor=run.samples.filter(s=>s.floor_ok===false).length;
-  el("metricCards").innerHTML=card("Cases with results",
-    run.sample_count+" / "+expected,"At least one observed assembler")+
-    card("Completed MiCall arms",String(finished)+" / "+planned,
-      "Successful and failed attempts")+
-    card("Successful arms",String(finished-failures),"Scored and timed")+
-    card("Failed arms",String(failures),"Not confused with missing results")+
-    card("Below 90% alignment",String(floor),"Only complete seven-way cases");
-  el("toolProgress").innerHTML=
-    '<table class="tool-progress-table"><thead><tr>'+
-    '<th>Assembler</th><th>Completed</th><th>Successful</th>'+
-    '<th>Failed</th><th>Progress</th></tr></thead><tbody>'+
-    run.tools.map(name=>{
-      const count=progress[name],ok=count.finished-count.failed;
-      const phase=count.finished===0?"Not started":
-        count.finished===count.expected?"Complete":"In progress";
-      return '<tr><th>'+esc(names[name.toLowerCase()]||name)+'</th>'+
-        '<td>'+count.finished+' / '+count.expected+'</td>'+
-        '<td>'+ok+'</td><td>'+count.failed+'</td>'+
-        '<td class="'+(count.finished?"":"unmeasured")+'">'+phase+
-        '</td></tr>';
-    }).join("")+'</tbody></table>';
+  el("runDate").textContent=run.date||"—";
+  el("runDescription").textContent=descriptions[run.cohort]||
+    "Final MiCall alignment and independently timed execution measurements.";
+  const note=BenchOverview.notice(state.data,run);
+  const notice=el("globalNotice");
+  notice.hidden=!note;
+  if(note) {
+    const published=state.data.published_at;
+    notice.textContent=note+(published
+      ?" · Data published "+new Date(published).toLocaleString()+".":"");
+  }
+  const overview=BenchOverview.summary(run,state.diagnostics);
+  const lead=overview.alignmentLeader,fast=overview.runtimeLeader;
+  el("metricCards").innerHTML=
+    card("Highest mean alignment",lead?fmt(lead.mean,1)+" points":"—",
+      lead?(names[lead.tool]||lead.tool):"No alignment measurements")+
+    card("Lowest mean runtime",fast?fmt(fast.mean,1)+" s":"—",
+      fast?(names[fast.tool]||fast.tool):"No runtime measurements")+
+    card("Median alignment",overview.medianAlignment===null?"—":
+      fmt(overview.medianAlignment,1)+" points",
+      "Across recorded final MAX alignments")+
+    card("Median MiCall runtime",overview.medianRuntime===null?"—":
+      fmt(overview.medianRuntime,1)+" s",
+      "Across recorded in-container durations");
 }
 
 function drawCompare() {
@@ -158,12 +146,13 @@ function drawCompare() {
     state.metric,state.direction);
   const valid=ranking.filter(x=>x.mean!==null);
   const cap=Math.max(1e-12,...valid.map(x=>Math.abs(x.mean)));
-  const expected=state.run.expected_sample_count||state.run.sample_count;
   const label=state.direction==="lower"?"Lowest first":"Highest first";
   el("comparisonContext").textContent=info.label+" · "+label+
     " · average across measured cases ("+info.unit+").";
-  el("comparisonChart").innerHTML=ranking.map(row=>
-    '<button type="button" class="bar-line rank-trigger" data-tool="'+
+  el("comparisonChart").innerHTML=ranking.map(row=>{
+    const incomplete=BenchOverview.coverage(state.run,row.tool,row.observed);
+    return '<button type="button" class="bar-line rank-trigger'+
+      (incomplete?"":" complete-coverage")+'" data-tool="'+
     esc(row.tool)+'" aria-label="Show '+esc(names[row.tool]||row.tool)+
     ' '+esc(info.label)+' distribution">'+
     '<span class="bar-name">'+row.rank+'. '+
@@ -172,8 +161,9 @@ function drawCompare() {
     (row.tool===state.firstTool?"":"other")+'" style="width:'+
     (row.mean===null?0:100*Math.abs(row.mean)/cap).toFixed(2)+'%"></span></span>'+
     '<span class="bar-value">'+(row.mean===null?"—":fmt(row.mean,5))+'</span>'+
-    '<span class="bar-count">'+row.observed+'/'+expected+' cases</span>'+
-    '</button>').join("")+
+    '<span class="bar-count">'+esc(incomplete)+'</span>'+
+    '</button>';
+  }).join("")+
     '<p class="plot-caption">Select an assembler to view its distribution.</p>';
   el("comparisonChart").querySelectorAll("button[data-tool]").forEach(button=>
     button.addEventListener("click",()=>{
@@ -600,8 +590,7 @@ function drawDominance() {
           esc(a)+' versus '+esc(b)+': '+esc(meaning)+'"><span class="dom-verdict">'+
           esc(label)+'</span></button></td>';
       }).join("")+'</tr>').join("")+'</tbody></table>';
-  details.textContent="Select a cell for Ψ values and sample counts. "+
-    report.observed_samples+"/"+report.expected_samples+" samples available.";
+  details.textContent="Select a cell to inspect Ψ values and paired-case evidence.";
   holder.querySelectorAll("button[data-dominates-a]").forEach(button=>{
     button.addEventListener("click",()=>{
       details.classList.remove("is-empty");
@@ -761,11 +750,6 @@ async function main() {
     const response=await fetch("./data/runs.json",{cache:"no-store"});
     if(!response.ok)throw new Error("HTTP "+response.status);
     state.data=await response.json();
-    const published=state.data.published_at;
-    el("progressStatus").textContent=published
-      ?"Verified data published "+new Date(published).toLocaleString()+
-        " · Refresh for new measurements."
-      :"Refresh to check for new measurements.";
     const earlier=await fetch("./data/history.json",{cache:"no-store"});
     if(!earlier.ok)throw new Error("Historical runs: HTTP "+earlier.status);
     const history=await earlier.json();

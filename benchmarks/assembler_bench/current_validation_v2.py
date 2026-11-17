@@ -8,6 +8,7 @@ from .current_inputs import PROGRESS_SCHEMA
 from .public_case_metrics import validate_sample
 from .hxb2_preview import COHORT_SHA
 from .current_runs import observed
+from .workload_activity import validate as validate_activity
 
 SAMPLE={"synthetic":re.compile(r"H[0-9]{3}"),
         "real":re.compile(r"R[0-9]{3}"),
@@ -118,4 +119,5 @@ def check_current(report):
                     ("score","seconds","failures","diagnostics",
                      "exact_profiles","floor_ok","outcome")):
                 raise ValueError("combined source scientific values were changed")
+    validate_activity(report.get("workload"),report)
     return True

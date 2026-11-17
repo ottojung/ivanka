@@ -150,8 +150,11 @@ class UnifiedReportingTests(unittest.TestCase):
         self.assertNotIn("comparatorProgress",html)
         self.assertFalse((site/"comparator-progress.js").exists())
         self.assertFalse((site/"data/comparator-progress.json").exists())
-        self.assertIn('id="toolProgress"',html)
-        self.assertIn('run.tool_progress',js)
+        self.assertNotIn('id="toolProgress"',html)
+        self.assertIn('src="./overview.js"',html)
+        self.assertIn("BenchOverview.summary(",js)
+        self.assertIn("BenchOverview.notice(",js)
+        self.assertIn("BenchOverview.coverage(",js)
 
 
 if __name__=="__main__":

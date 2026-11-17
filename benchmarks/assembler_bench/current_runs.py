@@ -61,7 +61,6 @@ def make_run(cohort,rows,expected,images,provenance,source_sha,when):
     for row in ordered:
         status(row,tools)
     counts=progress(ordered,tools,expected)
-    n=sum(info["finished"] for info in counts.values())
     return {"schema":SCHEMA,
             "progress_schema":PROGRESS_SCHEMA,
             "id":f"current-{cohort}-micall-{when}",
@@ -78,7 +77,8 @@ def make_run(cohort,rows,expected,images,provenance,source_sha,when):
             "source_commit":provenance["images"]["iva"]["source_commit"],
             "tool_progress":counts,"psi":{},
             "score_origin":SCORE_ORIGIN,
-            "status_reason":f"{n}/{expected*len(tools)} source-verified MiCall arms completed; this is not a qualified benchmark.",
+            "status_reason":"Independent source-verified MiCall final MAX "
+                "local-alignment and in-container runtime measurements.",
             **({"cohort_manifest_sha256":COHORT_SHA}
                if cohort=="synthetic" else {})}
 

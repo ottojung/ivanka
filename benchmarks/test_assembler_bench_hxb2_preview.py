@@ -35,8 +35,11 @@ class Hxb2PreviewTests(unittest.TestCase):
             self.assertRegex(sample["alias"], r"^H[0-9]{3}$")
             self.assertEqual(set(sample["score"]), set(ASSEMBLERS))
             self.assertEqual(set(sample["seconds"]), set(ASSEMBLERS))
+            all_measured=all(sample["score"][tool] is not None
+                             for tool in ASSEMBLERS)
             self.assertEqual(sample["outcome"],
-                             "failure" if sample["failures"] else "success")
+                             "failure" if sample["failures"] else
+                             "success" if all_measured else "incomplete")
         serialized = json.dumps(run)
         for secret in ("/workspace/", ".fastq", "hidden-truth",
                        "original_sample", "patient_id", "sample_id"):
@@ -49,9 +52,14 @@ class Hxb2PreviewTests(unittest.TestCase):
                 if tool in sample["failures"]:
                     self.assertIsNone(sample["score"][tool])
                     self.assertIsNone(sample["seconds"][tool])
-                else:
+                elif sample["score"][tool] is not None:
                     self.assertIsInstance(sample["score"][tool], (float, int))
                     self.assertGreater(sample["seconds"][tool], 0)
+                else:
+                    self.assertIsNone(sample["seconds"][tool])
+                    self.assertLess(
+                        run["tool_progress"][tool]["finished"],
+                        run["tool_progress"][tool]["expected"])
 
     def test_site_refuses_ineligible_hxb2_failure_concealment(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -71,7 +79,8 @@ class Hxb2PreviewTests(unittest.TestCase):
                           if r.get("hxb2_truth_verified") is True)
             target["psi"] = {"runtime": {"positive_all_nonnegative": True}}
             (dest/"data/runs.json").write_text(json.dumps(edited))
-            with self.assertRaisesRegex(ValueError, "HXB2"):
+            with self.assertRaisesRegex(ValueError,
+                                        "HXB2|metadata/qualification"):
                 validate_public_site(dest)
 
     def test_missing_or_tampered_assembler_measurements_fail_closed(self):

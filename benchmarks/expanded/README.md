@@ -612,3 +612,28 @@ than triggering six new control runs.
 Run no more than ten simultaneous MiCall containers and keep the minimal
 assembler images immutable after external preflight. Only full physical
 198 and synthetic 400 case gates can establish formal qualification.
+
+## Comparator-first rerun: freeze opponents, defer Ivanka
+
+For the expensive November 2026 enhanced run, calculate six **non-Ivanka**
+MiCall images first: IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet.
+The synthetic phase runs all six on every frozen HXB2-derived case with
+source-verified, individually resumable per-arm checkpoints. The physical
+phase independently runs the same six images on all 198 original read pairs
+and locally scores each final MiCall MAX consensus against the same pinned
+33-reference panel. Reference sequences are scoring-only, never involved
+in contig selection.
+
+No Ivanka image is executed during either phase. A later, possibly updated,
+Ivanka must have its **own** new exact source/image attestation, and be
+compared with authenticated, unchanged rival measurements. This avoids
+restarting costly rival MiCall work after Ivanka changes. No partial phase
+or a later joining step is by itself a seven-way qualification.
+
+Both comparator phases run under a persistent s6 service, a maximum of ten
+MiCall containers at once, 1800 seconds per MiCall arm, fail-closed
+source/panel/data checks and durable per-arm recovery. A separate supervised
+publisher pushes an anonymized, source-verified counter summary to Assembler
+Bench on GitHub Pages every five minutes, without blocking benchmark execution
+or publishing private physical sample names. The website visibly labels Ivanka
+as deferred until its independently validated late-stage results arrive.

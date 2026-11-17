@@ -24,7 +24,7 @@ def decode(listing):
             raise ValueError("invalid benchmark container ID")
         pid = int(raw_pid)
         if pid <= 0:
-            continue
+            raise ValueError("benchmark container has unavailable process ID")
         if cid in found:
             raise ValueError("duplicate benchmark container ID")
         found[cid] = (name, pid)

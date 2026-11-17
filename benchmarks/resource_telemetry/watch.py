@@ -5,17 +5,22 @@ import time
 
 from .containers import running
 from .proc_tree import sample_tree
+from .reconcile import reconcile
 from .records import create, persist, update
 
 
 def watch(out, period=1.0):
     active = {}
     last_discovery = 0.0
+    reconciled = False
     while True:
         moment = time.monotonic()
         if moment - last_discovery >= 4:
             try:
                 found = running()
+                if not reconciled:
+                    reconcile(out, found)
+                    reconciled = True
                 for cid, (name, pid) in found.items():
                     if cid not in active:
                         active[cid] = (pid, create(cid, name, out))

@@ -26,7 +26,14 @@ def check(site, run):
                         "bench/assembler-" + name
                         for name, entry in att["images"].items()))):
         raise ValueError("public dedicated fork branches not independent")
-    if (att.get("base_image_sha256") != proof.get("base_image_sha256")
+    minimal=att.get("schema")=="ivanka.assembler-bench.minimal-fork-images.v1"
+    if (minimal and (att.get("baseline_commit")!=proof.get("baseline_commit")
+                     or not re.fullmatch("[a-f0-9]{40}",
+                                         att.get("baseline_commit",""))
+                     or any(not x.get("source_branch","").startswith("bench/minimal-")
+                            for x in att.get("images",{}).values()))):
+        raise ValueError("minimal source baseline/branch differs")
+    if ((not minimal and att.get("base_image_sha256") != proof.get("base_image_sha256"))
             or set(att.get("images", {})) != set(run["tools"])
             or set(run["images"]) != set(run["tools"])
             or set(proof.get("images", {})) != set(run["tools"])):
@@ -40,5 +47,6 @@ def check(site, run):
                 or shown.get("source_branch") != image.get("source_branch")
                 or not SOURCE.fullmatch(image["source_url"])
                 or not SHA.fullmatch(image["image_sha256"])
-                or not SHA.fullmatch(proof["base_image_sha256"])):
+                or (not minimal and
+                    not SHA.fullmatch(proof["base_image_sha256"]))):
             raise ValueError(f"{tool}: forged public source-attestation fields")

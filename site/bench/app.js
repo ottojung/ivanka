@@ -100,37 +100,56 @@ function syncUrl() {
 }
 
 function drawOverview() {
-  const run=state.run, previous=!!run.archive;
-  const expected=run.expected_sample_count;
+  const run=state.run,previous=!!run.archive;
+  const expected=run.expected_sample_count||run.sample_count;
   const label=run.cohort==="combined"?"Combined · both cohorts":
     run.cohort==="real"?"Physical · MiCall":"HXB2 · MiCall";
+  const progress=run.tool_progress||Object.fromEntries(
+    run.tools.map(tool=>[tool,{
+      expected,finished:run.samples.filter(s=>
+        Number.isFinite(s.score?.[tool])||s.failures?.includes(tool)).length,
+      failed:run.samples.filter(s=>s.failures?.includes(tool)).length
+    }]));
+  const finished=Object.values(progress).reduce((n,r)=>n+r.finished,0);
+  const failures=Object.values(progress).reduce((n,r)=>n+r.failed,0);
+  const complete=Object.values(progress).every(r=>r.finished===r.expected);
+  const planned=Object.values(progress).reduce((n,r)=>n+r.expected,0);
   el("runSelect").value=run.id;
   el("runCohort").textContent=label;
-  el("runStatus").textContent=previous?"Earlier run":"In progress";
+  el("runStatus").textContent=previous?"Historical":
+    run.eligible_for_expanded?"Qualified":
+    complete?"Complete · unqualified":finished?"In progress":"Not started";
   el("runStatus").className=previous?"status-neutral":"status-no";
   el("runDate").textContent=run.date;
-  el("runDescription").textContent=previous
-    ?"Measurements retained from this MiCall build. Each result keeps its source identity."
-    :run.cohort==="combined"
-    ?"Synthetic and real samples, all seven assemblers."
-    :run.cohort==="real"?"198 real DNA samples.":"400 synthetic DNA samples.";
-  const evidence=run.cohort==="combined"
-    ?"400 synthetic + 198 real cases"
-    :run.cohort==="real"?"198 physical samples; six rival runs in progress"
-    :"400 source-attested HXB2-derived synthetic samples";
+  el("runDescription").textContent=run.status_reason||
+    (previous?"Retained earlier measurements":"Source-attested current MiCall measurements");
   el("globalNotice").textContent=previous
-    ?"Earlier benchmark · "+run.sample_count+" recorded cases. Select another run to compare builds."
-    :"Benchmark in progress · "+evidence+
-      ". Comparisons update as more samples finish.";
-  const failures=run.samples.reduce((n,s)=>n+s.failures.length,0);
+    ?"Earlier measurements · "+run.sample_count+" recorded cases."
+    :"Current verified results · "+run.sample_count+"/"+expected+
+      " samples observed · "+finished+"/"+planned+
+      " arms completed. Missing measurements are not zero or failures.";
   const floor=run.samples.filter(s=>s.floor_ok===false).length;
-  const measured=run.samples.reduce((n,s)=>n+
-    Object.values(s.score).filter(Number.isFinite).length,0);
   el("metricCards").innerHTML=card("Cases with results",
-    run.sample_count+" / "+expected,"Published samples")+
-    card("Assembler results",String(measured),"Of "+(expected*7)+" planned")+
-    card("Run failures",String(failures),"MiCall executions")+
-    card("Below 90% alignment",String(floor),"Against the strongest rival");
+    run.sample_count+" / "+expected,"At least one observed assembler")+
+    card("Completed MiCall arms",String(finished)+" / "+planned,
+      "Successful and failed attempts")+
+    card("Successful arms",String(finished-failures),"Scored and timed")+
+    card("Failed arms",String(failures),"Not confused with missing results")+
+    card("Below 90% alignment",String(floor),"Only complete seven-way cases");
+  el("toolProgress").innerHTML=
+    '<table class="tool-progress-table"><thead><tr>'+
+    '<th>Assembler</th><th>Completed</th><th>Successful</th>'+
+    '<th>Failed</th><th>Progress</th></tr></thead><tbody>'+
+    run.tools.map(name=>{
+      const count=progress[name],ok=count.finished-count.failed;
+      const phase=count.finished===0?"Not started":
+        count.finished===count.expected?"Complete":"In progress";
+      return '<tr><th>'+esc(names[name.toLowerCase()]||name)+'</th>'+
+        '<td>'+count.finished+' / '+count.expected+'</td>'+
+        '<td>'+ok+'</td><td>'+count.failed+'</td>'+
+        '<td class="'+(count.finished?"":"unmeasured")+'">'+phase+
+        '</td></tr>';
+    }).join("")+'</tbody></table>';
 }
 
 function drawCompare() {
@@ -742,6 +761,11 @@ async function main() {
     const response=await fetch("./data/runs.json",{cache:"no-store"});
     if(!response.ok)throw new Error("HTTP "+response.status);
     state.data=await response.json();
+    const published=state.data.published_at;
+    el("progressStatus").textContent=published
+      ?"Verified data published "+new Date(published).toLocaleString()+
+        " · Refresh for new measurements."
+      :"Refresh to check for new measurements.";
     const earlier=await fetch("./data/history.json",{cache:"no-store"});
     if(!earlier.ok)throw new Error("Historical runs: HTTP "+earlier.status);
     const history=await earlier.json();

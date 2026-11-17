@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-17T13:19:56.675188+00:00",
+  "published_at": "2026-11-17T13:25:18.190417+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -13336,21 +13336,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 1,
-                  "losses": 8,
-                  "mean_delta": -19.628571428571,
+                  "losses": 9,
+                  "mean_delta": -19.222222222222,
                   "ties": 26
                 },
-                "paired": 35,
+                "paired": 36,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 1,
-                    "losses": 8,
+                    "losses": 9,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.2,
-                    "psi1": -19.62857142857143,
-                    "psi2": -4522.028571428571,
+                    "psi0": -0.2222222222222222,
+                    "psi1": -19.22222222222222,
+                    "psi2": -4397.111111111111,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 26,
                     "zeros_nonnegative": null
@@ -13490,21 +13490,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 9,
-                  "losses": 19,
-                  "mean_delta": 0.168831168831,
+                  "losses": 20,
+                  "mean_delta": 0.064102564103,
                   "ties": 49
                 },
-                "paired": 77,
+                "paired": 78,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 9,
-                    "losses": 19,
+                    "losses": 20,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.12987012987012986,
-                    "psi1": 0.16883116883116883,
-                    "psi2": 2062.6103896103896,
+                    "psi0": -0.14102564102564102,
+                    "psi1": 0.0641025641025641,
+                    "psi2": 2035.3461538461538,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 49,
                     "zeros_nonnegative": null
@@ -13618,21 +13618,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 29,
-                  "losses": 10,
-                  "mean_delta": 17.470588235294,
+                  "losses": 11,
+                  "mean_delta": 17.233009708738,
                   "ties": 63
                 },
-                "paired": 102,
+                "paired": 103,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 29,
-                    "losses": 10,
+                    "losses": 11,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.18627450980392157,
-                    "psi1": 17.470588235294116,
-                    "psi2": 3549.078431372549,
+                    "psi0": 0.17475728155339806,
+                    "psi1": 17.233009708737864,
+                    "psi2": 3514.145631067961,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 63,
                     "zeros_nonnegative": []
@@ -13644,26 +13644,27 @@
                 "expected": 198,
                 "observed": {
                   "gains": 19,
-                  "losses": 12,
-                  "mean_delta": 10.977272727273,
+                  "losses": 14,
+                  "mean_delta": 10.522222222222,
                   "ties": 57
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 19,
-                    "losses": 12,
-                    "positive_all_nonnegative": true,
-                    "psi0": 0.07954545454545454,
-                    "psi1": 10.977272727272727,
-                    "psi2": 3571.75,
+                    "losses": 14,
+                    "positive_all_nonnegative": false,
+                    "proof_incomplete": true,
+                    "psi0": 0.05555555555555555,
+                    "psi1": 10.522222222222222,
+                    "psi2": 3490.322222222222,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 57,
-                    "zeros_nonnegative": []
+                    "zeros_nonnegative": null
                   },
-                  "status": "dominates"
+                  "status": "unresolved"
                 }
               },
               "velvet": {
@@ -13853,22 +13854,22 @@
               "iva": {
                 "expected": 198,
                 "observed": {
-                  "gains": 10,
+                  "gains": 11,
                   "losses": 29,
-                  "mean_delta": -17.470588235294,
+                  "mean_delta": -17.233009708738,
                   "ties": 63
                 },
-                "paired": 102,
+                "paired": 103,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 10,
+                    "gains": 11,
                     "losses": 29,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.18627450980392157,
-                    "psi1": -17.470588235294116,
-                    "psi2": -3549.078431372549,
+                    "psi0": -0.17475728155339806,
+                    "psi1": -17.233009708737864,
+                    "psi2": -3514.145631067961,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 63,
                     "zeros_nonnegative": null
@@ -13902,21 +13903,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 13,
-                  "losses": 24,
-                  "mean_delta": -8.386363636364,
+                  "losses": 26,
+                  "mean_delta": -8.3,
                   "ties": 51
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 13,
-                    "losses": 24,
+                    "losses": 26,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.125,
-                    "psi1": -8.386363636363637,
-                    "psi2": -491.0681818181818,
+                    "psi0": -0.14444444444444443,
+                    "psi1": -8.3,
+                    "psi2": -480.6111111111111,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 51,
                     "zeros_nonnegative": null
@@ -13955,22 +13956,22 @@
               "abyss": {
                 "expected": 198,
                 "observed": {
-                  "gains": 8,
+                  "gains": 9,
                   "losses": 1,
-                  "mean_delta": 19.628571428571,
+                  "mean_delta": 19.222222222222,
                   "ties": 26
                 },
-                "paired": 35,
+                "paired": 36,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 8,
+                    "gains": 9,
                     "losses": 1,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.2,
-                    "psi1": 19.62857142857143,
-                    "psi2": 4522.028571428571,
+                    "psi0": 0.2222222222222222,
+                    "psi1": 19.22222222222222,
+                    "psi2": 4397.111111111111,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 26,
                     "zeros_nonnegative": []
@@ -13981,22 +13982,22 @@
               "haploflow": {
                 "expected": 198,
                 "observed": {
-                  "gains": 19,
+                  "gains": 20,
                   "losses": 9,
-                  "mean_delta": -0.168831168831,
+                  "mean_delta": -0.064102564103,
                   "ties": 49
                 },
-                "paired": 77,
+                "paired": 78,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 19,
+                    "gains": 20,
                     "losses": 9,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.12987012987012986,
-                    "psi1": -0.16883116883116883,
-                    "psi2": -2062.6103896103896,
+                    "psi0": 0.14102564102564102,
+                    "psi1": -0.0641025641025641,
+                    "psi2": -2035.3461538461538,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 49,
                     "zeros_nonnegative": null
@@ -14007,22 +14008,22 @@
               "iva": {
                 "expected": 198,
                 "observed": {
-                  "gains": 12,
+                  "gains": 14,
                   "losses": 19,
-                  "mean_delta": -10.977272727273,
+                  "mean_delta": -10.522222222222,
                   "ties": 57
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 12,
+                    "gains": 14,
                     "losses": 19,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.07954545454545454,
-                    "psi1": -10.977272727272727,
-                    "psi2": -3571.75,
+                    "psi0": -0.05555555555555555,
+                    "psi1": -10.522222222222222,
+                    "psi2": -3490.322222222222,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 57,
                     "zeros_nonnegative": null
@@ -14049,22 +14050,22 @@
               "megahit": {
                 "expected": 198,
                 "observed": {
-                  "gains": 24,
+                  "gains": 26,
                   "losses": 13,
-                  "mean_delta": 8.386363636364,
+                  "mean_delta": 8.3,
                   "ties": 51
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 24,
+                    "gains": 26,
                     "losses": 13,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.125,
-                    "psi1": 8.386363636363637,
-                    "psi2": 491.0681818181818,
+                    "psi0": 0.14444444444444443,
+                    "psi1": 8.3,
+                    "psi2": 480.6111111111111,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 51,
                     "zeros_nonnegative": null
@@ -14081,22 +14082,22 @@
               "velvet": {
                 "expected": 198,
                 "observed": {
-                  "gains": 17,
+                  "gains": 18,
                   "losses": 3,
-                  "mean_delta": 108.059701492537,
+                  "mean_delta": 106.588235294118,
                   "ties": 47
                 },
-                "paired": 67,
+                "paired": 68,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 17,
+                    "gains": 18,
                     "losses": 3,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.208955223880597,
-                    "psi1": 108.05970149253731,
-                    "psi2": 212750.2985074627,
+                    "psi0": 0.22058823529411764,
+                    "psi1": 106.58823529411765,
+                    "psi2": 209622.5588235294,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 47,
                     "zeros_nonnegative": []
@@ -14230,21 +14231,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 3,
-                  "losses": 17,
-                  "mean_delta": -108.059701492537,
+                  "losses": 18,
+                  "mean_delta": -106.588235294118,
                   "ties": 47
                 },
-                "paired": 67,
+                "paired": 68,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 3,
-                    "losses": 17,
+                    "losses": 18,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.208955223880597,
-                    "psi1": -108.05970149253731,
-                    "psi2": -212750.2985074627,
+                    "psi0": -0.22058823529411764,
+                    "psi1": -106.58823529411765,
+                    "psi2": -209622.5588235294,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 47,
                     "zeros_nonnegative": null
@@ -14465,18 +14466,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 1,
-                    "losses": 8,
-                    "mean_delta": -19.628571428571,
+                    "losses": 9,
+                    "mean_delta": -19.222222222222,
                     "ties": 26
                   },
                   "runtime": {
-                    "gains": 27,
+                    "gains": 28,
                     "losses": 8,
-                    "mean_delta": 35.6912612338,
+                    "mean_delta": 59.347309870389,
                     "ties": 0
                   }
                 },
-                "paired": 35,
+                "paired": 36,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -14486,11 +14487,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 1,
-                      "losses": 8,
+                      "losses": 9,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.2,
-                      "psi1": -19.62857142857143,
-                      "psi2": -4522.028571428571,
+                      "psi0": -0.2222222222222222,
+                      "psi1": -19.22222222222222,
+                      "psi2": -4397.111111111111,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 26,
                       "zeros_nonnegative": null
@@ -14499,12 +14500,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 27,
+                      "gains": 28,
                       "losses": 8,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.5428571428571428,
-                      "psi1": 35.6912612338,
-                      "psi2": -39818.82507422617,
+                      "psi0": 0.5555555555555556,
+                      "psi1": 59.347309870388884,
+                      "psi2": -16842.82207093147,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -14771,18 +14772,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 9,
-                    "losses": 19,
-                    "mean_delta": 0.168831168831,
+                    "losses": 20,
+                    "mean_delta": 0.064102564103,
                     "ties": 49
                   },
                   "runtime": {
-                    "gains": 33,
+                    "gains": 34,
                     "losses": 44,
-                    "mean_delta": 2.086750833623,
+                    "mean_delta": 10.877061249269,
                     "ties": 0
                   }
                 },
-                "paired": 77,
+                "paired": 78,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -14792,11 +14793,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 9,
-                      "losses": 19,
+                      "losses": 20,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.12987012987012986,
-                      "psi1": 0.16883116883116883,
-                      "psi2": 2062.6103896103896,
+                      "psi0": -0.14102564102564102,
+                      "psi1": 0.0641025641025641,
+                      "psi2": 2035.3461538461538,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 49,
                       "zeros_nonnegative": null
@@ -14805,12 +14806,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 33,
+                      "gains": 34,
                       "losses": 44,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.14285714285714285,
-                      "psi1": 2.0867508336233715,
-                      "psi2": 1118.7712556379565,
+                      "psi0": -0.1282051282051282,
+                      "psi1": 10.877061249269225,
+                      "psi2": 7168.195698748684,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -15024,18 +15025,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 29,
-                    "losses": 10,
-                    "mean_delta": 17.470588235294,
+                    "losses": 11,
+                    "mean_delta": 17.233009708738,
                     "ties": 63
                   },
                   "runtime": {
-                    "gains": 50,
+                    "gains": 51,
                     "losses": 52,
-                    "mean_delta": 83.248642525775,
+                    "mean_delta": 86.719468529466,
                     "ties": 0
                   }
                 },
-                "paired": 102,
+                "paired": 103,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15045,11 +15046,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 29,
-                      "losses": 10,
+                      "losses": 11,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.18627450980392157,
-                      "psi1": 17.470588235294116,
-                      "psi2": 3549.078431372549,
+                      "psi0": 0.17475728155339806,
+                      "psi1": 17.233009708737864,
+                      "psi2": 3514.145631067961,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 63,
                       "zeros_nonnegative": []
@@ -15058,12 +15059,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 50,
+                      "gains": 51,
                       "losses": 52,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.0196078431372549,
-                      "psi1": 83.24864252577451,
-                      "psi2": 83005.48068011076,
+                      "psi0": -0.009708737864077669,
+                      "psi1": 86.71946852946601,
+                      "psi2": 84085.5733678579,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -15077,18 +15078,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 19,
-                    "losses": 12,
-                    "mean_delta": 10.977272727273,
+                    "losses": 14,
+                    "mean_delta": 10.522222222222,
                     "ties": 57
                   },
                   "runtime": {
-                    "gains": 75,
+                    "gains": 77,
                     "losses": 13,
-                    "mean_delta": 215.315295328023,
+                    "mean_delta": 228.2925288437,
                     "ties": 0
                   }
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15098,25 +15099,26 @@
                   "alignment": {
                     "proof": {
                       "gains": 19,
-                      "losses": 12,
-                      "positive_all_nonnegative": true,
-                      "psi0": 0.07954545454545454,
-                      "psi1": 10.977272727272727,
-                      "psi2": 3571.75,
+                      "losses": 14,
+                      "positive_all_nonnegative": false,
+                      "proof_incomplete": true,
+                      "psi0": 0.05555555555555555,
+                      "psi1": 10.522222222222222,
+                      "psi2": 3490.322222222222,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 57,
-                      "zeros_nonnegative": []
+                      "zeros_nonnegative": null
                     },
-                    "status": "dominates"
+                    "status": "unresolved"
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 75,
+                      "gains": 77,
                       "losses": 13,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.7045454545454546,
-                      "psi1": 215.31529532802273,
-                      "psi2": 158938.6084793394,
+                      "psi0": 0.7111111111111111,
+                      "psi1": 228.2925288437,
+                      "psi2": 169605.00568349657,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": []
@@ -15496,19 +15498,19 @@
                 "expected": 198,
                 "observed": {
                   "alignment": {
-                    "gains": 10,
+                    "gains": 11,
                     "losses": 29,
-                    "mean_delta": -17.470588235294,
+                    "mean_delta": -17.233009708738,
                     "ties": 63
                   },
                   "runtime": {
                     "gains": 52,
-                    "losses": 50,
-                    "mean_delta": -83.248642525775,
+                    "losses": 51,
+                    "mean_delta": -86.719468529466,
                     "ties": 0
                   }
                 },
-                "paired": 102,
+                "paired": 103,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15517,12 +15519,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 10,
+                      "gains": 11,
                       "losses": 29,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.18627450980392157,
-                      "psi1": -17.470588235294116,
-                      "psi2": -3549.078431372549,
+                      "psi0": -0.17475728155339806,
+                      "psi1": -17.233009708737864,
+                      "psi2": -3514.145631067961,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 63,
                       "zeros_nonnegative": null
@@ -15532,11 +15534,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 52,
-                      "losses": 50,
+                      "losses": 51,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.0196078431372549,
-                      "psi1": -83.24864252577451,
-                      "psi2": -83005.48068011076,
+                      "psi0": 0.009708737864077669,
+                      "psi1": -86.71946852946601,
+                      "psi2": -84085.5733678579,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -15589,18 +15591,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 13,
-                    "losses": 24,
-                    "mean_delta": -8.386363636364,
+                    "losses": 26,
+                    "mean_delta": -8.3,
                     "ties": 51
                   },
                   "runtime": {
-                    "gains": 73,
+                    "gains": 75,
                     "losses": 15,
-                    "mean_delta": 132.959065998614,
+                    "mean_delta": 143.052244106722,
                     "ties": 0
                   }
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15610,11 +15612,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 13,
-                      "losses": 24,
+                      "losses": 26,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.125,
-                      "psi1": -8.386363636363637,
-                      "psi2": -491.0681818181818,
+                      "psi0": -0.14444444444444443,
+                      "psi1": -8.3,
+                      "psi2": -480.6111111111111,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 51,
                       "zeros_nonnegative": null
@@ -15623,12 +15625,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 73,
+                      "gains": 75,
                       "losses": 15,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.6590909090909091,
-                      "psi1": 132.95906599861362,
-                      "psi2": 66894.52421929112,
+                      "psi0": 0.6666666666666666,
+                      "psi1": 143.0522441067222,
+                      "psi2": 74310.87842064616,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": []
@@ -15696,19 +15698,19 @@
                 "expected": 198,
                 "observed": {
                   "alignment": {
-                    "gains": 8,
+                    "gains": 9,
                     "losses": 1,
-                    "mean_delta": 19.628571428571,
+                    "mean_delta": 19.222222222222,
                     "ties": 26
                   },
                   "runtime": {
                     "gains": 8,
-                    "losses": 27,
-                    "mean_delta": -35.6912612338,
+                    "losses": 28,
+                    "mean_delta": -59.347309870389,
                     "ties": 0
                   }
                 },
-                "paired": 35,
+                "paired": 36,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15717,12 +15719,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 8,
+                      "gains": 9,
                       "losses": 1,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.2,
-                      "psi1": 19.62857142857143,
-                      "psi2": 4522.028571428571,
+                      "psi0": 0.2222222222222222,
+                      "psi1": 19.22222222222222,
+                      "psi2": 4397.111111111111,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 26,
                       "zeros_nonnegative": []
@@ -15732,11 +15734,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 8,
-                      "losses": 27,
+                      "losses": 28,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.5428571428571428,
-                      "psi1": -35.6912612338,
-                      "psi2": 39818.82507422617,
+                      "psi0": -0.5555555555555556,
+                      "psi1": -59.347309870388884,
+                      "psi2": 16842.82207093147,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -15749,19 +15751,19 @@
                 "expected": 198,
                 "observed": {
                   "alignment": {
-                    "gains": 19,
+                    "gains": 20,
                     "losses": 9,
-                    "mean_delta": -0.168831168831,
+                    "mean_delta": -0.064102564103,
                     "ties": 49
                   },
                   "runtime": {
                     "gains": 44,
-                    "losses": 33,
-                    "mean_delta": -2.086750833623,
+                    "losses": 34,
+                    "mean_delta": -10.877061249269,
                     "ties": 0
                   }
                 },
-                "paired": 77,
+                "paired": 78,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15770,12 +15772,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 19,
+                      "gains": 20,
                       "losses": 9,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.12987012987012986,
-                      "psi1": -0.16883116883116883,
-                      "psi2": -2062.6103896103896,
+                      "psi0": 0.14102564102564102,
+                      "psi1": -0.0641025641025641,
+                      "psi2": -2035.3461538461538,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 49,
                       "zeros_nonnegative": null
@@ -15785,11 +15787,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 44,
-                      "losses": 33,
+                      "losses": 34,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.14285714285714285,
-                      "psi1": -2.0867508336233715,
-                      "psi2": -1118.7712556379565,
+                      "psi0": 0.1282051282051282,
+                      "psi1": -10.877061249269225,
+                      "psi2": -7168.195698748684,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -15802,19 +15804,19 @@
                 "expected": 198,
                 "observed": {
                   "alignment": {
-                    "gains": 12,
+                    "gains": 14,
                     "losses": 19,
-                    "mean_delta": -10.977272727273,
+                    "mean_delta": -10.522222222222,
                     "ties": 57
                   },
                   "runtime": {
                     "gains": 13,
-                    "losses": 75,
-                    "mean_delta": -215.315295328023,
+                    "losses": 77,
+                    "mean_delta": -228.2925288437,
                     "ties": 0
                   }
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15823,12 +15825,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 12,
+                      "gains": 14,
                       "losses": 19,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.07954545454545454,
-                      "psi1": -10.977272727272727,
-                      "psi2": -3571.75,
+                      "psi0": -0.05555555555555555,
+                      "psi1": -10.522222222222222,
+                      "psi2": -3490.322222222222,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 57,
                       "zeros_nonnegative": null
@@ -15838,11 +15840,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 13,
-                      "losses": 75,
+                      "losses": 77,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.7045454545454546,
-                      "psi1": -215.31529532802273,
-                      "psi2": -158938.6084793394,
+                      "psi0": -0.7111111111111111,
+                      "psi1": -228.2925288437,
+                      "psi2": -169605.00568349657,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -15888,19 +15890,19 @@
                 "expected": 198,
                 "observed": {
                   "alignment": {
-                    "gains": 24,
+                    "gains": 26,
                     "losses": 13,
-                    "mean_delta": 8.386363636364,
+                    "mean_delta": 8.3,
                     "ties": 51
                   },
                   "runtime": {
                     "gains": 15,
-                    "losses": 73,
-                    "mean_delta": -132.959065998614,
+                    "losses": 75,
+                    "mean_delta": -143.052244106722,
                     "ties": 0
                   }
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15909,12 +15911,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 24,
+                      "gains": 26,
                       "losses": 13,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.125,
-                      "psi1": 8.386363636363637,
-                      "psi2": 491.0681818181818,
+                      "psi0": 0.14444444444444443,
+                      "psi1": 8.3,
+                      "psi2": 480.6111111111111,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 51,
                       "zeros_nonnegative": null
@@ -15924,11 +15926,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 15,
-                      "losses": 73,
+                      "losses": 75,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.6590909090909091,
-                      "psi1": -132.95906599861362,
-                      "psi2": -66894.52421929112,
+                      "psi0": -0.6666666666666666,
+                      "psi1": -143.0522441067222,
+                      "psi2": -74310.87842064616,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -15947,19 +15949,19 @@
                 "expected": 198,
                 "observed": {
                   "alignment": {
-                    "gains": 17,
+                    "gains": 18,
                     "losses": 3,
-                    "mean_delta": 108.059701492537,
+                    "mean_delta": 106.588235294118,
                     "ties": 47
                   },
                   "runtime": {
                     "gains": 20,
-                    "losses": 47,
-                    "mean_delta": -82.897770132313,
+                    "losses": 48,
+                    "mean_delta": -93.869043521618,
                     "ties": 0
                   }
                 },
-                "paired": 67,
+                "paired": 68,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -15968,12 +15970,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 17,
+                      "gains": 18,
                       "losses": 3,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.208955223880597,
-                      "psi1": 108.05970149253731,
-                      "psi2": 212750.2985074627,
+                      "psi0": 0.22058823529411764,
+                      "psi1": 106.58823529411765,
+                      "psi2": 209622.5588235294,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 47,
                       "zeros_nonnegative": []
@@ -15983,11 +15985,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 20,
-                      "losses": 47,
+                      "losses": 48,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.40298507462686567,
-                      "psi1": -82.89777013231343,
-                      "psi2": -31862.7838814913,
+                      "psi0": -0.4117647058823529,
+                      "psi1": -93.86904352161764,
+                      "psi2": -41499.34225056984,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -16248,18 +16250,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 3,
-                    "losses": 17,
-                    "mean_delta": -108.059701492537,
+                    "losses": 18,
+                    "mean_delta": -106.588235294118,
                     "ties": 47
                   },
                   "runtime": {
-                    "gains": 47,
+                    "gains": 48,
                     "losses": 20,
-                    "mean_delta": 82.897770132313,
+                    "mean_delta": 93.869043521618,
                     "ties": 0
                   }
                 },
-                "paired": 67,
+                "paired": 68,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -16269,11 +16271,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 3,
-                      "losses": 17,
+                      "losses": 18,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.208955223880597,
-                      "psi1": -108.05970149253731,
-                      "psi2": -212750.2985074627,
+                      "psi0": -0.22058823529411764,
+                      "psi1": -106.58823529411765,
+                      "psi2": -209622.5588235294,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 47,
                       "zeros_nonnegative": null
@@ -16282,12 +16284,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 47,
+                      "gains": 48,
                       "losses": 20,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.40298507462686567,
-                      "psi1": 82.89777013231343,
-                      "psi2": 31862.7838814913,
+                      "psi0": 0.4117647058823529,
+                      "psi1": 93.86904352161764,
+                      "psi2": 41499.34225056984,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -16409,22 +16411,22 @@
               "spades": {
                 "expected": 198,
                 "observed": {
-                  "gains": 27,
+                  "gains": 28,
                   "losses": 8,
-                  "mean_delta": 35.6912612338,
+                  "mean_delta": 59.347309870389,
                   "ties": 0
                 },
-                "paired": 35,
+                "paired": 36,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 27,
+                    "gains": 28,
                     "losses": 8,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.5428571428571428,
-                    "psi1": 35.6912612338,
-                    "psi2": -39818.82507422617,
+                    "psi0": 0.5555555555555556,
+                    "psi1": 59.347309870388884,
+                    "psi2": -16842.82207093147,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -16563,22 +16565,22 @@
               "spades": {
                 "expected": 198,
                 "observed": {
-                  "gains": 33,
+                  "gains": 34,
                   "losses": 44,
-                  "mean_delta": 2.086750833623,
+                  "mean_delta": 10.877061249269,
                   "ties": 0
                 },
-                "paired": 77,
+                "paired": 78,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 33,
+                    "gains": 34,
                     "losses": 44,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.14285714285714285,
-                    "psi1": 2.0867508336233715,
-                    "psi2": 1118.7712556379565,
+                    "psi0": -0.1282051282051282,
+                    "psi1": 10.877061249269225,
+                    "psi2": 7168.195698748684,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -16691,22 +16693,22 @@
               "megahit": {
                 "expected": 198,
                 "observed": {
-                  "gains": 50,
+                  "gains": 51,
                   "losses": 52,
-                  "mean_delta": 83.248642525775,
+                  "mean_delta": 86.719468529466,
                   "ties": 0
                 },
-                "paired": 102,
+                "paired": 103,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 50,
+                    "gains": 51,
                     "losses": 52,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.0196078431372549,
-                    "psi1": 83.24864252577451,
-                    "psi2": 83005.48068011076,
+                    "psi0": -0.009708737864077669,
+                    "psi1": 86.71946852946601,
+                    "psi2": 84085.5733678579,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -16717,22 +16719,22 @@
               "spades": {
                 "expected": 198,
                 "observed": {
-                  "gains": 75,
+                  "gains": 77,
                   "losses": 13,
-                  "mean_delta": 215.315295328023,
+                  "mean_delta": 228.2925288437,
                   "ties": 0
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 75,
+                    "gains": 77,
                     "losses": 13,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.7045454545454546,
-                    "psi1": 215.31529532802273,
-                    "psi2": 158938.6084793394,
+                    "psi0": 0.7111111111111111,
+                    "psi1": 228.2925288437,
+                    "psi2": 169605.00568349657,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": []
@@ -16928,21 +16930,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 52,
-                  "losses": 50,
-                  "mean_delta": -83.248642525775,
+                  "losses": 51,
+                  "mean_delta": -86.719468529466,
                   "ties": 0
                 },
-                "paired": 102,
+                "paired": 103,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 52,
-                    "losses": 50,
+                    "losses": 51,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.0196078431372549,
-                    "psi1": -83.24864252577451,
-                    "psi2": -83005.48068011076,
+                    "psi0": 0.009708737864077669,
+                    "psi1": -86.71946852946601,
+                    "psi2": -84085.5733678579,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -16975,22 +16977,22 @@
               "spades": {
                 "expected": 198,
                 "observed": {
-                  "gains": 73,
+                  "gains": 75,
                   "losses": 15,
-                  "mean_delta": 132.959065998614,
+                  "mean_delta": 143.052244106722,
                   "ties": 0
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 73,
+                    "gains": 75,
                     "losses": 15,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.6590909090909091,
-                    "psi1": 132.95906599861362,
-                    "psi2": 66894.52421929112,
+                    "psi0": 0.6666666666666666,
+                    "psi1": 143.0522441067222,
+                    "psi2": 74310.87842064616,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": []
@@ -17030,21 +17032,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 8,
-                  "losses": 27,
-                  "mean_delta": -35.6912612338,
+                  "losses": 28,
+                  "mean_delta": -59.347309870389,
                   "ties": 0
                 },
-                "paired": 35,
+                "paired": 36,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 8,
-                    "losses": 27,
+                    "losses": 28,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.5428571428571428,
-                    "psi1": -35.6912612338,
-                    "psi2": 39818.82507422617,
+                    "psi0": -0.5555555555555556,
+                    "psi1": -59.347309870388884,
+                    "psi2": 16842.82207093147,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -17056,21 +17058,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 44,
-                  "losses": 33,
-                  "mean_delta": -2.086750833623,
+                  "losses": 34,
+                  "mean_delta": -10.877061249269,
                   "ties": 0
                 },
-                "paired": 77,
+                "paired": 78,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 44,
-                    "losses": 33,
+                    "losses": 34,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.14285714285714285,
-                    "psi1": -2.0867508336233715,
-                    "psi2": -1118.7712556379565,
+                    "psi0": 0.1282051282051282,
+                    "psi1": -10.877061249269225,
+                    "psi2": -7168.195698748684,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -17082,21 +17084,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 13,
-                  "losses": 75,
-                  "mean_delta": -215.315295328023,
+                  "losses": 77,
+                  "mean_delta": -228.2925288437,
                   "ties": 0
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 13,
-                    "losses": 75,
+                    "losses": 77,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.7045454545454546,
-                    "psi1": -215.31529532802273,
-                    "psi2": -158938.6084793394,
+                    "psi0": -0.7111111111111111,
+                    "psi1": -228.2925288437,
+                    "psi2": -169605.00568349657,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -17124,21 +17126,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 15,
-                  "losses": 73,
-                  "mean_delta": -132.959065998614,
+                  "losses": 75,
+                  "mean_delta": -143.052244106722,
                   "ties": 0
                 },
-                "paired": 88,
+                "paired": 90,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 15,
-                    "losses": 73,
+                    "losses": 75,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.6590909090909091,
-                    "psi1": -132.95906599861362,
-                    "psi2": -66894.52421929112,
+                    "psi0": -0.6666666666666666,
+                    "psi1": -143.0522441067222,
+                    "psi2": -74310.87842064616,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -17156,21 +17158,21 @@
                 "expected": 198,
                 "observed": {
                   "gains": 20,
-                  "losses": 47,
-                  "mean_delta": -82.897770132313,
+                  "losses": 48,
+                  "mean_delta": -93.869043521618,
                   "ties": 0
                 },
-                "paired": 67,
+                "paired": 68,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 20,
-                    "losses": 47,
+                    "losses": 48,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.40298507462686567,
-                    "psi1": -82.89777013231343,
-                    "psi2": -31862.7838814913,
+                    "psi0": -0.4117647058823529,
+                    "psi1": -93.86904352161764,
+                    "psi2": -41499.34225056984,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -17303,22 +17305,22 @@
               "spades": {
                 "expected": 198,
                 "observed": {
-                  "gains": 47,
+                  "gains": 48,
                   "losses": 20,
-                  "mean_delta": 82.897770132313,
+                  "mean_delta": 93.869043521618,
                   "ties": 0
                 },
-                "paired": 67,
+                "paired": 68,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 47,
+                    "gains": 48,
                     "losses": 20,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.40298507462686567,
-                    "psi1": 82.89777013231343,
-                    "psi2": 31862.7838814913,
+                    "psi0": 0.4117647058823529,
+                    "psi1": 93.86904352161764,
+                    "psi2": 41499.34225056984,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -24110,7 +24112,33 @@
               "unique_aligned_fragments": 35235,
               "unstitched_contig_count": 5
             },
-            "spades": {},
+            "spades": {
+              "average_concordance": 0.8705810145803088,
+              "average_read_depth": 21545.689655172413,
+              "final_contig_31mer_redundancy_fraction": 0.8716526913713822,
+              "final_contig_count": 63,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 9284,
+              "final_contig_unknown_count": 62,
+              "mapped_fragments": 35331,
+              "multimap_avg_depth_mean": 890.9741490736751,
+              "multimap_avg_depth_total": 8271804.0,
+              "multimap_capped_pairs": 35043,
+              "multimap_max_depth_mean": 892.909844894442,
+              "multimap_max_depth_total": 8289775.0,
+              "nuc_q15_covered_fraction": 0.8744769874476988,
+              "nuc_q15_mean_depth": 18724.343096234308,
+              "nuc_q15_positions_covered": 418,
+              "nuc_q15_total_depth": 8950236.0,
+              "nuc_soft_clips_count": 22605,
+              "reference_bases_ge_100": 405,
+              "region_concordance_covered_mean": 67.02941176470588,
+              "region_concordance_mean": 10.312217194570136,
+              "stitched_contig_count": 107,
+              "total_read_depth": 8747550.0,
+              "unique_aligned_fragments": 35241,
+              "unstitched_contig_count": 139
+            },
             "velvet": {
               "average_concordance": 0.8876385297781634,
               "average_read_depth": 34151.57352941176,
@@ -24149,7 +24177,7 @@
             "iva": 203.0,
             "ivanka": null,
             "megahit": 206.0,
-            "spades": null,
+            "spades": 211.0,
             "velvet": 203.0
           },
           "seconds": {
@@ -24158,7 +24186,7 @@
             "iva": 319.270919316,
             "ivanka": null,
             "megahit": 302.80464375,
-            "spades": null,
+            "spades": 1126.352361667,
             "velvet": 297.408001062
           }
         },
@@ -31045,8 +31073,60 @@
               "unstitched_contig_count": 1
             },
             "ivanka": {},
-            "megahit": {},
-            "spades": {},
+            "megahit": {
+              "average_concordance": 0.6407287593115273,
+              "average_read_depth": 1969.1736636245112,
+              "final_contig_31mer_redundancy_fraction": 0.018136941750392044,
+              "final_contig_count": 424,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 184910,
+              "final_contig_unknown_count": 419,
+              "mapped_fragments": 47344,
+              "multimap_avg_depth_mean": 41.64792778211751,
+              "multimap_avg_depth_total": 7701118.32619135,
+              "multimap_capped_pairs": 1020,
+              "multimap_max_depth_mean": 45.48783191823049,
+              "multimap_max_depth_total": 8411155.0,
+              "nuc_q15_covered_fraction": 0.7842170160295932,
+              "nuc_q15_mean_depth": 4593.271886559803,
+              "nuc_q15_positions_covered": 1272,
+              "nuc_q15_total_depth": 7450287.0,
+              "nuc_soft_clips_count": 176026,
+              "reference_bases_ge_100": 2663,
+              "region_concordance_covered_mean": 94.35127978817299,
+              "region_concordance_mean": 4.717563989408649,
+              "stitched_contig_count": 440,
+              "total_read_depth": 7551781.0,
+              "unique_aligned_fragments": 46998,
+              "unstitched_contig_count": 472
+            },
+            "spades": {
+              "average_concordance": 0.8233136748986363,
+              "average_read_depth": 4754.073417721519,
+              "final_contig_31mer_redundancy_fraction": 0.00973371509512766,
+              "final_contig_count": 370,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 176299,
+              "final_contig_unknown_count": 366,
+              "mapped_fragments": 48999,
+              "multimap_avg_depth_mean": 45.755246475661494,
+              "multimap_avg_depth_total": 8066604.198412646,
+              "multimap_capped_pairs": 1119,
+              "multimap_max_depth_mean": 45.81221107323354,
+              "multimap_max_depth_total": 8076647.0,
+              "nuc_q15_covered_fraction": 0.8676470588235294,
+              "nuc_q15_mean_depth": 5748.006965944272,
+              "nuc_q15_positions_covered": 1121,
+              "nuc_q15_total_depth": 7426425.0,
+              "nuc_soft_clips_count": 203447,
+              "reference_bases_ge_100": 1169,
+              "region_concordance_covered_mean": 94.52914798206278,
+              "region_concordance_mean": 9.452914798206278,
+              "stitched_contig_count": 389,
+              "total_read_depth": 7511436.0,
+              "unique_aligned_fragments": 48849,
+              "unstitched_contig_count": 579
+            },
             "velvet": {}
           },
           "exact_profiles": {},
@@ -31058,8 +31138,8 @@
             "haploflow": null,
             "iva": 1016.0,
             "ivanka": null,
-            "megahit": null,
-            "spades": null,
+            "megahit": 1023.0,
+            "spades": 1027.0,
             "velvet": null
           },
           "seconds": {
@@ -31067,8 +31147,8 @@
             "haploflow": null,
             "iva": 225.544319931,
             "ivanka": null,
-            "megahit": null,
-            "spades": null,
+            "megahit": 666.288040837,
+            "spades": 1017.044484647,
             "velvet": null
           }
         },
@@ -40005,12 +40085,12 @@
         "megahit": {
           "expected": 198,
           "failed": 5,
-          "finished": 107
+          "finished": 108
         },
         "spades": {
           "expected": 198,
           "failed": 17,
-          "finished": 105
+          "finished": 107
         },
         "velvet": {
           "expected": 198,
@@ -40147,21 +40227,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 3,
-                  "losses": 17,
-                  "mean_delta": -124.963636363636,
+                  "losses": 18,
+                  "mean_delta": -122.821428571429,
                   "ties": 35
                 },
-                "paired": 55,
+                "paired": 56,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 3,
-                    "losses": 17,
+                    "losses": 18,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.2545454545454545,
-                    "psi1": -124.96363636363637,
-                    "psi2": -243096.27272727274,
+                    "psi0": -0.26785714285714285,
+                    "psi1": -122.82142857142857,
+                    "psi2": -238755.7142857143,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 35,
                     "zeros_nonnegative": null
@@ -40302,21 +40382,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 13,
-                  "losses": 27,
-                  "mean_delta": -104.948453608247,
+                  "losses": 28,
+                  "mean_delta": -103.959183673469,
                   "ties": 57
                 },
-                "paired": 97,
+                "paired": 98,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 13,
-                    "losses": 27,
+                    "losses": 28,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.14432989690721648,
-                    "psi1": -104.94845360824742,
-                    "psi2": -836673.5670103093,
+                    "psi0": -0.15306122448979592,
+                    "psi1": -103.95918367346938,
+                    "psi2": -828136.7346938775,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 57,
                     "zeros_nonnegative": null
@@ -40431,21 +40511,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 30,
-                  "losses": 26,
-                  "mean_delta": -92.386363636364,
+                  "losses": 27,
+                  "mean_delta": -91.744360902256,
                   "ties": 76
                 },
-                "paired": 132,
+                "paired": 133,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 30,
-                    "losses": 26,
+                    "losses": 27,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.030303030303030304,
-                    "psi1": -92.38636363636364,
-                    "psi2": -257187.40151515152,
+                    "psi0": 0.022556390977443608,
+                    "psi1": -91.74436090225564,
+                    "psi2": -255254.03007518797,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 76,
                     "zeros_nonnegative": null
@@ -40457,21 +40537,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 20,
-                  "losses": 27,
-                  "mean_delta": -108.981481481481,
+                  "losses": 29,
+                  "mean_delta": -107.172727272727,
                   "ties": 61
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 20,
-                    "losses": 27,
+                    "losses": 29,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.06481481481481481,
-                    "psi1": -108.98148148148148,
-                    "psi2": -301977.8703703704,
+                    "psi0": -0.08181818181818182,
+                    "psi1": -107.17272727272727,
+                    "psi2": -296489.04545454547,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 61,
                     "zeros_nonnegative": null
@@ -40666,22 +40746,22 @@
               "iva": {
                 "expected": 598,
                 "observed": {
-                  "gains": 26,
+                  "gains": 27,
                   "losses": 30,
-                  "mean_delta": 92.386363636364,
+                  "mean_delta": 91.744360902256,
                   "ties": 76
                 },
-                "paired": 132,
+                "paired": 133,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 26,
+                    "gains": 27,
                     "losses": 30,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.030303030303030304,
-                    "psi1": 92.38636363636364,
-                    "psi2": 257187.40151515152,
+                    "psi0": -0.022556390977443608,
+                    "psi1": 91.74436090225564,
+                    "psi2": 255254.03007518797,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 76,
                     "zeros_nonnegative": null
@@ -40715,21 +40795,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 17,
-                  "losses": 27,
-                  "mean_delta": -6.435185185185,
+                  "losses": 29,
+                  "mean_delta": -6.4,
                   "ties": 64
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 17,
-                    "losses": 27,
+                    "losses": 29,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.09259259259259259,
-                    "psi1": -6.435185185185185,
-                    "psi2": -489.3796296296296,
+                    "psi0": -0.10909090909090909,
+                    "psi1": -6.4,
+                    "psi2": -480.8545454545455,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 64,
                     "zeros_nonnegative": null
@@ -40768,22 +40848,22 @@
               "abyss": {
                 "expected": 598,
                 "observed": {
-                  "gains": 17,
+                  "gains": 18,
                   "losses": 3,
-                  "mean_delta": 124.963636363636,
+                  "mean_delta": 122.821428571429,
                   "ties": 35
                 },
-                "paired": 55,
+                "paired": 56,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 17,
+                    "gains": 18,
                     "losses": 3,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.2545454545454545,
-                    "psi1": 124.96363636363637,
-                    "psi2": 243096.27272727274,
+                    "psi0": 0.26785714285714285,
+                    "psi1": 122.82142857142857,
+                    "psi2": 238755.7142857143,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 35,
                     "zeros_nonnegative": []
@@ -40794,22 +40874,22 @@
               "haploflow": {
                 "expected": 598,
                 "observed": {
-                  "gains": 27,
+                  "gains": 28,
                   "losses": 13,
-                  "mean_delta": 104.948453608247,
+                  "mean_delta": 103.959183673469,
                   "ties": 57
                 },
-                "paired": 97,
+                "paired": 98,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 27,
+                    "gains": 28,
                     "losses": 13,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.14432989690721648,
-                    "psi1": 104.94845360824742,
-                    "psi2": 836673.5670103093,
+                    "psi0": 0.15306122448979592,
+                    "psi1": 103.95918367346938,
+                    "psi2": 828136.7346938775,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 57,
                     "zeros_nonnegative": []
@@ -40820,22 +40900,22 @@
               "iva": {
                 "expected": 598,
                 "observed": {
-                  "gains": 27,
+                  "gains": 29,
                   "losses": 20,
-                  "mean_delta": 108.981481481481,
+                  "mean_delta": 107.172727272727,
                   "ties": 61
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 27,
+                    "gains": 29,
                     "losses": 20,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.06481481481481481,
-                    "psi1": 108.98148148148148,
-                    "psi2": 301977.8703703704,
+                    "psi0": 0.08181818181818182,
+                    "psi1": 107.17272727272727,
+                    "psi2": 296489.04545454547,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 61,
                     "zeros_nonnegative": []
@@ -40862,22 +40942,22 @@
               "megahit": {
                 "expected": 598,
                 "observed": {
-                  "gains": 27,
+                  "gains": 29,
                   "losses": 17,
-                  "mean_delta": 6.435185185185,
+                  "mean_delta": 6.4,
                   "ties": 64
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 27,
+                    "gains": 29,
                     "losses": 17,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.09259259259259259,
-                    "psi1": 6.435185185185185,
-                    "psi2": 489.3796296296296,
+                    "psi0": 0.10909090909090909,
+                    "psi1": 6.4,
+                    "psi2": 480.8545454545455,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 64,
                     "zeros_nonnegative": null
@@ -40894,22 +40974,22 @@
               "velvet": {
                 "expected": 598,
                 "observed": {
-                  "gains": 33,
+                  "gains": 34,
                   "losses": 5,
-                  "mean_delta": 187.563218390805,
+                  "mean_delta": 185.522727272727,
                   "ties": 49
                 },
-                "paired": 87,
+                "paired": 88,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 33,
+                    "gains": 34,
                     "losses": 5,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.3218390804597701,
-                    "psi1": 187.5632183908046,
-                    "psi2": 642849.6551724138,
+                    "psi0": 0.32954545454545453,
+                    "psi1": 185.52272727272728,
+                    "psi2": 635545.2727272727,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 49,
                     "zeros_nonnegative": []
@@ -41043,21 +41123,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 5,
-                  "losses": 33,
-                  "mean_delta": -187.563218390805,
+                  "losses": 34,
+                  "mean_delta": -185.522727272727,
                   "ties": 49
                 },
-                "paired": 87,
+                "paired": 88,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 5,
-                    "losses": 33,
+                    "losses": 34,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.3218390804597701,
-                    "psi1": -187.5632183908046,
-                    "psi2": -642849.6551724138,
+                    "psi0": -0.32954545454545453,
+                    "psi1": -185.52272727272728,
+                    "psi2": -635545.2727272727,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 49,
                     "zeros_nonnegative": null
@@ -41278,18 +41358,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 3,
-                    "losses": 17,
-                    "mean_delta": -124.963636363636,
+                    "losses": 18,
+                    "mean_delta": -122.821428571429,
                     "ties": 35
                   },
                   "runtime": {
-                    "gains": 39,
+                    "gains": 40,
                     "losses": 16,
-                    "mean_delta": 10.271743857818,
+                    "mean_delta": 25.933123648768,
                     "ties": 0
                   }
                 },
-                "paired": 55,
+                "paired": 56,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -41299,11 +41379,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 3,
-                      "losses": 17,
+                      "losses": 18,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.2545454545454545,
-                      "psi1": -124.96363636363637,
-                      "psi2": -243096.27272727274,
+                      "psi0": -0.26785714285714285,
+                      "psi1": -122.82142857142857,
+                      "psi2": -238755.7142857143,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 35,
                       "zeros_nonnegative": null
@@ -41312,12 +41392,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 39,
+                      "gains": 40,
                       "losses": 16,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.41818181818181815,
-                      "psi1": 10.27174385781818,
-                      "psi2": -28007.823809894453,
+                      "psi0": 0.42857142857142855,
+                      "psi1": 25.933123648767854,
+                      "psi2": -13448.44690178235,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -41585,18 +41665,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 13,
-                    "losses": 27,
-                    "mean_delta": -104.948453608247,
+                    "losses": 28,
+                    "mean_delta": -103.959183673469,
                     "ties": 57
                   },
                   "runtime": {
-                    "gains": 42,
+                    "gains": 43,
                     "losses": 55,
-                    "mean_delta": 1.52657033067,
+                    "mean_delta": 8.528655972745,
                     "ties": 0
                   }
                 },
-                "paired": 97,
+                "paired": 98,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -41606,11 +41686,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 13,
-                      "losses": 27,
+                      "losses": 28,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.14432989690721648,
-                      "psi1": -104.94845360824742,
-                      "psi2": -836673.5670103093,
+                      "psi0": -0.15306122448979592,
+                      "psi1": -103.95918367346938,
+                      "psi2": -828136.7346938775,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 57,
                       "zeros_nonnegative": null
@@ -41619,12 +41699,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 42,
+                      "gains": 43,
                       "losses": 55,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.13402061855670103,
-                      "psi1": 1.526570330670099,
-                      "psi2": 943.8765669815664,
+                      "psi0": -0.12244897959183673,
+                      "psi1": 8.528655972744893,
+                      "psi2": 5760.509232811088,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -41839,18 +41919,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 30,
-                    "losses": 26,
-                    "mean_delta": -92.386363636364,
+                    "losses": 27,
+                    "mean_delta": -91.744360902256,
                     "ties": 76
                   },
                   "runtime": {
-                    "gains": 55,
+                    "gains": 56,
                     "losses": 77,
-                    "mean_delta": 61.063025053364,
+                    "mean_delta": 63.917767127444,
                     "ties": 0
                   }
                 },
-                "paired": 132,
+                "paired": 133,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -41860,11 +41940,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 30,
-                      "losses": 26,
+                      "losses": 27,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.030303030303030304,
-                      "psi1": -92.38636363636364,
-                      "psi2": -257187.40151515152,
+                      "psi0": 0.022556390977443608,
+                      "psi1": -91.74436090225564,
+                      "psi2": -255254.03007518797,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 76,
                       "zeros_nonnegative": null
@@ -41873,12 +41953,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 55,
+                      "gains": 56,
                       "losses": 77,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.16666666666666666,
-                      "psi1": 61.06302505336364,
-                      "psi2": 64041.63055372675,
+                      "psi0": -0.15789473684210525,
+                      "psi1": 63.91776712744361,
+                      "psi2": 65020.67865120298,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -41892,18 +41972,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 20,
-                    "losses": 27,
-                    "mean_delta": -108.981481481481,
+                    "losses": 29,
+                    "mean_delta": -107.172727272727,
                     "ties": 61
                   },
                   "runtime": {
-                    "gains": 79,
+                    "gains": 81,
                     "losses": 29,
-                    "mean_delta": 173.782147903722,
+                    "mean_delta": 185.155032551536,
                     "ties": 0
                   }
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -41913,11 +41993,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 20,
-                      "losses": 27,
+                      "losses": 29,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.06481481481481481,
-                      "psi1": -108.98148148148148,
-                      "psi2": -301977.8703703704,
+                      "psi0": -0.08181818181818182,
+                      "psi1": -107.17272727272727,
+                      "psi2": -296489.04545454547,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 61,
                       "zeros_nonnegative": null
@@ -41926,12 +42006,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 79,
+                      "gains": 81,
                       "losses": 29,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.46296296296296297,
-                      "psi1": 173.78214790372223,
-                      "psi2": 129455.02581069703,
+                      "psi0": 0.4727272727272727,
+                      "psi1": 185.15503255153635,
+                      "psi2": 138718.14320807368,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": []
@@ -42311,19 +42391,19 @@
                 "expected": 598,
                 "observed": {
                   "alignment": {
-                    "gains": 26,
+                    "gains": 27,
                     "losses": 30,
-                    "mean_delta": 92.386363636364,
+                    "mean_delta": 91.744360902256,
                     "ties": 76
                   },
                   "runtime": {
                     "gains": 77,
-                    "losses": 55,
-                    "mean_delta": -61.063025053364,
+                    "losses": 56,
+                    "mean_delta": -63.917767127444,
                     "ties": 0
                   }
                 },
-                "paired": 132,
+                "paired": 133,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -42332,12 +42412,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 26,
+                      "gains": 27,
                       "losses": 30,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.030303030303030304,
-                      "psi1": 92.38636363636364,
-                      "psi2": 257187.40151515152,
+                      "psi0": -0.022556390977443608,
+                      "psi1": 91.74436090225564,
+                      "psi2": 255254.03007518797,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 76,
                       "zeros_nonnegative": null
@@ -42347,11 +42427,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 77,
-                      "losses": 55,
+                      "losses": 56,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.16666666666666666,
-                      "psi1": -61.06302505336364,
-                      "psi2": -64041.63055372675,
+                      "psi0": 0.15789473684210525,
+                      "psi1": -63.91776712744361,
+                      "psi2": -65020.67865120298,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -42404,18 +42484,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 17,
-                    "losses": 27,
-                    "mean_delta": -6.435185185185,
+                    "losses": 29,
+                    "mean_delta": -6.4,
                     "ties": 64
                   },
                   "runtime": {
-                    "gains": 89,
+                    "gains": 91,
                     "losses": 19,
-                    "mean_delta": 109.281111164954,
+                    "mean_delta": 117.969674250382,
                     "ties": 0
                   }
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -42425,11 +42505,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 17,
-                      "losses": 27,
+                      "losses": 29,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.09259259259259259,
-                      "psi1": -6.435185185185185,
-                      "psi2": -489.3796296296296,
+                      "psi0": -0.10909090909090909,
+                      "psi1": -6.4,
+                      "psi2": -480.8545454545455,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 64,
                       "zeros_nonnegative": null
@@ -42438,12 +42518,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 89,
+                      "gains": 91,
                       "losses": 19,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.6481481481481481,
-                      "psi1": 109.2811111649537,
-                      "psi2": 54519.50828768946,
+                      "psi0": 0.6545454545454545,
+                      "psi1": 117.96967425038181,
+                      "psi2": 60812.43474209998,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": []
@@ -42511,19 +42591,19 @@
                 "expected": 598,
                 "observed": {
                   "alignment": {
-                    "gains": 17,
+                    "gains": 18,
                     "losses": 3,
-                    "mean_delta": 124.963636363636,
+                    "mean_delta": 122.821428571429,
                     "ties": 35
                   },
                   "runtime": {
                     "gains": 16,
-                    "losses": 39,
-                    "mean_delta": -10.271743857818,
+                    "losses": 40,
+                    "mean_delta": -25.933123648768,
                     "ties": 0
                   }
                 },
-                "paired": 55,
+                "paired": 56,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -42532,12 +42612,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 17,
+                      "gains": 18,
                       "losses": 3,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.2545454545454545,
-                      "psi1": 124.96363636363637,
-                      "psi2": 243096.27272727274,
+                      "psi0": 0.26785714285714285,
+                      "psi1": 122.82142857142857,
+                      "psi2": 238755.7142857143,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 35,
                       "zeros_nonnegative": []
@@ -42547,11 +42627,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 16,
-                      "losses": 39,
+                      "losses": 40,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.41818181818181815,
-                      "psi1": -10.27174385781818,
-                      "psi2": 28007.823809894453,
+                      "psi0": -0.42857142857142855,
+                      "psi1": -25.933123648767854,
+                      "psi2": 13448.44690178235,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -42564,19 +42644,19 @@
                 "expected": 598,
                 "observed": {
                   "alignment": {
-                    "gains": 27,
+                    "gains": 28,
                     "losses": 13,
-                    "mean_delta": 104.948453608247,
+                    "mean_delta": 103.959183673469,
                     "ties": 57
                   },
                   "runtime": {
                     "gains": 55,
-                    "losses": 42,
-                    "mean_delta": -1.52657033067,
+                    "losses": 43,
+                    "mean_delta": -8.528655972745,
                     "ties": 0
                   }
                 },
-                "paired": 97,
+                "paired": 98,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -42585,12 +42665,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 27,
+                      "gains": 28,
                       "losses": 13,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.14432989690721648,
-                      "psi1": 104.94845360824742,
-                      "psi2": 836673.5670103093,
+                      "psi0": 0.15306122448979592,
+                      "psi1": 103.95918367346938,
+                      "psi2": 828136.7346938775,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 57,
                       "zeros_nonnegative": []
@@ -42600,11 +42680,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 55,
-                      "losses": 42,
+                      "losses": 43,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.13402061855670103,
-                      "psi1": -1.526570330670099,
-                      "psi2": -943.8765669815664,
+                      "psi0": 0.12244897959183673,
+                      "psi1": -8.528655972744893,
+                      "psi2": -5760.509232811088,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -42617,19 +42697,19 @@
                 "expected": 598,
                 "observed": {
                   "alignment": {
-                    "gains": 27,
+                    "gains": 29,
                     "losses": 20,
-                    "mean_delta": 108.981481481481,
+                    "mean_delta": 107.172727272727,
                     "ties": 61
                   },
                   "runtime": {
                     "gains": 29,
-                    "losses": 79,
-                    "mean_delta": -173.782147903722,
+                    "losses": 81,
+                    "mean_delta": -185.155032551536,
                     "ties": 0
                   }
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -42638,12 +42718,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 27,
+                      "gains": 29,
                       "losses": 20,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.06481481481481481,
-                      "psi1": 108.98148148148148,
-                      "psi2": 301977.8703703704,
+                      "psi0": 0.08181818181818182,
+                      "psi1": 107.17272727272727,
+                      "psi2": 296489.04545454547,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 61,
                       "zeros_nonnegative": []
@@ -42653,11 +42733,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 29,
-                      "losses": 79,
+                      "losses": 81,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.46296296296296297,
-                      "psi1": -173.78214790372223,
-                      "psi2": -129455.02581069703,
+                      "psi0": -0.4727272727272727,
+                      "psi1": -185.15503255153635,
+                      "psi2": -138718.14320807368,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -42703,19 +42783,19 @@
                 "expected": 598,
                 "observed": {
                   "alignment": {
-                    "gains": 27,
+                    "gains": 29,
                     "losses": 17,
-                    "mean_delta": 6.435185185185,
+                    "mean_delta": 6.4,
                     "ties": 64
                   },
                   "runtime": {
                     "gains": 19,
-                    "losses": 89,
-                    "mean_delta": -109.281111164954,
+                    "losses": 91,
+                    "mean_delta": -117.969674250382,
                     "ties": 0
                   }
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -42724,12 +42804,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 27,
+                      "gains": 29,
                       "losses": 17,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.09259259259259259,
-                      "psi1": 6.435185185185185,
-                      "psi2": 489.3796296296296,
+                      "psi0": 0.10909090909090909,
+                      "psi1": 6.4,
+                      "psi2": 480.8545454545455,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 64,
                       "zeros_nonnegative": null
@@ -42739,11 +42819,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 19,
-                      "losses": 89,
+                      "losses": 91,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.6481481481481481,
-                      "psi1": -109.2811111649537,
-                      "psi2": -54519.50828768946,
+                      "psi0": -0.6545454545454545,
+                      "psi1": -117.96967425038181,
+                      "psi2": -60812.43474209998,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -42762,19 +42842,19 @@
                 "expected": 598,
                 "observed": {
                   "alignment": {
-                    "gains": 33,
+                    "gains": 34,
                     "losses": 5,
-                    "mean_delta": 187.563218390805,
+                    "mean_delta": 185.522727272727,
                     "ties": 49
                   },
                   "runtime": {
                     "gains": 27,
-                    "losses": 60,
-                    "mean_delta": -64.607507650253,
+                    "losses": 61,
+                    "mean_delta": -73.293153706557,
                     "ties": 0
                   }
                 },
-                "paired": 87,
+                "paired": 88,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -42783,12 +42863,12 @@
                 "subset": {
                   "alignment": {
                     "proof": {
-                      "gains": 33,
+                      "gains": 34,
                       "losses": 5,
                       "positive_all_nonnegative": true,
-                      "psi0": 0.3218390804597701,
-                      "psi1": 187.5632183908046,
-                      "psi2": 642849.6551724138,
+                      "psi0": 0.32954545454545453,
+                      "psi1": 185.52272727272728,
+                      "psi2": 635545.2727272727,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 49,
                       "zeros_nonnegative": []
@@ -42798,11 +42878,11 @@
                   "runtime": {
                     "proof": {
                       "gains": 27,
-                      "losses": 60,
+                      "losses": 61,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.3793103448275862,
-                      "psi1": -64.60750765025287,
-                      "psi2": -24539.702923159304,
+                      "psi0": -0.38636363636363635,
+                      "psi1": -73.29315370655681,
+                      "psi2": -32069.351219246495,
                       "psi_at_positive_infinity": "+inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -43063,18 +43143,18 @@
                 "observed": {
                   "alignment": {
                     "gains": 5,
-                    "losses": 33,
-                    "mean_delta": -187.563218390805,
+                    "losses": 34,
+                    "mean_delta": -185.522727272727,
                     "ties": 49
                   },
                   "runtime": {
-                    "gains": 60,
+                    "gains": 61,
                     "losses": 27,
-                    "mean_delta": 64.607507650253,
+                    "mean_delta": 73.293153706557,
                     "ties": 0
                   }
                 },
-                "paired": 87,
+                "paired": 88,
                 "proof": {
                   "alignment": null,
                   "runtime": null
@@ -43084,11 +43164,11 @@
                   "alignment": {
                     "proof": {
                       "gains": 5,
-                      "losses": 33,
+                      "losses": 34,
                       "positive_all_nonnegative": false,
-                      "psi0": -0.3218390804597701,
-                      "psi1": -187.5632183908046,
-                      "psi2": -642849.6551724138,
+                      "psi0": -0.32954545454545453,
+                      "psi1": -185.52272727272728,
+                      "psi2": -635545.2727272727,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 49,
                       "zeros_nonnegative": null
@@ -43097,12 +43177,12 @@
                   },
                   "runtime": {
                     "proof": {
-                      "gains": 60,
+                      "gains": 61,
                       "losses": 27,
                       "positive_all_nonnegative": false,
-                      "psi0": 0.3793103448275862,
-                      "psi1": 64.60750765025287,
-                      "psi2": 24539.702923159304,
+                      "psi0": 0.38636363636363635,
+                      "psi1": 73.29315370655681,
+                      "psi2": 32069.351219246495,
                       "psi_at_positive_infinity": "-inf",
                       "ties": 0,
                       "zeros_nonnegative": null
@@ -43224,22 +43304,22 @@
               "spades": {
                 "expected": 598,
                 "observed": {
-                  "gains": 39,
+                  "gains": 40,
                   "losses": 16,
-                  "mean_delta": 10.271743857818,
+                  "mean_delta": 25.933123648768,
                   "ties": 0
                 },
-                "paired": 55,
+                "paired": 56,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 39,
+                    "gains": 40,
                     "losses": 16,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.41818181818181815,
-                    "psi1": 10.27174385781818,
-                    "psi2": -28007.823809894453,
+                    "psi0": 0.42857142857142855,
+                    "psi1": 25.933123648767854,
+                    "psi2": -13448.44690178235,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -43378,22 +43458,22 @@
               "spades": {
                 "expected": 598,
                 "observed": {
-                  "gains": 42,
+                  "gains": 43,
                   "losses": 55,
-                  "mean_delta": 1.52657033067,
+                  "mean_delta": 8.528655972745,
                   "ties": 0
                 },
-                "paired": 97,
+                "paired": 98,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 42,
+                    "gains": 43,
                     "losses": 55,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.13402061855670103,
-                    "psi1": 1.526570330670099,
-                    "psi2": 943.8765669815664,
+                    "psi0": -0.12244897959183673,
+                    "psi1": 8.528655972744893,
+                    "psi2": 5760.509232811088,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -43506,22 +43586,22 @@
               "megahit": {
                 "expected": 598,
                 "observed": {
-                  "gains": 55,
+                  "gains": 56,
                   "losses": 77,
-                  "mean_delta": 61.063025053364,
+                  "mean_delta": 63.917767127444,
                   "ties": 0
                 },
-                "paired": 132,
+                "paired": 133,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 55,
+                    "gains": 56,
                     "losses": 77,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.16666666666666666,
-                    "psi1": 61.06302505336364,
-                    "psi2": 64041.63055372675,
+                    "psi0": -0.15789473684210525,
+                    "psi1": 63.91776712744361,
+                    "psi2": 65020.67865120298,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -43532,22 +43612,22 @@
               "spades": {
                 "expected": 598,
                 "observed": {
-                  "gains": 79,
+                  "gains": 81,
                   "losses": 29,
-                  "mean_delta": 173.782147903722,
+                  "mean_delta": 185.155032551536,
                   "ties": 0
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 79,
+                    "gains": 81,
                     "losses": 29,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.46296296296296297,
-                    "psi1": 173.78214790372223,
-                    "psi2": 129455.02581069703,
+                    "psi0": 0.4727272727272727,
+                    "psi1": 185.15503255153635,
+                    "psi2": 138718.14320807368,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": []
@@ -43743,21 +43823,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 77,
-                  "losses": 55,
-                  "mean_delta": -61.063025053364,
+                  "losses": 56,
+                  "mean_delta": -63.917767127444,
                   "ties": 0
                 },
-                "paired": 132,
+                "paired": 133,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 77,
-                    "losses": 55,
+                    "losses": 56,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.16666666666666666,
-                    "psi1": -61.06302505336364,
-                    "psi2": -64041.63055372675,
+                    "psi0": 0.15789473684210525,
+                    "psi1": -63.91776712744361,
+                    "psi2": -65020.67865120298,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -43790,22 +43870,22 @@
               "spades": {
                 "expected": 598,
                 "observed": {
-                  "gains": 89,
+                  "gains": 91,
                   "losses": 19,
-                  "mean_delta": 109.281111164954,
+                  "mean_delta": 117.969674250382,
                   "ties": 0
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 89,
+                    "gains": 91,
                     "losses": 19,
                     "positive_all_nonnegative": true,
-                    "psi0": 0.6481481481481481,
-                    "psi1": 109.2811111649537,
-                    "psi2": 54519.50828768946,
+                    "psi0": 0.6545454545454545,
+                    "psi1": 117.96967425038181,
+                    "psi2": 60812.43474209998,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": []
@@ -43845,21 +43925,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 16,
-                  "losses": 39,
-                  "mean_delta": -10.271743857818,
+                  "losses": 40,
+                  "mean_delta": -25.933123648768,
                   "ties": 0
                 },
-                "paired": 55,
+                "paired": 56,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 16,
-                    "losses": 39,
+                    "losses": 40,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.41818181818181815,
-                    "psi1": -10.27174385781818,
-                    "psi2": 28007.823809894453,
+                    "psi0": -0.42857142857142855,
+                    "psi1": -25.933123648767854,
+                    "psi2": 13448.44690178235,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -43871,21 +43951,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 55,
-                  "losses": 42,
-                  "mean_delta": -1.52657033067,
+                  "losses": 43,
+                  "mean_delta": -8.528655972745,
                   "ties": 0
                 },
-                "paired": 97,
+                "paired": 98,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 55,
-                    "losses": 42,
+                    "losses": 43,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.13402061855670103,
-                    "psi1": -1.526570330670099,
-                    "psi2": -943.8765669815664,
+                    "psi0": 0.12244897959183673,
+                    "psi1": -8.528655972744893,
+                    "psi2": -5760.509232811088,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -43897,21 +43977,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 29,
-                  "losses": 79,
-                  "mean_delta": -173.782147903722,
+                  "losses": 81,
+                  "mean_delta": -185.155032551536,
                   "ties": 0
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 29,
-                    "losses": 79,
+                    "losses": 81,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.46296296296296297,
-                    "psi1": -173.78214790372223,
-                    "psi2": -129455.02581069703,
+                    "psi0": -0.4727272727272727,
+                    "psi1": -185.15503255153635,
+                    "psi2": -138718.14320807368,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -43939,21 +44019,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 19,
-                  "losses": 89,
-                  "mean_delta": -109.281111164954,
+                  "losses": 91,
+                  "mean_delta": -117.969674250382,
                   "ties": 0
                 },
-                "paired": 108,
+                "paired": 110,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 19,
-                    "losses": 89,
+                    "losses": 91,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.6481481481481481,
-                    "psi1": -109.2811111649537,
-                    "psi2": -54519.50828768946,
+                    "psi0": -0.6545454545454545,
+                    "psi1": -117.96967425038181,
+                    "psi2": -60812.43474209998,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -43971,21 +44051,21 @@
                 "expected": 598,
                 "observed": {
                   "gains": 27,
-                  "losses": 60,
-                  "mean_delta": -64.607507650253,
+                  "losses": 61,
+                  "mean_delta": -73.293153706557,
                   "ties": 0
                 },
-                "paired": 87,
+                "paired": 88,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
                     "gains": 27,
-                    "losses": 60,
+                    "losses": 61,
                     "positive_all_nonnegative": false,
-                    "psi0": -0.3793103448275862,
-                    "psi1": -64.60750765025287,
-                    "psi2": -24539.702923159304,
+                    "psi0": -0.38636363636363635,
+                    "psi1": -73.29315370655681,
+                    "psi2": -32069.351219246495,
                     "psi_at_positive_infinity": "+inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -44118,22 +44198,22 @@
               "spades": {
                 "expected": 598,
                 "observed": {
-                  "gains": 60,
+                  "gains": 61,
                   "losses": 27,
-                  "mean_delta": 64.607507650253,
+                  "mean_delta": 73.293153706557,
                   "ties": 0
                 },
-                "paired": 87,
+                "paired": 88,
                 "proof": null,
                 "status": "incomplete",
                 "subset": {
                   "proof": {
-                    "gains": 60,
+                    "gains": 61,
                     "losses": 27,
                     "positive_all_nonnegative": false,
-                    "psi0": 0.3793103448275862,
-                    "psi1": 64.60750765025287,
-                    "psi2": 24539.702923159304,
+                    "psi0": 0.38636363636363635,
+                    "psi1": 73.29315370655681,
+                    "psi2": 32069.351219246495,
                     "psi_at_positive_infinity": "-inf",
                     "ties": 0,
                     "zeros_nonnegative": null
@@ -50975,7 +51055,33 @@
               "unique_aligned_fragments": 35235,
               "unstitched_contig_count": 5
             },
-            "spades": {},
+            "spades": {
+              "average_concordance": 0.8705810145803088,
+              "average_read_depth": 21545.689655172413,
+              "final_contig_31mer_redundancy_fraction": 0.8716526913713822,
+              "final_contig_count": 63,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 9284,
+              "final_contig_unknown_count": 62,
+              "mapped_fragments": 35331,
+              "multimap_avg_depth_mean": 890.9741490736751,
+              "multimap_avg_depth_total": 8271804.0,
+              "multimap_capped_pairs": 35043,
+              "multimap_max_depth_mean": 892.909844894442,
+              "multimap_max_depth_total": 8289775.0,
+              "nuc_q15_covered_fraction": 0.8744769874476988,
+              "nuc_q15_mean_depth": 18724.343096234308,
+              "nuc_q15_positions_covered": 418,
+              "nuc_q15_total_depth": 8950236.0,
+              "nuc_soft_clips_count": 22605,
+              "reference_bases_ge_100": 405,
+              "region_concordance_covered_mean": 67.02941176470588,
+              "region_concordance_mean": 10.312217194570136,
+              "stitched_contig_count": 107,
+              "total_read_depth": 8747550.0,
+              "unique_aligned_fragments": 35241,
+              "unstitched_contig_count": 139
+            },
             "velvet": {
               "average_concordance": 0.8876385297781634,
               "average_read_depth": 34151.57352941176,
@@ -51015,7 +51121,7 @@
             "iva": 203.0,
             "ivanka": null,
             "megahit": 206.0,
-            "spades": null,
+            "spades": 211.0,
             "velvet": 203.0
           },
           "seconds": {
@@ -51024,7 +51130,7 @@
             "iva": 319.270919316,
             "ivanka": null,
             "megahit": 302.80464375,
-            "spades": null,
+            "spades": 1126.352361667,
             "velvet": 297.408001062
           }
         },
@@ -57980,8 +58086,60 @@
               "unstitched_contig_count": 1
             },
             "ivanka": {},
-            "megahit": {},
-            "spades": {},
+            "megahit": {
+              "average_concordance": 0.6407287593115273,
+              "average_read_depth": 1969.1736636245112,
+              "final_contig_31mer_redundancy_fraction": 0.018136941750392044,
+              "final_contig_count": 424,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 184910,
+              "final_contig_unknown_count": 419,
+              "mapped_fragments": 47344,
+              "multimap_avg_depth_mean": 41.64792778211751,
+              "multimap_avg_depth_total": 7701118.32619135,
+              "multimap_capped_pairs": 1020,
+              "multimap_max_depth_mean": 45.48783191823049,
+              "multimap_max_depth_total": 8411155.0,
+              "nuc_q15_covered_fraction": 0.7842170160295932,
+              "nuc_q15_mean_depth": 4593.271886559803,
+              "nuc_q15_positions_covered": 1272,
+              "nuc_q15_total_depth": 7450287.0,
+              "nuc_soft_clips_count": 176026,
+              "reference_bases_ge_100": 2663,
+              "region_concordance_covered_mean": 94.35127978817299,
+              "region_concordance_mean": 4.717563989408649,
+              "stitched_contig_count": 440,
+              "total_read_depth": 7551781.0,
+              "unique_aligned_fragments": 46998,
+              "unstitched_contig_count": 472
+            },
+            "spades": {
+              "average_concordance": 0.8233136748986363,
+              "average_read_depth": 4754.073417721519,
+              "final_contig_31mer_redundancy_fraction": 0.00973371509512766,
+              "final_contig_count": 370,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 176299,
+              "final_contig_unknown_count": 366,
+              "mapped_fragments": 48999,
+              "multimap_avg_depth_mean": 45.755246475661494,
+              "multimap_avg_depth_total": 8066604.198412646,
+              "multimap_capped_pairs": 1119,
+              "multimap_max_depth_mean": 45.81221107323354,
+              "multimap_max_depth_total": 8076647.0,
+              "nuc_q15_covered_fraction": 0.8676470588235294,
+              "nuc_q15_mean_depth": 5748.006965944272,
+              "nuc_q15_positions_covered": 1121,
+              "nuc_q15_total_depth": 7426425.0,
+              "nuc_soft_clips_count": 203447,
+              "reference_bases_ge_100": 1169,
+              "region_concordance_covered_mean": 94.52914798206278,
+              "region_concordance_mean": 9.452914798206278,
+              "stitched_contig_count": 389,
+              "total_read_depth": 7511436.0,
+              "unique_aligned_fragments": 48849,
+              "unstitched_contig_count": 579
+            },
             "velvet": {}
           },
           "exact_profiles": {},
@@ -57994,8 +58152,8 @@
             "haploflow": null,
             "iva": 1016.0,
             "ivanka": null,
-            "megahit": null,
-            "spades": null,
+            "megahit": 1023.0,
+            "spades": 1027.0,
             "velvet": null
           },
           "seconds": {
@@ -58003,8 +58161,8 @@
             "haploflow": null,
             "iva": 225.544319931,
             "ivanka": null,
-            "megahit": null,
-            "spades": null,
+            "megahit": 666.288040837,
+            "spades": 1017.044484647,
             "velvet": null
           }
         },
@@ -75987,12 +76145,12 @@
         "megahit": {
           "expected": 598,
           "failed": 5,
-          "finished": 137
+          "finished": 138
         },
         "spades": {
           "expected": 598,
           "failed": 17,
-          "finished": 125
+          "finished": 127
         },
         "velvet": {
           "expected": 598,

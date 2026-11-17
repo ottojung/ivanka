@@ -148,6 +148,48 @@ class ForkRealRunnerTests(unittest.TestCase):
             self.assertTrue(seen[0][1].endswith("attempt-000"))
             self.assertTrue(seen[1][1].endswith("attempt-001"))
 
+    def test_shared_control_runs_exactly_one_iva_pair_before_comparators(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            data=root/"data"
+            data.mkdir()
+            (data/"manifest.tsv").write_text("sample\na\n")
+            proof=root/"proof.json"
+            proof.write_text("{}")
+            output=root/"fresh"
+            calls=[]
+            def tool(name,destination,sample_ids,jobs,images,env,pinned,
+                     shared_controls=None,control_manifest=None):
+                calls.append((name,jobs,shared_controls,control_manifest))
+                return {"image_id":images[name],"complete":True}
+            shared={"a":{"image_id":self.images["iva"]}}
+            control=output/"shared-iva-controls.json"
+            with (patch.object(runner,"checked_images",return_value={}),
+                  patch.object(runner,"source_manifest",return_value={"source":"x"}),
+                  patch.object(runner,"samples_in_cohort",return_value={"a"}),
+                  patch.object(runner,"one_tool",side_effect=tool),
+                  patch.object(runner,"certify",return_value=control),
+                  patch.object(runner,"load",return_value=shared)):
+                result=runner.run(
+                    data,output,self.images,"/fork","base",proof,
+                    jobs=10,selected=["spades","ivanka","velvet"])
+            self.assertEqual([c[0] for c in calls],
+                             ["ivanka","spades","velvet"])
+            self.assertEqual([c[1] for c in calls],[5,10,10])
+            self.assertIsNone(calls[0][2])
+            self.assertIsNone(calls[0][3])
+            self.assertTrue(all(c[2]==shared and c[3]==control
+                                for c in calls[1:]))
+            self.assertEqual(len(result["tools"]),3)
+            self.assertTrue(runner.command("spades",jobs=10,shared=True)[
+                0].endswith("python") or runner.command(
+                "spades",jobs=10,shared=True)[0])
+            self.assertNotIn("--parallel-arms",runner.command(
+                "spades",jobs=10,shared=True))
+            self.assertIn("--mode",runner.command("spades",jobs=10,shared=True))
+            self.assertIn("ivanka",runner.command(
+                "spades",jobs=10,shared=True))
+
     def test_invalid_tool_or_worker_refused(self):
         with self.assertRaisesRegex(ValueError,"worker"):
             runner.run(".",".",self.images,".","base",".",jobs=11)

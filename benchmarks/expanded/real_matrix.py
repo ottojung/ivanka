@@ -15,7 +15,8 @@ PANEL = "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8"
 MANIFEST = "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192"
 
 
-def source_rows(path, proof=None, images=None, name=None, source_manifest=None):
+def source_rows(path, proof=None, images=None, name=None, source_manifest=None,
+                control_manifest=None):
     rows = []
     invocations = set()
     for line in Path(path).read_text().splitlines():
@@ -36,8 +37,14 @@ def source_rows(path, proof=None, images=None, name=None, source_manifest=None):
         folder=Path(path).parent
         if Path(proof).resolve()!=folder.joinpath("checkpoints.json").resolve():
             raise ValueError("real per-sample checkpoint must accompany its results")
+        controls=None
+        if control_manifest is not None:
+            from .real_shared_controls import load
+            controls=load(Path(source_manifest).parent,control_manifest,
+                          {r["sample"] for r in rows},images)
         authenticated=verify_collection(folder,{r["sample"] for r in rows},
-                                        images,name,source_manifest)
+                                        images,name,source_manifest,
+                                        shared_controls=controls)
         if authenticated!={r["sample"]:r for r in rows}:
             raise ValueError("per-sample real source journal differs")
     return {r["sample"]: r for r in rows}
@@ -54,7 +61,8 @@ def join_real_runs(specification):
         runs[tool] = source_rows(spec["results_jsonl"],
                                  spec.get("checkpoint_manifest"),
                                  spec.get("images"),tool,
-                                 spec.get("source_manifest"))
+                                 spec.get("source_manifest"),
+                                 spec.get("control_manifest"))
     sample_ids = set(runs["ivanka"])
     if any(set(rows) != sample_ids for rows in runs.values()):
         raise ValueError("candidate runs have unequal sample sets")
@@ -78,7 +86,8 @@ def join_real_runs(specification):
                     or entry.get("failed") is not expected_failed
                     or entry.get("baseline_error") is not None
                     or entry.get("evaluation_error") is not None
-                    or entry.get("iva_baseline_reused") is True
+                    or (entry.get("iva_baseline_reused") is True) !=
+                       bool(specification[name].get("control_manifest"))
                     or entry.get("provenance") != source_proof
                     or candidate["image_id"] != specification[name]["image_id"]
                     or control["image_id"] != pinned_iva

@@ -100,3 +100,22 @@ scientific gates remain unchanged. This intent is cumulative with
 [Intent 010](010-upstream-micall-read-only.md) and
 [Intent 011](011-ottojung-micall-fork-provenance.md), and never
 permits pushes or PRs to `cfe-lab/MiCall`.
+
+## Shared original physical IVA controls
+
+The enhanced 198-real six-way comparisons must execute the pinned IVA image
+**once per physical sample**, not six times. The first, ordinary paired
+Ivanka-versus-IVA comparison produces that control. External infrastructure
+independently verifies the original MiCall completion marker, source images,
+input fingerprints, output hashes and in-container timing. Only then is the
+final MAX consensus copied to an immutable, source-bound control cache.
+The other five tools run their ordinary MiCall integrations against this
+same authenticated control; no historical or cross-image IVA baseline is
+silently accepted. A changed cache, input, manifest or image rejects reuse.
+
+All scientific metric and eligibility checks remain external to the runtime
+images. A competitor scoring below IVA's diagnostic 90% floor is still a
+valid measured outcome, not an infrastructure failure. The full all-r
+seven-way qualifying gates remain authoritative. To prevent memory
+oversubscription, at most ten MiCall containers run concurrently: five
+paired original IVA/Ivanka samples or ten subsequent single-arm samples.

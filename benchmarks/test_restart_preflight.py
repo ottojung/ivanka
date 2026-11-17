@@ -26,6 +26,7 @@ class RestartAdmissionTests(unittest.TestCase):
             "synthetic_smoke":self.root/"smoke-synthetic",
             "targeted_smoke":self.root/"smoke-targeted",
             "real_smoke":self.root/"smoke-real",
+            "shared_iva_smoke":self.root/"smoke-shared",
             "exact_synthetic":self.root/"exact-synth",
             "exact_real":self.root/"exact-real",
             "min_free_bytes":1,
@@ -33,12 +34,14 @@ class RestartAdmissionTests(unittest.TestCase):
 
     def assess(self, master=gate.BASE):
         with (patch.object(gate,"runner_revision",return_value={"commit":"f"*40}),
+              patch.object(gate,"ensure_podman_store",return_value={"store":"pinned"}),
               patch.object(gate,"ensure_images",return_value={"status":"ok"}),
               patch.object(gate,"physical_attestation",return_value={"sample_count":198}),
               patch.object(gate,"attestation",return_value={"valid":True}),
               patch.object(gate,"ensure_synthetic_smoke",return_value={"arms":7}),
               patch.object(gate,"ensure_targeted_smoke",return_value={"arms":21}),
               patch.object(gate,"verify_physical_smoke",return_value={"arms":12}),
+              patch.object(gate,"ensure_shared_iva_smoke",return_value={"runs":2}),
               patch.object(gate,"ensure_exact_smoke",return_value={"arms":9}),
               patch.object(gate,"git_master",return_value=master)):
             return gate.assess(**self.kwargs)
@@ -50,6 +53,21 @@ class RestartAdmissionTests(unittest.TestCase):
                          "TECHNICALLY_READY_PENDING_OWNER_AUTHORIZATION")
         self.assertFalse(report["benchmark_started"])
         self.assertTrue(report["requires_owner_authorization"])
+
+    def test_shared_iva_control_smoke_is_mandatory(self):
+        with (patch.object(gate,"runner_revision",return_value={"commit":"f"*40}),
+              patch.object(gate,"ensure_podman_store",return_value={"store":"pinned"}),
+              patch.object(gate,"ensure_images",return_value={}),
+              patch.object(gate,"physical_attestation",return_value={}),
+              patch.object(gate,"attestation",return_value={"valid":True}),
+              patch.object(gate,"ensure_synthetic_smoke",return_value={}),
+              patch.object(gate,"ensure_targeted_smoke",return_value={}),
+              patch.object(gate,"verify_physical_smoke",return_value={}),
+              patch.object(gate,"ensure_shared_iva_smoke",side_effect=ValueError("not shared")),
+              patch.object(gate,"ensure_exact_smoke",return_value={}),
+              patch.object(gate,"git_master",return_value=gate.BASE)):
+            report=gate.assess(**self.kwargs)
+        self.assertIn("shared_iva_control_reuse",report["blockers"][0])
 
     def test_wrong_fork_master_blocks(self):
         report=self.assess("b"*40)
@@ -64,12 +82,14 @@ class RestartAdmissionTests(unittest.TestCase):
 
     def test_missing_complete_smoke_blocks_instead_of_fabricating_pass(self):
         with (patch.object(gate,"runner_revision",return_value={}),
+              patch.object(gate,"ensure_podman_store",return_value={"store":"pinned"}),
               patch.object(gate,"ensure_images",return_value={}),
               patch.object(gate,"physical_attestation",return_value={}),
               patch.object(gate,"attestation",return_value={"valid":True}),
               patch.object(gate,"ensure_synthetic_smoke",side_effect=ValueError("bad")),
               patch.object(gate,"ensure_targeted_smoke",return_value={}),
               patch.object(gate,"verify_physical_smoke",return_value={}),
+              patch.object(gate,"ensure_shared_iva_smoke",return_value={}),
               patch.object(gate,"ensure_exact_smoke",return_value={}),
               patch.object(gate,"git_master",return_value=gate.BASE)):
             report=gate.assess(**self.kwargs)

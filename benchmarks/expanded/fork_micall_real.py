@@ -11,12 +11,13 @@ from pathlib import Path
 import subprocess
 import sys
 
-from benchmarks.fork_micall_binding import VARIABLES
+from benchmarks.fork_micall_binding import VARIABLES, SHARED_CONTROL_MANIFEST
 from .adapters import ASSEMBLERS
 from .fork_micall_synthetic import checked_images
 from .micall_lock import exclusive_lock
 from .real_matrix import MANIFEST
 from .real_resume import collect, commit, digest, verify_collection
+from .real_shared_controls import certify, load
 
 SCHEMA = "ivanka.expanded.fork_micall_real.v2"
 
@@ -35,13 +36,15 @@ def validate_real(data, sample):
     return MANIFEST
 
 
-def command(name, *, jobs, sample=None, samples=None):
+def command(name, *, jobs, sample=None, samples=None, shared=False):
     """Use unmodified clinical MiCall, original reads, and 33-reference scorer."""
     args = [sys.executable,
             str(Path(__file__).resolve().parents[1] / "podman_full_micall.py"),
-            "--mode", "both", "--jobs", str(jobs), "--parallel-arms",
+            "--mode", "ivanka" if shared else "both", "--jobs", str(jobs),
             "--all-projects", "--timeout-per-arm", "1800",
             "--sample-time-limit", "1800", "--diagnostic-90-floor"]
+    if not shared:
+        args.append("--parallel-arms")
     if name != "ivanka":
         args.extend(["--candidate-assembler", name])
     selected = [sample] if sample is not None else (samples or [])
@@ -53,6 +56,7 @@ def command(name, *, jobs, sample=None, samples=None):
 def source_manifest(data, images, attestation_file, base, sample, selected):
     root = Path(__file__).resolve()
     source = [root, root.with_name("real_resume.py"),
+              root.with_name("real_shared_controls.py"),
               root.with_name("micall_lock.py"),
               root.parents[1] / "podman_full_micall.py",
               root.parents[1] / "fork_micall_binding.py",
@@ -64,6 +68,7 @@ def source_manifest(data, images, attestation_file, base, sample, selected):
     return {
         "schema": SCHEMA, "qualified": False, "status": "ATTEMPTED_NOT_QUALIFIED",
         "expected_samples": 198, "selected_sample": sample,
+        "control_policy": "one_attested_iva_run_per_sample",
         "selected_tools": selected, "images": images,
         "frozen_baseline_identity": base,
         "real_manifest_sha256": validate_real(data, sample),
@@ -83,6 +88,7 @@ def environment(data, output, images, fork, base, attestation_file):
     result.update({
         "IVANKA_DATA": str(Path(data).resolve()),
         "IVANKA_IVA_IMAGE": images["iva"],
+        "IVANKA_IVA_BASELINE_CACHE": str((output / "iva-baselines").resolve()),
         "IVANKA_PODMAN_LIFECYCLE": "detached",
         VARIABLES[0]: str(Path(attestation_file).resolve()),
         VARIABLES[1]: str(Path(fork).resolve()),
@@ -98,14 +104,16 @@ def write_json(path, value):
     temporary.replace(path)
 
 
-def one_tool(name, root, sample_ids, jobs, images, env, pinned):
+def one_tool(name, root, sample_ids, jobs, images, env, pinned,
+             shared_controls=None, control_manifest=None):
     folder = root / name
     folder.mkdir(exist_ok=True)
     existing = folder / "checkpoints.json"
     if existing.exists():
         verify_collection(folder, sample_ids, images, name, root/"run_manifest.json",
-                          allow_additional=True)
-    records, witnesses = collect(folder, sample_ids, images, name)
+                          allow_additional=True,shared_controls=shared_controls)
+    records, witnesses = collect(folder, sample_ids, images, name,
+                                shared_controls)
     missing = sorted(sample_ids-set(records))
     exit_code = None
     if missing:
@@ -117,19 +125,23 @@ def one_tool(name, root, sample_ids, jobs, images, env, pinned):
         attempt.mkdir()
         # ALWAYS enumerate the exact remaining sample IDs. Omitting --sample
         # would silently expand a one-case smoke into the entire 198 cohort.
-        args = command(name, jobs=jobs, samples=missing)
+        args = command(name, jobs=jobs, samples=missing,
+                       shared=shared_controls is not None)
         on_cli = [args[i + 1] for i, arg in enumerate(args[:-1])
                   if arg == "--sample"]
         if len(on_cli) != len(missing) or set(on_cli) != set(missing):
             raise ValueError("MiCall subprocess sample scope differs from pending set")
         scoped = env | {"IVANKA_IVANKA_IMAGE": images[name],
                         "IVANKA_PODMAN_RESULTS": str(attempt)}
+        if control_manifest is not None:
+            scoped[SHARED_CONTROL_MANIFEST]=str(control_manifest)
         with (attempt/"runner.log").open("x") as log:
             execution = subprocess.run(
                 args, env=scoped, cwd=Path(__file__).resolve().parents[2],
                 stdout=log, stderr=subprocess.STDOUT, check=False)
         exit_code = execution.returncode
-        records,witnesses = collect(folder,sample_ids,images,name)
+        records,witnesses = collect(folder,sample_ids,images,name,
+                                   shared_controls)
     proof = commit(folder,records,witnesses,root/"run_manifest.json")
     status = {"exit_code":exit_code, "image_id":images[name],
               "results_jsonl":str(folder/"results.jsonl"),
@@ -137,6 +149,8 @@ def one_tool(name, root, sample_ids, jobs, images, env, pinned):
               "checkpoint_manifest":str(folder/"checkpoints.json"),
               "source_manifest":str(root/"run_manifest.json"),
               "images":images,
+              "control_manifest":str(control_manifest) if control_manifest else None,
+              "shared_iva_control":shared_controls is not None,
               "sample_count":len(records),
               "missing_samples":len(sample_ids-set(records)),
               "failed_terminal_samples":sum(
@@ -180,8 +194,19 @@ def _run(data, root, images, fork, base, attestation_file, *,
         write_json(root/"source_verified_images.json",images)
     env=environment(data,root,images,fork,base,attestation_file)
     recorded={}
-    for name in selected:
-        recorded[name]=one_tool(name,root,sample_ids,jobs,images,env,pinned)
+    ordered=sorted(selected,key=lambda name:name!="ivanka")
+    sharing="ivanka" in ordered and len(ordered)>1
+    control_path=None
+    controls=None
+    for name in ordered:
+        if name!="ivanka" and sharing:
+            if control_path is None:
+                control_path=certify(root,sample_ids,images)
+            controls=load(root,control_path,sample_ids,images)
+        recorded[name]=one_tool(
+            name,root,sample_ids,min(jobs,5) if name=="ivanka" else jobs,
+            images,env,pinned,shared_controls=controls if name!="ivanka" else None,
+            control_manifest=control_path if name!="ivanka" else None)
         write_json(root/"execution_manifest.json",recorded)
     full = (sample is None and set(selected)==set(ASSEMBLERS)-{"iva"}
             and all(v["complete"] for v in recorded.values()))

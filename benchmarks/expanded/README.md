@@ -590,3 +590,25 @@ the whole 400-case benchmark has passed. Source-identity differences,
 mixed rival images, modified final MAX output, or a mismatched HXB2
 truth manifest abort the join. Failed arms are retained exactly as
 recorded; they cannot become successful measurements.
+
+## Frozen seven-image restart and one-time physical IVA controls
+
+The host-only `benchmarks.expanded.restart_preflight` verifies exact source
+commits and installed seven-image identities; the original 198 physical
+read pairs; 400 synthetic truths; complete original, adversarial, and
+shared-IVA MiCall smoke tests; exact-coverage sidecars; and disk capacity.
+It never starts the full benchmark, and owner authorization is still required.
+
+The resumable physical runner `benchmarks.expanded.fork_micall_real` runs
+the pinned IVA control once per sample as part of the first paired Ivanka
+comparison, then externally certifies `shared-iva-controls.json`. The other
+five candidates execute only their own MiCall arms, using exactly that
+verified IVA result. MiCall outputs, in-container timing, FASTQ fingerprints,
+source and image hashes, and interrupted attempts remain individually
+auditable. `--resume` rejects changed images, cohorts, runner code and
+control evidence. An original IVA failure blocks uncontrolled reuse rather
+than triggering six new control runs.
+
+Run no more than ten simultaneous MiCall containers and keep the minimal
+assembler images immutable after external preflight. Only full physical
+198 and synthetic 400 case gates can establish formal qualification.

@@ -15,12 +15,16 @@ from benchmarks.assembler_bench.minimal_image_attestation import verify as verif
 from .hxb2_cohort import attestation
 from .micall_checkpoint import existing_case, identity
 from .physical_inputs import attest as physical_attestation
+from .real_resume import verify_collection
+from .real_shared_controls import load as shared_iva_load
 from .real_progress_bridge import verify_physical_smoke
 from .run_synthetic import cohort_rows
 
 SCHEMA="ivanka.expanded.restart_preflight.v1"
 BASE="8458f9e5d34c39a6694b1fb6a40e055d7ce89553"
 MIN_FREE_BYTES=60*1024**3
+PODMAN_CONF="/workspace/ivanka-podman-overlay-20261103/storage.conf"
+PODMAN_STORE="/workspace/ivanka-podman-overlay-20261103/store"
 
 
 def sha(path):
@@ -57,6 +61,18 @@ def git_master(root):
     return subprocess.check_output(
         ["git","-C",str(root),"ls-remote","origin","refs/heads/master"],
         text=True,timeout=30).split()[0]
+
+
+def ensure_podman_store():
+    import os
+    if os.environ.get("CONTAINERS_STORAGE_CONF")!=PODMAN_CONF:
+        raise ValueError("benchmark Podman storage configuration differs")
+    graph=subprocess.check_output(
+        ["podman","info","--format","{{.Store.GraphRoot}}"],
+        text=True,timeout=30).strip()
+    if graph!=PODMAN_STORE:
+        raise ValueError("benchmark Podman image store changed")
+    return {"config":PODMAN_CONF,"graphroot":graph}
 
 
 def ensure_images(images, attestation_file, sources, baseline):
@@ -118,6 +134,37 @@ def ensure_targeted_smoke(folder, input_root, images, truth):
             "arms_successful":len(rows)*7}
 
 
+def ensure_shared_iva_smoke(folder, images):
+    """Verify only one genuine IVA control is used by two independent tools."""
+    root=Path(folder)
+    pinned=json.loads((root/"run_manifest.json").read_text())
+    sample=pinned.get("selected_sample")
+    if (pinned.get("schema")!="ivanka.expanded.fork_micall_real.v2"
+            or not isinstance(sample,str)
+            or set(pinned.get("selected_tools",[]))!={"ivanka","spades"}
+            or pinned.get("images")!=images
+            or pinned.get("control_policy")!="one_attested_iva_run_per_sample"):
+        raise ValueError("shared IVA pilot has no frozen two-tool source witness")
+    controls=shared_iva_load(
+        root,root/"shared-iva-controls.json",{sample},images)
+    original=verify_collection(root/"ivanka",{sample},images,
+                               "ivanka",root/"run_manifest.json")
+    candidate=verify_collection(
+        root/"spades",{sample},images,"spades",root/"run_manifest.json",
+        shared_controls=controls)
+    if (set(original)!={sample} or set(candidate)!={sample}
+            or original[sample].get("iva_baseline_reused") is True
+            or candidate[sample].get("iva_baseline_reused") is not True
+            or candidate[sample]["iva"]["seconds"]!=original[sample]["iva"]["seconds"]
+            or candidate[sample]["iva"]["image_id"]!=images["iva"]
+            or candidate[sample]["ivanka"]["image_id"]!=images["spades"]
+            or candidate[sample]["ivanka"]["exit_code"]!=0):
+        raise ValueError("shared IVA pilot does not reuse original control exactly")
+    return {"sample":sample,"shared_control_verified":True,
+            "fresh_iva_runs":1,"candidate_only_runs":1,
+            "control_manifest_sha256":sha(root/"shared-iva-controls.json")}
+
+
 def ensure_exact_smoke(cache_syn, cache_real, synth_smoke, real_smoke, images):
     source=json.loads((Path(synth_smoke)/"clonal-s000"/"matrix.json").read_text())
     sample=source["id"]
@@ -144,7 +191,7 @@ def ensure_exact_smoke(cache_syn, cache_real, synth_smoke, real_smoke, images):
 
 def assess(*,root,images,sources,attestation_file,real_data,
            synthetic_data,synthetic_smoke,targeted_smoke,real_smoke,
-           exact_synthetic,exact_real,baseline=BASE,
+           shared_iva_smoke,exact_synthetic,exact_real,baseline=BASE,
            min_free_bytes=MIN_FREE_BYTES):
     report={"schema":SCHEMA,"status":"BLOCKED","benchmark_started":False,
             "requires_owner_authorization":True,"blockers":[],
@@ -156,6 +203,7 @@ def assess(*,root,images,sources,attestation_file,real_data,
             report["blockers"].append(
                 f"{name}: {type(error).__name__}: {error}")
     check("runner_source",lambda:runner_revision(Path(root)/"ivanka-main-source"))
+    check("podman_store_integrity",ensure_podman_store)
     check("image_integrity",lambda:ensure_images(
           images,attestation_file,sources,baseline))
     check("physical_input_integrity",lambda:physical_attestation(real_data))
@@ -167,6 +215,8 @@ def assess(*,root,images,sources,attestation_file,real_data,
         check("adversarial_synthetic_smoke",lambda:ensure_targeted_smoke(
               targeted_smoke,synthetic_data,images,truth))
     check("real_six_pair_smoke",lambda:verify_physical_smoke(real_smoke,images))
+    check("shared_iva_control_reuse",lambda:ensure_shared_iva_smoke(
+          shared_iva_smoke,images))
     if "real_six_pair_smoke" in report["checks"]:
         check("exact_coverage_sidecars",lambda:ensure_exact_smoke(
               exact_synthetic,exact_real,synthetic_smoke,real_smoke,images))
@@ -188,7 +238,8 @@ def assess(*,root,images,sources,attestation_file,real_data,
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ("root","images","sources","attestation","real","synthetic",
-                 "synthetic-smoke","targeted-smoke","real-smoke","exact-synthetic",
+                 "synthetic-smoke","targeted-smoke","real-smoke","shared-iva-smoke",
+                 "exact-synthetic",
                  "exact-real","output"):
         parser.add_argument("--"+name,required=True)
     args=parser.parse_args()
@@ -201,6 +252,7 @@ def main():
         synthetic_smoke=Path(args.synthetic_smoke),
         targeted_smoke=Path(args.targeted_smoke),
         real_smoke=Path(args.real_smoke),
+        shared_iva_smoke=Path(args.shared_iva_smoke),
         exact_synthetic=Path(args.exact_synthetic),
         exact_real=Path(args.exact_real))
     destination=Path(args.output)

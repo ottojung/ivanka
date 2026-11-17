@@ -58,7 +58,7 @@ def authentic_arm(value, expected_image, attempt):
     if abs(actual-value["seconds"])>1e-9:
         raise ValueError("modified in-container timing evidence")
 
-def authenticate(row, sample, images, name, attempt):
+def authenticate(row, sample, images, name, attempt, shared_controls=None):
     if row.get("sample")!=sample or not isinstance(row.get("invocation"),str):
         raise ValueError("sample identity or invocation changed")
     source=row.get("provenance",{})
@@ -69,8 +69,15 @@ def authenticate(row, sample, images, name, attempt):
             or not all(isinstance(x,str) and len(x)==64 for x in
                        source["fastq_sha256"])):
         raise ValueError("not an original paired-read MiCall provenance")
+    if shared_controls is not None:
+        if (row.get("iva_baseline_reused") is not True or
+                row.get("iva")!=shared_controls.get(sample)):
+            raise ValueError("sample reused a different or unauthenticated IVA control")
+    elif row.get("iva_baseline_reused") is True:
+        raise ValueError("IVA control reuse requires original source proof")
     if row.get("status")=="finished" and "best_contig_acceptance" in row:
-        authentic_arm(row.get("iva"),images["iva"],attempt)
+        if shared_controls is None:
+            authentic_arm(row.get("iva"),images["iva"],attempt)
         authentic_arm(row.get("ivanka"),images[name],attempt)
         score=row["best_contig_acceptance"]
         if (score.get("reference_count")!=33
@@ -87,7 +94,7 @@ def authenticate(row, sample, images, name, attempt):
                 None,images["iva" if arm=="iva" else name]):
             raise ValueError("failed case used a different image")
 
-def read_attempt(path, expected_samples, images, name):
+def read_attempt(path, expected_samples, images, name, shared_controls=None):
     source=Path(path)/"results.jsonl"
     if not source.is_file():
         return {},None
@@ -108,19 +115,20 @@ def read_attempt(path, expected_samples, images, name):
             continue
         if sample in records:
             raise ValueError("duplicate original terminal sample")
-        authenticate(record,sample,images,name,path)
+        authenticate(record,sample,images,name,path,shared_controls)
         records[sample]=record
     if digest(source)!=before:
         raise ValueError("MiCall attempt changed during verification")
     return records,before
 
-def collect(tool_dir, expected_samples, images, name):
+def collect(tool_dir, expected_samples, images, name, shared_controls=None):
     records={}
     witnesses={}
     for folder in sorted(Path(tool_dir).glob("attempt-*")):
         if not folder.is_dir():
             continue
-        found,checksum=read_attempt(folder,expected_samples,images,name)
+        found,checksum=read_attempt(folder,expected_samples,images,name,
+                                    shared_controls)
         witnesses[folder.name]={"sha256":checksum,
                                  "samples":sorted(found)}
         for sample,record in found.items():
@@ -147,7 +155,7 @@ def commit(tool_dir,records,witnesses,source_manifest):
     return proof
 
 def verify_collection(tool_dir, expected_samples, images, name, source_manifest,
-                      allow_additional=False):
+                      allow_additional=False, shared_controls=None):
     """Reject edited checkpoints; optionally discover completed new-attempt rows.
 
     A process can die after MiCall writes a terminal row but before the outer
@@ -155,7 +163,7 @@ def verify_collection(tool_dir, expected_samples, images, name, source_manifest,
     """
     root=Path(tool_dir)
     proof=json.loads((root/"checkpoints.json").read_text())
-    records,witnesses=collect(root,expected_samples,images,name)
+    records,witnesses=collect(root,expected_samples,images,name,shared_controls)
     old_attempts=proof.get("attempts",{})
     old_rows=proof.get("records",{})
     if (proof.get("schema")!=SCHEMA

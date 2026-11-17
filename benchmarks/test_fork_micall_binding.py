@@ -73,6 +73,33 @@ class ForkBindingTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,"fresh complete"):
                     require_fresh_micall_mode(SimpleNamespace(**updated))
 
+    def test_source_authenticated_shared_iva_mode_has_no_unverified_bypass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            manifest=root/"shared-iva-controls.json"
+            manifest.write_text(json.dumps({
+                "schema":"ivanka.expanded.single-iva-controls.v1",
+                "control_image_id":"a"*64,
+                "samples":{"S1":{"baseline_sha256":"b"*64}}}))
+            opts=dict(mode="ivanka",parallel_arms=False,all_projects=True,
+                      cache_status=False,import_iva_from=[],resume_from=[],
+                      allow_missing_baseline=False)
+            env={"IVANKA_FORK_SHARED_IVA_MANIFEST":str(manifest),
+                 "IVANKA_IVA_IMAGE":"a"*64,
+                 "IVANKA_IVA_BASELINE_CACHE":str(root/"iva-baselines")}
+            with patch.dict(os.environ,env,clear=True):
+                require_fresh_micall_mode(SimpleNamespace(**opts))
+                with self.assertRaisesRegex(ValueError,"fresh complete"):
+                    require_fresh_micall_mode(SimpleNamespace(
+                        **(opts | {"parallel_arms":True})))
+                with self.assertRaisesRegex(ValueError,"fresh complete"):
+                    require_fresh_micall_mode(SimpleNamespace(
+                        **(opts | {"mode":"iva"})))
+            with patch.dict(os.environ,env | {"IVANKA_IVA_IMAGE":"c"*64},
+                            clear=True):
+                with self.assertRaisesRegex(ValueError,"unverified shared"):
+                    require_fresh_micall_mode(SimpleNamespace(**opts))
+
     def test_old_historical_check_is_not_bypassed_without_all_four(self):
         with (
             patch.dict(os.environ,{VARIABLES[0]:"path"},clear=True),

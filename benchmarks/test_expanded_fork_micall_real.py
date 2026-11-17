@@ -86,6 +86,7 @@ class ForkRealRunnerTests(unittest.TestCase):
                 target=Path(kwargs["env"]["IVANKA_PODMAN_RESULTS"])
                 self.assertEqual(target,output/"ivanka"/"attempt-000")
                 self.assertIn("--mode",argv)
+                self.assertEqual(argv[-2:],["--sample","sample"])
                 self.assertEqual(kwargs["env"]["IVANKA_FORK_IMAGE_MAP"],
                                  str(output/"source_verified_images.json"))
                 return Mock(returncode=0)
@@ -141,7 +142,8 @@ class ForkRealRunnerTests(unittest.TestCase):
             self.assertEqual(first["tools"]["ivanka"]["sample_count"],1)
             self.assertEqual(resumed["tools"]["ivanka"]["sample_count"],2)
             self.assertEqual(len(seen),2)
-            self.assertNotIn("--sample",seen[0][0])
+            self.assertEqual(seen[0][0][-4:],
+                             ["--sample","a","--sample","b"])
             self.assertEqual(seen[1][0][-2:],["--sample","b"])
             self.assertTrue(seen[0][1].endswith("attempt-000"))
             self.assertTrue(seen[1][1].endswith("attempt-001"))

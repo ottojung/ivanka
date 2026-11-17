@@ -115,8 +115,13 @@ def one_tool(name, root, sample_ids, jobs, images, env, pinned):
             raise ValueError("too many interrupted attempts")
         attempt = folder / f"attempt-{index:03d}"
         attempt.mkdir()
-        args = command(name, jobs=jobs,
-                       samples=missing if len(missing)<len(sample_ids) else None)
+        # ALWAYS enumerate the exact remaining sample IDs. Omitting --sample
+        # would silently expand a one-case smoke into the entire 198 cohort.
+        args = command(name, jobs=jobs, samples=missing)
+        on_cli = [args[i + 1] for i, arg in enumerate(args[:-1])
+                  if arg == "--sample"]
+        if len(on_cli) != len(missing) or set(on_cli) != set(missing):
+            raise ValueError("MiCall subprocess sample scope differs from pending set")
         scoped = env | {"IVANKA_IVANKA_IMAGE": images[name],
                         "IVANKA_PODMAN_RESULTS": str(attempt)}
         with (attempt/"runner.log").open("x") as log:

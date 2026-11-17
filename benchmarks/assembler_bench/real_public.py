@@ -10,6 +10,8 @@ from .real_progress import TERMINAL, snapshot, verified_terminal
 from .hxb2_preview import sha
 from .public_case_metrics import physical as published_metrics
 from .exact_cache import append as exact_metrics
+from benchmarks.expanded.real_resume import collect, verify_collection
+from .real_progress import SCHEMA_RESUMABLE
 
 ID = "real198-fork-source-attested-live"
 DEDICATED_ID = "real198-dedicated-source-live"
@@ -53,6 +55,10 @@ def measured(event, name):
 
 def case_rows(root, data, images, exact_root=None):
     aliases = sample_aliases(data)
+    run_manifest = Path(root) / "run_manifest.json"
+    mode = (json.loads(run_manifest.read_text()).get("schema")
+            if run_manifest.is_file() else None)
+    resumable = mode == SCHEMA_RESUMABLE
     cases = {name: {} for name in TOOLS}
     failures = {name: set() for name in TOOLS}
     diagnostics = {name: {} for name in TOOLS}
@@ -60,14 +66,23 @@ def case_rows(root, data, images, exact_root=None):
     for name in TOOLS:
         if name == "iva":
             continue
-        path = Path(root) / name / "results.jsonl"
-        if not path.is_file():
-            continue
-        started = set()
-        for line in path.read_text().splitlines():
-            if not line.strip():
+        folder = Path(root) / name
+        path = folder / "results.jsonl"
+        if resumable:
+            if (folder / "checkpoints.json").is_file():
+                records = verify_collection(
+                    folder, set(aliases), images, name, run_manifest,
+                    allow_additional=True)
+            else:
+                records, _ = collect(folder, set(aliases), images, name)
+            events = list(records.values())
+        else:
+            if not path.is_file():
                 continue
-            event = json.loads(line)
+            events = [json.loads(line) for line in path.read_text().splitlines()
+                      if line.strip()]
+        started = set()
+        for event in events:
             case = event.get("sample")
             if case not in aliases or event.get("status") not in TERMINAL | {"started"}:
                 raise ValueError("unexpected physical-198 sample or event")
@@ -76,7 +91,7 @@ def case_rows(root, data, images, exact_root=None):
                     raise ValueError("duplicate physical case start")
                 started.add(case)
                 continue
-            if case not in started or case in cases[name]:
+            if (not resumable and case not in started) or case in cases[name]:
                 raise ValueError("physical result not a unique completed case")
             verified_terminal(event, name, images)
             cases[name][case] = measured(event, "ivanka")
@@ -137,8 +152,9 @@ def preview(root, data, runner, attestation, base, images, fork_provenance,
     if any(len(cases[name]) != proof["candidates"][name]["finished"]
            for name in proof["candidates"]):
         raise ValueError("physical candidate counters disagree with result rows")
-    dedicated = fork_provenance.get("attestation_schema") == (
-        "ivanka.assembler-bench.dedicated-fork-images.v1")
+    dedicated = fork_provenance.get("attestation_schema") in (
+        "ivanka.assembler-bench.dedicated-fork-images.v1",
+        "ivanka.assembler-bench.minimal-fork-images.v1")
     return {
         "schema": RUN_SCHEMA, "id": DEDICATED_ID if dedicated else ID,
         "title": ("198 physical samples · dedicated seven-way MiCall"

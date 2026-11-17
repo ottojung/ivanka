@@ -7,8 +7,11 @@ from benchmarks.expanded.adapters import ASSEMBLERS
 from benchmarks.expanded.real_matrix import MANIFEST
 from .hxb2_preview import sha
 from .dedicated_image_attestation import SCHEMA as DEDICATED_SCHEMA
+from .minimal_image_attestation import SCHEMA as MINIMAL_SCHEMA
+from benchmarks.expanded.real_resume import collect, verify_collection
 
 SCHEMA = "ivanka.expanded.fork_micall_real.v1"
+SCHEMA_RESUMABLE = "ivanka.expanded.fork_micall_real.v2"
 
 TERMINAL = frozenset(("finished", "sample_timeout", "error"))
 
@@ -46,6 +49,10 @@ def source_ok(manifest, runner, dedicated):
                 "podman_full_micall.py", "fork_micall_binding.py")
     extra = ("image_source_attestation.py",
              "dedicated_image_attestation.py", "fork_image_attestation.py")
+    if manifest.get("schema") == SCHEMA_RESUMABLE:
+        required = (*required, "real_resume.py", "micall_lock.py")
+        extra = (*extra, "minimal_image_attestation.py")
+        dedicated = True
     if set(sources) != set(required + (extra if dedicated else ())):
         raise ValueError("physical-198 benchmark source list changed")
     for name, digest in sources.items():
@@ -81,31 +88,52 @@ def completed(path, samples, candidate, images):
     return {"finished": len(finished), "failed": failures}
 
 
+def resumable_completed(root, samples, candidate, images):
+    """Verify original per-attempt files, not solely an aggregate JSONL."""
+    folder = Path(root) / candidate
+    source = folder / "checkpoints.json"
+    if source.exists():
+        records = verify_collection(
+            folder, samples, images, candidate,
+            Path(root) / "run_manifest.json", allow_additional=True)
+    else:
+        records, _ = collect(folder, samples, images, candidate)
+    for record in records.values():
+        verified_terminal(record, candidate, images)
+    return {"finished": len(records),
+            "failed": sum(record["failed"] for record in records.values())}
+
+
 def snapshot(root, data, runner, attestation, base, images):
     root = Path(root)
     manifest_file = root / "run_manifest.json"
     manifest = json.loads(manifest_file.read_text())
     selected = set(ASSEMBLERS) - {"iva"}
-    if (manifest.get("schema") != SCHEMA or
+    mode = manifest.get("schema")
+    att_schema = json.loads(Path(attestation).read_text()).get("schema")
+    if (mode not in (SCHEMA, SCHEMA_RESUMABLE) or
+            (mode == SCHEMA_RESUMABLE and att_schema != MINIMAL_SCHEMA) or
             manifest.get("expected_samples") != 198 or
             manifest.get("selected_sample") is not None or
             manifest.get("qualified") is not False or
             set(manifest.get("selected_tools", [])) != selected or
             manifest.get("images") != images or
-            manifest.get("base_image_sha256") != base or
+            (manifest.get("frozen_baseline_identity") if mode == SCHEMA_RESUMABLE
+             else manifest.get("base_image_sha256")) != base or
             manifest.get("fork_attestation_sha256") != sha(attestation) or
             manifest.get("real_manifest_sha256") != MANIFEST or
             sha(Path(data) / "manifest.tsv") != MANIFEST):
         raise ValueError("physical-198 run source / cohort attestation mismatch")
-    source_ok(manifest, runner, json.loads(Path(attestation).read_text())
-              .get("schema") == DEDICATED_SCHEMA)
+    source_ok(manifest, runner, att_schema in (DEDICATED_SCHEMA, MINIMAL_SCHEMA))
     with (Path(data) / "manifest.tsv").open(newline="") as stream:
         rows = list(csv.DictReader(stream, delimiter="\t"))
     samples = {row["sample"] for row in rows}
     if len(rows) != 198 or len(samples) != 198:
         raise ValueError("physical-198 manifest does not contain unique cases")
-    candidates = {name: completed(
-        root / name / "results.jsonl", samples, name, images)
+    candidates = {
+        name: (resumable_completed(root, samples, name, images)
+               if mode == SCHEMA_RESUMABLE else
+               completed(root / name / "results.jsonl", samples, name, images))
         for name in sorted(selected)}
     return {"schema": PROGRESS, "expected_samples": 198,
             "status": "incomplete",

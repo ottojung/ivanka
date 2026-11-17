@@ -9,6 +9,7 @@ from benchmarks.generate_exact_sidecars import sha256
 from benchmarks.produce_exact_coverage import generate
 from micall.utils import exact_coverage
 from .exact_cache import sidecar
+from .exact_recovery import recover_partial
 
 
 def source_proof(fastqs, conseq, expected, image):
@@ -33,8 +34,8 @@ def generate_one(cache, cohort, sample, tool, candidate, fastqs,
                 and item["exact_coverage_sha256"] == sha256(csv_file)):
             return False
         raise ValueError("immutable exact-coverage report changed")
-    if report_file.exists() != csv_file.exists():
-        raise ValueError("partial exact-coverage sidecar")
+    # Incomplete sidecar transaction is recoverable without rerunning MiCall.
+    recover_partial(report_file, csv_file, sha256)
     fastq_sha = source_proof(fastqs, conseq, expected, image)
     folder.mkdir(parents=True, exist_ok=True)
     temp = folder / (str(os.getpid()) + ".pending.csv")

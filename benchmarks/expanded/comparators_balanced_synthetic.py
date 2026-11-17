@@ -71,6 +71,7 @@ def run(data,out,images,fork,base,attestation_file,jobs=10):
             results[sample]=found
             if len(found)==len(TOOLS):
                 folder.mkdir(exist_ok=True)
+                clear_stale_recovery(folder/"matrix.json.partial")
                 write_case(folder,final_record(row,proof,found))
         # Incorporate complete arm sets recovered after an interrupted journal.
         recovered=rehydrate(out,cohort,images,proof)
@@ -103,6 +104,7 @@ def run(data,out,images,fork,base,attestation_file,jobs=10):
                 if len(results[key])==len(TOOLS):
                     row=next(r for r in cohort if r[0]==key)
                     full=final_record(row,proof,results[key])
+                    clear_stale_recovery(out/key/"matrix.json.partial")
                     write_case(out/key,full)
                     journal.write(json.dumps(full,sort_keys=True)+"\n")
                     print("COMPARATOR_SYNTHETIC",key,"6 /6",flush=True)

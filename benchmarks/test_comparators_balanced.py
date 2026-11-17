@@ -65,6 +65,21 @@ class FairDispatcherTests(unittest.TestCase):
         self.assertIsNotNone(next_one)
         self.assertLessEqual(q.report()[next_one[0]][0],1)
 
+    def test_torn_journal_cleanup_only_removes_temp_files(self):
+        from expanded.balanced_dispatch import clear_stale_recovery
+        with tempfile.TemporaryDirectory() as folder:
+            home=Path(folder)
+            result=home/"results.recovered.partial"
+            result.write_text("interrupted write")
+            clear_stale_recovery(result)
+            self.assertFalse(result.exists())
+            original=home/"immutable-evidence.json"
+            original.write_text("protected")
+            result.symlink_to(original)
+            with self.assertRaisesRegex(ValueError,"unsafe symlink"):
+                clear_stale_recovery(result)
+            self.assertEqual(original.read_text(),"protected")
+
     def test_invalid_work_and_out_of_cohort_replay_fail(self):
         with self.assertRaisesRegex(ValueError,"duplicate"):
             BalancedQueue(TOOLS,[1,1],{t:set() for t in TOOLS},lambda x:x)

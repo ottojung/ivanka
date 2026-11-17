@@ -31,6 +31,28 @@ def sha(path):
     return h.hexdigest()
 
 
+def runner_revision(root):
+    """Host benchmark source must be committed and published, not an ad hoc edit."""
+    root=Path(root).resolve()
+    def git(*args):
+        return subprocess.check_output(
+            ["git","-C",str(root),*args],text=True,timeout=30).strip()
+    if git("status","--porcelain"):
+        raise ValueError("external benchmark runner has uncommitted changes")
+    branch=git("branch","--show-current")
+    if branch!="bench/reliable-relaunch-20261116":
+        raise ValueError("benchmark runner is not on the frozen review branch")
+    revision=git("rev-parse","HEAD")
+    origin=git("remote","get-url","origin")
+    remote=git("ls-remote","origin",f"refs/heads/{branch}").split()
+    if (origin!="https://github.com/ottojung/ivanka.git"
+            or len(revision)!=40 or len(remote)!=2
+            or remote[0]!=revision):
+        raise ValueError("benchmark runner commit is not published on its fork")
+    return {"repository":origin,"branch":branch,"commit":revision,
+            "source_tree":git("rev-parse","HEAD^{tree}")}
+
+
 def git_master(root):
     return subprocess.check_output(
         ["git","-C",str(root),"ls-remote","origin","refs/heads/master"],
@@ -133,6 +155,7 @@ def assess(*,root,images,sources,attestation_file,real_data,
         except Exception as error:
             report["blockers"].append(
                 f"{name}: {type(error).__name__}: {error}")
+    check("runner_source",lambda:runner_revision(Path(root)/"ivanka-main-source"))
     check("image_integrity",lambda:ensure_images(
           images,attestation_file,sources,baseline))
     check("physical_input_integrity",lambda:physical_attestation(real_data))

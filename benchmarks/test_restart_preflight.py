@@ -32,7 +32,8 @@ class RestartAdmissionTests(unittest.TestCase):
         }
 
     def assess(self, master=gate.BASE):
-        with (patch.object(gate,"ensure_images",return_value={"status":"ok"}),
+        with (patch.object(gate,"runner_revision",return_value={"commit":"f"*40}),
+              patch.object(gate,"ensure_images",return_value={"status":"ok"}),
               patch.object(gate,"physical_attestation",return_value={"sample_count":198}),
               patch.object(gate,"attestation",return_value={"valid":True}),
               patch.object(gate,"ensure_synthetic_smoke",return_value={"arms":7}),
@@ -62,7 +63,8 @@ class RestartAdmissionTests(unittest.TestCase):
         self.assertTrue(any("storage:" in item for item in report["blockers"]))
 
     def test_missing_complete_smoke_blocks_instead_of_fabricating_pass(self):
-        with (patch.object(gate,"ensure_images",return_value={}),
+        with (patch.object(gate,"runner_revision",return_value={}),
+              patch.object(gate,"ensure_images",return_value={}),
               patch.object(gate,"physical_attestation",return_value={}),
               patch.object(gate,"attestation",return_value={"valid":True}),
               patch.object(gate,"ensure_synthetic_smoke",side_effect=ValueError("bad")),
@@ -74,6 +76,27 @@ class RestartAdmissionTests(unittest.TestCase):
         self.assertEqual(report["status"],"BLOCKED")
         self.assertTrue(any("synthetic_seven_arm_smoke" in item
                             for item in report["blockers"]))
+
+    def test_runner_revision_rejects_dirty_unpublished_source(self):
+        with patch.object(gate.subprocess,"check_output",
+                          return_value=" M benchmarks/expanded/foo.py"):
+            with self.assertRaisesRegex(ValueError,"uncommitted"):
+                gate.runner_revision(self.root)
+        def fake(argv,**kwargs):
+            if "status" in argv:
+                return ""
+            if "branch" in argv:
+                return "bench/reliable-relaunch-20261116"
+            if "rev-parse" in argv:
+                return "a"*40
+            if "get-url" in argv:
+                return "https://github.com/ottojung/ivanka.git"
+            if "ls-remote" in argv:
+                return "b"*40+" refs/heads/bench/reliable-relaunch-20261116"
+            raise ValueError(argv)
+        with patch.object(gate.subprocess,"check_output",side_effect=fake):
+            with self.assertRaisesRegex(ValueError,"not published"):
+                gate.runner_revision(self.root)
 
     def test_scoped_real_smoke_refuses_legacy_invalid_attempt(self):
         root=self.root/"smoke-real"

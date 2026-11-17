@@ -13,7 +13,7 @@ seven-way gate is not optional or deferred.
 | Intent | Binding requirement | Status |
 |---|---|---|
 | [001 — Rust-only production execution](001-rust-only-execution.md) | The entire read-to-FASTA implementation is Rust; MiCall directly invokes its binary | Implemented in native alpha.3; 198 gate passed, expanded pending |
-| [002 — unconfigured, identical invocation](002-default-invocation-parity.md) | Empty child environment, exactly `--reads1`, `--reads2`, `--output`, built-in defaults, same execution under MiCall and the benchmark | Verified on native alpha.3 with original 198; expanded pending |
+| [002 — unconfigured, identical invocation](002-default-invocation-parity.md) | Empty child environment, three required read/output arguments plus optional same-sample read-derived G2P `--seeds`, built-in defaults, same MiCall execution during benchmarks | Verified on native alpha.3 with original 198; expanded pending |
 | [003 — reference blindness and evidence](003-reference-blindness.md) | No known/reference-derived genomes, reference panel, or scoring feedback influence assembly or contig selection | Binding now; continue enforcing |
 | [004 — pipeline-level dominant haplotype](004-dominant-sequence.md) | Ivanka need not reconstruct any haplotype by itself; MiCall with Ivanka must recover the most abundant identifiable haplotype; preserve original evidence | Binding now; clarified |
 | [005 — authentic 198-sample qualification](005-physical-198-qualification.md) | ≥90% IVA per sample, no failures/timeouts, positive alignment and runtime signed-power Ψ(r) for every real r≥0 with genuine pinned MiCall inputs | Binding now; the previous passing *wrapped* image is historical, not a pass for 001/002 |

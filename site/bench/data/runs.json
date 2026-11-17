@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-17T09:59:23.201457+00:00",
+  "published_at": "2026-11-17T10:04:47.676155+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -31060,9 +31060,11 @@
             "velvet": {}
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "velvet"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": null,
             "haploflow": null,
@@ -37269,8 +37271,8 @@
         },
         "velvet": {
           "expected": 198,
-          "failed": 12,
-          "finished": 76
+          "failed": 13,
+          "finished": 77
         }
       },
       "tools": [
@@ -55270,10 +55272,12 @@
             "velvet": {}
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "velvet"
+          ],
           "family": "physical",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "score": {
             "abyss": null,
             "haploflow": null,
@@ -70502,8 +70506,8 @@
         },
         "velvet": {
           "expected": 598,
-          "failed": 12,
-          "finished": 96
+          "failed": 13,
+          "finished": 97
         }
       },
       "tools": [

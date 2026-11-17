@@ -52,7 +52,14 @@ console.log('HISTOGRAM_KDE_STATS_VALID');
         self.assertIn('id="distributionChart"',html)
         self.assertIn('id="distributionClose"',html)
         self.assertIn('button type="button" class="bar-line rank-trigger',js)
-        self.assertIn("complete-coverage",js)
+        self.assertNotIn("complete-coverage",js)
+        css=(ROOT/"site/bench/style.css").read_text()
+        self.assertIn(".compare .bar-count:empty{visibility:hidden}",css)
+        self.assertNotIn(".bar-line.complete-coverage",css)
+        for widths in ("125px minmax(150px,1fr) 110px 102px",
+                       "98px minmax(110px,1fr) 80px 73px",
+                       "88px minmax(70px,1fr) 58px 53px"):
+            self.assertIn("grid-template-columns:"+widths,css)
         self.assertIn("BenchOverview.coverage(",js)
         self.assertIn('button.addEventListener("click",()=>{',js)
         self.assertIn('aria-pressed',js)

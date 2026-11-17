@@ -284,19 +284,4 @@ section.dominance,section.diagnostics{margin-top:61px}
 /* The top notice is the only execution-status region; overviews remain scientific. */
 .global-notice[hidden]{display:none}
 .global-notice{font-size:12px;line-height:1.6}
-.compare .bar-count:empty{display:none}
-
-/* Completed measurements have three ranking columns, not an empty progress slot. */
-.compare .bar-line.complete-coverage{
-  grid-template-columns:125px minmax(150px,1fr) 110px
-}
-@media(max-width:780px){
-  .compare .bar-line.complete-coverage{
-    grid-template-columns:98px minmax(110px,1fr) 80px
-  }
-}
-@media(max-width:470px){
-  .compare .bar-line.complete-coverage{
-    grid-template-columns:88px minmax(70px,1fr) 58px
-  }
-}
+.compare .bar-count:empty{visibility:hidden}

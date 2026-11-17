@@ -151,8 +151,7 @@ function drawCompare() {
     " · average across measured cases ("+info.unit+").";
   el("comparisonChart").innerHTML=ranking.map(row=>{
     const incomplete=BenchOverview.coverage(state.run,row.tool,row.observed);
-    return '<button type="button" class="bar-line rank-trigger'+
-      (incomplete?"":" complete-coverage")+'" data-tool="'+
+    return '<button type="button" class="bar-line rank-trigger" data-tool="'+
     esc(row.tool)+'" aria-label="Show '+esc(names[row.tool]||row.tool)+
     ' '+esc(info.label)+' distribution">'+
     '<span class="bar-name">'+row.rank+'. '+

@@ -40,7 +40,7 @@ def check_mapping_snapshot(site, report):
             or run.get("hxb2_truth_verified") is not True
             or snapshot.get("status") != "INCOMPLETE"
             or snapshot.get("cases_measured") not in (0, 1)
-            or snapshot.get("expected_cases") != 400
+            or snapshot.get("expected_cases") != run["expected_sample_count"]
             or (snapshot.get("cases_measured") == 1
                 and snapshot.get("sample_alias") not in {
                     sample["alias"] for sample in run["samples"]})

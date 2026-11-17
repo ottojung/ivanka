@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 from benchmarks.expanded.adapters import ASSEMBLERS
-from benchmarks.expanded.micall_dominant import SCORE_ORIGIN
+from benchmarks.expanded.micall_dominant import (
+    SCORE_ORIGIN, MULTITRUTH_SCORE_ORIGIN)
 from .hxb2_preview import COHORT_SHA, sha
 from .current_inputs import PROGRESS_SCHEMA, physical, synthetic
 from .public_dominance import enrich
@@ -56,7 +57,8 @@ def status(row,tools):
         row["outcome"]="incomplete"
 
 
-def make_run(cohort,rows,expected,images,provenance,source_sha,when):
+def make_run(cohort,rows,expected,images,provenance,source_sha,when,
+             *, multitruth=False):
     ordered=sorted(rows,key=lambda item:item["alias"])
     tools=list(ASSEMBLERS)
     for row in ordered:
@@ -66,7 +68,8 @@ def make_run(cohort,rows,expected,images,provenance,source_sha,when):
             "progress_schema":PROGRESS_SCHEMA,
             "id":f"current-{cohort}-micall-{when}",
             "title":{"real":"Current · physical MiCall",
-                     "synthetic":"Current · HXB2 synthetic MiCall",
+                     "synthetic":("Current · abundant-virus MiCall"
+                                  if multitruth else "Current · HXB2 synthetic MiCall"),
                      "combined":"Current · combined MiCall"}[cohort],
             "cohort":cohort,"date":when,"status":"incomplete",
             "expanded_status":"incomplete","eligible_for_expanded":False,
@@ -83,14 +86,23 @@ def make_run(cohort,rows,expected,images,provenance,source_sha,when):
                 "recovered_arms":sum(len(row.get("recovery",{}))
                                      for row in ordered),
                 "ram_metric":"sampled process-tree RSS, not exact peak"},
-            "score_origin":SCORE_ORIGIN,
-            "status_reason":"Independent source-verified MiCall final MAX "
-                "local-alignment and in-container runtime measurements.",
-            **({"cohort_manifest_sha256":COHORT_SHA}
+            "score_origin":(MULTITRUTH_SCORE_ORIGIN if
+                            multitruth and cohort=="synthetic" else
+                            "mixed_alignment_score_units_diagnostic_v1" if
+                            multitruth and cohort=="combined" else SCORE_ORIGIN),
+            "status_reason":("Combined physical and synthetic quality scores "
+                "use different units; compare quality within each cohort."
+                if multitruth and cohort=="combined" else
+                "Independent source-verified MiCall final MAX local-alignment "
+                "and in-container runtime measurements."),
+            **({"cohort_manifest_sha256":(
+                "90990f6109553347d37f7754cde63398a4dce57c388f90c2ce4b648530bfdfe4"
+                if multitruth else COHORT_SHA)}
                if cohort=="synthetic" else {})}
 
 
-def combine(synthetic_run,real_run,images,provenance,when):
+def combine(synthetic_run,real_run,images,provenance,when,
+            *, multitruth=False):
     rows=[]
     for prefix,run in (("S",synthetic_run),("R",real_run)):
         for item in run["samples"]:
@@ -100,7 +112,8 @@ def combine(synthetic_run,real_run,images,provenance,when):
     source=hashlib.sha256(json.dumps(
         [synthetic_run["source_manifest_sha256"],
          real_run["source_manifest_sha256"]]).encode()).hexdigest()
-    result=make_run("combined",rows,598,images,provenance,source,when)
+    result=make_run("combined",rows,662 if multitruth else 598,
+                    images,provenance,source,when,multitruth=multitruth)
     result["cohorts"]={"synthetic":synthetic_run["sample_count"],
                        "real":real_run["sample_count"]}
     result["source_runs"]=[synthetic_run["id"],real_run["id"]]
@@ -109,15 +122,25 @@ def combine(synthetic_run,real_run,images,provenance,when):
 
 def current(synthetic_root,real_root,physical_data,runner,attestation,images,
             when,physical_witness,physical_attestation,resources=None,
-            real_retries=None):
+            real_retries=None,*,synthetic_data=None,synthetic_runner=None):
     observed=load_resources(resources)
-    sy,sproof=synthetic(synthetic_root,images,attestation,runner,observed)
+    multitruth = synthetic_data is not None
+    if multitruth:
+        from .current_inputs_v6 import synthetic as synthetic_v6
+        if synthetic_runner is None:
+            raise ValueError("source-pinned v6 runner required")
+        sy,sproof=synthetic_v6(synthetic_root,synthetic_data,images,
+                              attestation,synthetic_runner,observed)
+    else:
+        sy,sproof=synthetic(synthetic_root,images,attestation,runner,observed)
     re,rproof=physical(real_root,physical_data,images,attestation,runner,
                        physical_witness,physical_attestation,observed,real_retries)
     proof=fork_provenance(attestation,images)
-    syn=make_run("synthetic",list(sy.values()),400,images,proof,sproof,when)
+    syn=make_run("synthetic",list(sy.values()),
+                 464 if multitruth else 400,images,proof,sproof,when,
+                 multitruth=multitruth)
     real=make_run("real",list(re.values()),198,images,proof,rproof,when)
-    combined=combine(syn,real,images,proof,when)
+    combined=combine(syn,real,images,proof,when,multitruth=multitruth)
     public={"schema":SCHEMA,"title":"Ivanka Assembler Bench",
             "expanded_qualification":"incomplete",
             "runs":[syn,real,combined]}

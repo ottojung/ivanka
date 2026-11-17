@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-17T20:31:07.086739+00:00",
+  "published_at": "2026-11-17T20:36:25.626234+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -32573,6 +32573,7 @@
           },
           "exact_profiles": {},
           "failures": [
+            "spades",
             "velvet"
           ],
           "floor_ok": null,
@@ -38289,7 +38290,9 @@
         {
           "alias": "R182",
           "diagnostics": {
-            "abyss": {},
+            "abyss": {
+              "peak_ram_observed_mib": 8153.26953125
+            },
             "haploflow": {
               "average_concordance": 0.9118097144071938,
               "average_read_depth": 1011.1637152574176,
@@ -41213,8 +41216,8 @@
         },
         "spades": {
           "expected": 198,
-          "failed": 51,
-          "finished": 177
+          "failed": 52,
+          "finished": 178
         },
         "velvet": {
           "expected": 198,
@@ -67703,6 +67706,7 @@
           },
           "exact_profiles": {},
           "failures": [
+            "spades",
             "velvet"
           ],
           "family": "physical",
@@ -73457,7 +73461,9 @@
         {
           "alias": "R-R182",
           "diagnostics": {
-            "abyss": {},
+            "abyss": {
+              "peak_ram_observed_mib": 8153.26953125
+            },
             "haploflow": {
               "average_concordance": 0.9118097144071938,
               "average_read_depth": 1011.1637152574176,
@@ -78395,8 +78401,8 @@
         },
         "spades": {
           "expected": 662,
-          "failed": 51,
-          "finished": 183
+          "failed": 52,
+          "finished": 184
         },
         "velvet": {
           "expected": 662,
@@ -78428,7 +78434,6 @@
         "abyss",
         "haploflow",
         "megahit",
-        "spades",
         "velvet"
       ],
       "synthetic": []

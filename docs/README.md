@@ -11,8 +11,9 @@ must recover the most abundant identifiable haplotype.
 - [Intent 001: Rust-only Ivanka execution](intents/001-rust-only-execution.md) —
   native assembly, selection, trimming and tiling; MiCall invokes Rust directly.
 - [Intent 002: default, identical invocation](intents/002-default-invocation-parity.md) —
-  no environment variables or benchmark-only settings; only three input/output
-  CLI arguments, identical between MiCall and qualification.
+  no environment variables or benchmark-only settings; three required
+  input/output flags plus optional read-derived G2P `--seeds`, governed by
+  the same ordinary MiCall rule in production and qualification.
 
 - [Intent 003: reference blindness](intents/003-reference-blindness.md) —
   no known genomes, panel scores or reference-derived inputs influence Ivanka.

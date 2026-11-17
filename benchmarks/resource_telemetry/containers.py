@@ -1,4 +1,4 @@
-"""Discover the exact Podman worker PIDs without using shared-cgroup stats."""
+"""Discover benchmark PIDs from one Podman listing, not contended inspect."""
 import subprocess
 
 
@@ -7,20 +7,30 @@ def call(args):
                           text=True, timeout=15, check=True).stdout
 
 
+def decode(listing):
+    """Return live bench worker IDs, names and positive host PIDs."""
+    found = {}
+    for line in listing.splitlines():
+        cells = line.split(maxsplit=2)
+        if len(cells) != 3:
+            raise ValueError("invalid Podman process listing row")
+        cid, name, raw_pid = cells
+        if not name.startswith(("ivanka-bench-ivanka-",
+                                "ivanka-bench-iva-",
+                                "ivanka-bench-synth-")):
+            continue
+        if (len(cid) not in (12, 64)
+                or any(x not in "0123456789abcdef" for x in cid)):
+            raise ValueError("invalid benchmark container ID")
+        pid = int(raw_pid)
+        if pid <= 0:
+            continue
+        if cid in found:
+            raise ValueError("duplicate benchmark container ID")
+        found[cid] = (name, pid)
+    return found
+
+
 def running():
-    """Return ID, container name and initial process ID for live benchmark arms."""
-    listing = call(["ps", "--format", "{{.ID}} {{.Names}}"])
-    rows = [line.split(maxsplit=1) for line in listing.splitlines()]
-    rows = [(cid, name) for cid, name in rows
-            if name.startswith(("ivanka-bench-ivanka-", "ivanka-bench-iva-",
-                                "ivanka-bench-synth-"))]
-    if not rows:
-        return {}
-    # A container can exit between listing and inspection. In that case
-    # preserve the last known readings and retry discovery next cycle.
-    output = call(["inspect", "--format", "{{.State.Pid}}",
-                   *[cid for cid, _ in rows]]).splitlines()
-    if len(output) != len(rows):
-        raise ValueError("Podman inspection returned incomplete PID list")
-    return {cid: (name, int(pid)) for (cid, name), pid
-            in zip(rows, output) if int(pid) > 0}
+    """One database transaction avoids inspect races and lock contention."""
+    return decode(call(["ps", "--format", "{{.ID}} {{.Names}} {{.Pid}}"]))

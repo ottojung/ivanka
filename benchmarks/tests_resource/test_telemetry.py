@@ -39,3 +39,24 @@ class ResourceTelemetryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PodmanDiscoveryTests(unittest.TestCase):
+    def test_single_listing_provides_host_pids(self):
+        from benchmarks.resource_telemetry.containers import decode
+        rows = ("abcabcabcabc ivanka-bench-ivanka-abyss-xyz 1201\n"
+                "fedfedfedfed unrelated-service 2100\n"
+                "123123123123 ivanka-bench-synth-xyz 3020\n")
+        result = decode(rows)
+        self.assertEqual(result, {
+            "abcabcabcabc": ("ivanka-bench-ivanka-abyss-xyz", 1201),
+            "123123123123": ("ivanka-bench-synth-xyz", 3020),
+        })
+
+    def test_rejects_ambiguous_listing_without_fabricating_measurements(self):
+        from benchmarks.resource_telemetry.containers import decode
+        for row in ("abcabcabcabc ivanka-bench-ivanka-abc garbage",
+                    "abcabcabcabc ivanka-bench-ivanka-abc",
+                    "zzzzzzzzzzzz ivanka-bench-ivanka-abc 1"):
+            with self.subTest(row=row), self.assertRaises(ValueError):
+                decode(row)

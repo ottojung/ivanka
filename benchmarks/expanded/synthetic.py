@@ -252,6 +252,7 @@ def generate_case(root, family, seed, pairs=900, *,
         **({"truth_model_revision": 2, "read_model_revision": 2,
             "quality_profile_sha256": fingerprint(PROFILE),
             "low_depth_target_x": low_target,
+            "requested_normal_pairs": pairs,
             "nominal_coverage_x": round(total * 2 * READ_LENGTH /
                                         len(genomes[0]), 4),
             "fragment_sampling_model": "prespecified_three_mode_v1"}
@@ -272,20 +273,44 @@ def generate_case(root, family, seed, pairs=900, *,
 
 def generate_cohort(root, seeds=16, pairs=10000, *,
                     truth_model=None, historical_random=False,
-                    split="development"):
+                    split="development", resume=False):
     root = Path(root)
-    if root.exists() and any(root.iterdir()):
+    if root.exists() and any(root.iterdir()) and not resume:
         raise FileExistsError(f"refusing nonempty cohort {root}")
     root.mkdir(parents=True, exist_ok=True)
+    if resume and (root / "cohort.json").exists():
+        from .hxb2_cohort import verify_cohort
+        verify_cohort(root, expected=25 * seeds)
+        existing = json.loads((root / "cohort.json").read_text())
+        if (existing.get("split") != split
+                or existing.get("normal_pairs") != pairs
+                or existing.get("seeds_per_family") != seeds):
+            raise ValueError("resumed cohort parameters differ")
+        return existing
     if split not in ("development", "validation"):
         raise ValueError("unknown synthetic cohort split")
     if split == "validation" and (historical_random or truth_model is not None):
         raise ValueError("holdout requires versioned HXB2 generator")
     seed_start = 900 if split == "validation" else 0
-    records = [generate_case(root, family, seed, pairs,
-                             truth_model=truth_model,
-                             historical_random=historical_random)
-               for family in FAMILIES for seed in range(seed_start, seed_start+seeds)]
+    records = []
+    for family in FAMILIES:
+        for seed in range(seed_start, seed_start + seeds):
+            case = root / f"{family}-s{seed:03d}"
+            if resume and case.exists():
+                from .hxb2_truth import validate
+                if not (case / "manifest.json").is_file():
+                    raise ValueError(f"incomplete synthetic case requires audit: {case}")
+                previous = json.loads((case / "manifest.json").read_text())
+                if (previous.get("family") != family
+                        or previous.get("seed") != seed
+                        or previous.get("requested_normal_pairs") != pairs
+                        or not validate(case)):
+                    raise ValueError(f"resumed synthetic case is not verified: {case}")
+                records.append(previous)
+            else:
+                records.append(generate_case(root, family, seed, pairs,
+                                             truth_model=truth_model,
+                                             historical_random=historical_random))
     manifest = {"schema": ("ivanka.expanded.cohort.v1"
                            if historical_random else
                            "ivanka.expanded.cohort.hxb2.v1" if truth_model
@@ -298,9 +323,11 @@ def generate_cohort(root, seeds=16, pairs=10000, *,
                    if not historical_random and truth_model is None else {}),
                 "cases": [{"id": f"{x['family']}-s{x['seed']:03d}",
                            "sha256": x["sha256"]} for x in records]}
-    with (root / "cohort.json").open("x") as out:
+    pending = root / "cohort.json.pending"
+    with pending.open("w" if resume else "x") as out:
         json.dump(manifest, out, indent=2, sort_keys=True)
         out.write("\n")
+    pending.replace(root / "cohort.json")
     return manifest
 
 
@@ -309,6 +336,8 @@ def main():
     parser.add_argument("out", type=Path)
     parser.add_argument("--seeds", type=int, default=16)
     parser.add_argument("--pairs", type=int, default=10000)
+    parser.add_argument("--resume", action="store_true",
+                        help="verify completed cases and resume interrupted generation")
     parser.add_argument("--split", choices=("development", "validation"),
                         default="development")
     parser.add_argument("--historical-random-only", action="store_true",
@@ -317,7 +346,8 @@ def main():
     if not (1 <= args.seeds <= 128):
         parser.error("--seeds must be 1..128")
     cohort = generate_cohort(args.out, args.seeds, args.pairs,
-                             historical_random=args.historical_random_only, split=args.split)
+                             historical_random=args.historical_random_only, split=args.split,
+                             resume=args.resume)
     print(json.dumps({"samples": cohort["samples"],
                       "families": len(cohort["families"])}, sort_keys=True))
 

@@ -90,6 +90,12 @@ PYTHONPATH=benchmarks python3 -m expanded.hxb2_cohort \
   --seeds 16 --certificate /tmp/ivanka-hxb2-science-v5-reproof.json
 ```
 
+If generation is interrupted, rerun the identical command with
+`--resume`. Previously completed cases must pass source/ancestry/hash checks
+before reuse; the manifest is written atomically only once the whole cohort
+exists. A partial case lacking its final manifest is preserved for manual
+audit, not silently overwritten.
+
 Then rerun all 400 × 7 integrated MiCall assembler arms using the newly
 attested cohort and dedicated source-pinned images. **Use a new output
 directory, not `--resume` against any previous run.** The synthetic runner

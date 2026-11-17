@@ -67,6 +67,8 @@ def verify_cohort(directory, *, expected=400):
                 and (recorded.get("schema") != "ivanka.expanded.synthetic.hxb2.v2"
                      or recorded.get("truth_model_revision") != 2
                      or recorded.get("read_model_revision") != 2
+                     or recorded.get("requested_normal_pairs")
+                     != manifest["normal_pairs"]
                      or recorded.get("quality_profile_sha256")
                      != manifest["quality_profile_sha256"])):
             raise ValueError("mixed versioned simulation or wrong quality profile")
@@ -102,6 +104,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--seeds", type=int, default=16)
+    parser.add_argument("--resume", action="store_true",
+                        help="verify completed cases and recover interrupted generation")
     parser.add_argument("--split", choices=("development", "validation"),
                         default="development")
     parser.add_argument("--pairs", type=int, default=10000)
@@ -128,7 +132,7 @@ def main():
         manifest = derive(args.derive_low_depth_v2_from, args.directory)
     else:
         manifest = generate_cohort(args.directory, args.seeds, args.pairs,
-                                   split=args.split)
+                                   split=args.split, resume=args.resume)
     proof = attestation(args.directory, expected=manifest["samples"])
     if args.certificate:
         with args.certificate.open("x") as output:

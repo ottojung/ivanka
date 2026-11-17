@@ -91,6 +91,31 @@ class ScientificSyntheticV4(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "split"):
                 verify_cohort(root, expected=25)
 
+    def test_completed_cohort_resume_is_verified_not_rewritten(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "development"
+            first = generate_cohort(root, seeds=1, pairs=40)
+            before = (root / "cohort.json").read_bytes()
+            second = generate_cohort(root, seeds=1, pairs=40, resume=True)
+            self.assertEqual(first, second)
+            self.assertEqual(before, (root / "cohort.json").read_bytes())
+
+    def test_interrupted_cohort_resume_recovers_verified_cases_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "development"
+            generate_cohort(root, seeds=1, pairs=40)
+            expected = (root / "cohort.json").read_bytes()
+            (root / "cohort.json").rename(root / "cohort.json.pending")
+            generate_cohort(root, seeds=1, pairs=40, resume=True)
+            self.assertEqual((root / "cohort.json").read_bytes(), expected)
+            damaged = root / "clonal-s000/manifest.json"
+            record = json.loads(damaged.read_text())
+            record["requested_normal_pairs"] = 60
+            damaged.write_text(json.dumps(record))
+            (root / "cohort.json").unlink()
+            with self.assertRaisesRegex(ValueError, "not verified"):
+                generate_cohort(root, seeds=1, pairs=40, resume=True)
+
     def test_old_and_new_generation_are_distinct_versions(self):
         with tempfile.TemporaryDirectory() as td:
             new = generate_case(td, "clonal", 0, pairs=30)

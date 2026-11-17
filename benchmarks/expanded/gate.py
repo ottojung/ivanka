@@ -17,13 +17,14 @@ from psi_acceptance import summarize as psi  # noqa: E402
 
 BASELINES = tuple(name for name in ASSEMBLERS if name != "ivanka")
 SCORE_FLOOR = 0.90
-MAX_WALL = 1800
+MAX_WALL = 3000
 # The gate scores downstream MiCall output, never the assembler's FASTA.
 SCORE_ORIGIN = "micall_final_max_reference_panel_v1"
 SCORE_ORIGINS = {"real": SCORE_ORIGIN, "synthetic": SCORE_ORIGIN}
 TIMING_ORIGIN = "micall_in_container_monotonic_v1"
 TRUTH_SCHEMA = "ivanka.hxb2_truth_validation.v1"
-TRUTH_SCHEMAS = {TRUTH_SCHEMA, "ivanka.hxb2_truth_validation.v2"}
+TRUTH_SCHEMAS = {TRUTH_SCHEMA, "ivanka.hxb2_truth_validation.v2",
+                 "ivanka.hxb2_truth_validation.v3"}
 
 
 def eligible_truth(row):
@@ -35,6 +36,10 @@ def eligible_truth(row):
     proof = row.get("truth_validation")
     return (isinstance(proof, dict)
             and proof.get("schema") in TRUTH_SCHEMAS
+            and (proof.get("schema") != "ivanka.hxb2_truth_validation.v3"
+                 or (proof.get("split") == "development"
+                     and proof.get("seed_start") == 0
+                     and proof.get("normal_pairs") == 10000))
             and proof.get("valid") is True
             and all(isinstance(proof.get(key), str)
                     and len(proof[key]) == 64

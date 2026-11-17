@@ -48,14 +48,14 @@ class Hxb2AncestryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             a = generate_case(root, "minority_5pct", 8, pairs=40)
-            self.assertEqual(a["schema"], "ivanka.expanded.synthetic.hxb2.v1")
+            self.assertEqual(a["schema"], "ivanka.expanded.synthetic.hxb2.v2")
             self.assertTrue(validate(root / "minority_5pct-s008"))
             self.assertEqual(a["haplotype_count"], 2)
             self.assertTrue(all(x in a["sha256"] for x in (
                 "reads/R1.fastq.gz", "reads/R2.fastq.gz",
                 "hidden-truth/haplotypes.fasta")))
             self.assertEqual(a["hxb2_ancestry"]["schema"],
-                             "ivanka.expanded.hxb2_ancestry.v1")
+                             "ivanka.expanded.hxb2_ancestry.v2")
 
     def test_truth_and_ancestry_tampering_fail_even_if_hash_is_rewritten(self):
         with tempfile.TemporaryDirectory() as tmp:

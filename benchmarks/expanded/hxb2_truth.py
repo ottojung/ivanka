@@ -49,18 +49,26 @@ def references():
     return records, info["alignment"]["sha256"]
 
 
-def seeded(family, sample, haplotype):
-    token = f"ivanka-hxb2-v1:{family}:{sample}:haplotype:{haplotype}".encode()
+def seeded(family, sample, haplotype, revision=1):
+    # v3 cohort uses matched biological truths across read-stress families.
+    if revision == 2:
+        family = ("two_strain" if family in (
+            "minority_5pct", "minority_30pct", "equal_strains")
+            else "four_strain" if family == "complex_mixture"
+            else "single_strain")
+    elif revision != 1:
+        raise ValueError("unrecognized truth recipe revision")
+    token = f"ivanka-hxb2-v{revision}:{family}:{sample}:haplotype:{haplotype}".encode()
     return int.from_bytes(hashlib.sha256(token).digest()[:8], "big")
 
 
-def plan(family, sample, haplotype, records):
+def plan(family, sample, haplotype, records, revision=1):
     """A no-replacement sample of uniform mutations independent of sequence."""
-    rng = random.Random(seeded(family, sample, haplotype))
+    rng = random.Random(seeded(family, sample, haplotype, revision))
     length = len(records[ACCESSIONS[0]])
     # Every recombinant starts with an HXB2 block and introduces one or
     # more randomly sampled other subtype blocks on aligned coordinates.
-    breaks = [] if haplotype == 0 and family == "clonal" else sorted(
+    breaks = [] if revision == 1 and haplotype == 0 and family == "clonal" else sorted(
         rng.sample(range(600, length - 600), rng.randint(1, 3)))
     limits = [0, *breaks, length]
     parents = [ACCESSIONS[0]]
@@ -75,7 +83,7 @@ def plan(family, sample, haplotype, records):
     changes = [{"site": site, "base": pick_alt(source[site], rng)}
                for site in sites]
     return {"segments": segments, "mutations": changes, "seed": seeded(
-        family, sample, haplotype), "unmutated_length": len(source)}
+        family, sample, haplotype, revision), "unmutated_length": len(source)}
 
 
 def synthesize(recipe, records):
@@ -97,21 +105,21 @@ def synthesize(recipe, records):
     return "".join(base)
 
 
-def haplotypes(family, sample):
+def haplotypes(family, sample, *, revision=1):
     if family not in FAMILIES or type(sample) is not int or sample < 0:
         raise ValueError("unregistered synthetic family or seed")
     records, aligned_hash = references()
     fractions = FRACTIONS.get(family, [1.0])
-    recipes = [plan(family, sample, i, records) for i in range(len(fractions))]
+    recipes = [plan(family, sample, i, records, revision) for i in range(len(fractions))]
     genome = [synthesize(x, records) for x in recipes]
     # Technical contaminants are also derived from allowed recombinant truth.
-    contamination = synthesize(plan(family, sample, 99, records), records)
+    contamination = synthesize(plan(family, sample, 99, records, revision), records)
     provenance = {
-        "schema": "ivanka.expanded.hxb2_ancestry.v1",
+        "schema": f"ivanka.expanded.hxb2_ancestry.v{revision}",
         "source_alignment_sha256": aligned_hash, "accessions": list(ACCESSIONS),
         "truth_mutation_policy": "uniform sites without replacement, <=5%",
         "recipes": recipes,
-        "contamination_recipe": plan(family, sample, 99, records),
+        "contamination_recipe": plan(family, sample, 99, records, revision),
     }
     return genome, fractions, contamination, provenance
 
@@ -121,8 +129,12 @@ def validate(case):
     case = Path(case)
     manifest = json.loads((case / "manifest.json").read_text())
     family, sample = manifest["family"], manifest["seed"]
-    genomes, fractions, contamination, expected = haplotypes(family, sample)
-    if (manifest.get("schema") != "ivanka.expanded.synthetic.hxb2.v1"
+    revision = manifest.get("truth_model_revision", 1)
+    genomes, fractions, contamination, expected = haplotypes(
+        family, sample, revision=revision)
+    if (manifest.get("schema") != ("ivanka.expanded.synthetic.hxb2.v2"
+                                         if revision == 2 else
+                                         "ivanka.expanded.synthetic.hxb2.v1")
             or manifest.get("hxb2_ancestry") != expected
             or manifest.get("nominal_fractions") != fractions):
         raise ValueError("missing, nonrandom or unpinned HXB2 ancestry")

@@ -10,7 +10,8 @@ rerunning a retained MiCall consensus output. The three current
 cohort views are:
 
 - **400 HXB2-derived synthetic samples:** final dominant MiCall output
-  scored against withheld synthetic truth. Each of the seven assembler
+  scored against withheld synthetic truth (v5 generation and rescore
+  required; earlier synthetic runs remain historical). Each of the seven assembler
   arms runs its own source-attested fork container.
 - **198 physical samples:** the unchanged original reads and independent
   33-reference MAX scorer, for IVA, Ivanka, Haploflow, MEGAHIT, ABySS,
@@ -22,10 +23,16 @@ cohort views are:
 scores and timed seconds over all 598 cases, with the numeric scores
 preserved exactly. Every case uses the same local-alignment scorer:
 match +1, mismatch -1, gap-open -2, gap-extension -1, across all
-final MAX sequences. The synthetic reference panel is a single
-generating truth sequence. The physical reference panel contains
+final MAX sequences. The synthetic reference panel contains
+the generating majority truth, or the two tied generating truths in
+equal-abundance mixtures; it is identical across competing assemblers. The physical reference panel contains
 the fixed project references. All values are raw alignment points.
 
+
+For the planned synthetic restart, see
+[scientific synthetic v5](../scientific-synthetic-v5.md). All previously
+finished synthetic arms must be run again against the new FASTQs; the
+source hashes do not permit silent reuse.
 
 ## Static progress publication
 
@@ -107,8 +114,9 @@ with anonymized H-/R-style case aliases. The archive publisher
 checks the original result stream, immutable image IDs, fork commit
 attestation, HXB2 truth proof, MiCall execution records, final
 conseq.csv digests and in-container timers. Synthetic consensus
-sequences are scored by the current local scorer against their
-one generating truth sequence. Physical scores are recovered from
+sequences are scored against the majority generating truth, or both
+equally dominant generating truths for a 50:50 mixture. Physical scores
+are recovered from
 the original fixed 33-reference local alignments.
 
 The current source-pinned qualification cohort remains separate:

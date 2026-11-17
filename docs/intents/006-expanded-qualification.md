@@ -46,7 +46,10 @@ and must never be accessible to any assembler.
 constant while changing only the integrated assembler. Score the
 final MiCall MAX consensus sequences by the same maximum local
 alignment function, against the independently fixed case reference
-panel (one generating truth sequence per synthetic case). Ivanka's raw contigs may be incomplete,
+panel (one dominant truth sequence per synthetic case, or both
+equally dominant generating sequences when the mixture is exactly tied).
+The panel is frozen per sample and identical for every assembler.
+Ivanka's raw contigs may be incomplete,
 overlapping or empty; **there is no independent assembler-only
 haplotype recovery, full-length global-alignment or contig-count gate**
 under [Intent 004](004-dominant-sequence.md). In particular, synthetic
@@ -72,7 +75,9 @@ synthetic cohorts:
    scoring parameters for every case: match +1, mismatch −1, gap
    open −2, gap extension −1, both DNA orientations, and the
    maximum over final MAX sequences and reference-panel members.
-   The synthetic panel is exactly one generating dominant truth sequence.
+   The synthetic panel contains all generating haplotypes tied at the
+   maximum prescribed abundance (one for a strict majority, two in a
+   50:50 mixture). All scoring references remain hidden from assemblers.
    Retain raw alignment points in the combined 598-case view. Require
    independent qualification on each cohort, and never substitute
    assembler FASTA for the final MiCall output.
@@ -102,3 +107,15 @@ to silently downgrade the gate. This requirement applies to the exact
 Rust-only direct, empty-environment default MiCall execution stipulated
 by Intents 001 and 002. Benchmark-tuned wrappers and alternative flags
 cannot be accepted. **No seven-way pass is currently claimed.**
+
+## Scientific v5 replacement cohort (November 17, 2026)
+
+The 400-sample synthetic qualification is restarted with a new source and
+scoring identity described in [the synthetic v5 plan](../scientific-synthetic-v5.md).
+It keeps the same families, HXB2 truth restrictions, seven contenders, and
+strict acceptance. Low-depth cases are genuinely 3–24×, read-quality
+profiles are source-aggregated, and equal-abundance ties have a fair
+hidden scoring panel. Prior v1/v2/v4 synthetic scores remain historical;
+they do **not** qualify the new cohort. The 198 real samples are unchanged.
+A separate 100-case seed-disjoint holdout is a supplementary, once-only
+final validation, not a substitute for the mandatory 400 synthetic cases.

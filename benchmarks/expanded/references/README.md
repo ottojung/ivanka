@@ -124,3 +124,21 @@ v3 data and failures as historical diagnostics. This single-case
 confirmation does **not** prove any seven-way dominance, all-r Ψ
 acceptance, or guaranteed success on other v4 families. A completely
 fresh, source-pinned v4 run and independent gate must establish that.
+
+## Scientific v5 input replacement (November 17, 2026)
+
+The previous v4 high-depth cohort and its SHA256 identity remain frozen
+historical input. The redesigned synthetic v5 generator uses the same
+pinned GenBank parents but a **new biology/read/model version**, with
+matched biological truths by seed across read-stress families. It also
+stores the new privacy-preserving quality aggregate
+`real-read-quality-20261117.json` (198 paired libraries, up to 128 quality
+records per mate per library, first 150 read cycles; no identifiers or bases).
+The reproducible *quality-only* reducer is
+`benchmarks/expanded/derive_quality_profile.py`.
+
+Only a new v3-schema 400-case cohort with ordinary 10,000-pair samples,
+3/6/12/24× low-depth cases and an independent validator certificate is
+eligible for renewed qualification; see
+[scientific synthetic v5](../../../docs/scientific-synthetic-v5.md).
+No v5 generated FASTQ/results SHA256 is claimed until generation finishes.

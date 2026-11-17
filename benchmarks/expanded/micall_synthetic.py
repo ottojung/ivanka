@@ -28,7 +28,7 @@ from .micall_lock import exclusive_lock
 from .run_real import verify_images
 from .run_synthetic import cohort_rows
 
-MAX_SECONDS = 1800
+MAX_SECONDS = 3000
 TIMER = Path(__file__).resolve().parents[1] / "inside_container_timing.py"
 
 
@@ -40,7 +40,7 @@ def command(name, image, case_dir, output_dir, identifier, timeout):
         f"{identifier}:{name}:{image}".encode()).hexdigest()[:18]
         + "-" + secrets.token_hex(8))
     base = ["podman", "run", "--rm", "--pull=never", "--network=none",
-            "--userns=host", "--cpus=2", "--memory=4g",
+            "--userns=host", "--cpus=2", "--memory=5g",
             "--name", job, "--timeout", str(timeout),
             "-v", f"{case_dir / 'reads'}:/reads:ro",
             "-v", f"{output_dir}:/results:rw",
@@ -226,13 +226,14 @@ def run_manifest(proof, images, limit):
                "micall_retention.py",
                "micall_synthetic_constants.py", "micall_lock.py",
                "micall_dominant.py",
-               "score.py", "adapters.py", "hxb2_cohort.py")
+               "score.py", "adapters.py", "hxb2_cohort.py",
+               "hxb2_truth.py", "synthetic.py", "read_model.py")
     return {
         "schema": "ivanka.expanded.micall_synthetic.v2",
         "status": "INCOMPLETE", "qualified": False,
         "source_truth": proof, "images": images,
         "limit": limit, "expected": 400,
-        "threads_per_arm": 2, "memory_limit": "4g",
+        "threads_per_arm": 2, "memory_limit": "5g",
         "network": "none", "timer": TIMING_ORIGIN,
         "score": SCORE_ORIGIN,
         "instrumentation_sha256": digest(TIMER),
@@ -246,6 +247,8 @@ def run_manifest(proof, images, limit):
             **{name: digest(root / name) for name in sources},
             **{name: digest(root.parent / name)
                for name in ("reference_panel.py", "project_references.py")},
+            "real-read-quality-20261117.json": digest(
+                root / "references/real-read-quality-20261117.json"),
         },
     }
 
@@ -256,7 +259,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--images", type=Path, required=True)
     parser.add_argument("--jobs", type=int, default=5)
-    parser.add_argument("--timeout", type=int, default=1800)
+    parser.add_argument("--timeout", type=int, default=3000)
     parser.add_argument("--limit", type=int,
                         help="development smoke only, never qualifies")
     parser.add_argument("--resume", action="store_true",

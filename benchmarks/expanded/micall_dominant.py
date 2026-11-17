@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 
 from benchmarks.project_references import final_max_sequences
-from .score import reference_truth, score_sequences
+from .score import score_sequences
 
 SCORE_ORIGIN = "micall_final_max_reference_panel_v1"
 
@@ -17,14 +17,14 @@ def evaluate_final_alignment(manifest, truth_path, micall_folder):
     sequences = final_max_sequences(root)
     if source is None or not sequences:
         raise ValueError("missing final MiCall MAX consensus output")
-    truth = reference_truth(manifest, truth_path)
     result = score_sequences(manifest, truth_path, sequences)
     return {"score": result["score"],
             "dominant_exact": result["dominant_exact"],
             "score_origin": SCORE_ORIGIN,
             "source": {
-                "reference_count": 1,
-                "reference_length": len(truth),
+                "reference_count": result["reference_count"],
+                "reference_length": result["reference_length"],
+                "best_reference": result["best_reference"],
                 "final_max_contig_count": result["contig_count"],
                 "best_contig_length": result["best_contig_length"],
                 "source_output": str(source.relative_to(root)),

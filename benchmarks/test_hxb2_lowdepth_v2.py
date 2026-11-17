@@ -7,6 +7,7 @@ import unittest
 from expanded.hxb2_cohort import attestation, verify_cohort
 from expanded.hxb2_lowdepth_v2 import derive
 from expanded.synthetic import generate_cohort
+from expanded.hxb2_truth import haplotypes
 
 
 class LowDepthLineageTests(unittest.TestCase):
@@ -16,7 +17,7 @@ class LowDepthLineageTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.original = self.root / "hxb2-v1"
         self.revised = self.root / "hxb2-v2"
-        generate_cohort(self.original, seeds=1, pairs=80)
+        generate_cohort(self.original, seeds=1, pairs=80, truth_model=haplotypes)
         self.v1_digest = verify_cohort(self.original, expected=25)
 
     def test_one_family_changes_only_paired_reads(self):

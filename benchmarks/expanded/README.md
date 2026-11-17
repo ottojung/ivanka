@@ -1,5 +1,17 @@
 # Expanded seven-assembler benchmark — mandatory v2 acceptance gate
 
+> **November 17, 2026 scientific v5 restart:** The default HXB2
+> generator has been redesigned (matched biological truths across
+> read-stress families, empirically aggregated per-cycle quality,
+> sparse 3–24× depth, modeled insert mixtures, and tie-aware 50:50
+> evaluation). The new cohort must be regenerated and all 400 × 7
+> integrated MiCall arms rerun. Old v1/v2/v3/v4 records are **historical
+> only**, not evidence for v5 qualification. The current source code
+> supports a distinct seed-900–903 holdout, reserved for post-freeze
+> evaluation. See [scientific v5](../../docs/scientific-synthetic-v5.md).
+> The new per-arm limits are 50 minutes and 5 GiB.
+
+
 **New mandatory conditions:** Under
 [Intent 007](../../docs/intents/007-assembler-bench.md), canonical runs
 must execute every assembler **as integrated into MiCall** and publish
@@ -8,10 +20,11 @@ reviewable, independently verified results on Ivanka's GitHub Pages
 all new biological synthetic truth must be **HXB2 or random
 HXB2/other-HIV-subtype homologous recombinants**, optionally with
 ≤5% uniformly random, untargeted substitutions. **Generic random
-A/C/G/T genomes are forbidden.** The present v1 generator and its
-400-case dataset do not satisfy this rule and are **historical
-diagnostics only**. The HXB2 source-pinned, ancestry-verified 400-case cohort is now
-generated. The **full MiCall-integrated synthetic comparison** and
+A/C/G/T genomes are forbidden.** The legacy v1 generic-random generator and its 400-case dataset are
+**historical diagnostics only**; the default generator is HXB2-derived.
+A previous source-pinned 400-case cohort was generated and verified,
+but the replacement scientific v5 cohort is **not yet fully generated or
+qualified**. The **full MiCall-integrated synthetic comparison** and
 its final independent qualification remain incomplete. The
 Assembler Bench Pages report exists at `/bench/` for verified
 historical real-run evidence; no synthetic PASS is claimed.
@@ -52,8 +65,8 @@ the 598 cases and all seven tools must be accounted for; incomplete runs
   profiles or targeted mutation clusters. Freeze parent accessions,
   alignments, seeds, ancestry, exact mutation sites and FASTQ/truth SHA256s.
   Keep every truth inaccessible to every assembler. The independent
-  local alignments to exactly one frozen generating dominant
-  truth sequence, using the same final MiCall MAX scorer.
+  local alignments use the frozen dominant truth or the two equally
+  dominant truths in a 50:50 mixture, with the same final MiCall scorer.
 - **Competition:** IVA, Haploflow, MEGAHIT, ABySS, SPAdes, Velvet and
   Ivanka. All seven must produce an attributable attempted result for each
   input. Missing executables, missing result rows, undiagnosed tool
@@ -290,14 +303,15 @@ The MiCall-integrated runner invokes every assembler through
 the same complete MiCall pipeline. It mounts reads and output only;
 evaluation occurs after MiCall exits. Every final MAX sequence in
 conseq.csv is assessed using the shared local-alignment scorer, with
-a single frozen generating truth sequence as the reference panel.
+the frozen majority generating truth (or both tied generating truths
+in a 50:50 mixture) as the reference panel.
 Missing final output or invalid provenance fails closed. Example:
 
 ```sh
 python3 -m benchmarks.expanded.micall_synthetic \
   --data /data/hxb2-micall-400 \
   --images /results/seven-full-image-ids.json \
-  --out /results/integrated-synthetic --jobs 10 --timeout 1800
+  --out /results/integrated-synthetic --jobs 10 --timeout 3000
 ```
 
 `--limit 1` is a diagnostic development smoke **only**, never a
@@ -319,8 +333,9 @@ The common scoring function is
 benchmarks.reference_panel.best_panel_alignment. Both cohorts supply
 final MiCall MAX sequences and their independently fixed reference panel.
 Alignment is local, uses both DNA orientations, and returns unnormalized
-points. A synthetic sample has exactly one generating truth sequence
-in its reference panel; the physical panel uses its pinned references.
+points. A synthetic sample has one generating truth as the reference,
+except a 50:50 case which has both equally dominant generating truths;
+the physical panel uses its pinned references.
 Neither scoring panel enters an assembler or MiCall process.
 
 The evaluator for a completed synthetic MiCall output is

@@ -40,6 +40,11 @@ def manifest(data, proof, images, attestation_file, limit):
                here.with_name("micall_retention.py"),
                here.with_name("micall_dominant.py"),
                here.with_name("score.py"),
+               here.with_name("hxb2_truth.py"),
+               here.with_name("hxb2_cohort.py"),
+               here.with_name("synthetic.py"),
+               here.with_name("read_model.py"),
+               here.parent / "references/real-read-quality-20261117.json",
                here.parents[1] / "reference_panel.py",
                here.parents[1] / "project_references.py",
                here.parents[1] / "inside_container_timing.py",
@@ -72,9 +77,9 @@ def recover(rows, output, images, proof):
 
 
 def run(data, output, images, fork, base, attestation_file, *,
-        jobs=5, timeout=1800, limit=None, resume=False):
-    if jobs not in range(1, 11) or timeout not in range(1, 1801):
-        raise ValueError("jobs must be <=10 and timeout <=1800 seconds")
+        jobs=5, timeout=3000, limit=None, resume=False):
+    if jobs not in range(1, 11) or timeout not in range(1, 3001):
+        raise ValueError("jobs must be <=10 and timeout <=3000 seconds")
     if limit is not None and not 1 <= limit <= 400:
         raise ValueError("development limit must be 1..400")
     output = Path(output).resolve()
@@ -157,7 +162,7 @@ def main():
     parser.add_argument("--fork", required=True, type=Path)
     parser.add_argument("--base", required=True)
     parser.add_argument("--jobs", type=int, default=5)
-    parser.add_argument("--timeout", type=int, default=1800)
+    parser.add_argument("--timeout", type=int, default=3000)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()

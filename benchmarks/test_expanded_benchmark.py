@@ -55,7 +55,9 @@ class ExpandedSyntheticTests(unittest.TestCase):
             self.assertTrue(all(x > 0 for x in minor["sampled_haplotype_pairs"]))
             self.assertGreater(chimeras["chimeric_mates"], 0)
             self.assertGreater(contamination["contamination_pairs"], 0)
-            self.assertEqual(low["pairs"], 75)
+            self.assertEqual(low["low_depth_target_x"], 6)
+            self.assertLess(low["pairs"], 300)
+            self.assertLess(low["nominal_coverage_x"], 7)
             self.assertEqual(deep["pairs"], 900)
 
     def test_strand_bias_changes_fragment_orientation(self):

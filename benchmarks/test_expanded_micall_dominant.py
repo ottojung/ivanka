@@ -45,6 +45,20 @@ class LocalAlignmentTests(unittest.TestCase):
             self.assertEqual(report["source"]["final_max_contig_count"], 2)
             self.assertEqual(len(report["source"]["conseq_csv_sha256"]), 64)
 
+    def test_equal_mix_uses_both_fixed_truths_in_final_micall(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            truth = root / "truth.fa"
+            a, b = "ACGT" * 55, "TTGG" * 55
+            truth.write_text(">first\n" + a + "\n>second\n" + b + "\n")
+            manifest = {"nominal_fractions": [0.5, 0.5]}
+            for candidate in (a, b):
+                write(root, {"region": candidate})
+                result = evaluate_final_alignment(manifest, truth, root)
+                self.assertEqual(result["score"], len(candidate))
+                self.assertEqual(result["source"]["reference_count"], 2)
+                self.assertTrue(result["dominant_exact"])
+
     def test_local_alignment_does_not_normalize_to_one(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

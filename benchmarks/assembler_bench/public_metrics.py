@@ -39,6 +39,9 @@ CATALOG = {
 }
 
 
+CATALOG["peak_ram_observed_mib"] = (
+    "Peak observed MiCall process-tree RSS", "MiB")
+
 CATALOG.update({key: value for key, value in micall_catalog().items()
                 if key not in CATALOG})
 CATALOG.update(exact_catalog())

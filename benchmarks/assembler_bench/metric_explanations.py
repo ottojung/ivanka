@@ -135,3 +135,11 @@ INFO.update({key: value for key, value in micall_explanations().items()
 INFO.update(exact_explanations())
 for key,(_,description,denominator) in RULES.items():
     INFO[key]=(description,denominator,stage(key),INFO[key][3])
+
+INFO["peak_ram_observed_mib"] = (
+    "Largest one-second-sampled sum of MiCall process-tree resident memory "
+    "across a container's processes; not an exact peak, may double-count "
+    "shared mappings and may miss early peaks when monitoring begins mid-run.",
+    "Maximum sampled process-tree RSS bytes / 1,048,576. "
+    "Absent if the container was not monitored through observed exit.",
+    "Host process-tree memory observer", "lower")

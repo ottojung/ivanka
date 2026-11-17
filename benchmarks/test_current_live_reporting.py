@@ -83,7 +83,8 @@ class UnifiedReportingTests(unittest.TestCase):
         (path/"conseq.csv").write_text("sequence\nACGT\n")
         image=IMAGES["iva"]
         record={"sha256":image,"status":"success",
-                "argv":["podman",image,"--all_projects"],
+                "argv":["podman","--memory=4g","--timeout","1800",
+                        image,"--all_projects"],
                 "score":4.,"seconds":7.,
                 "score_origin":"micall_final_max_reference_panel_v1",
                 "timing_origin":"micall_in_container_monotonic_v1",
@@ -91,7 +92,8 @@ class UnifiedReportingTests(unittest.TestCase):
                     "source_output":"conseq.csv",
                     "conseq_csv_sha256":inputs.sha(path/"conseq.csv")}}
         (path/"execution.json").write_text(json.dumps(record))
-        self.assertEqual(inputs.synth_arm(path,"iva",image),record)
+        self.assertEqual(inputs.synth_arm(path,"iva",image),
+                         {**record,"time_budget_seconds":1800})
         (path/"conseq.csv").write_text("altered")
         with self.assertRaisesRegex(ValueError,"final MiCall output changed"):
             inputs.synth_arm(path,"iva",image)

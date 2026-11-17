@@ -10,6 +10,7 @@ from .current_inputs import PROGRESS_SCHEMA, physical, synthetic
 from .public_dominance import enrich
 from .current_mapping import catalog, missing_arm
 from .public_metrics import SCHEMA as METRIC_SCHEMA
+from .resource_peak import load as load_resources
 
 SCHEMA="ivanka.assembler-bench.public.v1"
 
@@ -76,6 +77,12 @@ def make_run(cohort,rows,expected,images,provenance,source_sha,when):
             "micall_fork_provenance":provenance,
             "source_commit":provenance["images"]["iva"]["source_commit"],
             "tool_progress":counts,"psi":{},
+            "resource_policy":{
+                "original_timeout_seconds":1800,
+                "recovery_timeout_seconds":3000,
+                "recovered_arms":sum(len(row.get("recovery",{}))
+                                     for row in ordered),
+                "ram_metric":"sampled process-tree RSS, not exact peak"},
             "score_origin":SCORE_ORIGIN,
             "status_reason":"Independent source-verified MiCall final MAX "
                 "local-alignment and in-container runtime measurements.",
@@ -100,9 +107,13 @@ def combine(synthetic_run,real_run,images,provenance,when):
     return result
 
 
-def current(synthetic_root,real_root,physical_data,runner,attestation,images,when,physical_witness,physical_attestation):
-    sy,sproof=synthetic(synthetic_root,images,attestation,runner)
-    re,rproof=physical(real_root,physical_data,images,attestation,runner,physical_witness,physical_attestation)
+def current(synthetic_root,real_root,physical_data,runner,attestation,images,
+            when,physical_witness,physical_attestation,resources=None,
+            real_retries=None):
+    observed=load_resources(resources)
+    sy,sproof=synthetic(synthetic_root,images,attestation,runner,observed)
+    re,rproof=physical(real_root,physical_data,images,attestation,runner,
+                       physical_witness,physical_attestation,observed,real_retries)
     proof=fork_provenance(attestation,images)
     syn=make_run("synthetic",list(sy.values()),400,images,proof,sproof,when)
     real=make_run("real",list(re.values()),198,images,proof,rproof,when)

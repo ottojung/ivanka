@@ -7,6 +7,8 @@ from pathlib import Path
 
 from .hxb2_preview import pinned_truth, sha, COHORT_SHA
 from .public_case_metrics import synthetic as synthetic_metrics, physical as physical_metrics
+from .resource_peak import peak_mib, physical_name, synthetic_name
+from .resource_retry import select as select_retry
 
 SYN_SCHEMA="ivanka.expanded.comparators_first_synthetic.v1"
 REAL_SCHEMA="ivanka.expanded.comparators_first_real.v1"
@@ -47,7 +49,8 @@ def sample(alias,tools,family=None):
     row={"alias":alias,"score":{t:None for t in tools},
          "seconds":{t:None for t in tools},"failures":[],
          "diagnostics":{t:{} for t in tools},
-         "exact_profiles":{},"floor_ok":None,"outcome":"incomplete"}
+         "exact_profiles":{},"recovery":{},
+         "floor_ok":None,"outcome":"incomplete"}
     if family is not None:
         row["family"]=family
     return row
@@ -57,15 +60,18 @@ def accept(row,tool,record,diagnostics):
     status=record["status"]
     if status=="success":
         score,seconds=record["score"],record["seconds"]
-        if (type(score) not in (int,float) or not math.isfinite(score)
+        budget=record.get("time_budget_seconds",1800)
+        if (budget not in (1800,3000)
+                or type(score) not in (int,float) or not math.isfinite(score)
                 or score<0 or type(seconds) not in (int,float)
-                or not math.isfinite(seconds) or not 0<seconds<=1800):
+                or not math.isfinite(seconds) or not 0<seconds<=budget):
             raise ValueError("invalid source-scored final MiCall result")
         row["score"][tool]=score
         row["seconds"][tool]=seconds
         row["diagnostics"][tool]=diagnostics
     elif status=="failed":
         row["failures"].append(tool)
+        row["diagnostics"][tool]=diagnostics
     else:
         raise ValueError("invalid terminal result")
 
@@ -82,6 +88,18 @@ def synth_arm(folder,tool,image):
             or raw.get("argv",[]).count(image)!=1
             or raw.get("argv",[])[-1]!="--all_projects"):
         raise ValueError("unauthenticated synthetic MiCall output")
+    argv=raw["argv"]
+    if (argv.count("--timeout")!=1
+            or argv[argv.index("--timeout")+1] not in ("1800","3000")
+            or len([v for v in argv if v in ("--memory=4g","--memory=5g")])!=1):
+        raise ValueError("unknown synthetic MiCall resource allocation")
+    if (argv[argv.index("--timeout")+1]=="1800"
+            and "--memory=4g" not in argv):
+        raise ValueError("original synthetic memory allocation drift")
+    if (argv[argv.index("--timeout")+1]=="3000"
+            and "--memory=5g" not in argv):
+        raise ValueError("new synthetic memory allocation drift")
+    raw["time_budget_seconds"]=int(argv[argv.index("--timeout")+1])
     if raw["status"]=="success":
         output=raw.get("final_dominant",{})
         file=folder/output.get("source_output","nonexistent")
@@ -91,7 +109,7 @@ def synth_arm(folder,tool,image):
     return raw
 
 
-def synthetic(root,images,proof,runner):
+def synthetic(root,images,proof,runner,resources=None):
     manifest=freeze(root,SYN_SCHEMA,images,proof,runner)
     if manifest is None:
         return {},None
@@ -112,7 +130,11 @@ def synthetic(root,images,proof,runner):
                 continue
             arm=synth_arm(source/ident/tool,tool,images[tool])
             if arm is not None:
-                accept(row,tool,arm,synthetic_metrics(arm))
+                metrics=synthetic_metrics(arm)
+                memory=peak_mib(resources or {},synthetic_name(arm))
+                if memory is not None:
+                    metrics["peak_ram_observed_mib"]=memory
+                accept(row,tool,arm,metrics)
         if any(row["score"][t] is not None or t in row["failures"]
                for t in images):
             rows[ident]=row
@@ -133,7 +155,7 @@ def physical_pairs(witness_file,attestation_file):
         raise ValueError("physical FASTQ witnesses differ from preflight")
     return pairs
 
-def real_arm(source,tool,sample_name,image,pair):
+def real_arm(source,tool,sample_name,image,pair,retries=None):
     path=source/tool/"checkpoints"/(sha_bytes(sample_name.encode())+".json")
     if not path.is_file():
         return None
@@ -146,29 +168,37 @@ def real_arm(source,tool,sample_name,image,pair):
             or raw.get("reference_panel_sha256")!=PANEL
             or type(raw.get("failed")) is not bool):
         raise ValueError("unaligned physical MiCall source checkpoint")
+    raw,recovery=select_retry(raw,path,retries,tool,sample_name,image)
     arm=raw.get("arm")
     if not isinstance(arm,dict) or arm.get("image_id")!=image:
         raise ValueError("physical MiCall image identity mismatch")
+    evidence_root=Path(retries).resolve() if recovery else source
+    budget=3000 if recovery else 1800
+    provenance={"time_budget_seconds":budget,
+                "container_name":physical_name(arm,tool,sample_name,sha_bytes),
+                "recovery":recovery}
     if raw["failed"]:
         if raw.get("measurement") is not None:
             raise ValueError("failed physical arm cannot have a measured score")
-        return {"status":"failed"}
+        return {"status":"failed",**provenance}
     measure=raw.get("measurement")
     if (not isinstance(measure,dict) or arm.get("exit_code")!=0
             or measure.get("seconds")!=arm.get("seconds")):
         raise ValueError("physical MiCall timer evidence changed")
     artifact=Path(arm.get("artifact_dir","/"))
-    if not artifact.is_relative_to(source/"artifacts"):
+    if not artifact.is_relative_to(evidence_root/"artifacts"):
         raise ValueError("physical result escaped frozen artifact directory")
     metrics=(arm.get("metrics") or {}).get("outputs") or {}
     expected=(metrics.get("conseq.csv") or {}).get("sha256")
     if not (artifact/"conseq.csv").is_file() or sha(artifact/"conseq.csv")!=expected:
         raise ValueError("physical final consensus digest mismatch")
     return {"status":"success","score":measure["score"],
-            "seconds":measure["seconds"],"metrics":arm.get("metrics",{})}
+            "seconds":measure["seconds"],"metrics":arm.get("metrics",{}),
+            **provenance}
 
 
-def physical(root,data,images,proof,runner,witness_file,physical_attestation):
+def physical(root,data,images,proof,runner,witness_file,physical_attestation,
+             resources=None,retries=None):
     manifest=freeze(root,REAL_SCHEMA,images,proof,runner)
     if manifest is None:
         return {},None
@@ -191,9 +221,15 @@ def physical(root,data,images,proof,runner,witness_file,physical_attestation):
         for tool in images:
             if tool not in manifest["images"]:
                 continue
-            arm=real_arm(source,tool,name,images[tool],pairs[name])
+            arm=real_arm(source,tool,name,images[tool],pairs[name],retries)
             if arm is not None:
-                accept(row,tool,arm,physical_metrics(arm))
+                metrics=physical_metrics(arm)
+                memory=peak_mib(resources or {},arm.get("container_name"))
+                if memory is not None:
+                    metrics["peak_ram_observed_mib"]=memory
+                accept(row,tool,arm,metrics)
+                if arm.get("recovery"):
+                    row["recovery"][tool]=arm["recovery"]
         if any(row["score"][t] is not None or t in row["failures"]
                for t in images):
             rows[name]=row

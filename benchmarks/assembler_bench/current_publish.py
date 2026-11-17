@@ -48,13 +48,22 @@ def monotone(prior,current):
                         newer["seconds"][tool]!=row["seconds"][tool]):
                     raise ValueError("previously timed MiCall arm changed")
                 if tool in row["failures"] and tool not in newer["failures"]:
-                    raise ValueError("old verified arm failure disappeared")
+                    proof=newer.get("recovery",{}).get(tool)
+                    if (not isinstance(proof,dict)
+                            or proof.get("timeout_seconds")!=3000
+                            or proof.get("status")!="success"
+                            or not isinstance(
+                                proof.get("original_checkpoint_sha256"),str)
+                            or not isinstance(
+                                proof.get("retry_checkpoint_sha256"),str)):
+                        raise ValueError("unverified old arm failure disappeared")
 
 
-def update(site,synth,physical,data,runner,attestation,images,physical_witness,physical_attestation,*,migrate=False,include_workload=False,cohort_order=("real","synthetic")):
+def update(site,synth,physical,data,runner,attestation,images,physical_witness,physical_attestation,*,migrate=False,include_workload=False,cohort_order=("real","synthetic"),resources=None,real_retries=None):
     site=Path(site)
     when=frozen_date(synth)
-    generated=current(synth,physical,data,runner,attestation,images,when,physical_witness,physical_attestation)
+    generated=current(synth,physical,data,runner,attestation,images,when,
+                      physical_witness,physical_attestation,resources,real_retries)
     if include_workload:
         generated["workload"]=worker_snapshot(synth,physical,images,
                                              order=cohort_order)
@@ -100,12 +109,15 @@ def main():
     parser.add_argument("--migrate",action="store_true")
     parser.add_argument("--with-activity",action="store_true")
     parser.add_argument("--cohort-order",default="real,synthetic")
+    parser.add_argument("--resources",type=Path)
+    parser.add_argument("--real-retries",type=Path)
     args=parser.parse_args()
     images=json.loads(Path(args.images).read_text())
     update(args.site,args.synthetic,args.real,args.real_data,args.runner,
            args.attestation,images,args.physical_witness,args.physical_attestation,
            migrate=args.migrate,include_workload=args.with_activity,
-           cohort_order=tuple(args.cohort_order.split(",")))
+           cohort_order=tuple(args.cohort_order.split(",")),
+           resources=args.resources,real_retries=args.real_retries)
 
 
 if __name__=="__main__":

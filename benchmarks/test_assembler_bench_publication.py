@@ -45,7 +45,9 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         import subprocess
         import sys
         environment = dict(os.environ)
-        environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[0])
+        environment["PYTHONPATH"] = (
+            str(Path(__file__).resolve().parents[1]) + os.pathsep +
+            str(Path(__file__).resolve().parents[0]))
         command = [sys.executable, "-S", "-c",
                    "import sys; from assembler_bench.site_build import "
                    "validate_public_site; assert callable(validate_public_site); "

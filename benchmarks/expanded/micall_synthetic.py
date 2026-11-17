@@ -20,7 +20,7 @@ from .adapters import ASSEMBLERS
 from .synthetic import ACTIVE_FAMILIES
 from .hxb2_cohort import attestation
 from .micall_checkpoint import (
-    digest, existing_case, identity, preserve_interrupted, write_case,
+    digest, existing_case, identity, preserve_interrupted, reusable_arm, write_case,
 )
 from .micall_dominant import (
     SCORE_ORIGIN, MULTITRUTH_SCORE_ORIGIN, evaluate_final_alignment)
@@ -117,17 +117,37 @@ def run_case(case, root, images, proof, timeout, *, resume=False):
         reused = existing_case(destination, fields, images)
         if reused is not None:
             return reused
-        preserve_interrupted(root, identifier)
-    destination.mkdir(exist_ok=False)
+    destination.mkdir(exist_ok=resume)
     ordering = list(ASSEMBLERS)
     random.Random(int.from_bytes(
         hashlib.sha256(identifier.encode()).digest()[:8], "big")
     ).shuffle(ordering)
     row = {**fields, "execution_order": ordering, "results": {}}
+    score_origin = (MULTITRUTH_SCORE_ORIGIN
+                    if manifest.get("score_model_revision") == 2
+                    else SCORE_ORIGIN)
     for name in ordering:
+        arm_dir = destination / name
+        recovered = (reusable_arm(arm_dir, name, images[name], score_origin)
+                     if resume else None)
+        if recovered is not None:
+            row["results"][name] = recovered
+            continue
+        if arm_dir.exists():
+            partial = destination / "_interrupted"
+            partial.mkdir(exist_ok=True)
+            for n in range(1, 1000):
+                target = partial / f"{name}-{n:03d}"
+                if not target.exists():
+                    arm_dir.rename(target)
+                    break
+            else:
+                raise ValueError("too many interrupted assembler attempts")
         row["results"][name] = attempt(
-            (directory, manifest), destination / name, name,
-            images[name], timeout)
+            (directory, manifest), arm_dir, name, images[name], timeout)
+    if (destination / "matrix.json.partial").exists():
+        (destination / "matrix.json.partial").rename(
+            destination / "matrix.json.interrupted")
     write_case(destination, row)
     # The final scored artifacts are committed before dropping bulky scratch.
     return row

@@ -78,8 +78,6 @@ def recover(rows, output, images, proof):
         cached = existing_case(output / identifier, fields, images)
         if cached is not None:
             recovered.append(cached)
-        else:
-            preserve_interrupted(output, identifier)
     return recovered
 
 
@@ -88,7 +86,7 @@ def run(data, output, images, fork, base, attestation_file, *,
     if jobs not in range(1, 11) or timeout not in range(1, 3001):
         raise ValueError("jobs must be <=10 and timeout <=3000 seconds")
     if limit is not None and not 1 <= limit <= len(ACTIVE_FAMILIES) * 16:
-        raise ValueError("development limit must be 1..400")
+        raise ValueError("development limit must be 1..464")
     output = Path(output).resolve()
     with exclusive_lock(output):
         return _run(data, output, images, fork, base, attestation_file,
@@ -133,7 +131,7 @@ def _run(data, output, images, fork, base, attestation_file, *,
     with log.open("a" if resume else "x", buffering=1) as stream:
         with ThreadPoolExecutor(max_workers=jobs) as pool:
             futures = [pool.submit(run_case, case, output, images, truth,
-                                   timeout) for case in cohort
+                                   timeout, resume=resume) for case in cohort
                        if case[0] not in done]
             for future in as_completed(futures):
                 row = future.result()
@@ -180,7 +178,7 @@ def main():
                  limit=args.limit, resume=args.resume)
     print("FORK_SOURCE_VERIFIED_MICALL_ATTEMPTED",
           result["cases_attempted"], result["status"])
-    print("NOT QUALIFIED: compare full 198-real and 400-HXB2 results "
+    print("NOT QUALIFIED: compare full 198-real and 464-mixed-virus results "
           "with the strict independently verified seven-way PSI gate.")
 
 

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .adapters import ASSEMBLERS
-from .micall_dominant import SCORE_ORIGIN
+from .micall_dominant import SCORE_ORIGIN, MULTITRUTH_SCORE_ORIGIN
 from .micall_synthetic_constants import TIMING_ORIGIN
 
 
@@ -37,9 +37,11 @@ def existing_case(folder, fields, images):
             or set(row.get("results", {})) != set(ASSEMBLERS)
             or set(row.get("execution_order", [])) != set(ASSEMBLERS)):
         raise ValueError(f"cached case identity/assembler mismatch: {folder}")
+    version = fields["truth_validation"].get("schema") == "ivanka.mixed_viral_truth_validation.v4"
+    required_score_origin = MULTITRUTH_SCORE_ORIGIN if version else SCORE_ORIGIN
     for name, result in row["results"].items():
         if (result.get("sha256") != images[name]
-                or result.get("score_origin") != SCORE_ORIGIN
+                or result.get("score_origin") != required_score_origin
                 or result.get("timing_origin") != TIMING_ORIGIN
                 or result.get("status") not in ("success", "failed")):
             raise ValueError(f"invalid cached tool evidence: {folder}/{name}")
@@ -60,6 +62,31 @@ def existing_case(folder, fields, images):
                 if not relative or not expected or digest(arm / relative) != expected:
                     raise ValueError(f"modified cached MiCall output: {arm}")
     return row
+
+
+def reusable_arm(folder, name, image, score_origin):
+    """Recover a fully evidenced arm even when its enclosing case crashed."""
+    folder = Path(folder)
+    evidence = folder / "execution.json"
+    if not evidence.is_file():
+        return None
+    record = json.loads(evidence.read_text())
+    if (record.get("sha256") != image
+            or record.get("score_origin") != score_origin
+            or record.get("timing_origin") != TIMING_ORIGIN
+            or record.get("status") not in ("success", "failed")
+            or record.get("argv", []).count(image) != 1
+            or record.get("argv", [])[-1:] != ["--all_projects"]):
+        raise ValueError(f"{name}: incomplete arm identity or scoring evidence")
+    if record["status"] == "success":
+        report = record.get("final_dominant", {})
+        path, expected = report.get("source_output"), report.get("conseq_csv_sha256")
+        if (record.get("exit_code") != 0
+                or not isinstance(record.get("seconds"), (int, float))
+                or record["seconds"] <= 0 or not path or not expected
+                or digest(folder / path) != expected):
+            raise ValueError(f"{name}: missing or modified successful arm output")
+    return record
 
 
 def preserve_interrupted(output, identifier):

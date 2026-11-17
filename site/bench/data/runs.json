@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-17T23:15:53.591391+00:00",
+  "published_at": "2026-11-17T23:21:05.950828+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -16146,7 +16146,9 @@
               "unique_aligned_fragments": 79706,
               "unstitched_contig_count": 5
             },
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 595.41015625
+            },
             "velvet": {
               "average_concordance": 0.8995216548953419,
               "average_read_depth": 24582.991596638654,
@@ -16177,9 +16179,11 @@
             }
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "recovery": {},
           "score": {
             "abyss": 316.0,
@@ -42596,8 +42600,8 @@
         },
         "spades": {
           "expected": 198,
-          "failed": 59,
-          "finished": 188
+          "failed": 60,
+          "finished": 189
         },
         "velvet": {
           "expected": 198,
@@ -52547,7 +52551,9 @@
               "unique_aligned_fragments": 79706,
               "unstitched_contig_count": 5
             },
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 595.41015625
+            },
             "velvet": {
               "average_concordance": 0.8995216548953419,
               "average_read_depth": 24582.991596638654,
@@ -52578,10 +52584,12 @@
             }
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "family": "physical",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "recovery": {},
           "score": {
             "abyss": 316.0,
@@ -81161,8 +81169,8 @@
         },
         "spades": {
           "expected": 662,
-          "failed": 59,
-          "finished": 194
+          "failed": 60,
+          "finished": 195
         },
         "velvet": {
           "expected": 662,

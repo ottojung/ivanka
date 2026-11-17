@@ -102,7 +102,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         source = SITE / "data/mapping-diagnostics.json"
         report = json.loads(source.read_text())
         self.assertEqual(report["status"], "INCOMPLETE")
-        self.assertEqual(report["expected_cases"], 400)
+        self.assertEqual(report["expected_cases"], 464)
         self.assertIn(report["cases_measured"], (0, 1))
         self.assertEqual(len(report["tools"]), 7)
         for name,tool in report["tools"].items():

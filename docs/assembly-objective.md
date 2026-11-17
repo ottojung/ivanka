@@ -41,8 +41,9 @@ Ivanka must not know **any** viral reference sequences. Its assembly,
 candidate prioritization, pruning, tiling, or postselection may not use
 HXB2, subtype/HCV references, benchmark truth, or reference-conditioned
 feedback. The caller may supply `--seeds` only when every seed was
-independently derived from that sample's reads; the mandatory MiCall
-default invocation passes no optional seeds.
+independently derived from that sample's reads; ordinary MiCall may forward
+nonempty same-sample read-derived G2P contigs under Intent 002, including
+during mandatory benchmark qualification.
 
 MiCall may use references downstream for mapping/stitching and the
 independent evaluator may use reference or HXB2-derived truth **only

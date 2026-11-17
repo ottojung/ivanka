@@ -279,3 +279,11 @@ section.dominance,section.diagnostics{margin-top:61px}
   .sample-dialog-header .outline-button{padding:7px 10px}
   .matrix-plot{padding:10px}
 }
+
+/* Authenticated live comparator-first benchmark progress. */
+.comparator-progress{border:1px solid var(--border);border-radius:12px;padding:18px;margin:22px 0}
+.comparator-progress h2{font-size:1.05rem;margin:0 0 10px}
+.comparator-progress table{width:100%;border-collapse:collapse}
+.comparator-progress td,.comparator-progress th{padding:8px 12px;text-align:left;font-size:.9rem}
+.comparator-progress th{font-weight:600}
+.comparator-progress tbody tr+tr{border-top:1px solid var(--border)}

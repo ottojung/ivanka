@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-17T05:15:35.938313+00:00",
+  "published_at": "2026-11-17T05:21:08.980960+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -16135,7 +16135,7 @@
             }
           }
         },
-        "observed_samples": 167,
+        "observed_samples": 172,
         "qualification_effect": "none",
         "schema": "assembler-bench.directed-all-r-psi.v1",
         "tools": [
@@ -16215,7 +16215,7 @@
       },
       "progress_schema": "ivanka.assembler-bench.active-progress.v1",
       "psi": {},
-      "sample_count": 167,
+      "sample_count": 172,
       "samples": [
         {
           "alias": "R003",
@@ -17593,6 +17593,66 @@
           }
         },
         {
+          "alias": "R026",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.9251527552635042,
+              "average_read_depth": 13175.291253381425,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 2,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 1004,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 44710,
+              "multimap_avg_depth_mean": 14462.347609561753,
+              "multimap_avg_depth_total": 14520197.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 14462.347609561753,
+              "multimap_max_depth_total": 14520197.0,
+              "nuc_q15_covered_fraction": 0.99,
+              "nuc_q15_mean_depth": 11583.361428571428,
+              "nuc_q15_positions_covered": 693,
+              "nuc_q15_total_depth": 8108353.0,
+              "nuc_soft_clips_count": 3315,
+              "reference_bases_ge_100": 1109,
+              "region_concordance_covered_mean": 81.61755233494364,
+              "region_concordance_mean": 21.764680622651635,
+              "stitched_contig_count": 3,
+              "total_read_depth": 14611398.0,
+              "unique_aligned_fragments": 44428,
+              "unstitched_contig_count": 6
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 415.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 425.930921151,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
           "alias": "R027",
           "diagnostics": {
             "abyss": {},
@@ -17766,6 +17826,66 @@
             "abyss": null,
             "haploflow": null,
             "iva": 357.886815169,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
+          "alias": "R030",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.9347255617902364,
+              "average_read_depth": 13671.68694096601,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 2,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 1013,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 46205,
+              "multimap_avg_depth_mean": 15073.442250740374,
+              "multimap_avg_depth_total": 15269397.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 15073.442250740374,
+              "multimap_max_depth_total": 15269397.0,
+              "nuc_q15_covered_fraction": 0.8873239436619719,
+              "nuc_q15_mean_depth": 10462.197183098591,
+              "nuc_q15_positions_covered": 693,
+              "nuc_q15_total_depth": 8170976.0,
+              "nuc_soft_clips_count": 2560,
+              "reference_bases_ge_100": 1118,
+              "region_concordance_covered_mean": 81.28663390218898,
+              "region_concordance_mean": 21.676435707250395,
+              "stitched_contig_count": 5,
+              "total_read_depth": 15284946.0,
+              "unique_aligned_fragments": 45969,
+              "unstitched_contig_count": 8
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 444.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 445.494096016,
             "ivanka": null,
             "megahit": null,
             "spades": null,
@@ -18973,6 +19093,66 @@
           }
         },
         {
+          "alias": "R062",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.83612211204104,
+              "average_read_depth": 54508.32846715328,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 1,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 306,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 54985,
+              "multimap_avg_depth_mean": 54472.25490196078,
+              "multimap_avg_depth_total": 16668510.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 54472.25490196078,
+              "multimap_max_depth_total": 16668510.0,
+              "nuc_q15_covered_fraction": 0.9084967320261438,
+              "nuc_q15_mean_depth": 49516.54248366013,
+              "nuc_q15_positions_covered": 417,
+              "nuc_q15_total_depth": 22728093.0,
+              "nuc_soft_clips_count": 6490,
+              "reference_bases_ge_100": 411,
+              "region_concordance_covered_mean": 67.15686274509804,
+              "region_concordance_mean": 10.331825037707391,
+              "stitched_contig_count": 2,
+              "total_read_depth": 22402923.0,
+              "unique_aligned_fragments": 54813,
+              "unstitched_contig_count": 2
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 200.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 432.232437626,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
           "alias": "R063",
           "diagnostics": {
             "abyss": {},
@@ -19806,6 +19986,66 @@
             "abyss": null,
             "haploflow": null,
             "iva": 313.703328739,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
+          "alias": "R079",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.9600570613409415,
+              "average_read_depth": 23057.807417974323,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 1,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 701,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 46354,
+              "multimap_avg_depth_mean": 23057.021398002853,
+              "multimap_avg_depth_total": 16162972.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 23057.021398002853,
+              "multimap_max_depth_total": 16162972.0,
+              "nuc_q15_covered_fraction": 1.0,
+              "nuc_q15_mean_depth": 32008.07608695652,
+              "nuc_q15_positions_covered": 276,
+              "nuc_q15_total_depth": 8834229.0,
+              "nuc_soft_clips_count": 927,
+              "reference_bases_ge_100": 701,
+              "region_concordance_covered_mean": 95.20933977455717,
+              "region_concordance_mean": 95.20933977455717,
+              "stitched_contig_count": 3,
+              "total_read_depth": 16163523.0,
+              "unique_aligned_fragments": 46200,
+              "unstitched_contig_count": 4
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 443.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 442.828168546,
             "ivanka": null,
             "megahit": null,
             "spades": null,
@@ -24433,6 +24673,66 @@
           }
         },
         {
+          "alias": "R161",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.8530945324523213,
+              "average_read_depth": 54493.06796116505,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 1,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 307,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 56369,
+              "multimap_avg_depth_mean": 54198.58306188925,
+              "multimap_avg_depth_total": 16638965.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 54198.58306188925,
+              "multimap_max_depth_total": 16638965.0,
+              "nuc_q15_covered_fraction": 0.8058823529411765,
+              "nuc_q15_mean_depth": 44638.74705882353,
+              "nuc_q15_positions_covered": 411,
+              "nuc_q15_total_depth": 22765761.0,
+              "nuc_soft_clips_count": 347798,
+              "reference_bases_ge_100": 412,
+              "region_concordance_covered_mean": 69.62481962481962,
+              "region_concordance_mean": 10.71151071151071,
+              "stitched_contig_count": 2,
+              "total_read_depth": 22451144.0,
+              "unique_aligned_fragments": 56157,
+              "unstitched_contig_count": 3
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 221.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 438.893703807,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
           "alias": "R162",
           "diagnostics": {
             "abyss": {},
@@ -26246,7 +26546,7 @@
         "iva": {
           "expected": 198,
           "failed": 0,
-          "finished": 167
+          "finished": 172
         },
         "ivanka": {
           "expected": 198,
@@ -26282,7 +26582,7 @@
     {
       "cohort": "combined",
       "cohorts": {
-        "real": 167,
+        "real": 172,
         "synthetic": 30
       },
       "date": "2026-11-17",
@@ -30399,7 +30699,7 @@
             }
           }
         },
-        "observed_samples": 197,
+        "observed_samples": 202,
         "qualification_effect": "none",
         "schema": "assembler-bench.directed-all-r-psi.v1",
         "tools": [
@@ -30479,7 +30779,7 @@
       },
       "progress_schema": "ivanka.assembler-bench.active-progress.v1",
       "psi": {},
-      "sample_count": 197,
+      "sample_count": 202,
       "samples": [
         {
           "alias": "R-R003",
@@ -31880,6 +32180,67 @@
           }
         },
         {
+          "alias": "R-R026",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.9251527552635042,
+              "average_read_depth": 13175.291253381425,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 2,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 1004,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 44710,
+              "multimap_avg_depth_mean": 14462.347609561753,
+              "multimap_avg_depth_total": 14520197.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 14462.347609561753,
+              "multimap_max_depth_total": 14520197.0,
+              "nuc_q15_covered_fraction": 0.99,
+              "nuc_q15_mean_depth": 11583.361428571428,
+              "nuc_q15_positions_covered": 693,
+              "nuc_q15_total_depth": 8108353.0,
+              "nuc_soft_clips_count": 3315,
+              "reference_bases_ge_100": 1109,
+              "region_concordance_covered_mean": 81.61755233494364,
+              "region_concordance_mean": 21.764680622651635,
+              "stitched_contig_count": 3,
+              "total_read_depth": 14611398.0,
+              "unique_aligned_fragments": 44428,
+              "unstitched_contig_count": 6
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "family": "physical",
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 415.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 425.930921151,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
           "alias": "R-R027",
           "diagnostics": {
             "abyss": {},
@@ -32056,6 +32417,67 @@
             "abyss": null,
             "haploflow": null,
             "iva": 357.886815169,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
+          "alias": "R-R030",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.9347255617902364,
+              "average_read_depth": 13671.68694096601,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 2,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 1013,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 46205,
+              "multimap_avg_depth_mean": 15073.442250740374,
+              "multimap_avg_depth_total": 15269397.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 15073.442250740374,
+              "multimap_max_depth_total": 15269397.0,
+              "nuc_q15_covered_fraction": 0.8873239436619719,
+              "nuc_q15_mean_depth": 10462.197183098591,
+              "nuc_q15_positions_covered": 693,
+              "nuc_q15_total_depth": 8170976.0,
+              "nuc_soft_clips_count": 2560,
+              "reference_bases_ge_100": 1118,
+              "region_concordance_covered_mean": 81.28663390218898,
+              "region_concordance_mean": 21.676435707250395,
+              "stitched_contig_count": 5,
+              "total_read_depth": 15284946.0,
+              "unique_aligned_fragments": 45969,
+              "unstitched_contig_count": 8
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "family": "physical",
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 444.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 445.494096016,
             "ivanka": null,
             "megahit": null,
             "spades": null,
@@ -33283,6 +33705,67 @@
           }
         },
         {
+          "alias": "R-R062",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.83612211204104,
+              "average_read_depth": 54508.32846715328,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 1,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 306,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 54985,
+              "multimap_avg_depth_mean": 54472.25490196078,
+              "multimap_avg_depth_total": 16668510.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 54472.25490196078,
+              "multimap_max_depth_total": 16668510.0,
+              "nuc_q15_covered_fraction": 0.9084967320261438,
+              "nuc_q15_mean_depth": 49516.54248366013,
+              "nuc_q15_positions_covered": 417,
+              "nuc_q15_total_depth": 22728093.0,
+              "nuc_soft_clips_count": 6490,
+              "reference_bases_ge_100": 411,
+              "region_concordance_covered_mean": 67.15686274509804,
+              "region_concordance_mean": 10.331825037707391,
+              "stitched_contig_count": 2,
+              "total_read_depth": 22402923.0,
+              "unique_aligned_fragments": 54813,
+              "unstitched_contig_count": 2
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "family": "physical",
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 200.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 432.232437626,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
           "alias": "R-R063",
           "diagnostics": {
             "abyss": {},
@@ -34130,6 +34613,67 @@
             "abyss": null,
             "haploflow": null,
             "iva": 313.703328739,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
+          "alias": "R-R079",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.9600570613409415,
+              "average_read_depth": 23057.807417974323,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 1,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 701,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 46354,
+              "multimap_avg_depth_mean": 23057.021398002853,
+              "multimap_avg_depth_total": 16162972.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 23057.021398002853,
+              "multimap_max_depth_total": 16162972.0,
+              "nuc_q15_covered_fraction": 1.0,
+              "nuc_q15_mean_depth": 32008.07608695652,
+              "nuc_q15_positions_covered": 276,
+              "nuc_q15_total_depth": 8834229.0,
+              "nuc_soft_clips_count": 927,
+              "reference_bases_ge_100": 701,
+              "region_concordance_covered_mean": 95.20933977455717,
+              "region_concordance_mean": 95.20933977455717,
+              "stitched_contig_count": 3,
+              "total_read_depth": 16163523.0,
+              "unique_aligned_fragments": 46200,
+              "unstitched_contig_count": 4
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "family": "physical",
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 443.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 442.828168546,
             "ivanka": null,
             "megahit": null,
             "spades": null,
@@ -38827,6 +39371,67 @@
             "abyss": null,
             "haploflow": null,
             "iva": 23.13562426,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          }
+        },
+        {
+          "alias": "R-R161",
+          "diagnostics": {
+            "abyss": {},
+            "haploflow": {},
+            "iva": {
+              "average_concordance": 0.8530945324523213,
+              "average_read_depth": 54493.06796116505,
+              "final_contig_31mer_redundancy_fraction": 0.0,
+              "final_contig_count": 1,
+              "final_contig_exact_duplicates": 0,
+              "final_contig_total_bases": 307,
+              "final_contig_unknown_count": 0,
+              "mapped_fragments": 56369,
+              "multimap_avg_depth_mean": 54198.58306188925,
+              "multimap_avg_depth_total": 16638965.0,
+              "multimap_capped_pairs": 0,
+              "multimap_max_depth_mean": 54198.58306188925,
+              "multimap_max_depth_total": 16638965.0,
+              "nuc_q15_covered_fraction": 0.8058823529411765,
+              "nuc_q15_mean_depth": 44638.74705882353,
+              "nuc_q15_positions_covered": 411,
+              "nuc_q15_total_depth": 22765761.0,
+              "nuc_soft_clips_count": 347798,
+              "reference_bases_ge_100": 412,
+              "region_concordance_covered_mean": 69.62481962481962,
+              "region_concordance_mean": 10.71151071151071,
+              "stitched_contig_count": 2,
+              "total_read_depth": 22451144.0,
+              "unique_aligned_fragments": 56157,
+              "unstitched_contig_count": 3
+            },
+            "ivanka": {},
+            "megahit": {},
+            "spades": {},
+            "velvet": {}
+          },
+          "exact_profiles": {},
+          "failures": [],
+          "family": "physical",
+          "floor_ok": null,
+          "outcome": "incomplete",
+          "score": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 221.0,
+            "ivanka": null,
+            "megahit": null,
+            "spades": null,
+            "velvet": null
+          },
+          "seconds": {
+            "abyss": null,
+            "haploflow": null,
+            "iva": 438.893703807,
             "ivanka": null,
             "megahit": null,
             "spades": null,
@@ -49646,7 +50251,7 @@
         "iva": {
           "expected": 598,
           "failed": 0,
-          "finished": 197
+          "finished": 202
         },
         "ivanka": {
           "expected": 598,

@@ -1,7 +1,8 @@
 """Resume retry checkpoints without ever modifying the original 198 records."""
 import json
 
-from benchmarks.expanded.comparators_first_real import row_path, verify
+from benchmarks.expanded.comparators_first_real import row_path
+from .proof import verify
 from benchmarks.expanded.balanced_dispatch import clear_stale_recovery
 from benchmarks.expanded.real_resume import digest
 

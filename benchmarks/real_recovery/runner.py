@@ -18,8 +18,8 @@ from .policy import receipt
 from .schedule import dispatch
 
 
-def run(data, out, original, images, fork, base, attestation, jobs=4):
-    if not 1 <= jobs <= 4 or base != BASE:
+def run(data, out, original, images, fork, base, attestation, jobs=2):
+    if not 1 <= jobs <= 2 or base != BASE:
         raise ValueError("physical retry resources outside approved limits")
     out, original = Path(out).resolve(), Path(original).resolve()
     with exclusive_lock(out):

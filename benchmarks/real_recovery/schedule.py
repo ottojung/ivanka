@@ -2,7 +2,8 @@
 import json
 
 from benchmarks.expanded.balanced_dispatch import BalancedQueue, drive
-from benchmarks.expanded.comparators_first_real import TOOLS, verify
+from benchmarks.expanded.comparators_first_real import TOOLS
+from .proof import verify
 from .attempt import execute
 from .replay import recover
 

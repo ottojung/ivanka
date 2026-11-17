@@ -5,7 +5,9 @@
 Ivanka's input evidence is the original paired reads, with optional input
 contigs that have been independently derived from **those same reads**.
 Under the default MiCall/benchmark invocation in [Intent 002](002-default-invocation-parity.md),
-no optional seeds or other additional arguments are supplied.
+MiCall may pass nonempty same-sample, independently read-derived G2P contigs as
+`--seeds`. Neither MiCall nor the benchmark may supply reference-derived or
+reference-selected seed sequences or other tuning arguments.
 
 No known viral reference genome, HXB2 sequence, subtype/HCV reference, viral
 reference panel, benchmark alignments, reference-guided 21-mer score, or

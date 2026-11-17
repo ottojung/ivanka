@@ -10,7 +10,8 @@ def require(root, parent, images, attestation):
     here = Path(__file__).resolve()
     files = [here, *[here.with_name(name) for name in (
         "__main__.py", "attempt.py", "environment.py",
-        "gate.py", "replay.py", "runner.py", "schedule.py")],
+        "gate.py", "replay.py", "runner.py", "schedule.py",
+        "canonical.py", "canonical_cli.py")],
         here.parents[1] / "real_recovery/proof/arm.py",
         here.parents[1] / "real_recovery/proof/record.py"]
     value = {"schema": "ivanka.expanded.physical-ivanka-50m.v1",

@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-18T00:08:33.047723+00:00",
+  "published_at": "2026-11-18T00:13:50.425032+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10938,7 +10938,9 @@
         {
           "alias": "R001",
           "diagnostics": {
-            "abyss": {},
+            "abyss": {
+              "peak_ram_observed_mib": 5907.5390625
+            },
             "haploflow": {},
             "iva": {
               "average_concordance": 0.9078749008198889,
@@ -10973,9 +10975,11 @@
             "velvet": {}
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "abyss"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "recovery": {},
           "score": {
             "abyss": null,
@@ -38362,7 +38366,9 @@
               "unique_aligned_fragments": 72174,
               "unstitched_contig_count": 8
             },
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 5986.0625
+            },
             "velvet": {
               "average_concordance": 0.9118877774269579,
               "average_read_depth": 29890.763931104357,
@@ -38393,9 +38399,11 @@
             }
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "recovery": {},
           "score": {
             "abyss": 316.0,
@@ -43146,8 +43154,8 @@
       "tool_progress": {
         "abyss": {
           "expected": 198,
-          "failed": 91,
-          "finished": 196
+          "failed": 92,
+          "finished": 197
         },
         "haploflow": {
           "expected": 198,
@@ -43171,8 +43179,8 @@
         },
         "spades": {
           "expected": 198,
-          "failed": 64,
-          "finished": 194
+          "failed": 65,
+          "finished": 195
         },
         "velvet": {
           "expected": 198,
@@ -47883,7 +47891,9 @@
         {
           "alias": "R-R001",
           "diagnostics": {
-            "abyss": {},
+            "abyss": {
+              "peak_ram_observed_mib": 5907.5390625
+            },
             "haploflow": {},
             "iva": {
               "average_concordance": 0.9078749008198889,
@@ -47918,10 +47928,12 @@
             "velvet": {}
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "abyss"
+          ],
           "family": "physical",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "recovery": {},
           "score": {
             "abyss": null,
@@ -75476,7 +75488,9 @@
               "unique_aligned_fragments": 72174,
               "unstitched_contig_count": 8
             },
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 5986.0625
+            },
             "velvet": {
               "average_concordance": 0.9118877774269579,
               "average_read_depth": 29890.763931104357,
@@ -75507,10 +75521,12 @@
             }
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "family": "physical",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "recovery": {},
           "score": {
             "abyss": 316.0,
@@ -82286,8 +82302,8 @@
       "tool_progress": {
         "abyss": {
           "expected": 662,
-          "failed": 91,
-          "finished": 200
+          "failed": 92,
+          "finished": 201
         },
         "haploflow": {
           "expected": 662,
@@ -82311,8 +82327,8 @@
         },
         "spades": {
           "expected": 662,
-          "failed": 64,
-          "finished": 200
+          "failed": 65,
+          "finished": 201
         },
         "velvet": {
           "expected": 662,

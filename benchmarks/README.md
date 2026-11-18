@@ -1,5 +1,17 @@
 # Benchmark and experiment entry points
 
+## Immutable MiCall baseline (mandatory)
+
+**Do not change MiCall's frozen common base image or any of its clinical
+code, even to repair a demonstrated bug, timeout or failed contender.**
+MiCall issues are diagnostic findings, not fixes to implement in the
+benchmark. Improve Ivanka's Rust assembler or external benchmark
+instrumentation instead; preserve failed attempts, immutable OCI/source
+identities and truthful outcomes. The rule applies equally to all seven
+assemblers, including Haploflow, and supersedes old mutable-pipeline
+experiments. See [Frozen MiCall base](../docs/bench/frozen-micall-base.md).
+
+
 The authoritative numerical milestone is the frozen **198-sample, 33-reference,
 updated-MiCall physical comparison**, not an HXB2-only or synthetic surrogate.
 

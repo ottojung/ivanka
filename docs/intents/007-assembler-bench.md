@@ -19,8 +19,11 @@ documented adapter operation rather than a bespoke benchmark rewrite.
    version, immutable source/image identity, CLI, and effective environment.
    All MiCall integrations and runtime images **must come from exact
    committed revisions of [`ottojung/MiCall`](https://github.com/ottojung/MiCall)**;
-   no runtime monkeypatching of MiCall or images built from upstream
-   `cfe-lab/MiCall`. See [Intent 011](011-ottojung-micall-fork-provenance.md)
+   **the shared MiCall base and seven already-pinned images are frozen,
+   with no MiCall fixes permitted even when a defect prevents success.**
+   Record such a failure as-is; never substitute a patched fork image.
+   See [the frozen-base rule](../bench/frozen-micall-base.md),
+   [Intent 011](011-ottojung-micall-fork-provenance.md)
    and its mandatory [upstream read-only policy](010-upstream-micall-read-only.md).
    For Ivanka, preserve [Intents 001](001-rust-only-execution.md) and
    [002](002-default-invocation-parity.md): its Rust ELF is called directly

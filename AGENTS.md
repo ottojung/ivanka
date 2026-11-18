@@ -1,5 +1,17 @@
 # Ivanka contributor and agent orientation
 
+## Non-negotiable: MiCall is frozen
+
+**Do not fix or modify MiCall, no matter which defect, performance issue,
+crash or timeout is discovered.** The common MiCall clinical base and all
+seven source-pinned images must remain unchanged. MiCall bugs are
+diagnostic/reporting opportunities only, not implementation work.
+Historical fork-only patch permissions do not override this prohibition.
+Change only Ivanka Rust or external benchmark tools without affecting
+MiCall's execution. Never propose, merge or deploy a MiCall patch as a
+benchmark fix. See [binding frozen-base policy](docs/bench/frozen-micall-base.md).
+
+
 **Start with [README: Pipeline objective](README.md#pipeline-objective-enable-dominant-recovery-in-micall)
 and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
@@ -62,10 +74,11 @@ descriptions of what the existing qualifying image already implements:
   by Git, GitHub API, tooling, CI, or delegated agents. Read/fetch is fine.
   Double-check both Git remote push destination and PR base before writes.
 - **[Intent 011: MiCall fork is canonical](docs/intents/011-ottojung-micall-fork-provenance.md).**
-  Integrate all assemblers inside `github.com/ottojung/MiCall`. **Build
-  every MiCall candidate/base container from exact fork commits**,
-  without runtime source patching; every public reproducibility link
-  must target the fork with its full immutable commit SHA.
+  Existing seven assembler integrations originate from pinned commits
+  of `github.com/ottojung/MiCall`; **their common MiCall base and pinned
+  containers are immutable**. No MiCall source fix or rebuild is permitted
+  to repair an assembler failure. Reproducibility links must use the
+  fork with its full immutable commit SHA.
 - **[Intent 016: dedicated MiCall fork branch and container per assembler](docs/intents/016-dedicated-assembler-branches-and-containers.md).**
   Every contender has its own `ottojung/MiCall` branch
   `bench/assembler-<name>`, source-committed tool profile, dedicated

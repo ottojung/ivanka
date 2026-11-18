@@ -1,5 +1,11 @@
 # Documentation map
 
+**Binding benchmark rule:** MiCall is frozen and cannot be fixed or patched
+for benchmarks, no matter what failures are found. Read
+[the immutable MiCall base policy](bench/frozen-micall-base.md) before
+touching assembler integrations or containers.
+
+
 Start with the [project README](../README.md) and the
 [pipeline-level assembly objective](assembly-objective.md). Ivanka is
 reference-blind intermediate assembly infrastructure, **not required

@@ -1,55 +1,21 @@
-# Mutable optimization surface
+# Historical mutable-pipeline experiments — superseded
 
-The referenceless MiCall **contig stitcher is part of Ivanka's mutable optimization surface**. Candidate solutions may change stitching itself—not just the standalone Rust assembler—including overlap selection, joins, path scoring, redundancy handling and post-stitch output selection. MiCall's Python implementation is eligible for improvement.
+**NOT CURRENT POLICY.** Earlier experiments allowed modifications to
+MiCall's referenceless stitcher, remapping and other downstream stages.
+Those experiments are retained only as historical diagnostic evidence.
+Their candidate outputs and MiCall-modified images **do not qualify** for
+the current Assembler Bench.
 
-## Scope disclosure for the current 198-sample candidate
+The current rule is unconditional: **the MiCall base image and its clinical
+source must not be modified, whatever bugs, slowdowns or crashes are
+discovered.** No stitcher, mapping, plotting, remap, downstream analysis
+or MiCall Python fixes, even in a dedicated fork branch and even if they
+would enable Haploflow or another contender to finish. Keep all seven
+current image/source pins frozen. Only the standalone Ivanka Rust
+assembler and *external* benchmarking tools may be developed, without
+altering the MiCall runtime or outcomes. Report MiCall problems and
+retain failed or incomplete attempts as such.
 
-The November 3 candidate in PR #137 **also changes MiCall beyond the assembler
-and referenceless stitcher**. It installs a fail-closed opt-in patch at the
-remapping-to-`sam2aln` boundary, projecting an original paired-read observation
-to an isolated reciprocal near-identical HCV contig hypothesis only when both
-mate-mapped reference intervals have exactly identical sequence. The patched
-candidate image is derived from the pinned MiCall baseline; the IVA control
-image is untouched.
-
-This is a comparison of **two end-to-end pipelines**, not an assembler-only
-ablation and not evidence that Ivanka's native assembler by itself exceeds IVA.
-In particular, the S48/S98 improvement occurs **after stitching**; their
-assembled and stitched contig artifacts did not change relative to the prior
-candidate. Each projected QNAME is a correlated observation of the same
-original FASTQ pair, not a new independent molecule. The implementation does
-not lower MiCall's consensus depth threshold or infer reference alleles from
-unverified assembly.
-
-The external 198-sample cohort, sample-level floor, 1,800-second wall budget,
-pinned reference panel, frozen authentic IVA baseline, and both all-real-r PSI
-acceptance conditions are **identical** to the original qualification. If a
-scientific claim requires the narrower assembler/stitcher-only optimization
-surface, this remapper-enhanced candidate must be evaluated separately and
-must not be reported as passing that narrower experiment.
-
-## Exploratory approaches
-
-Filtering contigs **after stitching**, perhaps by the number of original read
-pairs supporting each path, is one possible experiment. It is **not** a
-prescribed design. The [primary objective](assembly-objective.md) is the
-**quantitative MiCall benchmark score over all ≥15%-abundant synthetic
-truths**, not exhaustive haplotype enumeration. Removing a contig can be
-acceptable only if the measured abundance-aware benchmark, original
-physical qualification, and downstream minority-allele reporting remain
-valid. Choosing few/long contigs
-blindly is still unsafe; test support-aware selection against the same
-unchanged scientific and runtime acceptance conditions.
-
-## Non-negotiable evaluation rules
-
-- The genuine frozen IVA baseline and its pinned MiCall container **do not change**. Build the candidate's stitcher and assembler changes into a traceable, immutable candidate image derived from the pinned MiCall base. Record the exact modifications and image identity.
-- Keep the frozen 198 paired FASTQ inputs, fixed reference panel, per-sample 1,800-second runtime limit, best **final MiCall MAX** alignment score of at least **90% of authentic IVA**, and strictly positive score and runtime PSI for every r>=0
-  (Psi(0)>0 and no nonnegative real zeros, using
-  Psi(r) = sum(sign(p_i)*abs(p_i)**r)/198). Exact ties contribute zero at every exponent; checking r=0,1,2 alone is insufficient. No gate is waived for stitcher work.
-- Evaluate full-pipeline time, including stitching, remapping and final consensus. Tests on stitcher output alone are useful but not formal qualification.
-- Compare raw, post-stitch and final consensus outputs. Measure read-supported distinct canonical k-mers, minority alleles, phasing where supported, and potential chimeric joins. Loss of a minority haplotype *contig* is a diagnostic to investigate for downstream harm, **not a mandatory recall gate**. A good winning MAX score alone does not prove dominant-phase authenticity.
-- Read-record support is not proof of independent molecules or correct haplotype phasing. Do not use arbitrary contig-count limits, unsupported pruning or per-sample hardcoding as an acceptance shortcut.
-- Prefer small representative authentic-sample experiments before another full-198 trial.
-
-Rust structural lint applies only to Rust code, not to MiCall stitcher development.
+See [Frozen MiCall base — binding Assembler Bench rule](bench/frozen-micall-base.md).
+Previous mutable-scope text is available in the Git history for studying
+the historical methodology; it is not operative permission.

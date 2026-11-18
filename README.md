@@ -10,6 +10,15 @@ This is early experimental code. It is **not** validated for clinical use.
 Ivanka is licensed under the [GNU Affero General Public License, version 3](LICENSE)
 (`AGPL-3.0-only`).
 
+## MiCall base is frozen — no clinical MiCall fixes
+
+**The shared MiCall base image and every pinned MiCall clinical stage
+are immutable, without exception.** Bugs, crashes and performance
+opportunities may be recorded and diagnosed, never repaired in MiCall
+to make a benchmark succeed. No MiCall source fixes, patched OCI
+rebuilds, or substituted fork commits; historical proposed patches do
+not qualify. See the [binding benchmark policy](docs/bench/frozen-micall-base.md).
+
 ## Reference-blind assembly: a hard boundary
 
 **Ivanka and every contig selector in its execution path must be completely
@@ -34,7 +43,8 @@ contigs, never reference sequences or reference-selected candidates.
 The CI guard `python benchmarks/reference_isolation.py` checks the Rust
 sources, the pinned MiCall assembler interface, reviewed candidate selectors
 and image build scripts (including Containerfiles). This is defense in depth:
-new adapters and downstream MiCall patches still require human code review. See
+**no downstream MiCall patches or adapter edits are permitted for the frozen
+benchmark**, regardless of review. See
 [the assembly objective](docs/assembly-objective.md).
 
 ## Required deployment intent (Rust implementation available; qualification pending)
@@ -276,43 +286,20 @@ must have the packages in `benchmarks/requirements.txt` installed. This
 avoids depending on the original host's absolute MiCall checkout location.
 
 
-The Podman harness substitutes Ivanka at the IVA assembler boundary in a pinned
-MiCall container. The default assembler-only A/B leaves the other MiCall steps (G2P,
-referenceless stitching, remapping and final consensus) unchanged. However,
-**the referenceless stitcher is explicitly part of the mutable Ivanka candidate
-pipeline**. Both arms still process the same genuine sample FASTQs against the
-pinned MiCall reference panel; authentic cached IVA controls are never modified.
+The Podman harness substitutes Ivanka at the IVA assembler boundary in
+the **already frozen, source-pinned MiCall containers**. Only Ivanka's
+standalone Rust assembler may be optimized. All MiCall post-assembly
+stages (G2P, referenceless stitching, remapping, plotting and consensus)
+and the frozen base image are **immutable, for all seven assemblers**.
 
-**The November 3 experimental 198-sample candidate also changes the
-MiCall remapping-to-`sam2aln` boundary.** The conservative isolated-HCV
-pair-sharing patch (PR #137) is beyond the assembler/stitcher-only surface.
-Report its results as a comparison of end-to-end candidate pipelines, **not**
-as an assembler-only claim. The frozen IVA image, MiCall consensus depth
-threshold and all qualification gates remain unchanged. See
-[mutable pipeline scope](docs/mutable-pipeline-scope.md) for the explicit
-scientific interpretation and limits.
-
-### Mutable referenceless stitcher: requirements
-
-The scientific milestone permits improvements to MiCall's **referenceless
-contig stitcher**, not just Ivanka's Rust assembler. Candidate changes may
-improve overlap evaluation, avoid chimeric joins, preserve phased variants,
-reduce redundant representations or change the post-stitch contigs supplied to
-remapping. The implementation may live in MiCall Python.
-
-**Post-stitch filtering by read support is an idea to test, not a mandated
-algorithm.** Missing a low-abundance contig is not intrinsically a failure:
-maximizing the integrated abundance-aware benchmark score is the
-priority, not enumerating all haplotypes. Pruning may improve remapping performance, but verify that
-it does not remove the dominant supported output, fabricate recombinants,
-or corrupt downstream minority-allele measurements. Do not infer biological
-validity from contig count, canonical k-mer diversity, or maximum final
-consensus score alone. The
-baseline IVA image and frozen controls remain unchanged; build a traceable
-candidate image and measure whole-pipeline remapping, alignment and runtime
-under the current all-real-exponent score and runtime Psi requirements.
-
-See [Mutable pipeline scope and acceptance safeguards](docs/mutable-pipeline-scope.md).
+**Do not fix MiCall, even when a MiCall defect prevents an assembler from
+finishing.** Document the defect, preserve its original timeout/error and
+source evidence, and improve Ivanka or the external benchmark tools instead.
+Old experiments that modified MiCall stitching or remapping, including
+the historical PR #137 and draft PRs #20/#21 in the MiCall fork,
+are **not valid implementations for the current frozen-base benchmark**.
+See the [binding frozen MiCall base rule](docs/bench/frozen-micall-base.md);
+it supersedes earlier `mutable pipeline` guidance.
 
 ### Reference-panel scoring (current 198 and historical 18-sample protocols)
 

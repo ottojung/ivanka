@@ -5,6 +5,13 @@ built images are implemented and independently source/binary attested;
 all seven completed an end-to-end MiCall smoke. Full expanded
 qualification remains outstanding; prior multi-tool images are historical.**
 
+**Freeze invariant:** all seven existing image identities, tool-specific
+MiCall profiles and the common clinical MiCall base are fixed. Dedicated
+fork branches distinguish provenance; they are **not permission to
+modify MiCall**. A bug or timeout must be documented, never resolved by
+patching a branch, replacing a pinned container or changing common
+downstream code. See [Frozen MiCall base](../bench/frozen-micall-base.md).
+
 For every assembler included in Assembler Bench, **there must be one
 separate, dedicated branch in
 [ottojung/MiCall](https://github.com/ottojung/MiCall) and one separately
@@ -44,14 +51,15 @@ tool image or subprocess.
 
 ## Reproducibility and acceptance
 
-1. Build the common downstream MiCall base from an exact, clean
-   `ottojung/MiCall` fork commit. Each branch must prove its unchanged
-   downstream MiCall modules match that base.
-2. Build each candidate image **from its own branch checkout** at its
-   exact commit. Reject dirty source, the wrong canonical branch,
-   a mismatched selected tool/profile, or a different downstream
-   MiCall baseline. Never inject or monkeypatch MiCall Python at build
-   or run time.
+1. **Retain** the already-frozen common downstream MiCall base and
+   exact fork source commit. Every branch must prove its downstream
+   MiCall modules are byte-for-byte unchanged relative to that base.
+   **Never rebuild or patch the base to address failures.**
+2. **Retain each existing candidate image** from its original pinned
+   branch commit and unique OCI digest. Reject dirty, substituted or
+   modified source, wrong profiles, or different downstream MiCall code.
+   Never inject, monkeypatch, update or otherwise fix MiCall at build
+   or run time; this is a frozen audit contract, not a rebuild request.
 3. Independently attest seven distinct immutable image IDs, exact
    branch-commit URLs, installed MiCall module hashes, tool binary
    hashes/versions, the common baseline source SHA, and image layers.

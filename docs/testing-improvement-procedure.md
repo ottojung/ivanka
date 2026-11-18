@@ -1,5 +1,13 @@
 # Ivanka testing and improvement workflow (MiCall non-stealing baseline)
 
+**MiCall is frozen:** changing its base image or any clinical MiCall
+source to fix a bug, crash, timeout or bottleneck is forbidden.
+Investigate and document such problems but do not fix them in the
+benchmark, including in `ottojung/MiCall`. Only the Ivanka Rust
+assembler and external verification/reporting tools can be improved.
+See [frozen-base policy](bench/frozen-micall-base.md).
+
+
 This is the procedure for an Ivanka improver, reviewer, or Antonina agent.
 **Every candidate must produce a metric report**, including negative results and
 missing evidence. Diagnostic metrics can guide optimization, but must never

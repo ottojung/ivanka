@@ -1,5 +1,14 @@
 # Expanded seven-assembler benchmark — mandatory v2 acceptance gate
 
+> **FROZEN MiCall baseline — unconditional.** Never patch, rebuild with
+> altered MiCall code, swap or update the shared MiCall base image or
+> clinical processing stages to fix a failure, even if a bug is proven or
+> Haploflow cannot complete. Document the problem and preserve an honest
+> failed/incomplete result. Optimize Ivanka's Rust implementation and
+> external benchmark tooling only. Keep the source-pinned seven images
+> unchanged. [Binding policy](../../docs/bench/frozen-micall-base.md).
+>
+
 > **Current objective: scientific v6 (November 17, 2026).**
 > Optimize the integrated MiCall benchmark score over **every
 > generating truth at ≥15% nominal abundance**. Four source-pinned
@@ -48,8 +57,9 @@ to exact revisions of [`ottojung/MiCall`](https://github.com/ottojung/MiCall)
 ([Intent 011](../../docs/intents/011-ottojung-micall-fork-provenance.md)).
 The upstream `cfe-lab/MiCall` must never receive pushes or PRs
 ([Intent 010](../../docs/intents/010-upstream-micall-read-only.md)).
-The current images must be audited/migrated before full qualification;
-their historical results must not be rebranded as fork-built evidence.
+Audit the existing frozen images' source identity before qualification.
+Any nonconforming image remains nonqualifying: **do not patch, rebuild or
+migrate the frozen MiCall base** to make the evidence pass.
 The public `/bench/` pages must link to exact full fork commit SHAs.
 **Tool isolation ([Intent 016](../../docs/intents/016-dedicated-assembler-branches-and-containers.md)):**
 all seven contenders require their own `ottojung/MiCall` branches

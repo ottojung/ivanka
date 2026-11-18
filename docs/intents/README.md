@@ -22,7 +22,7 @@ seven-way gate is not optional or deferred.
 | [008 — source-pinned viral truth](008-hxb2-synthetic-truth.md) | HXB2/recombinant HIV plus four source-pinned mutated HCV/HIV and HCV/V3 families, each with ≤5% untargeted mutations | **464-case source model implemented; expanded gate pending** |
 | [009 — assembler-neutral framework](009-neutral-metrics-and-pairwise-dominance.md) | General evaluation and presentation contract for any MiCall-integrated assembler; no privileged Ivanka baseline; delegates specialist requirements to 012–015 | **Required; neutral UI work incomplete** |
 | [010 — cfe-lab/MiCall read-only](010-upstream-micall-read-only.md) | Never push anything or create/modify PRs on `cfe-lab/MiCall`; allow fetch/read only, guard all push/PR destinations | **Binding immediately** |
-| [011 — fork MiCall integrations and builds](011-ottojung-micall-fork-provenance.md) | All assembler integrations and MiCall runtime images built from exact commits of `ottojung/MiCall`; commit-bound provenance and public source links | **Required; image/fork migration unverified** |
+| [011 — fork MiCall provenance and immutable base](011-ottojung-micall-fork-provenance.md) | Seven source-pinned fork integrations share an **unmodifiable** MiCall base; bugs are reported, never fixed in MiCall | **Binding; no baseline changes permitted** |
 | [012 — comprehensive assembler diagnostics](012-assembler-diagnostic-metrics.md) | Final MiCall quality, depth/read-support, mapping, contig structure, runtime/resources, errors, provenance and comparable missingness for every tool | **Required; full publication incomplete** |
 | [013 — SAM/CIGAR soft clipping](013-alignment-soft-clipping.md) | Clipped reads, events, bases, left/right clips, counts and densities; distinct from `nuc.csv` clips | **Required; all-tool capture/public presentation incomplete** |
 | [014 — exact read coverage](014-exact-read-coverage.md) | Two distinct per-base exact-read-match coverage tracks, full-span and 70-base-end-trimmed; distributions, zero breadth and provenance | **Required; current sidecars expose only full-span counts** |
@@ -55,9 +55,13 @@ seven-way gate is not optional or deferred.
   random genomes is diagnostic evidence, **not a qualifying cohort**
   under Intent 008. A replacement source-pinned mixed-virus cohort must be generated
   and independently validated before use in the strict expanded gate.
-- **Never mutate upstream MiCall.** `cfe-lab/MiCall` is strictly
-  read-only; no pushes, branches, tags, PRs or indirect writes.
-  All MiCall work belongs exclusively to `ottojung/MiCall`.
+- **Never mutate MiCall in the benchmark, including the fork.**
+  The MiCall clinical base and its seven pinned integration images are
+  frozen without exception; do not fix even known MiCall bugs, rebuild
+  patched images or silently swap commits. Upstream `cfe-lab/MiCall`
+  additionally remains strictly read-only. The fork is the source of
+  the *existing* pinned integrations, not permission to change them.
+  See the [binding base policy](../bench/frozen-micall-base.md).
 - **MiCall images must originate from the fork.** Build from
   exact committed `ottojung/MiCall` revisions, not ad hoc runtime
   patching; the public Bench must link to precise fork commits.

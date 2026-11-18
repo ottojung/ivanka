@@ -1,5 +1,11 @@
 # Assembler Bench — current source-attested comparison
 
+**Non-negotiable source boundary:** MiCall's common clinical base and all
+seven pinned images are frozen. Fixing MiCall is prohibited regardless of
+discovered bugs or performance bottlenecks; report them as diagnostics.
+See [the frozen-base benchmark policy](frozen-micall-base.md).
+
+
 Assembler Bench is a static, privacy-safe GitHub Pages website:
 https://ottojung.github.io/ivanka/bench/
 

@@ -23,9 +23,11 @@ Prohibited actions include:
 Read-only operations such as cloning, fetching upstream history,
 inspecting published code/PRs/issues, and comparing commits are
 permitted. Upstream can serve as a historical technical reference;
-**all proposed and actual MiCall implementation changes belong
-exclusively in [`ottojung/MiCall`](https://github.com/ottojung/MiCall)**
-under [Intent 011](011-ottojung-micall-fork-provenance.md).
+**this does not grant permission to change the benchmark's frozen
+MiCall base or fix MiCall in the fork**. The current benchmark uses the
+previously pinned integrations in [`ottojung/MiCall`](https://github.com/ottojung/MiCall)
+under [Intent 011](011-ottojung-micall-fork-provenance.md) and the
+[unconditional frozen-base rule](../bench/frozen-micall-base.md).
 
 ## Guardrails and verification
 
@@ -33,10 +35,11 @@ under [Intent 011](011-ottojung-micall-fork-provenance.md).
    remote is configured: set its push URL to a deliberately invalid
    destination and do not install write credentials for it. Prefer
    `ottojung/MiCall` as the **sole writable repository destination**.
-2. Before *every* MiCall mutation, repository API operation or PR,
-   verify the actual push repository/URL and PR **base repository**.
-   Refuse any operation whose destination resolves to
-   `cfe-lab/MiCall` (regardless of capitalization or transport).
+2. The frozen benchmark permits **no MiCall source mutations, patch PRs
+   or replacement clinical builds at all**, including in the fork.
+   For permitted read-only repository/API operations, verify the
+   repository identity. Independently refuse all write destinations
+   resolving to `cfe-lab/MiCall` (regardless of capitalization or transport).
 3. Make CI/agent preflight fail if a documented automated publish
    destination or write remote points at the upstream. Add regression
    tests checking remote URL and PR target normalization, including
@@ -48,7 +51,7 @@ under [Intent 011](011-ottojung-micall-fork-provenance.md).
 
 **Acceptance:** no new upstream write or upstream-targeted PR is
 ever attempted, and the repository-operations guard refuses the
-upstream as a destination. An explicit request to modify MiCall means
-modify **the fork only**. This intent does not restrict writing to the
+upstream as a destination. The fork is **not** an exception to
+the frozen MiCall benchmark base: no MiCall fixes are allowed. This intent does not restrict writing to the
 separate `ottojung/ivanka` repository, nor does it weaken any
 scientific or qualification requirement.

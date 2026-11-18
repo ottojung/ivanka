@@ -1,12 +1,21 @@
 # Intent 011: All MiCall assembler integrations and images come from the fork
 
-**Status: binding; existing container and runner provenance must be
-audited and migrated before final qualification.**
+**Status: binding; all seven source-pinned fork images and their common
+MiCall baseline are frozen. Verify provenance, never rebuild a patched
+replacement or mutate the base to repair a failure.**
 
-The **canonical source** for all MiCall assembler integrations, downstream
-pipeline fixes, benchmark-specific integration adapters that change MiCall
-behavior, and their container build definitions is the user's fork:
+The **canonical provenance** for the seven **already-frozen** MiCall
+assembler integrations, shared clinical base, and container build
+definitions is the user's fork:
 **[github.com/ottojung/MiCall](https://github.com/ottojung/MiCall)**.
+
+**The shared MiCall clinical base is immutable, without exceptions.**
+The existence of a writable fork does **not** authorize fixing MiCall
+bugs, altering downstream code, installing modified dependencies,
+changing a tool-specific MiCall adapter, swapping commits or rebuilding
+patched candidate images when a run fails. Record bugs or missed
+optimization opportunities as diagnostics, never as MiCall changes.
+See the [binding frozen-base rule](../bench/frozen-micall-base.md).
 
 [Intent 016](016-dedicated-assembler-branches-and-containers.md)
 additionally requires **one separate fork branch and dedicated, tool-only
@@ -18,20 +27,20 @@ The fork must actually contain **all supported assembler integrations**:
 Ivanka, IVA, Haploflow, MEGAHIT, ABySS, SPAdes, Velvet, and any future
 MiCall-integrated contender. Organize them as documented, reviewable
 versions/commits/branches of **that fork**; all tools must exercise the
-**same pinned MiCall downstream processing baseline** unless a declared
-experiment intentionally compares MiCall versions separately. Different
+**same pinned MiCall downstream processing baseline**, with **no
+exceptions** for fixes or benchmark performance experiments. Different
 assembler integrations may require distinct source commits or branches
 but must all be reproducible from `ottojung/MiCall` without untracked
 modifications.
 
 ## Builds and deployment
 
-1. Build **every MiCall runtime/container image** used for development,
-   physical benchmarks, synthetic benchmarks or production from a
+1. Verify that **every existing MiCall runtime/container image** used
+   for the physical and synthetic benchmarks originates from a
    **specific, full 40-character Git commit** of `ottojung/MiCall`.
-   This includes the shared MiCall base and each assembler-specific
-   candidate image. Always record the exact fork revision for both
-   the common base and any assembler integration change.
+   The current seven images and the common MiCall base are **already
+   frozen** and must remain identical. **Do not build replacements**
+   to repair a failure. Record their original immutable fork revisions.
 2. MiCall code that affects output, routing or scoring must live in
    committed **fork source**, not transient local patches, copied
    `site-packages` changes, monkeypatches, ad hoc Dockerfile injections,
@@ -89,9 +98,10 @@ assembler or to tune Ivanka per sample.
   and the public `/bench/` page exposes **clickable exact-commit links
   to `ottojung/MiCall`**. All historical images lacking such evidence
   remain explicitly *historical/nonconforming*, not relabeled as valid.
-- Write operations stay exclusively in the fork under
-  [Intent 010](010-upstream-micall-read-only.md), **never** in
-  `cfe-lab/MiCall`.
+- **No MiCall source or base-image changes** are allowed to repair
+  a benchmark failure, including fixes within the fork.
+  [Intent 010](010-upstream-micall-read-only.md) also forbids all
+  writes to `cfe-lab/MiCall`.
 
 This is a **mandatory source/provenance infrastructure requirement**,
 not an extra biological performance score. It is cumulative with

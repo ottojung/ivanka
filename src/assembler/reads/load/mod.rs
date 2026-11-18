@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::io;
 
 type LoadedPairs = (Vec<Vec<u8>>, Vec<Vec<u8>>, HashMap<u64, u32>, usize);
+#[rustfmt::skip]
 mod pairs;
 mod seed_counts;
 mod validate;

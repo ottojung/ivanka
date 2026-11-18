@@ -12,6 +12,7 @@ pub(super) use scan::rolling_query;
 mod test_left_rc;
 
 #[cfg(test)]
+#[rustfmt::skip]
 mod test_used;
 #[cfg(test)]
 pub(super) use super::types::Hit;

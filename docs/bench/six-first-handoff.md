@@ -56,6 +56,16 @@ same image, same sample, and the 3,000-second limit.
 Source/certificate drift blocks the transition; an s6 process merely
 being alive is not a completion certificate.
 
+To bound synthetic storage, the external six-first stage uses the **same
+scratch-only retention policy as the original frozen synthetic runner**:
+after a case has source-verified results for all six rivals and an atomic,
+independently verified six-arm certificate, it removes **only the
+reproducible `scratch/` directory of successful rival arms**. It always
+retains full `execution.json`, final CSV outputs, diagnostics, timings,
+every original/partial checkpoint and all failed/interrupted arm scratch.
+A restart after a partial cleanup is safe. This is external retention;
+it does not touch MiCall images, clinical source, or final results.
+
 The final pinned synthetic runner reuses the six existing `execution.json`
 records, not their scores from the six-stage sidecar. It writes its original
 seven-way full matrix and independently scores all abundant truth

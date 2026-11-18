@@ -7,6 +7,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from pathlib import Path
+import shutil
 
 from expanded.adapters import ASSEMBLERS
 from expanded.fork_micall_synthetic import checked_images, manifest
@@ -85,6 +86,30 @@ def save_json(path, obj):
     temporary.replace(path)
 
 
+def prune_verified_six(folder, proof, images, score_origin, manifest_sha):
+    """Apply the original synthetic scratch-only retention rule early.
+
+    All six successful execution records and the original source-bound
+    checkpoint must pass independent verification before scratch removal.
+    Failed and interrupted cases retain their exploratory intermediates.
+    """
+    if verify_case(folder, proof["identity"], images, score_origin,
+                   manifest_sha) != proof:
+        raise ValueError("six-comparator scratch cleanup lacks verified case proof")
+    count = 0
+    for tool, status in proof["statuses"].items():
+        if status != "success":
+            continue
+        scratch = folder / tool / "scratch"
+        if not scratch.exists():
+            continue
+        if not scratch.is_dir() or scratch.is_symlink():
+            raise ValueError("successful scratch is not a real directory")
+        shutil.rmtree(scratch)
+        count += 1
+    return count
+
+
 def run_one(row, root, images, truth, manifest_sha):
     identifier, _, case_manifest = row
     folder = root / identifier
@@ -92,6 +117,7 @@ def run_one(row, root, images, truth, manifest_sha):
     score_origin = score_origin_for(case_manifest)
     old = verify_case(folder, fields, images, score_origin, manifest_sha)
     if old is not None:
+        prune_verified_six(folder, old, images, score_origin, manifest_sha)
         return identifier, old
     if (folder / "matrix.json").exists():
         existing_case(folder, fields, images)  # Reject altered seven-arm results.
@@ -120,6 +146,7 @@ def run_one(row, root, images, truth, manifest_sha):
     save_json(folder / "six_arms.json", proof)
     if verify_case(folder, fields, images, score_origin, manifest_sha) != proof:
         raise ValueError("six-arm certificate failed independent recheck")
+    prune_verified_six(folder, proof, images, score_origin, manifest_sha)
     return identifier, proof
 
 

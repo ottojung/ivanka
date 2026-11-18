@@ -109,6 +109,49 @@ class SixFirstTest(unittest.TestCase):
             stage.run_one(self.case, self.root, self.images,
                           self.truth, self.manifest_sha)
 
+    def test_only_verified_success_scratch_is_removed_and_failure_retained(self):
+        for tool in stage.SIX:
+            self.arm(tool, success=tool != "haploflow")
+            scratch = self.case_dir / tool / "scratch"
+            scratch.mkdir()
+            (scratch / "expensive.tmp").write_bytes(b"reproducible"*100)
+        _, proof = stage.run_one(
+            self.case, self.root, self.images, self.truth,
+            self.manifest_sha)
+        for tool in stage.SIX:
+            scratch = self.case_dir / tool / "scratch"
+            if tool == "haploflow":
+                self.assertTrue((scratch / "expensive.tmp").exists())
+            else:
+                self.assertFalse(scratch.exists())
+            self.assertEqual(
+                json.loads((self.case_dir / tool / "execution.json").read_text())
+                ["status"], proof["statuses"][tool])
+        self.assertTrue(stage.verify_case(
+            self.case_dir, self.fields, self.images,
+            MULTITRUTH_SCORE_ORIGIN, self.manifest_sha))
+        with patch.object(stage, "attempt", side_effect=AssertionError):
+            stage.run_one(self.case, self.root, self.images,
+                          self.truth, self.manifest_sha)
+
+    def test_invalid_six_evidence_cannot_delete_scratch(self):
+        for tool in stage.SIX:
+            self.arm(tool)
+        scratch = self.case_dir / "iva/scratch"
+        scratch.mkdir()
+        (scratch / "keep.tmp").write_text("preserve")
+        _, proof = stage.run_one(
+            self.case, self.root, self.images, self.truth,
+            self.manifest_sha)
+        scratch.mkdir()
+        (scratch / "keep.tmp").write_text("preserve")
+        (self.case_dir / "iva/execution.json").write_text("tampered")
+        with self.assertRaises(ValueError):
+            stage.prune_verified_six(self.case_dir, proof, self.images,
+                                     MULTITRUTH_SCORE_ORIGIN,
+                                     self.manifest_sha)
+        self.assertEqual((scratch / "keep.tmp").read_text(), "preserve")
+
     def test_interrupted_sidecar_write_is_preserved_on_resume(self):
         for t in stage.SIX:
             self.arm(t)

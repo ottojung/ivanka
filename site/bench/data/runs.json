@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-18T13:07:32.602268+00:00",
+  "published_at": "2026-11-18T13:17:46.457839+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10932,7 +10932,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 41,
+        "recovered_arms": 42,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -26315,7 +26315,7 @@
               "unstitched_contig_count": 3
             },
             "spades": {
-              "peak_ram_observed_mib": 3848.2890625
+              "peak_ram_observed_mib": 4208.9296875
             },
             "velvet": {
               "average_concordance": 0.7432468222714689,
@@ -26351,7 +26351,14 @@
           ],
           "floor_ok": null,
           "outcome": "failure",
-          "recovery": {},
+          "recovery": {
+            "spades": {
+              "original_checkpoint_sha256": "2e7b02d1113c176a02f7ff1b3d974ab5f726435f300640a6e6366018e48c784a",
+              "retry_checkpoint_sha256": "c8a059f53f196062a913dfcee4fc60891acfa129b9a56023595e7f3bd3a6f836",
+              "status": "failed",
+              "timeout_seconds": 3000
+            }
+          },
           "score": {
             "abyss": 403.0,
             "haploflow": 409.0,
@@ -49079,7 +49086,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 41,
+        "recovered_arms": 42,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -64548,7 +64555,7 @@
               "unstitched_contig_count": 3
             },
             "spades": {
-              "peak_ram_observed_mib": 3848.2890625
+              "peak_ram_observed_mib": 4208.9296875
             },
             "velvet": {
               "average_concordance": 0.7432468222714689,
@@ -64585,7 +64592,14 @@
           "family": "physical",
           "floor_ok": null,
           "outcome": "failure",
-          "recovery": {},
+          "recovery": {
+            "spades": {
+              "original_checkpoint_sha256": "2e7b02d1113c176a02f7ff1b3d974ab5f726435f300640a6e6366018e48c784a",
+              "retry_checkpoint_sha256": "c8a059f53f196062a913dfcee4fc60891acfa129b9a56023595e7f3bd3a6f836",
+              "status": "failed",
+              "timeout_seconds": 3000
+            }
+          },
           "score": {
             "abyss": 403.0,
             "haploflow": 409.0,
@@ -84749,7 +84763,8 @@
     ],
     "running": {
       "real": [
-        "spades"
+        "spades",
+        "velvet"
       ],
       "synthetic": []
     },

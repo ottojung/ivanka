@@ -16,6 +16,9 @@ def watch(out, period=1.0):
     while True:
         moment = time.monotonic()
         if moment - last_discovery >= 4:
+            # Back off after failed discovery too; a broken Podman invocation
+            # must not become a one-second hot loop under benchmark load.
+            last_discovery = moment
             try:
                 found = running()
                 if not reconciled:
@@ -28,9 +31,10 @@ def watch(out, period=1.0):
                     _, record = active.pop(cid)
                     record["observation_ended"] = True
                     persist(out, record)
-                last_discovery = moment
             except Exception as exc:
-                logging.warning("Podman discovery deferred: %s", exc)
+                detail = getattr(exc, "stderr", None)
+                logging.warning("Podman discovery deferred: %s; stderr: %s",
+                                exc, str(detail).strip()[:256] if detail else "")
         for cid, (pid, record) in active.items():
             measured = sample_tree(pid)
             if measured is not None:

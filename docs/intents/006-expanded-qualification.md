@@ -1,5 +1,12 @@
 # Intent 006: Beat six assemblers on the authentic MiCall benchmark
 
+**Execution order:** 198 physical six-comparator attempts and selective
+retries → all 464 synthetic six-comparator cases → physical Ivanka 198 →
+synthetic Ivanka 464. Earlier valid arms are preserved and reused; Ivanka
+runs last. This affects scheduling **only**, not scoring, the seven exact
+frozen MiCall images, per-sample 50-minute maximum, or strict completion
+gates. See [benchmark handoff](../bench/six-first-handoff.md).
+
 **Binding numerical completion and release gate. Not yet passed.**
 
 Use the same default, reference-blind Rust Ivanka in the unchanged MiCall

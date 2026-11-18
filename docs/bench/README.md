@@ -6,6 +6,13 @@ discovered bugs or performance bottlenecks; report them as diagnostics.
 See [the frozen-base benchmark policy](frozen-micall-base.md).
 
 
+**Execution scheduling:** complete the 198 physical comparator retries,
+then execute all 464 synthetic cases for IVA, Haploflow, MEGAHIT, ABySS,
+SPAdes and Velvet **without Ivanka**, followed by the 198 physical Ivanka
+cases and finally 464 synthetic Ivanka cases. Reuse every prior valid
+checkpoint and leave the MiCall base frozen. See
+[Six-comparators-first, Ivanka-last handoff](six-first-handoff.md).
+
 Assembler Bench is a static, privacy-safe GitHub Pages website:
 https://ottojung.github.io/ivanka/bench/
 

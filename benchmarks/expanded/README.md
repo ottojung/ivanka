@@ -34,6 +34,15 @@
 > The new per-arm limits are 50 minutes and 5 GiB.
 
 
+**Current execution order (November 18):** First finish the 198 physical
+samples for all six non-Ivanka assemblers, including their eligible frozen
+resource retries. Next complete those **same six assemblers on all 464
+synthetic cases**. Only then run Ivanka, physical 198 first and synthetic
+464 last, using preserved original six-arm evidence without recomputation.
+The four complete historical synthetic cases and all partial arms remain
+unaltered. No MiCall base or container changes are allowed.
+See [six-first scheduling](../../docs/bench/six-first-handoff.md).
+
 **New mandatory conditions:** Under
 [Intent 007](../../docs/intents/007-assembler-bench.md), canonical runs
 must execute every assembler **as integrated into MiCall** and publish

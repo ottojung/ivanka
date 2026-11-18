@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-18T00:24:27.852162+00:00",
+  "published_at": "2026-11-18T00:34:42.525854+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10941,7 +10941,9 @@
             "abyss": {
               "peak_ram_observed_mib": 5907.5390625
             },
-            "haploflow": {},
+            "haploflow": {
+              "peak_ram_observed_mib": 3748.3671875
+            },
             "iva": {
               "average_concordance": 0.9078749008198889,
               "average_read_depth": 16579.234505862645,
@@ -10970,13 +10972,23 @@
               "unstitched_contig_count": 1
             },
             "ivanka": {},
-            "megahit": {},
-            "spades": {},
-            "velvet": {}
+            "megahit": {
+              "peak_ram_observed_mib": 1718.53515625
+            },
+            "spades": {
+              "peak_ram_observed_mib": 1952.4609375
+            },
+            "velvet": {
+              "peak_ram_observed_mib": 8333.52734375
+            }
           },
           "exact_profiles": {},
           "failures": [
-            "abyss"
+            "abyss",
+            "haploflow",
+            "megahit",
+            "spades",
+            "velvet"
           ],
           "floor_ok": null,
           "outcome": "failure",
@@ -17012,7 +17024,9 @@
               "unique_aligned_fragments": 78990,
               "unstitched_contig_count": 3
             },
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 6122.77734375
+            },
             "velvet": {
               "average_concordance": 0.2059090909090909,
               "average_read_depth": 43686.33986013986,
@@ -17043,9 +17057,11 @@
             }
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "recovery": {},
           "score": {
             "abyss": 196.0,
@@ -43271,8 +43287,8 @@
         },
         "haploflow": {
           "expected": 198,
-          "failed": 26,
-          "finished": 197
+          "failed": 27,
+          "finished": 198
         },
         "iva": {
           "expected": 198,
@@ -43286,18 +43302,18 @@
         },
         "megahit": {
           "expected": 198,
-          "failed": 9,
-          "finished": 197
+          "failed": 10,
+          "finished": 198
         },
         "spades": {
           "expected": 198,
-          "failed": 66,
-          "finished": 196
+          "failed": 68,
+          "finished": 198
         },
         "velvet": {
           "expected": 198,
-          "failed": 40,
-          "finished": 197
+          "failed": 41,
+          "finished": 198
         }
       },
       "tools": [
@@ -48006,7 +48022,9 @@
             "abyss": {
               "peak_ram_observed_mib": 5907.5390625
             },
-            "haploflow": {},
+            "haploflow": {
+              "peak_ram_observed_mib": 3748.3671875
+            },
             "iva": {
               "average_concordance": 0.9078749008198889,
               "average_read_depth": 16579.234505862645,
@@ -48035,13 +48053,23 @@
               "unstitched_contig_count": 1
             },
             "ivanka": {},
-            "megahit": {},
-            "spades": {},
-            "velvet": {}
+            "megahit": {
+              "peak_ram_observed_mib": 1718.53515625
+            },
+            "spades": {
+              "peak_ram_observed_mib": 1952.4609375
+            },
+            "velvet": {
+              "peak_ram_observed_mib": 8333.52734375
+            }
           },
           "exact_profiles": {},
           "failures": [
-            "abyss"
+            "abyss",
+            "haploflow",
+            "megahit",
+            "spades",
+            "velvet"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -54113,7 +54141,9 @@
               "unique_aligned_fragments": 78990,
               "unstitched_contig_count": 3
             },
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 6122.77734375
+            },
             "velvet": {
               "average_concordance": 0.2059090909090909,
               "average_read_depth": 43686.33986013986,
@@ -54144,10 +54174,12 @@
             }
           },
           "exact_profiles": {},
-          "failures": [],
+          "failures": [
+            "spades"
+          ],
           "family": "physical",
           "floor_ok": null,
-          "outcome": "incomplete",
+          "outcome": "failure",
           "recovery": {},
           "score": {
             "abyss": 196.0,
@@ -82531,8 +82563,8 @@
         },
         "haploflow": {
           "expected": 662,
-          "failed": 28,
-          "finished": 201
+          "failed": 29,
+          "finished": 202
         },
         "iva": {
           "expected": 662,
@@ -82546,18 +82578,18 @@
         },
         "megahit": {
           "expected": 662,
-          "failed": 9,
-          "finished": 202
+          "failed": 10,
+          "finished": 203
         },
         "spades": {
           "expected": 662,
-          "failed": 66,
-          "finished": 202
+          "failed": 68,
+          "finished": 204
         },
         "velvet": {
           "expected": 662,
-          "failed": 40,
-          "finished": 202
+          "failed": 41,
+          "finished": 203
         }
       },
       "tools": [
@@ -82580,12 +82612,7 @@
       "synthetic"
     ],
     "running": {
-      "real": [
-        "haploflow",
-        "megahit",
-        "spades",
-        "velvet"
-      ],
+      "real": [],
       "synthetic": []
     },
     "schema": "ivanka.assembler-bench.live-worker-activity.v1",

@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-18T02:46:54.449218+00:00",
+  "published_at": "2026-11-18T03:27:29.795291+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10930,7 +10930,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 6,
+        "recovered_arms": 7,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -29051,7 +29051,9 @@
             },
             "ivanka": {},
             "megahit": {},
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 1727.984375
+            },
             "velvet": {}
           },
           "exact_profiles": {},
@@ -29064,7 +29066,14 @@
           ],
           "floor_ok": null,
           "outcome": "failure",
-          "recovery": {},
+          "recovery": {
+            "spades": {
+              "original_checkpoint_sha256": "69237def690a3a118d36ac255b30f6caf6be6917fafb1b6e94a3d5bac69c4e4f",
+              "retry_checkpoint_sha256": "3d2a24fd0beeb76b38aec683e22f4c8c03b6e36f13d937115833f35f78ca469f",
+              "status": "failed",
+              "timeout_seconds": 3000
+            }
+          },
           "score": {
             "abyss": null,
             "haploflow": null,
@@ -48158,7 +48167,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 6,
+        "recovered_arms": 7,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -66383,7 +66392,9 @@
             },
             "ivanka": {},
             "megahit": {},
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 1727.984375
+            },
             "velvet": {}
           },
           "exact_profiles": {},
@@ -66397,7 +66408,14 @@
           "family": "physical",
           "floor_ok": null,
           "outcome": "failure",
-          "recovery": {},
+          "recovery": {
+            "spades": {
+              "original_checkpoint_sha256": "69237def690a3a118d36ac255b30f6caf6be6917fafb1b6e94a3d5bac69c4e4f",
+              "retry_checkpoint_sha256": "3d2a24fd0beeb76b38aec683e22f4c8c03b6e36f13d937115833f35f78ca469f",
+              "status": "failed",
+              "timeout_seconds": 3000
+            }
+          },
           "score": {
             "abyss": null,
             "haploflow": null,

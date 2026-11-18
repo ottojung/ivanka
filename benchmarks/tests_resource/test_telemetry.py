@@ -1,7 +1,9 @@
 """Resource monitor reports sampled peaks, without fabricating exact maxima."""
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
+from benchmarks.resource_telemetry import proc_tree
 from benchmarks.resource_telemetry.proc_tree import sample_tree
 from benchmarks.resource_telemetry.records import create, persist, update
 
@@ -13,6 +15,32 @@ class ResourceTelemetryTests(unittest.TestCase):
         self.assertIsNotNone(value)
         self.assertGreater(value[0], 0)
         self.assertGreaterEqual(value[2], 1)
+
+    def test_exited_zero_resident_descendant_has_exactly_zero_pss(self):
+        with (patch.object(proc_tree, "Path") as fake,
+              patch.object(proc_tree.os, "sysconf", return_value=4096)):
+            fake.return_value.read_text.return_value = "0 0 0 0 0 0 0"
+            fake.return_value.open.side_effect = FileNotFoundError()
+            self.assertEqual(proc_tree.process_memory(1234), (0, 0))
+
+    def test_missing_pss_for_resident_process_remains_unknown(self):
+        with (patch.object(proc_tree, "Path") as fake,
+              patch.object(proc_tree.os, "sysconf", return_value=4096)):
+            fake.return_value.read_text.return_value = "5 2 0 0 0 0 0"
+            fake.return_value.open.side_effect = PermissionError()
+            self.assertEqual(proc_tree.process_memory(1234), (8192, None))
+
+    def test_zero_resident_zombie_does_not_hide_live_pss_peak(self):
+        with (patch.object(proc_tree, "descendants", return_value=[1, 2]),
+              patch.object(proc_tree, "process_memory",
+                           side_effect=[(10_000, 9_400), (0, 0)])):
+            self.assertEqual(sample_tree(1), (10_000, 9_400, 2))
+
+    def test_nonzero_missing_pss_remains_unreported(self):
+        with (patch.object(proc_tree, "descendants", return_value=[1, 2]),
+              patch.object(proc_tree, "process_memory",
+                           side_effect=[(10_000, 9_400), (64, None)])):
+            self.assertEqual(sample_tree(1), (10_064, None, 2))
 
     def test_monotone_peak_and_reload_do_not_lose_previous_observations(self):
         with TemporaryDirectory() as temp:

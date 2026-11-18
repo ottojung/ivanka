@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-18T11:35:47.927003+00:00",
+  "published_at": "2026-11-18T11:40:56.625004+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10930,7 +10930,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 36,
+        "recovered_arms": 37,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -38344,7 +38344,9 @@
               "unique_aligned_fragments": 42897,
               "unstitched_contig_count": 1
             },
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 7300.8671875
+            },
             "velvet": {
               "average_concordance": 0.7286799251414173,
               "average_read_depth": 32839.51330798479,
@@ -38379,7 +38381,14 @@
           ],
           "floor_ok": null,
           "outcome": "failure",
-          "recovery": {},
+          "recovery": {
+            "spades": {
+              "original_checkpoint_sha256": "f5aef08e37e57417598071dc0b341e44c8e73a6178bb77a38795882173fca6d7",
+              "retry_checkpoint_sha256": "3409a534cac62960b72b8d965af653843a8fc35d36e19cac4899dc6e92f16d29",
+              "status": "failed",
+              "timeout_seconds": 3000
+            }
+          },
           "score": {
             "abyss": 233.0,
             "haploflow": 233.0,
@@ -48964,7 +48973,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 36,
+        "recovered_arms": 37,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -76541,7 +76550,9 @@
               "unique_aligned_fragments": 42897,
               "unstitched_contig_count": 1
             },
-            "spades": {},
+            "spades": {
+              "peak_ram_observed_mib": 7300.8671875
+            },
             "velvet": {
               "average_concordance": 0.7286799251414173,
               "average_read_depth": 32839.51330798479,
@@ -76577,7 +76588,14 @@
           "family": "physical",
           "floor_ok": null,
           "outcome": "failure",
-          "recovery": {},
+          "recovery": {
+            "spades": {
+              "original_checkpoint_sha256": "f5aef08e37e57417598071dc0b341e44c8e73a6178bb77a38795882173fca6d7",
+              "retry_checkpoint_sha256": "3409a534cac62960b72b8d965af653843a8fc35d36e19cac4899dc6e92f16d29",
+              "status": "failed",
+              "timeout_seconds": 3000
+            }
+          },
           "score": {
             "abyss": 233.0,
             "haploflow": 233.0,
@@ -84519,8 +84537,7 @@
     ],
     "running": {
       "real": [
-        "abyss",
-        "spades"
+        "abyss"
       ],
       "synthetic": []
     },

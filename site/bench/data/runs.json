@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-18T13:58:29.066145+00:00",
+  "published_at": "2026-11-18T14:08:41.907127+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10932,7 +10932,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 43,
+        "recovered_arms": 44,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -32264,7 +32264,9 @@
               "unique_aligned_fragments": 25688,
               "unstitched_contig_count": 1287
             },
-            "velvet": {}
+            "velvet": {
+              "peak_ram_observed_mib": 14890.54296875
+            }
           },
           "exact_profiles": {},
           "failures": [
@@ -32286,6 +32288,12 @@
               "original_checkpoint_sha256": "713fede3a06065cf63acd5bced5247913b21d85fc67af68ce6a641389d26ad9e",
               "retry_checkpoint_sha256": "8b23935491c453a5a1e114ce765da30f447795f4440f0f81aa2a0f72bfbbcc36",
               "status": "success",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "92e501ddeba4485f3c06c4c281fc1a2a5ff517736e20064f10d62dc6dfe0fa27",
+              "retry_checkpoint_sha256": "be1857636e22848a0a424e0e0dfbf6e394c1f57776a5b629eed9dfe09407c2df",
+              "status": "failed",
               "timeout_seconds": 3000
             }
           },
@@ -49093,7 +49101,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 43,
+        "recovered_arms": 44,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -70549,7 +70557,9 @@
               "unique_aligned_fragments": 25688,
               "unstitched_contig_count": 1287
             },
-            "velvet": {}
+            "velvet": {
+              "peak_ram_observed_mib": 14890.54296875
+            }
           },
           "exact_profiles": {},
           "failures": [
@@ -70572,6 +70582,12 @@
               "original_checkpoint_sha256": "713fede3a06065cf63acd5bced5247913b21d85fc67af68ce6a641389d26ad9e",
               "retry_checkpoint_sha256": "8b23935491c453a5a1e114ce765da30f447795f4440f0f81aa2a0f72bfbbcc36",
               "status": "success",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "92e501ddeba4485f3c06c4c281fc1a2a5ff517736e20064f10d62dc6dfe0fa27",
+              "retry_checkpoint_sha256": "be1857636e22848a0a424e0e0dfbf6e394c1f57776a5b629eed9dfe09407c2df",
+              "status": "failed",
               "timeout_seconds": 3000
             }
           },
@@ -84777,8 +84793,7 @@
     ],
     "running": {
       "real": [
-        "abyss",
-        "velvet"
+        "abyss"
       ],
       "synthetic": []
     },

@@ -72,6 +72,24 @@ seven-way full matrix and independently scores all abundant truth
 sequences as before. The previous four completed cases and any successful
 partial arms are never rerun.
 
+## Bounded scheduling and low-disk protection
+
+The external synthetic-six dispatcher never submits all 464 case futures
+at once: it schedules no more than **two active cases**, waits for a
+terminal, verified case, and only then starts another. If a case fails
+verification, the dispatcher stops scheduling rather than waiting for
+hundreds of already-submitted tasks to finish. The 3,000-second per-arm
+limit and two-case concurrency are unchanged.
+
+Before scheduling an additional synthetic case or **each missing rival
+MiCall arm**, it checks the shared filesystem's available space using
+`statvfs`; if less than **20 GiB** remains, it stops the stage cleanly
+with an explicit low-space diagnostic, without deleting any checkpoint
+or starting another arm. The supervising service retries the source-
+attested resume after capacity is restored. Running arms retain their
+normal source-pinned timeout and artifacts. This is a **minimum safety
+floor, not proof that 20 GiB suffices for the entire cohort**.
+
 ## Storage caveat
 
 This order may increase temporary six-case artifact retention before the

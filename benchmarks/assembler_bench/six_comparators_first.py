@@ -4,8 +4,9 @@ Use the original frozen synthetic runner as a library, without modifying it.
 Write six-arm per-case evidence alongside the original seven-arm checkpoints.
 """
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import json
+import os
 from pathlib import Path
 import shutil
 
@@ -23,6 +24,19 @@ SIX = tuple(name for name in ASSEMBLERS if name != "ivanka")
 SCHEMA = "ivanka.synthetic.six-before-ivanka.v1"
 SUMMARY = "six_comparators_summary.json"
 SOURCE = Path(__file__).resolve()
+MIN_FREE_BYTES = 20 * 1024**3
+
+
+def ensure_disk_capacity(path):
+    """Fail closed before an unbounded run consumes the shared filesystem."""
+    stats = os.statvfs(path)
+    free = stats.f_bavail * stats.f_frsize
+    if free < MIN_FREE_BYTES:
+        raise OSError(
+            f"synthetic six stage paused: only {free / 1024**3:.2f} GiB "
+            f"free on {path}; requires >=20 GiB before new arms")
+    return free
+
 
 
 def score_origin_for(case_manifest):
@@ -136,6 +150,7 @@ def run_one(row, root, images, truth, manifest_sha):
                     break
             else:
                 raise ValueError("too many interrupted six-arm attempts")
+        ensure_disk_capacity(root)
         result = attempt((row[1], case_manifest), dest, tool, images[tool], 3000)
         if reusable_arm(dest, tool, images[tool], score_origin) != result:
             raise ValueError("new six-arm evidence does not independently verify")
@@ -187,17 +202,30 @@ def run(data, root, images, fork, base, attestation_file, jobs=2):
     manifest_sha = digest(original)
     with exclusive_lock(root):
         completed = 0
+        pending = iter(rows)
         with ThreadPoolExecutor(max_workers=jobs) as pool:
-            futures = [
-                pool.submit(run_one, row, root, images, truth, manifest_sha)
-                for row in rows
-            ]
-            for future in as_completed(futures):
-                identifier, proof = future.result()
-                completed += 1
-                print("SYNTHETIC_SIX_COMPARATORS", completed, "/464", identifier,
-                      "failed", [t for t, v in proof["statuses"].items()
-                                 if v != "success"], flush=True)
+            active = {}
+            for _ in range(jobs):
+                ensure_disk_capacity(root)
+                row = next(pending, None)
+                if row is not None:
+                    active[pool.submit(
+                        run_one, row, root, images, truth, manifest_sha)] = row[0]
+            while active:
+                finished, _ = wait(active, return_when=FIRST_COMPLETED)
+                for future in finished:
+                    active.pop(future)
+                    identifier, proof = future.result()
+                    completed += 1
+                    print("SYNTHETIC_SIX_COMPARATORS", completed, "/464",
+                          identifier, "failed", [
+                              t for t, v in proof["statuses"].items()
+                              if v != "success"], flush=True)
+                    ensure_disk_capacity(root)
+                    row = next(pending, None)
+                    if row is not None:
+                        active[pool.submit(
+                            run_one, row, root, images, truth, manifest_sha)] = row[0]
         summary = verify_all(rows, root, images, truth, manifest_sha)
         target = root / SUMMARY
         if target.exists():

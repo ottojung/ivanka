@@ -205,6 +205,53 @@ class SixFirstTest(unittest.TestCase):
         self.assertEqual(set(proof["statuses"]), set(ASSEMBLERS) - {"ivanka"})
         self.assertFalse((self.case_dir / "matrix.json").exists())
 
+    def test_disk_headroom_fails_closed_without_touching_results(self):
+        with patch.object(stage.os, "statvfs") as stats:
+            stats.return_value.f_bavail = 20 * 1024**3 - 1
+            stats.return_value.f_frsize = 1
+            with self.assertRaisesRegex(OSError, "paused"):
+                stage.ensure_disk_capacity(self.root)
+        with patch.object(stage.os, "statvfs") as stats:
+            stats.return_value.f_bavail = 20 * 1024**3
+            stats.return_value.f_frsize = 1
+            self.assertEqual(stage.ensure_disk_capacity(self.root), 20*1024**3)
+
+    def test_two_worker_queue_stops_scheduling_when_disk_low(self):
+        data = self.root / "source_data"
+        data.mkdir()
+        (data / "cohort.json").write_text("{}")
+        out = self.root / "synthetic_output"
+        out.mkdir()
+        image_manifest = {"images": self.images}
+        (out / "run_manifest.json").write_text(json.dumps(image_manifest))
+        cases = [(f"clonal-s{i:03d}", data, self.manifest) for i in range(464)]
+        invoked = []
+        checked = 0
+
+        def capacity(_):
+            nonlocal checked
+            checked += 1
+            if checked > 2:
+                raise OSError("disk below threshold")
+            return 80 * 1024**3
+
+        def execute(row, *_):
+            invoked.append(row[0])
+            return row[0], {"statuses": {tool: "success" for tool in stage.SIX}}
+
+        with (patch.object(stage, "checked_images"),
+              patch.object(stage, "attestation", return_value=self.truth),
+              patch.object(stage, "cohort_rows", return_value=cases),
+              patch.object(stage, "manifest", return_value=image_manifest),
+              patch.object(stage, "run_one", side_effect=execute),
+              patch.object(stage, "ensure_disk_capacity", side_effect=capacity),
+              patch.object(stage, "verify_all", side_effect=AssertionError)):
+            with self.assertRaisesRegex(OSError, "disk below threshold"):
+                stage.run(data, out, self.images, data, "base", data, jobs=2)
+        self.assertEqual(sorted(invoked),
+                         ["clonal-s000", "clonal-s001"])
+        self.assertFalse((out / stage.SUMMARY).exists())
+
     def test_requires_exact_six_arm_and_source(self):
         self.arm("iva")
         self.assertIsNone(stage.arm_records(

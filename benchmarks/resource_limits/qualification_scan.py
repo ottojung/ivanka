@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .qualification import category, container_name
+from .synthetic_scan import summary as synthetic_summary
 
 
 def load_jsonl(path, unique=True):
@@ -50,6 +51,7 @@ def report(root):
                                 audits.get(name))] += 1
             by_tool[tool] = dict(sorted(counts.items()))
         results[phase] = by_tool
+    results["phase-synthetic464"] = synthetic_summary(root, telemetry, audits)
     return {"schema": "ivanka.external-caps-qualification.v1",
             "max_wall_seconds": 2400, "max_rss_bytes": 4_000_000_000,
             "note": "Sampled RSS is not an exact kernel hard cap; no legacy success is silently requalified.",

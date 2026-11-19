@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-19T00:59:51.895807+00:00",
+  "published_at": "2026-11-19T01:05:00.659228+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10930,7 +10930,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 73,
+        "recovered_arms": 74,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -29578,7 +29578,9 @@
             "spades": {
               "peak_ram_observed_mib": 1727.984375
             },
-            "velvet": {}
+            "velvet": {
+              "peak_ram_observed_mib": 16518.35546875
+            }
           },
           "exact_profiles": {},
           "failures": [
@@ -29600,6 +29602,12 @@
             "spades": {
               "original_checkpoint_sha256": "69237def690a3a118d36ac255b30f6caf6be6917fafb1b6e94a3d5bac69c4e4f",
               "retry_checkpoint_sha256": "3d2a24fd0beeb76b38aec683e22f4c8c03b6e36f13d937115833f35f78ca469f",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "4ffd4566c918186b177cdb14cb26b2d00ec6e8b39ed883be153ef898e46e6f2c",
+              "retry_checkpoint_sha256": "7ddd8be809ce7afd9105815729cebfb33a6cf812318fb5af80d250347f49f036",
               "status": "failed",
               "timeout_seconds": 3000
             }
@@ -49716,7 +49724,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 73,
+        "recovered_arms": 74,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -68468,7 +68476,9 @@
             "spades": {
               "peak_ram_observed_mib": 1727.984375
             },
-            "velvet": {}
+            "velvet": {
+              "peak_ram_observed_mib": 16518.35546875
+            }
           },
           "exact_profiles": {},
           "failures": [
@@ -68491,6 +68501,12 @@
             "spades": {
               "original_checkpoint_sha256": "69237def690a3a118d36ac255b30f6caf6be6917fafb1b6e94a3d5bac69c4e4f",
               "retry_checkpoint_sha256": "3d2a24fd0beeb76b38aec683e22f4c8c03b6e36f13d937115833f35f78ca469f",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "4ffd4566c918186b177cdb14cb26b2d00ec6e8b39ed883be153ef898e46e6f2c",
+              "retry_checkpoint_sha256": "7ddd8be809ce7afd9105815729cebfb33a6cf812318fb5af80d250347f49f036",
               "status": "failed",
               "timeout_seconds": 3000
             }
@@ -86023,8 +86039,7 @@
     ],
     "running": {
       "real": [
-        "spades",
-        "velvet"
+        "spades"
       ],
       "synthetic": []
     },

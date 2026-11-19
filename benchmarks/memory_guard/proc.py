@@ -25,10 +25,15 @@ def processes(root=ROOT):
 
 
 def benchmark_roots(table):
+    """Actual MiCall processes, excluding Podman CLI and timing wrappers."""
+    prefixes = (
+        "/opt/venv/bin/python /opt/venv/bin/micall analyze sample ",
+        "python /opt/venv/bin/micall analyze sample ",
+        "/opt/venv/bin/micall analyze sample ",
+    )
     return {pid for pid, (_, _, args) in table.items()
-            if "micall analyze sample " in args
-            and ("/bench/samples/" in args or "/reads/" in args)
-            and not args.lstrip().startswith(("sh -c ", "/bin/sh -c "))}
+            if args.startswith(prefixes)
+            and ("/bench/samples/" in args or "/reads/" in args)}
 
 
 def tree_bytes(table, root):

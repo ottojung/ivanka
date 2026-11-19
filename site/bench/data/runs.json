@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-19T22:33:14.473184+00:00",
+  "published_at": "2026-11-19T22:38:23.559677+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10932,7 +10932,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 185,
+        "recovered_arms": 187,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -36710,7 +36710,7 @@
               "peak_ram_observed_mib": 3501.64453125
             },
             "haploflow": {
-              "peak_ram_observed_mib": 4025.2421875
+              "peak_ram_observed_mib": 2901.01171875
             },
             "iva": {
               "average_concordance": 0.9397513777238296,
@@ -36741,7 +36741,7 @@
             },
             "ivanka": {},
             "megahit": {
-              "peak_ram_observed_mib": 3367.93359375
+              "peak_ram_observed_mib": 3417.1953125
             },
             "spades": {
               "peak_ram_observed_mib": 3085.26953125
@@ -36764,6 +36764,18 @@
             "abyss": {
               "original_checkpoint_sha256": "6260fdded466b3668ba0fcddc0db7d121a0c823c969c56f33f4a7d295b5b2d66",
               "retry_checkpoint_sha256": "7639513c86e9a9152288b0c2d337638c816b8facf45c8a885ca64dee15e5294b",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "haploflow": {
+              "original_checkpoint_sha256": "23b3090bb319fdc6772ee112d85554bd2af7d6583a6cff064ad5529bff569c07",
+              "retry_checkpoint_sha256": "dfa74dc29f052a0a51bcf7308e142cc6f2a665df6092952e2ab63b3cd3ac37f2",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "megahit": {
+              "original_checkpoint_sha256": "bd9ad9ce77e3df4b11257cfb06a5161332bb41a47f182983e9790ecad868cd0b",
+              "retry_checkpoint_sha256": "716eb841b9a64246c65c8cc8a3774861ecf56ed99e7b054a7a846375f524a1ec",
               "status": "failed",
               "timeout_seconds": 3000
             },
@@ -51342,7 +51354,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 185,
+        "recovered_arms": 187,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -77263,7 +77275,7 @@
               "peak_ram_observed_mib": 3501.64453125
             },
             "haploflow": {
-              "peak_ram_observed_mib": 4025.2421875
+              "peak_ram_observed_mib": 2901.01171875
             },
             "iva": {
               "average_concordance": 0.9397513777238296,
@@ -77294,7 +77306,7 @@
             },
             "ivanka": {},
             "megahit": {
-              "peak_ram_observed_mib": 3367.93359375
+              "peak_ram_observed_mib": 3417.1953125
             },
             "spades": {
               "peak_ram_observed_mib": 3085.26953125
@@ -77318,6 +77330,18 @@
             "abyss": {
               "original_checkpoint_sha256": "6260fdded466b3668ba0fcddc0db7d121a0c823c969c56f33f4a7d295b5b2d66",
               "retry_checkpoint_sha256": "7639513c86e9a9152288b0c2d337638c816b8facf45c8a885ca64dee15e5294b",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "haploflow": {
+              "original_checkpoint_sha256": "23b3090bb319fdc6772ee112d85554bd2af7d6583a6cff064ad5529bff569c07",
+              "retry_checkpoint_sha256": "dfa74dc29f052a0a51bcf7308e142cc6f2a665df6092952e2ab63b3cd3ac37f2",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "megahit": {
+              "original_checkpoint_sha256": "bd9ad9ce77e3df4b11257cfb06a5161332bb41a47f182983e9790ecad868cd0b",
+              "retry_checkpoint_sha256": "716eb841b9a64246c65c8cc8a3774861ecf56ed99e7b054a7a846375f524a1ec",
               "status": "failed",
               "timeout_seconds": 3000
             },

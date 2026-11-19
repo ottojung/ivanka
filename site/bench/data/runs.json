@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-19T05:24:40.279068+00:00",
+  "published_at": "2026-11-19T05:50:06.907248+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10934,7 +10934,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 86,
+        "recovered_arms": 87,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -32668,7 +32668,9 @@
             "abyss": {
               "peak_ram_observed_mib": 5143.64453125
             },
-            "haploflow": {},
+            "haploflow": {
+              "peak_ram_observed_mib": 5097.140625
+            },
             "iva": {
               "average_concordance": 0.9304324072234501,
               "average_read_depth": 546.5275387263339,
@@ -32743,6 +32745,12 @@
             "abyss": {
               "original_checkpoint_sha256": "3583c764d55ec646cb50fb11de7540971f0f988cb912422d11b67f2491d3b956",
               "retry_checkpoint_sha256": "374265587c9aae0d20626eba316e8ddf40b627d61722399931a28caece951a3c",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "haploflow": {
+              "original_checkpoint_sha256": "e1e873f4844de9ad76cddbf84be91c7c9ff917f4605b51c8545a4e58d71ab0a9",
+              "retry_checkpoint_sha256": "262e5108144818f23e4f72411ddb281fc3d4e03488c928c6b9d40da7d6321cac",
               "status": "failed",
               "timeout_seconds": 3000
             },
@@ -49985,7 +49993,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 86,
+        "recovered_arms": 87,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -71843,7 +71851,9 @@
             "abyss": {
               "peak_ram_observed_mib": 5143.64453125
             },
-            "haploflow": {},
+            "haploflow": {
+              "peak_ram_observed_mib": 5097.140625
+            },
             "iva": {
               "average_concordance": 0.9304324072234501,
               "average_read_depth": 546.5275387263339,
@@ -71919,6 +71929,12 @@
             "abyss": {
               "original_checkpoint_sha256": "3583c764d55ec646cb50fb11de7540971f0f988cb912422d11b67f2491d3b956",
               "retry_checkpoint_sha256": "374265587c9aae0d20626eba316e8ddf40b627d61722399931a28caece951a3c",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "haploflow": {
+              "original_checkpoint_sha256": "e1e873f4844de9ad76cddbf84be91c7c9ff917f4605b51c8545a4e58d71ab0a9",
+              "retry_checkpoint_sha256": "262e5108144818f23e4f72411ddb281fc3d4e03488c928c6b9d40da7d6321cac",
               "status": "failed",
               "timeout_seconds": 3000
             },
@@ -86557,8 +86573,7 @@
     ],
     "running": {
       "real": [
-        "abyss",
-        "haploflow"
+        "abyss"
       ],
       "synthetic": []
     },

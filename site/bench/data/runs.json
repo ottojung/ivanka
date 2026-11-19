@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-19T19:04:00.134720+00:00",
+  "published_at": "2026-11-19T19:24:23.580503+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10934,7 +10934,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 167,
+        "recovered_arms": 168,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -35032,7 +35032,7 @@
               "unstitched_contig_count": 672
             },
             "velvet": {
-              "peak_ram_observed_mib": 2466.05078125
+              "peak_ram_observed_mib": 2464.9921875
             }
           },
           "exact_profiles": {},
@@ -35047,6 +35047,12 @@
             "abyss": {
               "original_checkpoint_sha256": "9113447a0e3499737f93ab0b09373c2558b30453e920eb2b0effa8443c5a75da",
               "retry_checkpoint_sha256": "ce22f8b80d1a438e498902c249b910f08b18be57432ae4b18099188c30908db6",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "0843b0c221f6b492d1d5493e4ba855d4fb357af414446f33ed056c04de7675f0",
+              "retry_checkpoint_sha256": "d762cbb8a94ec9ef4fcac6b51d408306c2a5ca318d41bab68df1e39a1bfa1d34",
               "status": "failed",
               "timeout_seconds": 3000
             }
@@ -51034,7 +51040,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 167,
+        "recovered_arms": 168,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -75266,7 +75272,7 @@
               "unstitched_contig_count": 672
             },
             "velvet": {
-              "peak_ram_observed_mib": 2466.05078125
+              "peak_ram_observed_mib": 2464.9921875
             }
           },
           "exact_profiles": {},
@@ -75282,6 +75288,12 @@
             "abyss": {
               "original_checkpoint_sha256": "9113447a0e3499737f93ab0b09373c2558b30453e920eb2b0effa8443c5a75da",
               "retry_checkpoint_sha256": "ce22f8b80d1a438e498902c249b910f08b18be57432ae4b18099188c30908db6",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "0843b0c221f6b492d1d5493e4ba855d4fb357af414446f33ed056c04de7675f0",
+              "retry_checkpoint_sha256": "d762cbb8a94ec9ef4fcac6b51d408306c2a5ca318d41bab68df1e39a1bfa1d34",
               "status": "failed",
               "timeout_seconds": 3000
             }
@@ -88656,7 +88668,7 @@
     "running": {
       "real": [
         "haploflow",
-        "velvet"
+        "megahit"
       ],
       "synthetic": []
     },

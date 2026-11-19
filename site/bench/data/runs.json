@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-19T22:28:04.956293+00:00",
+  "published_at": "2026-11-19T22:33:14.473184+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10932,7 +10932,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 184,
+        "recovered_arms": 185,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -36747,7 +36747,7 @@
               "peak_ram_observed_mib": 3085.26953125
             },
             "velvet": {
-              "peak_ram_observed_mib": 4938.12109375
+              "peak_ram_observed_mib": 2752.0703125
             }
           },
           "exact_profiles": {},
@@ -36770,6 +36770,12 @@
             "spades": {
               "original_checkpoint_sha256": "66ce34a5e0bbf5f8826b9de3591ca94afd98bcae7148f88268671efaf25e2328",
               "retry_checkpoint_sha256": "4ecb862f749552cfec4e514be19aa8357a29e33814d988e2b702f637183bccdf",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "cf2c813d73385925b21dec4e0bc07fe072cea6a644259984f3c2021f90061b49",
+              "retry_checkpoint_sha256": "d263e09249ba194585f33a85671c0c87124f39b6cd0f41239491aeb51b754725",
               "status": "failed",
               "timeout_seconds": 3000
             }
@@ -51336,7 +51342,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 184,
+        "recovered_arms": 185,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -77294,7 +77300,7 @@
               "peak_ram_observed_mib": 3085.26953125
             },
             "velvet": {
-              "peak_ram_observed_mib": 4938.12109375
+              "peak_ram_observed_mib": 2752.0703125
             }
           },
           "exact_profiles": {},
@@ -77318,6 +77324,12 @@
             "spades": {
               "original_checkpoint_sha256": "66ce34a5e0bbf5f8826b9de3591ca94afd98bcae7148f88268671efaf25e2328",
               "retry_checkpoint_sha256": "4ecb862f749552cfec4e514be19aa8357a29e33814d988e2b702f637183bccdf",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "cf2c813d73385925b21dec4e0bc07fe072cea6a644259984f3c2021f90061b49",
+              "retry_checkpoint_sha256": "d263e09249ba194585f33a85671c0c87124f39b6cd0f41239491aeb51b754725",
               "status": "failed",
               "timeout_seconds": 3000
             }
@@ -89259,8 +89271,8 @@
     ],
     "running": {
       "real": [
-        "megahit",
-        "velvet"
+        "haploflow",
+        "megahit"
       ],
       "synthetic": []
     },

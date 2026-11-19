@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-19T18:58:50.411297+00:00",
+  "published_at": "2026-11-19T19:04:00.134720+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10934,7 +10934,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 166,
+        "recovered_arms": 167,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -32488,7 +32488,7 @@
               "unstitched_contig_count": 1434
             },
             "velvet": {
-              "peak_ram_observed_mib": 8750.875
+              "peak_ram_observed_mib": 3825.49609375
             }
           },
           "exact_profiles": {},
@@ -32511,6 +32511,12 @@
               "original_checkpoint_sha256": "d07255b339749ca13522c248afcd67467c243c0b14f36d33b9ec44fb384dcc38",
               "retry_checkpoint_sha256": "b954375e1433aca8bbf612b6cbcfa57b91741ec49e0d2fbcf61b952e9300054a",
               "status": "success",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "4d91fef4fcd55a7f3fc8adbb0481d0e33ca6740b12400c5a1e2acf108bcdc023",
+              "retry_checkpoint_sha256": "a1ed56f2dd012a4a283829da4d96fc6580a74d610184719337e4bb6e95b93ccd",
+              "status": "failed",
               "timeout_seconds": 3000
             }
           },
@@ -51028,7 +51034,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 166,
+        "recovered_arms": 167,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -72701,7 +72707,7 @@
               "unstitched_contig_count": 1434
             },
             "velvet": {
-              "peak_ram_observed_mib": 8750.875
+              "peak_ram_observed_mib": 3825.49609375
             }
           },
           "exact_profiles": {},
@@ -72725,6 +72731,12 @@
               "original_checkpoint_sha256": "d07255b339749ca13522c248afcd67467c243c0b14f36d33b9ec44fb384dcc38",
               "retry_checkpoint_sha256": "b954375e1433aca8bbf612b6cbcfa57b91741ec49e0d2fbcf61b952e9300054a",
               "status": "success",
+              "timeout_seconds": 3000
+            },
+            "velvet": {
+              "original_checkpoint_sha256": "4d91fef4fcd55a7f3fc8adbb0481d0e33ca6740b12400c5a1e2acf108bcdc023",
+              "retry_checkpoint_sha256": "a1ed56f2dd012a4a283829da4d96fc6580a74d610184719337e4bb6e95b93ccd",
+              "status": "failed",
               "timeout_seconds": 3000
             }
           },
@@ -88643,6 +88655,7 @@
     ],
     "running": {
       "real": [
+        "haploflow",
         "velvet"
       ],
       "synthetic": []

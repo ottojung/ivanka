@@ -1,6 +1,5 @@
 """Read-only counters for physical arms under current resource-policy evidence."""
-from collections import Counter, defaultdict
-import hashlib
+from collections import Counter
 import json
 from pathlib import Path
 

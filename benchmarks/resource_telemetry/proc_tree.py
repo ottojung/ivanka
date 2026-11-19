@@ -34,6 +34,11 @@ def process_memory(pid):
                     break
     except (OSError, ValueError, IndexError):
         pass
+    # Zombie or exited descendants have zero resident pages and may lack
+    # smaps_rollup. Their PSS is exactly zero, not an unavailable reading.
+    # Do not infer PSS for a live process with nonzero resident pages.
+    if proportional is None and resident == 0:
+        proportional = 0
     return resident, proportional
 
 

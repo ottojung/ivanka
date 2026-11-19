@@ -1,0 +1,90 @@
+{
+  "max_rss_bytes": 4000000000,
+  "max_wall_seconds": 2400,
+  "note": "Sampled RSS is not an exact kernel hard cap; no legacy success is silently requalified.",
+  "results": {
+    "phase-real198": {
+      "abyss": {
+        "failed": 92,
+        "legacy_uncapped": 42,
+        "memory_unmeasured": 63,
+        "observed_over_4GB": 1
+      },
+      "haploflow": {
+        "failed": 27,
+        "legacy_uncapped": 55,
+        "memory_unmeasured": 116
+      },
+      "iva": {
+        "memory_unmeasured": 198
+      },
+      "megahit": {
+        "failed": 10,
+        "legacy_uncapped": 57,
+        "memory_unmeasured": 131
+      },
+      "spades": {
+        "failed": 68,
+        "legacy_uncapped": 22,
+        "memory_unmeasured": 108
+      },
+      "velvet": {
+        "failed": 41,
+        "legacy_uncapped": 52,
+        "memory_unmeasured": 104,
+        "observed_over_4GB": 1
+      }
+    },
+    "phase-real198-memory-retries": {
+      "abyss": {
+        "failed": 11,
+        "legacy_uncapped": 1,
+        "observed_over_4GB": 16,
+        "over_40_minutes": 5
+      },
+      "haploflow": {
+        "failed": 3,
+        "legacy_uncapped": 1
+      },
+      "iva": {},
+      "megahit": {},
+      "spades": {
+        "failed": 16,
+        "legacy_uncapped": 21,
+        "observed_over_4GB": 1,
+        "observed_within_budget_not_kernel_proven": 1,
+        "over_40_minutes": 5
+      },
+      "velvet": {
+        "failed": 12,
+        "legacy_uncapped": 4,
+        "over_40_minutes": 1
+      }
+    },
+    "phase-synthetic464": {
+      "abyss": {
+        "legacy_uncapped": 4
+      },
+      "haploflow": {
+        "failed": 2,
+        "legacy_uncapped": 2
+      },
+      "iva": {
+        "legacy_uncapped": 4
+      },
+      "ivanka": {
+        "legacy_uncapped": 5
+      },
+      "megahit": {
+        "legacy_uncapped": 5
+      },
+      "spades": {
+        "legacy_uncapped": 6
+      },
+      "velvet": {
+        "legacy_uncapped": 5
+      }
+    }
+  },
+  "schema": "ivanka.external-caps-qualification.v1"
+}

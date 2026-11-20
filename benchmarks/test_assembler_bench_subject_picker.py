@@ -10,7 +10,8 @@ from assembler_bench.site_build import SITE
 class CheckboxSelectionTests(unittest.TestCase):
     def _node_current(self, code):
         node=shutil.which("node")
-        if node is None:self.skipTest("Node unavailable")
+        if node is None:
+            self.skipTest("Node unavailable")
         result=subprocess.run(
             [node,"-e",code,str(SITE/"subjects.js"),
              str(SITE/"data/runs.json")],
@@ -236,7 +237,7 @@ console.log('ALL_42_HXB2_PAIRWISE_COMPARISONS_PARTIAL');
     def test_current_snapshot_never_invents_missing_diagnostics(self):
         current=json.loads((SITE/"data/mapping-diagnostics.json").read_text())
         self.assertIn(current["cases_measured"],(0,1))
-        self.assertEqual(current["expected_cases"],400)
+        self.assertEqual(current["expected_cases"],464)
         self.assertEqual(current["status"],"INCOMPLETE")
 
 

@@ -9,6 +9,7 @@ from .hxb2_preview import pinned_truth, sha, COHORT_SHA
 from .public_case_metrics import synthetic as synthetic_metrics, physical as physical_metrics
 from .resource_peak import peak_mib, physical_name, synthetic_name
 from .resource_retry import select as select_retry
+from .exact_cache import append as exact_metrics
 
 SYN_SCHEMA="ivanka.expanded.comparators_first_synthetic.v1"
 REAL_SCHEMA="ivanka.expanded.comparators_first_real.v1"
@@ -197,7 +198,7 @@ def real_arm(source,tool,sample_name,image,pair,retries=None):
         raise ValueError("physical final consensus digest mismatch")
     return {"status":"success","score":measure["score"],
             "seconds":measure["seconds"],"metrics":arm.get("metrics",{}),
-            **provenance}
+            "conseq_digest":expected, **provenance}
 
 
 def physical_tool_allowed(name, original_manifest):
@@ -206,7 +207,7 @@ def physical_tool_allowed(name, original_manifest):
 
 
 def physical(root,data,images,proof,runner,witness_file,physical_attestation,
-             resources=None,retries=None):
+             resources=None,retries=None,exact_root=None):
     manifest=freeze(root,REAL_SCHEMA,images,proof,runner)
     if manifest is None:
         return {},None
@@ -239,6 +240,11 @@ def physical(root,data,images,proof,runner,witness_file,physical_attestation,
                 memory=peak_mib(resources or {},arm.get("container_name"))
                 if memory is not None:
                     metrics["peak_ram_observed_mib"]=memory
+                metrics, profile = exact_metrics(
+                    metrics, exact_root, "real", name, tool,
+                    arm.get("conseq_digest"), images[tool], candidate=tool)
+                if profile is not None:
+                    row["exact_profiles"][tool] = profile
                 accept(row,tool,arm,metrics)
                 if arm.get("recovery"):
                     row["recovery"][tool]=arm["recovery"]

@@ -59,12 +59,14 @@ def monotone(prior,current):
                         raise ValueError("unverified old arm failure disappeared")
 
 
-def update(site,synth,physical,data,runner,attestation,images,physical_witness,physical_attestation,*,migrate=False,include_workload=False,cohort_order=("real","synthetic"),resources=None,real_retries=None,synthetic_data=None,synthetic_runner=None):
+def update(site,synth,physical,data,runner,attestation,images,physical_witness,physical_attestation,*,migrate=False,include_workload=False,cohort_order=("real","synthetic"),resources=None,real_retries=None,synthetic_data=None,synthetic_runner=None,
+           exact_real=None,exact_synthetic=None):
     site=Path(site)
     when=frozen_date(synth)
     generated=current(synth,physical,data,runner,attestation,images,when,
                       physical_witness,physical_attestation,resources,real_retries,
-                      synthetic_data=synthetic_data,synthetic_runner=synthetic_runner)
+                      synthetic_data=synthetic_data,synthetic_runner=synthetic_runner,
+                      exact_real=exact_real,exact_synthetic=exact_synthetic)
     if include_workload:
         generated["workload"]=worker_snapshot(synth,physical,images,
                                              order=cohort_order)
@@ -133,6 +135,8 @@ def main():
     parser.add_argument("--real-retries",type=Path)
     parser.add_argument("--synthetic-data",type=Path)
     parser.add_argument("--synthetic-runner",type=Path)
+    parser.add_argument("--exact-real",type=Path)
+    parser.add_argument("--exact-synthetic",type=Path)
     args=parser.parse_args()
     images=json.loads(Path(args.images).read_text())
     update(args.site,args.synthetic,args.real,args.real_data,args.runner,
@@ -141,7 +145,8 @@ def main():
            cohort_order=tuple(args.cohort_order.split(",")),
            resources=args.resources,real_retries=args.real_retries,
            synthetic_data=args.synthetic_data,
-           synthetic_runner=args.synthetic_runner)
+           synthetic_runner=args.synthetic_runner,
+           exact_real=args.exact_real,exact_synthetic=args.exact_synthetic)
 
 
 if __name__=="__main__":

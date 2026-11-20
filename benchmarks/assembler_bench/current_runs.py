@@ -122,7 +122,8 @@ def combine(synthetic_run,real_run,images,provenance,when,
 
 def current(synthetic_root,real_root,physical_data,runner,attestation,images,
             when,physical_witness,physical_attestation,resources=None,
-            real_retries=None,*,synthetic_data=None,synthetic_runner=None):
+            real_retries=None,*,synthetic_data=None,synthetic_runner=None,
+            exact_real=None,exact_synthetic=None):
     observed=load_resources(resources)
     multitruth = synthetic_data is not None
     if multitruth:
@@ -130,11 +131,13 @@ def current(synthetic_root,real_root,physical_data,runner,attestation,images,
         if synthetic_runner is None:
             raise ValueError("source-pinned v6 runner required")
         sy,sproof=synthetic_v6(synthetic_root,synthetic_data,images,
-                              attestation,synthetic_runner,observed)
+                              attestation,synthetic_runner,observed,
+                              exact_root=exact_synthetic)
     else:
         sy,sproof=synthetic(synthetic_root,images,attestation,runner,observed)
     re,rproof=physical(real_root,physical_data,images,attestation,runner,
-                       physical_witness,physical_attestation,observed,real_retries)
+                       physical_witness,physical_attestation,observed,real_retries,
+                       exact_root=exact_real)
     proof=fork_provenance(attestation,images)
     syn=make_run("synthetic",list(sy.values()),
                  464 if multitruth else 400,images,proof,sproof,when,

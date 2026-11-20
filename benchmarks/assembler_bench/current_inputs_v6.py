@@ -12,6 +12,7 @@ from .current_inputs import sample, accept
 from .hxb2_preview import sha
 from .public_case_metrics import synthetic as synthetic_metrics
 from .resource_peak import peak_mib, synthetic_name
+from .exact_cache import append as exact_metrics
 
 SCHEMA = "ivanka.expanded.fork_micall_synthetic.v1"
 COHORT_SHA = "90990f6109553347d37f7754cde63398a4dce57c388f90c2ce4b648530bfdfe4"
@@ -100,7 +101,8 @@ def verified_arm(arm_dir, tool, image, truth):
     return record
 
 
-def synthetic(root, data, images, attestation, runner, resources=None):
+def synthetic(root, data, images, attestation, runner, resources=None,
+              exact_root=None):
     manifest = Path(root) / "run_manifest.json"
     if not manifest.exists():
         return {}, None
@@ -123,6 +125,12 @@ def synthetic(root, data, images, attestation, runner, resources=None):
             memory = peak_mib(resources or {}, synthetic_name(record))
             if memory is not None:
                 metrics["peak_ram_observed_mib"] = memory
+            provenance = record.get("final_dominant") or {}
+            metrics, profile = exact_metrics(
+                metrics, exact_root, "synthetic", entry["id"], tool,
+                provenance.get("conseq_csv_sha256"), images[tool])
+            if profile is not None:
+                row["exact_profiles"][tool] = profile
             accept(row, tool, record, metrics)
             if record["status"] == "success":
                 row["truth_recovery"][tool] = {

@@ -25,6 +25,9 @@ SCHEMA = "ivanka.synthetic.six-before-ivanka.v1"
 SUMMARY = "six_comparators_summary.json"
 SOURCE = Path(__file__).resolve()
 MIN_FREE_BYTES = 20 * 1024**3
+MEMORY_CGROUP = Path("/sys/fs/cgroup")
+MIN_RAW_CGROUP_HEADROOM = 5 * 1024**3
+MIN_RECLAIMABLE_HEADROOM = 8 * 1024**3
 
 
 def ensure_disk_capacity(path):
@@ -37,6 +40,35 @@ def ensure_disk_capacity(path):
             f"free on {path}; requires >=20 GiB before new arms")
     return free
 
+
+
+def memory_headroom(maximum, current, inactive_file):
+    """Admission only: reserve space for an added MiCall process tree."""
+    if (maximum <= 0 or current < 0 or inactive_file < 0
+            or inactive_file > current):
+        raise ValueError("invalid cgroup memory counters")
+    raw = maximum - current
+    reclaimable = raw + inactive_file
+    if (raw < MIN_RAW_CGROUP_HEADROOM
+            or reclaimable < MIN_RECLAIMABLE_HEADROOM):
+        raise OSError(
+            "synthetic three-worker admission paused: cgroup headroom "
+            f"{raw / 1024**3:.2f} GiB raw, "
+            f"{reclaimable / 1024**3:.2f} GiB reclaimable")
+    return raw
+
+
+def ensure_memory_capacity():
+    """Only add a third worker when the shared host memory has slack."""
+    try:
+        maximum = int((MEMORY_CGROUP / "memory.max").read_text().strip())
+        current = int((MEMORY_CGROUP / "memory.current").read_text().strip())
+        stat = dict(line.split() for line in
+                    (MEMORY_CGROUP / "memory.stat").read_text().splitlines())
+        inactive = int(stat["inactive_file"])
+    except (OSError, ValueError, KeyError) as exc:
+        raise OSError("synthetic worker admission cannot verify host RAM") from exc
+    return memory_headroom(maximum, current, inactive)
 
 
 def score_origin_for(case_manifest):
@@ -188,8 +220,8 @@ def verify_all(rows, root, images, truth, manifest_sha):
 
 
 def run(data, root, images, fork, base, attestation_file, jobs=2):
-    if not 1 <= jobs <= 2:
-        raise ValueError("only the independently bounded 1-2 worker recovery mode is allowed")
+    if not 1 <= jobs <= 3:
+        raise ValueError("only the independently bounded 1-3 worker recovery mode is allowed")
     rows = list(cohort_rows(data))
     if len(rows) != len(ACTIVE_FAMILIES) * 16:
         raise ValueError("not exactly the frozen 464 synthetic cases")
@@ -207,6 +239,8 @@ def run(data, root, images, fork, base, attestation_file, jobs=2):
             active = {}
             for _ in range(jobs):
                 ensure_disk_capacity(root)
+                if jobs == 3:
+                    ensure_memory_capacity()
                 row = next(pending, None)
                 if row is not None:
                     active[pool.submit(
@@ -222,6 +256,8 @@ def run(data, root, images, fork, base, attestation_file, jobs=2):
                               t for t, v in proof["statuses"].items()
                               if v != "success"], flush=True)
                     ensure_disk_capacity(root)
+                    if jobs == 3:
+                        ensure_memory_capacity()
                     row = next(pending, None)
                     if row is not None:
                         active[pool.submit(

@@ -53,7 +53,24 @@ def append(metrics, cache, cohort, sample, tool, source_digest, image,
     if any(type(v) not in (int, float) or not math.isfinite(v)
            or v < 0 for v in exact.values()):
         raise ValueError("invalid exact-coverage aggregates")
+    full = report["tracks"]["exact_coverage"]
+    inner = report["tracks"]["exact_coverage_overlapped"]
+    if (report.get("uncovered") != exact["exact_coverage_zero_count"]
+            or report.get("bases") != exact["exact_coverage_length"]
+            or report["bases"] != exact["exact_coverage_overlapped_length"]
+            or full["zero_count"] != exact["exact_coverage_zero_count"]
+            or inner["zero_count"] != exact[
+                "exact_coverage_overlapped_zero_count"]):
+        raise ValueError("exact uncovered counts disagree with source tracks")
     result.update(exact)
+    # These existing catalog keys are aliases for the same longest-MAX
+    # exact-coverage evidence, not new or independently estimated scores.
+    result.update({
+        "exact_uncovered_bases": exact["exact_coverage_zero_count"],
+        "exact_uncovered_fraction": exact["exact_coverage_zero_fraction"],
+        "exact_uncovered_overlapped_bases":
+            exact["exact_coverage_overlapped_zero_count"],
+    })
     plots = {track: list(details["depth_profile"])
              for track, details in report["tracks"].items()}
     return result, {

@@ -1,6 +1,6 @@
 {
   "expanded_qualification": "incomplete",
-  "published_at": "2026-11-20T00:40:59.348232+00:00",
+  "published_at": "2026-11-20T00:46:09.386301+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -10932,7 +10932,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 199,
+        "recovered_arms": 200,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 198,
@@ -10941,7 +10941,7 @@
           "alias": "R001",
           "diagnostics": {
             "abyss": {
-              "peak_ram_observed_mib": 5907.5390625
+              "peak_ram_observed_mib": 3532.890625
             },
             "haploflow": {
               "peak_ram_observed_mib": 3748.3671875
@@ -11019,6 +11019,12 @@
           "floor_ok": null,
           "outcome": "failure",
           "recovery": {
+            "abyss": {
+              "original_checkpoint_sha256": "d8536518f03f4a26fb458569af0c809926fc9269fa657aacd4c3b7f24057bc38",
+              "retry_checkpoint_sha256": "9502b688d1f1aa1d22be78f93fca97dc14964a882a143a1e7e5ecb90de9b1109",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
             "megahit": {
               "original_checkpoint_sha256": "82ec966ba72f27e445f497ec1119ee705a05803ee9be0b30d3ba97ecf6744fec",
               "retry_checkpoint_sha256": "cab647aed4acd5d028061b2ecba769970653a83c284d537f887ed503d2ec52c4",
@@ -51525,7 +51531,7 @@
       "resource_policy": {
         "original_timeout_seconds": 1800,
         "ram_metric": "sampled process-tree RSS, not exact peak",
-        "recovered_arms": 199,
+        "recovered_arms": 200,
         "recovery_timeout_seconds": 3000
       },
       "sample_count": 204,
@@ -51534,7 +51540,7 @@
           "alias": "R-R001",
           "diagnostics": {
             "abyss": {
-              "peak_ram_observed_mib": 5907.5390625
+              "peak_ram_observed_mib": 3532.890625
             },
             "haploflow": {
               "peak_ram_observed_mib": 3748.3671875
@@ -51613,6 +51619,12 @@
           "floor_ok": null,
           "outcome": "failure",
           "recovery": {
+            "abyss": {
+              "original_checkpoint_sha256": "d8536518f03f4a26fb458569af0c809926fc9269fa657aacd4c3b7f24057bc38",
+              "retry_checkpoint_sha256": "9502b688d1f1aa1d22be78f93fca97dc14964a882a143a1e7e5ecb90de9b1109",
+              "status": "failed",
+              "timeout_seconds": 3000
+            },
             "megahit": {
               "original_checkpoint_sha256": "82ec966ba72f27e445f497ec1119ee705a05803ee9be0b30d3ba97ecf6744fec",
               "retry_checkpoint_sha256": "cab647aed4acd5d028061b2ecba769970653a83c284d537f887ed503d2ec52c4",
@@ -89637,8 +89649,8 @@
     ],
     "running": {
       "real": [
-        "abyss",
-        "haploflow"
+        "haploflow",
+        "spades"
       ],
       "synthetic": []
     },

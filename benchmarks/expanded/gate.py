@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 
 from .adapters import ASSEMBLERS
-from .synthetic import ACTIVE_FAMILIES, FAMILIES
+from .synthetic import ACTIVE_FAMILIES
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from psi_acceptance import summarize as psi  # noqa: E402

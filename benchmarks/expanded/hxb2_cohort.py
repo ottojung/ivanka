@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .hxb2_truth import haplotypes, validate, references
+from .hxb2_truth import validate, references
 from .synthetic import ACTIVE_FAMILIES, FAMILIES, generate_cohort, fingerprint
 from .read_model import PROFILE
 

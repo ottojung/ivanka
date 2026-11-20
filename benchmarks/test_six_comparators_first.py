@@ -216,6 +216,50 @@ class SixFirstTest(unittest.TestCase):
             stats.return_value.f_frsize = 1
             self.assertEqual(stage.ensure_disk_capacity(self.root), 20*1024**3)
 
+    def test_three_worker_memory_gate_exposes_raw_and_reclaimable_pressure(self):
+        gb = 1024**3
+        self.assertEqual(stage.memory_headroom(30 * gb, 20 * gb, 5 * gb),
+                         10 * gb)
+        with self.assertRaisesRegex(OSError, "admission paused"):
+            stage.memory_headroom(30 * gb, 26 * gb, 12 * gb)
+        with self.assertRaisesRegex(OSError, "admission paused"):
+            stage.memory_headroom(30 * gb, 24 * gb, gb)
+        with self.assertRaises(ValueError):
+            stage.memory_headroom(30 * gb, 20 * gb, 25 * gb)
+
+    def test_three_worker_queue_fails_closed_before_fourth_task(self):
+        data = self.root / "source_data"
+        data.mkdir()
+        out = self.root / "synthetic_output"
+        out.mkdir()
+        image_manifest = {"images": self.images}
+        (out / "run_manifest.json").write_text(json.dumps(image_manifest))
+        cases = [(f"clonal-s{i:03d}", data, self.manifest) for i in range(464)]
+        invoked = []
+        admission = [10*1024**3, 10*1024**3, 10*1024**3]
+        def memory():
+            if not admission:
+                raise OSError("low cgroup headroom")
+            return admission.pop()
+        def execute(row, *_):
+            invoked.append(row[0])
+            return row[0], {"statuses": {tool: "success" for tool in stage.SIX}}
+        with (patch.object(stage, "checked_images"),
+              patch.object(stage, "attestation", return_value=self.truth),
+              patch.object(stage, "cohort_rows", return_value=cases),
+              patch.object(stage, "manifest", return_value=image_manifest),
+              patch.object(stage, "run_one", side_effect=execute),
+              patch.object(stage, "ensure_disk_capacity",
+                           return_value=80*1024**3),
+              patch.object(stage, "ensure_memory_capacity",
+                           side_effect=memory),
+              patch.object(stage, "verify_all", side_effect=AssertionError)):
+            with self.assertRaisesRegex(OSError, "low cgroup headroom"):
+                stage.run(data, out, self.images, data, "base", data, jobs=3)
+        self.assertEqual(sorted(invoked),
+                         ["clonal-s000", "clonal-s001", "clonal-s002"])
+        self.assertFalse((out / stage.SUMMARY).exists())
+
     def test_two_worker_queue_stops_scheduling_when_disk_low(self):
         data = self.root / "source_data"
         data.mkdir()

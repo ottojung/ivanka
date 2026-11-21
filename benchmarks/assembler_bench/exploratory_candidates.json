@@ -1,0 +1,127 @@
+{
+  "schema": "ivanka.exploratory.assemblers.v1",
+  "created_utc": "2026-11-21",
+  "qualifying": false,
+  "baseline_assemblers": [
+    "ivanka",
+    "iva",
+    "haploflow",
+    "megahit",
+    "abyss",
+    "spades",
+    "velvet"
+  ],
+  "policy": {
+    "total_incremental_storage_bytes": 8589934592,
+    "min_workspace_free_bytes": 34359738368,
+    "max_concurrent_exploratory_workers": 1,
+    "max_container_wall_seconds": 2400,
+    "max_sampled_process_tree_rss_bytes": 4000000000,
+    "frozen_seven_manifest_sha256": "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f",
+    "reference_blind_assembler_input": true,
+    "qualification_admission": "explicit_future_decision_only",
+    "retention": "hash minimal outputs and independently verified metrics; remove only disposable scratch; never touch frozen historical or shared project assets"
+  },
+  "candidates": [
+    {
+      "id": "skesa",
+      "name": "SKESA",
+      "source_repo": "https://github.com/ncbi/SKESA",
+      "rationale": "short-read de Bruijn graph; bacterial baseline",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "idba-ud",
+      "name": "IDBA-UD",
+      "source_repo": "https://github.com/loneknightpy/idba",
+      "rationale": "uneven-depth multi-k assembly",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "minia",
+      "name": "Minia",
+      "source_repo": "https://github.com/GATB/minia",
+      "rationale": "compact-memory de Bruijn graph",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "ray",
+      "name": "Ray",
+      "source_repo": "https://github.com/sebhtml/ray",
+      "rationale": "MPI/distributed de Bruijn graph",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "unicycler",
+      "name": "Unicycler",
+      "source_repo": "https://github.com/rrwick/Unicycler",
+      "rationale": "short-read-only pipeline; SPAdes-backed but distinct workflow",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "tadpole",
+      "name": "Tadpole",
+      "source_repo": "https://github.com/bbushnell/BBTools",
+      "rationale": "single-k de Bruijn graph/coverage heuristics",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "vicuna",
+      "name": "VICUNA",
+      "source_repo": "https://github.com/broadinstitute/mvicuna",
+      "rationale": "diverse viral consensus assembly, no external reference",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "pehaplo",
+      "name": "PEHaplo",
+      "source_repo": "https://github.com/chjiao/PEHaplo",
+      "rationale": "paired-end de novo viral haplotypes",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "penguin",
+      "name": "PenguiN",
+      "source_repo": "https://github.com/soedinglab/plass",
+      "rationale": "protein-guided nucleotide de novo assembler; verify no leaked reference",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    },
+    {
+      "id": "savage-denovo",
+      "name": "SAVAGE de novo",
+      "source_repo": "https://github.com/HaploConduct/HaploConduct",
+      "rationale": "overlap graph viral quasispecies; strictly de novo mode",
+      "source_commit": null,
+      "image_sha256": null,
+      "status": "proposed",
+      "qualifying": false
+    }
+  ]
+}

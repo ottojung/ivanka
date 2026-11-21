@@ -4,10 +4,19 @@
 retries → all 464 synthetic six-comparator cases → physical Ivanka 198 →
 synthetic Ivanka 464. Earlier valid arms are preserved and reused; Ivanka
 runs last. This affects scheduling **only**, not scoring, the seven exact
-frozen MiCall images, per-sample 50-minute maximum, or strict completion
+frozen MiCall images, per-sample 40-minute maximum and 4 GB sampled RSS budget, or strict completion
 gates. See [benchmark handoff](../bench/six-first-handoff.md).
 
 **Binding numerical completion and release gate. Not yet passed.**
+
+**Founder work order (2026-11-21):** first repair Ivanka-controlled
+physical-198 checks, then synthetic-464 checks, while ten *additional*
+nonqualifying assemblers are evaluated under a separate 8 GiB exploration
+budget. Only after the primary gates, optimize physical diagnostics,
+then pursue repairs of current rivals. This order does **not** defer or
+remove any comparator from the final mandatory seven-way qualification;
+the completed frozen 662×7 trial has genuine failures and is NOT PASSED.
+See [ordered work](../bench/ordered-work-20261121.md).
 
 Use the same default, reference-blind Rust Ivanka in the unchanged MiCall
 pipeline, versus IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet.
@@ -49,7 +58,9 @@ contains one or more withheld generating truths with declared
    fixed 33-reference maximum local-alignment score in raw points.
    Physical reads, scoring and qualification evidence are not changed.
 5. Full MiCall runtime is independently measured in-container.
-   The synthetic per-arm limit is 50 minutes and memory limit 5 GiB;
+   The canonical per-arm limit is 40 minutes (2,400 seconds) and its
+    sampled-process-tree RSS budget is 4,000,000,000 bytes. A sampled RSS
+    measurement is not proof of kernel-enforced hard memory isolation;
    retain peak-memory telemetry as an additional diagnostic.
 
 The mixed-virus cases include **mutated HCV-1a + mutated HXB2-derived

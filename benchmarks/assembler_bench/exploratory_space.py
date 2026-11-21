@@ -1,6 +1,7 @@
 """Fail-closed DISK ADMISSION CHECK, not a running-job quota/watcher."""
 import os
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -13,10 +14,20 @@ def allocated(path):
     # unprivileged host user cannot stat: plain `du` both fails AND
     # undercounts.  Enter the user namespace so every allocated block of the
     # dedicated OCI store is visible; any failure still raises (fail closed).
-    result = subprocess.run(["podman", "unshare", "du", "-sB1", "--", str(target)],
-                            check=True, text=True, capture_output=True,
-                            timeout=120)
-    return int(result.stdout.split()[0])
+    last = None
+    for attempt in range(4):
+        try:
+            result = subprocess.run(
+                ["podman", "unshare", "du", "-sB1", "--", str(target)],
+                check=True, text=True, capture_output=True, timeout=120)
+            return int(result.stdout.split()[0])
+        except (subprocess.CalledProcessError, ValueError) as exc:
+            # Rootless OCI layers can appear/disappear mid-build; retry a
+            # bounded number of times, but still fail closed if unmeasurable.
+            last = exc
+            if attempt < 3:
+                time.sleep(0.25 * (attempt + 1))
+    raise last
 
 
 def available(path):

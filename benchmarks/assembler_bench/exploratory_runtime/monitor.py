@@ -10,10 +10,18 @@ class GuardExceeded(Exception):
 
 
 def rss_group_bytes(pgid):
-    result = subprocess.run(["ps", "-eo", "pgid=,rss="], check=True,
-                            capture_output=True, text=True, timeout=10)
-    return sum(int(fields[1]) * 1024 for line in result.stdout.splitlines()
-               if len(fields := line.split()) == 2 and int(fields[0]) == pgid)
+    last = None
+    for attempt in range(4):
+        try:
+            result = subprocess.run(["ps", "-eo", "pgid=,rss="], check=True,
+                                    capture_output=True, text=True, timeout=10)
+            return sum(int(fields[1]) * 1024 for line in result.stdout.splitlines()
+                       if len(fields := line.split()) == 2 and int(fields[0]) == pgid)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            last = exc
+            if attempt < 3:
+                time.sleep(0.25 * (attempt + 1))
+    raise last
 
 
 def watch(proc, config, *, interval=1, margin=1024**3, clock=time.monotonic,

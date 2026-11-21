@@ -1,6 +1,5 @@
 """No invisible wall/RSS/disk failures may escape supervisor."""
 import unittest
-from unittest.mock import patch
 
 from assembler_bench.exploratory_runtime.monitor import GuardExceeded, watch
 

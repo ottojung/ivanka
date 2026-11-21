@@ -28,9 +28,9 @@
       "name": "SKESA",
       "source_repo": "https://github.com/ncbi/SKESA",
       "rationale": "short-read de Bruijn graph; bacterial baseline",
-      "source_commit": null,
+      "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -38,9 +38,9 @@
       "name": "IDBA-UD",
       "source_repo": "https://github.com/loneknightpy/idba",
       "rationale": "uneven-depth multi-k assembly",
-      "source_commit": null,
+      "source_commit": "a1bafe6b012912cd9a76926ec75a98aee6213af6",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -48,9 +48,9 @@
       "name": "Minia",
       "source_repo": "https://github.com/GATB/minia",
       "rationale": "compact-memory de Bruijn graph",
-      "source_commit": null,
+      "source_commit": "7b7239c69ecc63534a20fc0d0c2de30f0f67e31c",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -58,9 +58,9 @@
       "name": "Ray",
       "source_repo": "https://github.com/sebhtml/ray",
       "rationale": "MPI/distributed de Bruijn graph",
-      "source_commit": null,
+      "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -68,9 +68,9 @@
       "name": "Unicycler",
       "source_repo": "https://github.com/rrwick/Unicycler",
       "rationale": "short-read-only pipeline; SPAdes-backed but distinct workflow",
-      "source_commit": null,
+      "source_commit": "1429301eb24df9162f3c9386e8522f942594ae42",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -78,9 +78,9 @@
       "name": "Tadpole",
       "source_repo": "https://github.com/bbushnell/BBTools",
       "rationale": "single-k de Bruijn graph/coverage heuristics",
-      "source_commit": null,
+      "source_commit": "fb1a2727b7b4994ecae0ddc362d4ed8148307b20",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -88,9 +88,9 @@
       "name": "VICUNA",
       "source_repo": "https://github.com/broadinstitute/mvicuna",
       "rationale": "diverse viral consensus assembly, no external reference",
-      "source_commit": null,
+      "source_commit": "437843110f5e6b63087f57ded9b9c93654391451",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -98,9 +98,9 @@
       "name": "PEHaplo",
       "source_repo": "https://github.com/chjiao/PEHaplo",
       "rationale": "paired-end de novo viral haplotypes",
-      "source_commit": null,
+      "source_commit": "eeb564329ed7f5b5b99d1b79a81d7962fc13eeca",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -108,9 +108,9 @@
       "name": "PenguiN",
       "source_repo": "https://github.com/soedinglab/plass",
       "rationale": "protein-guided nucleotide de novo assembler; verify no leaked reference",
-      "source_commit": null,
+      "source_commit": "ac83d8fa2fd315738afe675609a3dea05837cfea",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     },
     {
@@ -118,10 +118,16 @@
       "name": "SAVAGE de novo",
       "source_repo": "https://github.com/HaploConduct/HaploConduct",
       "rationale": "overlap graph viral quasispecies; strictly de novo mode",
-      "source_commit": null,
+      "source_commit": "24e4d9fc35ef6a93e336949a9a8f98ed4ceef362",
       "image_sha256": null,
-      "status": "proposed",
+      "status": "source-pinned",
       "qualifying": false
     }
-  ]
+  ],
+  "source_pinning": {
+    "method": "git ls-remote on the listed original GitHub repositories",
+    "observed_utc": "2026-11-21T16:53:00Z",
+    "runtime_images_built": 0,
+    "pilots_executed": 0
+  }
 }

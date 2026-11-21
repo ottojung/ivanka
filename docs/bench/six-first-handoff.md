@@ -1,11 +1,20 @@
 # Assembler Bench execution order: six comparators first, Ivanka last
 
-**Binding November 18, 2026 scheduling policy.** Continue the existing
+**Historical November 18, 2026 scheduling plan (execution completed November 21).** The existing
 198-physical + 464-synthetic, seven-assembler MiCall benchmark using the
 **same exact seven frozen MiCall images, clinical base, input hashes,
-source-pinned runner, scoring rules and 3,000-second per-arm limit**.
+source-pinned runner and scoring rules**. The earlier 3,000-second
+limit was subsequently superseded by the final **2,400-second (40-minute)
+cap and 4,000,000,000-byte sampled RSS budget** (which does not prove
+kernel-enforced hard memory isolation).
 Changing the schedule is not permission to patch, rebuild or replace MiCall;
 see [the frozen MiCall rule](frozen-micall-base.md).
+
+**Final outcome (November 21, 2026):** every one of the 198 physical
+and 464 synthetic cases has seven terminal source-attested execution
+records. The stage handoffs succeeded, although the expanded seven-way
+scientific qualification did **not** pass. Never repeat those terminal
+arms merely to reproduce this historical scheduling plan.
 
 Execute work in this order:
 
@@ -29,7 +38,8 @@ Execute work in this order:
    `results.jsonl` and `attempt_summary.json` format; a separate
    six-comparator sidecar is not a substitute for these original results.
 
-The original four completed source-attested synthetic cases have all seven
+At the time this historical execution order was designed, the original
+four completed source-attested synthetic cases had all seven
 arms and **must be reused**, not recomputed or deleted. Two more cases have
 partial historical results. Any already-run synthetic Ivanka arms predate
 this scheduling policy; preserve them as-is. The new order controls all
@@ -52,7 +62,8 @@ Ivanka handoff verifies each individual original arm again.
 The independent physical-six gate requires the authentic first-pass
 `198 × 6` certificate **and all separately eligible resource retries**,
 with each retry tied to its source-attested original checkpoint SHA-256,
-same image, same sample, and the 3,000-second limit.
+same image, same sample, and the then-current cap, with the final
+frozen trial externally limited to 2,400 seconds per arm.
 Source/certificate drift blocks the transition; an s6 process merely
 being alive is not a completion certificate.
 
@@ -69,7 +80,7 @@ it does not touch MiCall images, clinical source, or final results.
 The final pinned synthetic runner reuses the six existing `execution.json`
 records, not their scores from the six-stage sidecar. It writes its original
 seven-way full matrix and independently scores all abundant truth
-sequences as before. The previous four completed cases and any successful
+sequences as before. Under this historical plan, the previous four completed cases and any successful
 partial arms are never rerun.
 
 ## Bounded scheduling and low-disk protection
@@ -78,8 +89,9 @@ The external synthetic-six dispatcher never submits all 464 case futures
 at once: it schedules no more than **two active cases**, waits for a
 terminal, verified case, and only then starts another. If a case fails
 verification, the dispatcher stops scheduling rather than waiting for
-hundreds of already-submitted tasks to finish. The 3,000-second per-arm
-limit and two-case concurrency are unchanged.
+hundreds of already-submitted tasks to finish. Two-case concurrency
+was maintained and the final execution cap is 2,400 seconds, not the
+historical 3,000-second setting.
 
 Before scheduling an additional synthetic case or **each missing rival
 MiCall arm**, it checks the shared filesystem's available space using

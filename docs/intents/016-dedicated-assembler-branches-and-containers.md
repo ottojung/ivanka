@@ -12,6 +12,8 @@ modify MiCall**. A bug or timeout must be documented, never resolved by
 patching a branch, replacing a pinned container or changing common
 downstream code. See [Frozen MiCall base](../bench/frozen-micall-base.md).
 
+**November 21, 2026 expansion note:** the ten additional *proposed* assemblers in the [ordered development workplan](../bench/ordered-work-20261121.md) are **experimental and nonqualifying** until individually built, independently provenance-checked, and explicitly admitted by a future decision. The original seven fork branches/images and all original cohort results remain frozen. The dedicated branch-and-container requirement applies to these ten only when they are actually integrated; a registry entry alone is not an implementation or benchmark result.
+
 For every assembler included in Assembler Bench, **there must be one
 separate, dedicated branch in
 [ottojung/MiCall](https://github.com/ottojung/MiCall) and one separately

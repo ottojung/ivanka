@@ -1,5 +1,7 @@
 # Assembler Bench — current source-attested comparison
 
+**Current work priority:** [physical P0 → synthetic P1 → physical diagnostics P2 → existing-comparator repairs P3, with ten nonqualifying assemblers in parallel](ordered-work-20261121.md). This ordering does not alter any frozen qualification gate or image.
+
 **Non-negotiable source boundary:** MiCall's common clinical base and all
 seven pinned images are frozen. Fixing MiCall is prohibited regardless of
 discovered bugs or performance bottlenecks; report them as diagnostics.

@@ -16,6 +16,10 @@ The frozen November 2026 integrated-MiCall run achieved **198/198 successful phy
 
 The complete **198 physical + 464 synthetic × seven-assembler** benchmark is terminal, but **expanded seven-way qualification is NOT PASSED** because genuine failures and abundant-truth accuracy regressions remain. See the [source- and hash-bound release evidence](docs/releases/v0.1.0-alpha.4.md) and the [public Assembler Bench](https://ottojung.github.io/ivanka/bench/). This is an experimental milestone, **not** clinical validation.
 
+## Current development order (November 21, 2026)
+
+Follow the [founder-ordered benchmark workplan](docs/bench/ordered-work-20261121.md): **P0 physical checks**, then **P1 synthetic checks**, with **ten additional nonqualifying assemblers in parallel** under strict disk admission; then **P2 physical diagnostic improvement**, and **P3 existing-comparator repairs last**. The ten experimental tools cannot change the frozen seven-way release gate. Physical Ivanka/IVA already passes, but the seven-way gate remains failing until all authentic original-arm failure dependencies are resolved.
+
 ## MiCall base is frozen — no clinical MiCall fixes
 
 **The shared MiCall base image and every pinned MiCall clinical stage

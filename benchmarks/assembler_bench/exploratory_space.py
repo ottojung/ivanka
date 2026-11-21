@@ -9,9 +9,13 @@ def allocated(path):
     target = Path(path).resolve()
     if not target.is_dir():
         raise ValueError("missing measured directory: " + str(target))
-    result = subprocess.run(["du", "-sB1", "--", str(target)],
+    # Rootless Podman creates root-owned overlay subdirectories that the
+    # unprivileged host user cannot stat: plain `du` both fails AND
+    # undercounts.  Enter the user namespace so every allocated block of the
+    # dedicated OCI store is visible; any failure still raises (fail closed).
+    result = subprocess.run(["podman", "unshare", "du", "-sB1", "--", str(target)],
                             check=True, text=True, capture_output=True,
-                            timeout=60)
+                            timeout=120)
     return int(result.stdout.split()[0])
 
 

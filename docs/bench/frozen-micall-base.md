@@ -32,10 +32,15 @@ is **evidence**, never permission to repair MiCall. Do not disable or skip
 a downstream stage, change timeout semantics, manufacture outputs, convert
 errors into successes, or relabel earlier source-attested results.
 
-For repeated runs, preserve the same input, exact source and immutable OCI
-identity, with the existing **3,000-second (50-minute) per-arm maximum**.
-Preserve successful checkpoints, retain truthful failures with their
-reasons, and run the 198 physical cases before the 464 synthetic cases.
+For any separately versioned prospective runs, preserve original inputs,
+exact source and immutable OCI identity for each version, applying the
+current **2,400-second (40-minute) per-arm maximum** and
+**4,000,000,000-byte sampled process-tree RSS budget**. Sampled RSS is
+not evidence of independent kernel hard memory enforcement. Preserve
+all completed original checkpoints and genuine failures: do **not**
+repeat terminal arms or rewrite the completed 198 physical + 464
+synthetic frozen cohort. The original physical-first execution order
+and [founder work priorities](ordered-work-20261121.md) remain binding.
 A competitor that cannot finish because of the frozen MiCall pipeline
 must be reported as **failed/incomplete under the frozen pipeline**,
 even if a hypothetical MiCall repair would make it pass. The goal that

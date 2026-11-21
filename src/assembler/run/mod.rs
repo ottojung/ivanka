@@ -5,7 +5,7 @@ mod seeds;
 mod write_results;
 use super::extension::extend;
 use super::ranking::{
-    canonical_kmer, select_supported_contigs, select_supported_contigs_with_kmers,
+    canonical_kmer, select_supported_contigs_read_support, select_supported_contigs_with_kmers,
 };
 use super::reads::{encode, fasta_seeds, Reads, K};
 use super::run_seed::{append_preserving_diversity, assemble_candidates, rescue_short};

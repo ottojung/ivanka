@@ -20,7 +20,9 @@
     "frozen_seven_manifest_sha256": "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f",
     "reference_blind_assembler_input": true,
     "qualification_admission": "explicit_future_decision_only",
-    "retention": "hash minimal outputs and independently verified metrics; remove only disposable scratch; never touch frozen historical or shared project assets"
+    "retention": "hash minimal outputs and independently verified metrics; remove only disposable scratch; never touch frozen historical or shared project assets",
+    "dedicated_image_store_root": "/workspace/ivanka-exploratory-podman-20261121",
+    "dedicated_podman_storage_conf": "/workspace/ivanka-exploratory-ten-20261121/storage.conf"
   },
   "candidates": [
     {
@@ -129,5 +131,6 @@
     "observed_utc": "2026-11-21T16:53:00Z",
     "runtime_images_built": 0,
     "pilots_executed": 0
-  }
+  },
+  "storage_baseline_sha256": "e482773a20157b8585783bd6c3a9f3c5f351470805474d94c361454e47e28698"
 }

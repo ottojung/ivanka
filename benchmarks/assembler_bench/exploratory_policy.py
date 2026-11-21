@@ -22,6 +22,8 @@ def checked(path):
             or set(data["baseline_assemblers"]) != ORIGINAL
             or policy["total_incremental_storage_bytes"] != 8 * 1024**3
             or policy["min_workspace_free_bytes"] != 32 * 1024**3
+            or policy["dedicated_image_store_root"] != "/workspace/ivanka-exploratory-podman-20261121"
+            or policy["dedicated_podman_storage_conf"] != "/workspace/ivanka-exploratory-ten-20261121/storage.conf"
             or policy["max_concurrent_exploratory_workers"] != 1
             or policy["max_container_wall_seconds"] != 2400
             or policy["max_sampled_process_tree_rss_bytes"] != 4_000_000_000

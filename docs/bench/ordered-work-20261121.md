@@ -29,7 +29,7 @@ The order is normative even when some earlier Antonina issue descriptions contai
 
 ## Additional 10 candidate assemblers — nonqualifying
 
-The proposed [machine-readable registry](../../benchmarks/assembler_bench/exploratory_candidates.json) enumerates exactly these distinct tools, their original source repositories, and honest **proposed/unpinned** state. The list is not evidence that any are installed, built, benchmarked or approved:
+The source-pinned [machine-readable registry](../../benchmarks/assembler_bench/exploratory_candidates.json) enumerates exactly these distinct tools, their original source repositories, and ten verified upstream **source commits without built images**. The list is not evidence that any are installed, built, benchmarked or approved:
 
 1. [SKESA](https://github.com/ncbi/SKESA)
 2. [IDBA-UD](https://github.com/loneknightpy/idba)

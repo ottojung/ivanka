@@ -421,18 +421,21 @@ For a concise map of the active acceptance scripts versus historical
 experiments, see [benchmark entry points](benchmarks/README.md) and
 [the documentation map](docs/README.md).
 
-**Default benchmark configuration:** the standard packaged MiCall
-`ivanka` command now uses 50 primary / 20 supplementary native seed
-attempts and the complete original-read-backed selector, trimming and
-512-nt overlapping tiling, without special environment settings.
-The earlier 198-sample pass used the same algorithm with those options
-supplied by the image environment. The standalone Rust executable
-still does not implement read-backed post-selection: it is **not yet
-independently qualified** as the complete benchmark pipeline.
-The cohort also informed parameter tuning, so it is not held-out
-evidence. See [the complete qualification boundary](
-docs/read-backed-selection-experiment.md#qualification-boundary-and-reproducible-rebuilds)
-and [the source-pinned image builder](scripts/build_read_backed_image.sh).
+**Current native Rust benchmark identity:** The source-attested
+[v0.1.0-alpha.4](docs/releases/v0.1.0-alpha.4.md) image invokes the
+Rust Ivanka binary directly from MiCall with its ordinary default
+arguments (no Python selection wrapper or benchmark-only tuning).
+That frozen version passed the original 198-case physical comparison
+against IVA, including strict all-real-r≥0 alignment and runtime
+dominance, but did **not** pass the full seven-assembler 662-case
+qualification. Historical Python-wrapped configurations and
+read-backed selection experiments have their own immutable evidence;
+they do not qualify the current native source or justify swapping
+its tested binary. All experiments on the 198-case training/benchmark
+cohort also lack independent held-out clinical validation. The
+[original experiment record](docs/read-backed-selection-experiment.md)
+and [current benchmark work order](docs/bench/ordered-work-20261121.md)
+keep these distinct.
 
 **Expanded seven-assembler benchmark (COMPUTATIONS FINISHED; GATE NOT PASSED):**
 The current [source-attested benchmark](docs/bench/README.md) includes

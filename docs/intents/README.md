@@ -3,7 +3,11 @@
 **These requirements are conjunctive: satisfying one never waives any other.**
 A release or benchmark result is not a valid completion claim unless it
 meets every applicable architectural, scientific, and numerical requirement.
-The Rust-only, default-invocation, enhanced benchmark, public Assembler
+The [founder-ordered work programme](../bench/ordered-work-20261121.md)
+starts with physical checks, then synthetic checks, allows ten independent
+nonqualifying assembler candidates in parallel, improves physical diagnostics
+next, and repairs original rivals last; none of that changes the final
+scientific gate. The Rust-only, default-invocation, enhanced benchmark, public Assembler
 Bench, HXB2-derived synthetic-truth, tool-neutral evaluation, comprehensive diagnostics, soft clipping,
 exact coverage, all-pairs Ψ, fork-only MiCall source, and dedicated per-assembler branch/image
 requirements **all apply now**;
@@ -16,9 +20,9 @@ seven-way gate is not optional or deferred.
 | [002 — unconfigured, identical invocation](002-default-invocation-parity.md) | Empty child environment, three required read/output arguments plus optional same-sample read-derived G2P `--seeds`, built-in defaults, same MiCall execution during benchmarks | Verified on native alpha.3 with original 198; expanded pending |
 | [003 — reference blindness and evidence](003-reference-blindness.md) | No known/reference-derived genomes, reference panel, or scoring feedback influence assembly or contig selection | Binding now; continue enforcing |
 | [004 — numerical benchmark objective](004-dominant-sequence.md) | Maximize source-attested MiCall benchmark scores; synthetic evaluation scores every generating truth at ≥15% abundance, without a contig-count mandate | Binding now; quantitative |
-| [005 — authentic 198-sample qualification](005-physical-198-qualification.md) | ≥90% IVA per sample, no failures/timeouts, positive alignment and runtime signed-power Ψ(r) for every real r≥0 with genuine pinned MiCall inputs | Binding now; the previous passing *wrapped* image is historical, not a pass for 001/002 |
+| [005 — authentic 198-sample qualification](005-physical-198-qualification.md) | ≥90% IVA per sample, no failures/timeouts, positive alignment and runtime signed-power Ψ(r) for every real r≥0 with genuine pinned MiCall inputs | **PASS for tested native v0.1.0-alpha.4** on 198/198; expanded seven-way remains NOT PASSED |
 | [006 — expanded seven-assembler qualification](006-expanded-qualification.md) | 198 original real + 464 diverse synthetic samples; beat all six competitors with strict, separate, all-r alignment and runtime gates | **Required now for completion/release; not yet passed** |
-| [007 — public MiCall Assembler Bench](007-assembler-bench.md) | Reusable MiCall-integrated multi-assembler testing, independent review, versioned results publicly navigable on Ivanka GitHub Pages under `/bench/` | **Required; not yet built/published** |
+| [007 — public MiCall Assembler Bench](007-assembler-bench.md) | Reusable MiCall-integrated multi-assembler testing, independent review, versioned results publicly navigable on Ivanka GitHub Pages under `/bench/` | **Published** source-attested 198/464/662 cohorts; complete expanded qualification still NOT PASSED |
 | [008 — source-pinned viral truth](008-hxb2-synthetic-truth.md) | HXB2/recombinant HIV plus four source-pinned mutated HCV/HIV and HCV/V3 families, each with ≤5% untargeted mutations | **464-case source model implemented; expanded gate pending** |
 | [009 — assembler-neutral framework](009-neutral-metrics-and-pairwise-dominance.md) | General evaluation and presentation contract for any MiCall-integrated assembler; no privileged Ivanka baseline; delegates specialist requirements to 012–015 | **Required; neutral UI work incomplete** |
 | [010 — cfe-lab/MiCall read-only](010-upstream-micall-read-only.md) | Never push anything or create/modify PRs on `cfe-lab/MiCall`; allow fetch/read only, guard all push/PR destinations | **Binding immediately** |
@@ -26,7 +30,7 @@ seven-way gate is not optional or deferred.
 | [012 — comprehensive assembler diagnostics](012-assembler-diagnostic-metrics.md) | Final MiCall quality, depth/read-support, mapping, contig structure, runtime/resources, errors, provenance and comparable missingness for every tool | **Required; full publication incomplete** |
 | [013 — SAM/CIGAR soft clipping](013-alignment-soft-clipping.md) | Clipped reads, events, bases, left/right clips, counts and densities; distinct from `nuc.csv` clips | **Required; all-tool capture/public presentation incomplete** |
 | [014 — exact read coverage](014-exact-read-coverage.md) | Two distinct per-base exact-read-match coverage tracks, full-span and 70-base-end-trimmed; distributions, zero breadth and provenance | **Required; current sidecars expose only full-span counts** |
-| [015 — directed all-pairs Ψ](015-pairwise-psi-dominance.md) | Proof-backed all-r alignment/runtime/joint dominance matrix with incomplete, disproven, unresolved and self states | **Required; complete public matrix pending** |
+| [015 — directed all-pairs Ψ](015-pairwise-psi-dominance.md) | Proof-backed all-r alignment/runtime/joint dominance matrix with incomplete, disproven, unresolved and self states | Public matrix available with incomplete/failure states; full seven-way proof cannot pass given genuine terminal failures |
 | [016 — dedicated assembler branches and images](016-dedicated-assembler-branches-and-containers.md) | One dedicated fork branch, tool-only image and unique digest per assembler with identical MiCall baseline and exact-commit provenance | **Seven dedicated remote branches and separately built images verified; first seven-way MiCall smoke passed; full expanded gate pending** |
 
 ## Rules for changes and claims
@@ -42,9 +46,11 @@ seven-way gate is not optional or deferred.
   conditions. Architectural compliance alone is not a numerical pass.
 - **Distinguish evidence from intent.** The old alpha.2 passing image
   used a Python wrapper and cannot establish 001/002. The tagged
-  Rust-only alpha.3 subsequently passed the original 198 gate, but
-  neither release satisfies the *expanded* 662-case completion gate.
-  Both releases and their evidence remain immutable.
+  Rust-only alpha.3 and later **v0.1.0-alpha.4** each have independently
+  recorded original 198-case results; the latter source-attested 662-case
+  evaluation preserves **198/198 native physical Ivanka successes and strict
+  all-r Ψ PASS against IVA**, but still fails full expanded qualification.
+  Each tagged version and its evidence remains immutable.
 - **No benchmark leakage.** Real-data tuning does not constitute independent
   held-out validation. Preserve provenance and report negative results.
 - **Benchmark infrastructure is also a requirement.** The canonical

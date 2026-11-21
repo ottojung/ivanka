@@ -51,7 +51,7 @@ descriptions of what the existing qualifying image already implements:
   The unchanged ≥90% per-sample alignment floor and strict positive
   alignment **and runtime Ψ(r) for every real r≥0** remain mandatory.
 - **[Intent 006: expanded seven-way qualification](docs/intents/006-expanded-qualification.md).**
-  **Require a passing** 400-synthetic + 198-real, seven-assembler gate
+  **Require a passing** 464-synthetic + 198-real, seven-assembler gate
   before any completion or release claim; never weaken 005.
 - **[Intent 007: public MiCall Assembler Bench](docs/intents/007-assembler-bench.md).**
   All assemblers must be benchmarked as genuinely integrated into MiCall.
@@ -167,10 +167,10 @@ truth out of every candidate container/mount/CLI/environment. Clustered
 **read errors** may be studied, but **truth mutations** must be uniformly
 sampled at ≤5%, not intentionally clustered.
 
-**Benchmark-integrity contract.** Both independently mandatory gates must
+**Benchmark-integrity contract.** The current canonical cohort is 198 physical + 464 synthetic (662 total), and the per-arm current resource policy is 2,400 seconds / 4,000,000,000 bytes sampled RSS; the historical 400-case and 3,000-second/5-GiB policies are superseded, not retroactive. Sampled RSS does not prove kernel-enforced memory isolation. See [ordered work](docs/bench/ordered-work-20261121.md). Both independently mandatory gates must
 pass: the original authentic physical-198 IVA comparison (≥90% alignment
 per sample, no timeouts, positive alignment and runtime Ψ(r) for every real
-r≥0), and the expanded 198-real + 400-synthetic comparison against all six
+r≥0), and the expanded 198-real + 464-synthetic comparison against all six
 other assemblers (≥90% of the best rival per sample, both strict all-r Ψ
 gates separately per competitor and cohort). Partial, missing, failed or
 unrun comparisons never qualify. Do not silently change acceptance criteria

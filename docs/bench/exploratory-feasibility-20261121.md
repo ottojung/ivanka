@@ -70,6 +70,23 @@ top of the immutable common MiCall baseline `eeca0381808a6e9ba5ef791c80238a0e294
 The frozen seven images and common clinical source are untouched; upstream `cfe-lab/MiCall`
 is never a push/PR target.
 
+The four adapter-only branches are pushed to `ottojung/MiCall` (never `cfe-lab/MiCall`),
+each on the immutable common baseline `eeca0381808a6e9ba5ef791c80238a0e2940abb0`:
+
+| Branch | Fork commit | Tool source pinned |
+|--------|-------------|--------------------|
+| `bench/assembler-skesa` | `9a130efefab05d777aa225c1f967285ff9cfea45` | `34c872e7fd61c758d0d3917acd76507a43edfc64` |
+| `bench/assembler-tadpole` | `74d5bbb62dc770a2187f74d946ada2ce71bf2eb1` | `fb1a2727b7b4994ecae0ddc362d4ed8148307b20` |
+| `bench/assembler-idba-ud` | `aff920302e54ba27b14716cda42124e57348b8f0` | `a1bafe6b012912cd9a76926ec75a98aee6213af6` |
+| `bench/assembler-minia` | `af2e05142f278b5df01e335bef62286c97163478` | `7b7239c69ecc63534a20fc0d0c2de30f0f67e31c` |
+
+Each branch adds only one tool command, a one-name dispatch whitelist, a tool-only
+`Dockerfile.assembler-bench` that builds from the pinned source commit, provenance labels
+(including an independently attested tool binary SHA256 argument), a fail-closed
+`scripts/build_dedicated_assembler.sh`, docs and seven passing unit tests. No frozen seven
+tool is installed or copied and the shared clinical MiCall source is byte-identical to the
+baseline. Reference-guided modes cannot be selected through the committed argv.
+
 **No image is built and no pilot is run as part of this feasibility phase.** Building or
 piloting requires: a separately attested tool binary SHA, a dedicated image digest with
 full fork-commit provenance, a promoted `image-pinned` registry status, an admitted

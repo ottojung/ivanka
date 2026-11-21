@@ -39,7 +39,8 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                 state["recorded_utc"] = time.time()
                 output.flush()
                 os.fsync(output.fileno())
-                state["log_sha256"] = hashlib.sha256(log.read_bytes()).hexdigest()
+                with log.open("rb") as log_stream:
+                    state["log_sha256"] = hashlib.file_digest(log_stream, "sha256").hexdigest()
                 with record.open("x") as out:
                     json.dump(state, out, sort_keys=True)
                     out.write("\n")

@@ -56,6 +56,26 @@ For each: verify license/dependencies and reference-blind mode; pin a full sourc
 - Keep independently hashed, immutable small final outputs, consensus metrics, outcomes, source proofs and failure receipts. Delete only **provably disposable exploration scratch** after its outcome has been published and all hashes verified. Preserve every frozen benchmark artifact and unrelated projects (including qai-repo), no workspace-wide purges.
 - Do **not** launch all ten full 198+464 cohorts unless the demonstrated disk policy and durable storage provision support it. Partially completed exploration is published explicitly as partial; do not assert the ten-tool trial is complete just because pilot runs exist.
 
+### Supervised pilot/build execution
+
+The experimental launcher at \`benchmarks/assembler_bench/exploratory_runtime/cli.py\` admits only **registered, nonqualifying** projects against the verified baseline and dedicated Podman configuration. It requires a global exclusive worker lock and a 1–4 GiB explicit preflight reservation, records SHA256-hashed local logs and terminal outcomes, and polls every second for accumulated project+OCI storage, free shared disk space, sampled process-group RSS and 2400-second runtime. It stops its *own* process group on any exceeded or unreadable measurement. A separate source-pinned candidate may be built only in \`--mode build\`; a paired-read pilot \`--mode pilot\` requires independently audited *image-pinned* status. Parent PX must maintain that promotion; the ten source-pinned entries are not yet pilot-eligible.
+
+For example, a future approved source-pinned image build is invoked **only by its responsible worker** with an appropriate separately attested build command:
+
+~~~sh
+PYTHONPATH=benchmarks python -m assembler_bench.exploratory_runtime.cli \
+  --registry benchmarks/assembler_bench/exploratory_candidates.json \
+  --baseline /workspace/ivanka-exploratory-ten-20261121/budget-baseline.json \
+  --tool skesa --mode build --reserve-bytes 1073741824 \
+  -- podman build --file /path/to/source-pinned/Containerfile \
+      --tag localhost/ivanka-exploratory-skesa:<exact-source-revision> \
+      /path/to/source-pinned/context
+~~~
+
+This is a command **template, not evidence that such an image or branch has been built**; the builder must first verify the exact source, tool CLI, license and committed MiCall adapter, then confirm the image uses the dedicated store from the launcher environment. Do not use detached container modes. The sample's source inputs, opaque paths and private sequencing identities must remain private.
+
+**Limit of enforcement:** this is a conservative user-space polling watchdog with a 1 GiB emergency margin, **not** a kernel hard filesystem quota, per-container hard memory enforcement, or a guarantee against subsecond multi-GiB write bursts, malicious child detachment or storage outside the dedicated roots. Prior to running larger cohorts, the operator must independently verify that all writes are rooted inside the monitored directories and available disk remains safely above 32 GiB. If these conditions cannot be demonstrated, stop at pilots, disclose the blocker, and provision quota-backed storage rather than risk the frozen results or other users.
+
 ## Physical diagnostic objectives (after primary gates)
 
 Record both exact-coverage tracks (whole-read placements and internal positions after excluding 70 bases at each read end) on the same pinned final-MAX consensus target. Compare zero-covered fraction, longest exact-uncovered stretch, true breadth ≥1/3/10/100, quantiles, approximate depth separately from exact support, mean/total read depth, CIGAR soft-clipped bases/events, concordance, and resource metrics. Missing exact-consensus targets remain unavailable with reasons, **not zero**.

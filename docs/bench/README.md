@@ -18,14 +18,16 @@ checkpoint and leave the MiCall base frozen. See
 Assembler Bench is a static, privacy-safe GitHub Pages website:
 https://ottojung.github.io/ivanka/bench/
 
-The public site currently displays the historical 400-HXB2-case
-MiCall cohort and the unchanged 198-physical-case cohort. The new
-**464-case mixed-virus qualification view is not published or qualified
-until its own 7-way execution and source validation complete.**
-The site retains historical runs. Once available, the new synthetic
-score is length-balanced over **every ≥15%-abundant generating truth**.
-The previous 400-case final-MAX metric is historical and must not be
-relabeled as the new score.
+The source-attested November 2026 run is **complete at the execution level**:
+198 authentic physical and 464 abundance-aware, mixed-virus synthetic cases,
+with seven terminal execution records per case (4,634 in total). The public
+site publishes the current physical, synthetic and combined-662 views,
+with genuine failed arms explicitly represented. The **mandatory expanded
+seven-way qualification did NOT pass**. Historical 400-HXB2 synthetic
+runs retain their original metadata in separate archived views; they
+cannot be substituted or relabeled as the 464-case source-attested cohort.
+The current synthetic score is length-balanced over every generating
+truth with nominal abundance ≥15% (inclusive).
 
 The public site shows three current-cohort views and selectable
 earlier execution runs. Measurements remain attached to their
@@ -33,30 +35,32 @@ source/image identities; a scoring change does not require
 rerunning a retained MiCall consensus output. The three current
 cohort views are:
 
-- **400 HXB2-derived synthetic samples:** final dominant MiCall output
-  scored against withheld synthetic truth (v5 generation and rescore
-  required; earlier synthetic runs remain historical). Each of the seven assembler
-  arms runs its own source-attested fork container.
-- **198 physical samples:** the unchanged original reads and independent
-  33-reference MAX scorer, for IVA, Ivanka, Haploflow, MEGAHIT, ABySS,
-  SPAdes and Velvet. Every candidate is compared with a fresh IVA run.
-  The six candidates execute concurrently in their own result
-  directories and each has independent, freshly measured IVA controls.
-  Unavailable and not-yet-run measurements remain missing.
-- **Combined 598 cases:** the same final MiCall MAX local-alignment
-scores and timed seconds over all 598 cases, with the numeric scores
-preserved exactly. Every case uses the same local-alignment scorer:
-match +1, mismatch -1, gap-open -2, gap-extension -1, across all
-final MAX sequences. The synthetic reference panel contains
-the generating majority truth, or the two tied generating truths in
-equal-abundance mixtures; it is identical across competing assemblers. The physical reference panel contains
-the fixed project references. All values are raw alignment points.
+- **464 source-attested synthetic samples:** final MiCall MAX consensuses
+  scored independently against **each ≥15%-abundant withheld truth** on
+  both strands. The combined synthetic score is
+  `10,000 × mean(best_local_alignment_points / generating_truth_length)`.
+  This is the current original 25 read-stress families plus four HCV/HIV
+  and HCV/V3 families (16 seeds per new family). The older 400-case
+  HXB2-only benchmark is historical and not interchangeable.
+- **198 physical samples:** original paired-read inputs, same pinned
+  33-reference local-alignment MAX scorer in **raw points**; results for
+  IVA, Ivanka, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet. Genuine
+  failed/timeout original and selectively attested retry attempts remain
+  visible instead of becoming fabricated zero scores.
+- **Combined 662 cases:** one selectable union of the above cohorts,
+  retaining the cohort-specific original score units (physical raw
+  alignment points, synthetic 10,000-point normalized per-truth score),
+  individual runtime, provenance and missing-data reasons. Both use
+  match +1, mismatch −1, gap-open −2 and extension −1 local alignment;
+  **the two quality-score units must not be silently conflated** when
+  interpreting a pooled ranking or Ψ comparison.
 
-
-For the new qualifying synthetic benchmark, see
-[scientific synthetic v6](../scientific-synthetic-v6.md). All previously
-finished synthetic arms must be run again against the new FASTQs; the
-source hashes do not permit silent reuse.
+For the frozen qualifying 464-case methodology, see
+[scientific synthetic v6](../scientific-synthetic-v6.md). The completed
+original synthetic executions are source-attested and must **not** be
+rerun merely to refresh a report or experiment with candidate ranking.
+Any new candidate must use a separate versioned namespace, preserving
+the previous 464-case truth and input hashes.
 
 ## Static progress publication
 
@@ -83,7 +87,7 @@ The 23 diagnostic metrics (including CIGAR soft clipping, depth and
 contig summaries) include units, denominators and missing-data
 semantics. The one-case illustrative mapping diagnostic is taken
 from a completed source-attested checkpoint; it does not claim
-to represent all 400 cases.
+to represent all 464 current synthetic cases.
 
 The single-metric total ranking uses observed measurements only,
 with a clear denominator. The directed Ψ matrix allows independently
@@ -156,7 +160,7 @@ All diagnostic units and missing-data states remain intact.
 
 ## Independent private expanded-gate evaluation
 
-The end-to-end 598-case qualification is reconstructed from immutable
+The end-to-end 662-case qualification is reconstructed from immutable
 MiCall results, **not** from browser rankings. The source-pinned synthetic run is independently rechecked by
 the fork checkpoint verifier. The complete physical-198 attempt must
 have six independently finished candidate runs. Its frozen original
@@ -164,12 +168,19 @@ manifest, complete MiCall result/IVA controls, source hashes and
 dedicated images are checked before constructing the common
 seven-assembler matrix with the existing strict physical joiner.
 
-Use the private host command below after or during the runs:
-
-    PYTHONPATH=.:benchmarks python3 -m benchmarks.expanded.fork_qualification       --synthetic /private/dedicated-hxb2-400       --real /private/dedicated-real198       --physical-data /private/original-physical198       --runner /private/pinned-benchmark-runner       --attestation /private/seven-branch-attestation.json       --source-roots /private/seven-source-checkouts.json       --base IMMUTABLE_MIcall_BASE_ID       --output /private/seven-way-gate-report.json
+The previous 400-case CLI example is **historical, not sufficient** to
+qualify the 464-case multi-truth method. Reconstruct the current gate
+from the immutable seven-case rows and individual ≥15%-abundant-truth
+scores using the source-pinned v6 independent verifier, preserving all
+failed arms and the fixed image/source identities. The canonical frozen
+host evidence lives under
+`/workspace/micall-frozen-seven-20261117/phase-synthetic464`,
+`phase-real198`, and `phase-real198-memory-retries` (on the authorized
+host; not public paths). Do not repeat any terminal arm or import old
+400-case outcomes into the current gate.
 
 The tool reports **incomplete**, never a speculative pass, until
-all 400 synthetic cases and six full 198-case physical candidate arms
+all 464 synthetic cases and seven complete 198-case physical assembler arms
 are source-verified. It then uses the existing separate-cohort
 all-comparator strict signed-power PSI gate, including the 90% floor,
 without replacing missing observations or accepting a partial

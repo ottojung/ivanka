@@ -434,13 +434,19 @@ evidence. See [the complete qualification boundary](
 docs/read-backed-selection-experiment.md#qualification-boundary-and-reproducible-rebuilds)
 and [the source-pinned image builder](scripts/build_read_backed_image.sh).
 
-**Required new benchmark (NOT YET PASSED):** The
-[expanded seven-assembler suite](benchmarks/expanded/README.md) requires
-400 HXB2-derived synthetic cases beside the 198 real samples and requires
-Ivanka to beat IVA, Haploflow, MEGAHIT, ABySS, SPAdes and Velvet
-individually, through the public MiCall Assembler Bench. The suite is **not yet qualified**; source-pinned competitor
-images and a complete physical run are still required. See the
-[Ivanka–IVA algorithmic review](docs/assembler-comparison-20261112.md).
+**Expanded seven-assembler benchmark (COMPUTATIONS FINISHED; GATE NOT PASSED):**
+The current [source-attested benchmark](docs/bench/README.md) includes
+**198 physical + 464 abundance-aware mixed-virus synthetic samples** and
+seven dedicated MiCall-integrated assemblers (Ivanka, IVA, Haploflow,
+MEGAHIT, ABySS, SPAdes, Velvet): all **4,634** original executions are
+terminal and their genuine failures are preserved. Ivanka's native
+[v0.1.0-alpha.4](docs/releases/v0.1.0-alpha.4.md) passed the original
+198-sample IVA alignment/runtime Ψ gates but did **not** pass the expanded
+seven-way gate. Current [work order](docs/bench/ordered-work-20261121.md):
+physical Ivanka-controlled checks first, synthetic checks second, ten
+nonqualifying experimental assemblers in parallel, physical diagnostic
+optimization afterward, and comparator failures last. No source or image
+of the frozen run may be modified.
 
 ## Contig reporting and read-support ranking
 

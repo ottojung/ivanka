@@ -10,6 +10,12 @@ This is early experimental code. It is **not** validated for clinical use.
 Ivanka is licensed under the [GNU Affero General Public License, version 3](LICENSE)
 (`AGPL-3.0-only`).
 
+## Benchmarked milestone: [v0.1.0-alpha.4](https://github.com/ottojung/ivanka/releases/tag/v0.1.0-alpha.4)
+
+The frozen November 2026 integrated-MiCall run achieved **198/198 successful physical Ivanka cases** and passed the original IVA comparison: every final alignment met the ≥90%-of-IVA floor, and **alignment and runtime Ψ(r)>0 for every real r≥0** (mean **+3.59 alignment points** and **80.90 seconds saved/sample**). All 198 Ivanka arms stayed within 40 minutes and 4 GB of **observed** memory; kernel hard-limit enforcement was not established.
+
+The complete **198 physical + 464 synthetic × seven-assembler** benchmark is terminal, but **expanded seven-way qualification is NOT PASSED** because genuine failures and abundant-truth accuracy regressions remain. See the [source- and hash-bound release evidence](docs/releases/v0.1.0-alpha.4.md) and the [public Assembler Bench](https://ottojung.github.io/ivanka/bench/). This is an experimental milestone, **not** clinical validation.
+
 ## MiCall base is frozen — no clinical MiCall fixes
 
 **The shared MiCall base image and every pinned MiCall clinical stage

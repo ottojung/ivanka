@@ -27,6 +27,7 @@ def admit(registry, baseline, root, image_store, workspace, proposed_bytes):
             or baseline["root"] != str(Path(root).resolve())
             or baseline["image_store"] != str(Path(image_store).resolve())
             or baseline["workspace"] != str(Path(workspace).resolve())
+            or str(Path(image_store).resolve()) != cfg["dedicated_image_store_root"]
             or baseline["frozen_manifest_sha256"] != cfg["frozen_seven_manifest_sha256"]
             or not isinstance(proposed_bytes, int) or proposed_bytes < 1
             or baseline.get("active_job") is not None):

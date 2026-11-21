@@ -1,4 +1,6 @@
 """Validate unqualified job and rooted Podman store before process spawn."""
+import configparser
+import hashlib
 import json
 from pathlib import Path
 
@@ -16,8 +18,18 @@ def prepare(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
             or any(a in ("--detach", "-d") for a in argv)):
         raise ValueError("not an admissible bounded nonqualifying job")
     root = Path(base["root"])
-    if root / "storage.conf" != Path(reg["policy"]["dedicated_podman_storage_conf"]):
-        raise ValueError("wrong project storage configuration")
+    storage = root / "storage.conf"
+    store = Path(base["image_store"]).resolve()
+    if (storage != Path(reg["policy"]["dedicated_podman_storage_conf"])
+            or store != Path(reg["policy"]["dedicated_image_store_root"])
+            or hashlib.sha256(Path(baseline_path).read_bytes()).hexdigest()
+            != reg["storage_baseline_sha256"]):
+        raise ValueError("wrong project storage or changed disk baseline")
+    policy = configparser.ConfigParser()
+    if not policy.read(storage) or dict(policy["storage"]) != {
+            "driver": "overlay", "graphroot": str(store / "store"),
+            "runroot": str(store / "run")}:
+        raise ValueError("invalid dedicated-only container storage config")
     cfg = {"registry": reg, "baseline": base, "root": root,
            "image_store": base["image_store"], "workspace": base["workspace"],
            "budget_bytes": reg["policy"]["total_incremental_storage_bytes"],

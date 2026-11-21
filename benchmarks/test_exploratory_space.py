@@ -1,4 +1,5 @@
 """Storage admission is conservative and requires source-pinned scope."""
+import copy
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,7 +13,7 @@ PATH = Path(__file__).parent / "assembler_bench/exploratory_candidates.json"
 
 class TestExploratorySpace(unittest.TestCase):
     def setUp(self):
-        self.r = checked(PATH)
+        self.r = copy.deepcopy(checked(PATH))
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
@@ -21,6 +22,7 @@ class TestExploratorySpace(unittest.TestCase):
         self.exp = self.root / "experiment"
         for p in (self.store, self.work, self.exp):
             p.mkdir()
+        self.r["policy"]["dedicated_image_store_root"] = str(self.store.resolve())
         self.large = 100 * 1024**3
         with patch("assembler_bench.exploratory_space.available", return_value=self.large):
             self.base = initial(self.exp, self.store, self.work, self.r)

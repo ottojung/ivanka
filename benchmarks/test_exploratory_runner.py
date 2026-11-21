@@ -27,20 +27,23 @@ class TestRunner(unittest.TestCase):
         (self.root / "storage.conf").write_text(
             '[storage]\ndriver = "overlay"\ngraphroot = "'+str(self.store / 'store')+
             '"\nrunroot = "'+str(self.store / 'run')+'"\n')
-        base = {"root": str(self.root), "image_store": str(self.store),
-                "workspace": str(self.root)}
+        base = {"schema": "ivanka.exploratory.storage-baseline.v1",
+                "root": str(self.root), "image_store": str(self.store),
+                "workspace": str(self.root), "base_store_bytes": 0,
+                "frozen_manifest_sha256": self.policy["policy"]["frozen_seven_manifest_sha256"],
+                "active_job": None}
         self.baseline = self.root / "baseline.json"
         self.baseline.write_text(json.dumps(base))
         self.policy["storage_baseline_sha256"] = hashlib.sha256(
             self.baseline.read_bytes()).hexdigest()
         self.config = patch("assembler_bench.exploratory_runtime.setup.checked",
                             return_value=self.policy)
-        self.admission = patch("assembler_bench.exploratory_runtime.launch.admit",
-                               return_value={})
+        self.available = patch("assembler_bench.exploratory_space.available",
+                               return_value=100 * 1024**3)
         self.config.start()
-        self.admission.start()
+        self.available.start()
         self.addCleanup(self.config.stop)
-        self.addCleanup(self.admission.stop)
+        self.addCleanup(self.available.stop)
 
     def run_job(self, mode="build", argv=None):
         return operate(REG, self.baseline, "skesa", mode,

@@ -92,6 +92,8 @@ missing or malformed input, which is **null/unavailable with reason**.
   earlier benchmark evidence. Missing historical interior tracks
   remain `unavailable`, never inferred.
 
+**Current optimization order (November 21, 2026):** read-only baseline analysis is allowed now; prospective Ivanka optimization for breadth of exact coverage, zero-uncovered positions and related physical diagnostics is scheduled **after primary physical and synthetic numerical checks**. These measurements remain secondary, source-verified diagnostics; a raw-depth or repeated-placement increase cannot justify a reference-assisted selection, lost true haplotype evidence, or weakening any original alignment/runtime gate. See the [ordered workplan](../bench/ordered-work-20261121.md).
+
 ## Acceptance
 
 - Independently reproducible fixtures verify full-length exactness,

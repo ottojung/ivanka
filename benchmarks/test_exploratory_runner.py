@@ -1,5 +1,6 @@
 """Single-worker real process-group supervision and immutable storage checks."""
 import copy
+import fcntl
 import hashlib
 import json
 import sys
@@ -64,6 +65,23 @@ class TestRunner(unittest.TestCase):
     def test_changed_store_is_rejected(self):
         (self.root / "storage.conf").write_text("[storage]\ndriver = 'vfs'\n")
         with self.assertRaises(ValueError):
+            self.run_job()
+
+    def test_global_single_worker_lock(self):
+        with (self.root / ".global-worker.lock").open("a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(BlockingIOError):
+                self.run_job()
+
+    def test_insufficient_free_space_blocks_before_spawn(self):
+        with patch("assembler_bench.exploratory_space.available", return_value=0):
+            with self.assertRaisesRegex(ValueError, "workspace reserve"):
+                self.run_job()
+        self.assertFalse(list(self.root.glob("run-*.json")))
+
+    def test_tampered_baseline_rejected(self):
+        self.baseline.write_text(self.baseline.read_text() + " ")
+        with self.assertRaisesRegex(ValueError, "changed disk baseline"):
             self.run_job()
 
     def test_guard_violation_kills_group_and_records(self):

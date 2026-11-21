@@ -26,7 +26,7 @@ def prepare(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
             != reg["storage_baseline_sha256"]):
         raise ValueError("wrong project storage or changed disk baseline")
     policy = configparser.ConfigParser()
-    if not policy.read(storage) or dict(policy["storage"]) != {
+    if not policy.read(storage) or {k: v.strip("\"'") for k, v in policy["storage"].items()} != {
             "driver": "overlay", "graphroot": str(store / "store"),
             "runroot": str(store / "run")}:
         raise ValueError("invalid dedicated-only container storage config")

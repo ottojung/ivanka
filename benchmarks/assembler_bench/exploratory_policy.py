@@ -30,11 +30,13 @@ def checked(path):
     for item in candidates:
         src, img = item["source_commit"], item["image_sha256"]
         if (item["qualifying"] is not False or item["status"] not in
-                ("proposed", "pinned", "pilot", "benchmarked")
+                ("proposed", "source-pinned", "image-pinned", "pilot", "benchmarked")
                 or not item["source_repo"].startswith("https://github.com/")
                 or (src is not None and not SHA40.fullmatch(src))
                 or (img is not None and not SHA64.fullmatch(img))
-                or (item["status"] != "proposed" and (src is None or img is None))
+                or (item["status"] in ("image-pinned", "pilot", "benchmarked")
+                    and (src is None or img is None))
+                or (item["status"] == "source-pinned" and (src is None or img is not None))
                 or (item["status"] == "proposed" and (src is not None or img is not None))):
             raise ValueError("unproven or qualifying explorer: " + item["id"])
     return data
@@ -43,4 +45,4 @@ def checked(path):
 def eligible(data, name):
     """No unpinned source/image may be scheduled as a result-bearing arm."""
     return next(x for x in data["candidates"] if x["id"] == name)["status"] in (
-        "pinned", "pilot", "benchmarked")
+        "image-pinned", "pilot", "benchmarked")

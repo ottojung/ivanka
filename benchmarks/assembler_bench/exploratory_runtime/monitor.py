@@ -31,7 +31,7 @@ def watch(proc, config, *, interval=1, margin=1024**3, clock=time.monotonic,
                             config["root"], config["image_store"],
                             config["workspace"], margin)
             now = rss(proc.pid)
-        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        except Exception as exc:
             raise GuardExceeded("measurement_unavailable") from exc
         peak = max(peak, now)
         if peak > config["rss_bytes"]:

@@ -1,5 +1,4 @@
 """Storage admission is conservative and requires source-pinned scope."""
-import copy
 import tempfile
 import unittest
 from pathlib import Path

@@ -36,6 +36,7 @@ def verified_receipt(item, evidence, kind):
     if (data.get("schema") != "ivanka.exploratory." + kind + ".receipt.v1"
             or data.get("tool_id") != item["id"]
             or data.get("source_commit") != item["source_commit"]
+            or data.get("adapter_commit") != item.get("adapter_commit")
             or data.get("image_sha256") != item["image_sha256"]
             or data.get("qualifying") is not False):
         return False
@@ -94,7 +95,18 @@ def checked(path):
                 or entry.get("license_path") != license_path
                 or entry.get("replaces_blocked") != blocked_id):
             raise ValueError("license or substitution proof lost: " + replacement)
+    branches = data.get("adapter_branch_commits")
+    baseline = data.get("adapter_baseline_commit")
+    if (not isinstance(branches, dict) or set(branches) != EXPERIMENTAL
+            or not isinstance(baseline, str)
+            or not SHA40.fullmatch(baseline)
+            or sum(value is not None for value in branches.values()) < 8
+            or any(value is not None and (not isinstance(value, str)
+                   or not SHA40.fullmatch(value))
+                   for value in branches.values())):
+        raise ValueError("missing/invalid independent MiCall adapter source pins")
     for item in candidates:
+        item = dict(item, adapter_commit=branches[item["id"]])
         src, img = item["source_commit"], item["image_sha256"]
         if (item["qualifying"] is not False or item["status"] not in
                 ("proposed", "source-pinned", "image-pinned", "pilot", "benchmarked")
@@ -107,7 +119,8 @@ def checked(path):
                 or (item["status"] == "proposed" and (src is not None or img is not None))):
             raise ValueError("unproven or qualifying explorer: " + item["id"])
         if (item["status"] in ("image-pinned", "pilot", "benchmarked")
-                and not verified_receipt(item, item.get("image_evidence"), "image")):
+                and (item["adapter_commit"] is None or not verified_receipt(
+                    item, item.get("image_evidence"), "image"))):
             raise ValueError("no source-bound image proof: " + item["id"])
         if (item["status"] in ("pilot", "benchmarked")
                 and not verified_receipt(item, item.get("pilot_evidence"), "pilot")):

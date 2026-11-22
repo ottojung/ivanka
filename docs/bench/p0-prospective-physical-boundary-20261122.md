@@ -1,0 +1,41 @@
+# P0 physical correction: prospective native/G2P molecule deduplication
+
+**Status on 2026-11-22 (08:57 UTC): measured prospective controls, NOT full qualification.** This document is a progress record; [v0.1.0-alpha.4](https://github.com/ottojung/ivanka/releases/tag/v0.1.0-alpha.4) and all 4,634 source-attested original seven-arm results stay unchanged.
+
+## Correctness defect and source-bounded repair
+
+R042 originally scores 102 for Ivanka against a physical best score of 179 (90% floor 161.1). MiCall appends two G2P-derived molecules that are byte-identical to two of Ivanka's native output contigs. Under the original multimapping-safe `project_stitched_counts` contract, duplicated complete molecules have *unknown* projected read support, since summing duplicate remap counts would invent read evidence. That causes a region/contig selection fallback and loses the strongly read-supported 324-base R042 molecule.
+
+**Proposed future-version change:** [draft ottojung/MiCall PR #22](https://github.com/ottojung/MiCall/pull/22), source commit `a6c8195d95076325a07661f7f625a86361dfed45`, strand-canonical deduplication of native+G2P *complete, identical* molecules before the first remap. Retains the native contig first, all distinct minority molecules, zero-contig validity, and original output bytes when no duplicates are present. It changes **common MiCall preprocessing**, not the reference-blind Rust Ivanka assembler; no truth, reference, sample-specific scoring or evaluator knowledge enters the merge. The conservative count projector is unchanged. 28 focused Python tests and Ruff pass; a source-fixed R042 pilot produced the 179-score consensus with the original `--all_projects` and in-container monotonic timer.
+
+## Original sample attestations and prospective evidence
+
+| Physical evidence | Current result |
+| --- | --- |
+| Historical tagged Ivanka/IVA physical execution and all-r score/runtime gate | **198/198 + original IVA comparison PASS**; frozen and unchanged |
+| Physical source-only native+G2P input classification | 128/198 affected by exact duplicate molecule representation, 70/198 source-unique |
+| Prospective source-changed timed Ivanka affected subset (08:57 UTC) | **17 successful cases; 17/17 ≥90% of ORIGINAL IVA and best available original rivals** |
+| Differences within 17 affected cases | 1 improved (+27), 3 regressed (−6, −6, −2), 13 score ties; regressions retained |
+| Independently timed corrected R042 | 102 → 179; meets best-of-six historical floor of 161.1 |
+| Full future-version physical strict all-real-r Ψ and all-seven qualification | **NOT PASSED/NOT CERTIFIED**; incomplete paired future-version comparator evidence |
+
+Posthoc scores use the immutable 33-reference local-alignment panel SHA-256 `018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8` only **after** all candidate assembler execution has completed. The 17-case signed report is preserved under `/workspace/ivanka-p0-prospective-allprojects-20261122/p0-physical-selective-score-audit-20261122T0857Z.json`, SHA-256 `b1e5caa56e73288cfdb222b389d7a1097e4c6e9467bbfb975289b09d41540c63`. A separate source-ordered 24-new-case batch started later and its status must be verified from signed receipts, not inferred from this document.
+
+## Scientific safeguards still required
+
+1. **Do not overclaim the comparison.** Because PR #22 changes common MiCall, comparing prospective Ivanka against frozen pre-change IVA/other-assembler scores is only a provisional historical baseline, not a version-consistent seven-way pass. Future fair comparison must use the same new common processing for any affected comparator arm; original failures remain genuine, and the user's comparator-failure-repair priority is P3 **last**.
+2. **Measure runtimes rather than infer them.** Source-unique cases can preserve their original combined FASTA bytes and potentially original alignment scores, but this does not establish identical new-version runtime. An independently selected negative control had byte-identical final output but an 8.45-second timing difference. A prospective 198-case runtime all-r Ψ certificate must use genuine new-timed observations for all 198, including the 70 source-unique cases.
+3. **Protect all inputs and phase evidence.** Future controlled runs use the original physical paired FASTQ SHA-256 witnesses, original MiCall project mode `--all_projects`, original in-container monotonic timer, full MAX consensus and the unchanged 33-reference posthoc scorer. Do not choose output contigs using any reference, truth or benchmark score. Include non-cherry-picked controls and read-pair/minority consistency.
+4. **Keep the frozen trial immutable.** Never rebuild, modify, overwrite, delete, or quietly rerun any historical original seven OCI images, source checkouts, result journals, original read inputs or cached IVA artifacts. Future candidate work belongs to a distinctly source-identified namespace.
+
+## Separate resource admission — P0 versus nonqualifying ten-tool exploration
+
+The selective physical P0 runner is a single-worker, fail-closed, terminal-certificate-resuming external script in `/workspace/ivanka-p0-prospective-allprojects-20261122`. It admits a case only with **24 GiB of shared disk free plus max(256 MiB, 64× compressed source FASTQ bytes)** reserved for that case, checks free space every second, enforces 2,400 seconds and 4,000,000,000 bytes **sampled** RSS, caps logs, and uses a nonblocking lock to prevent competing dispatches. It does not prove independent kernel-enforced 4 GB memory isolation. Every verified completed scratch archive is lossless and checked by source/archive SHA-256 before loose copies are removed; results remain untouched.
+
+**The ten extra nonqualifying assemblers retain an entirely separate, stricter admission gate: ≥32 GiB free, ≤8 GiB incremental combined images/data/scratch, one total experimental worker.** Do not borrow P0's lower floor for those images or pilot runs. Their original seven-way acceptance membership remains zero.
+
+Two proposed tools, VICUNA and PEHaplo, remain blocked by source-output or licensing evidence. Independent source-pinned possible alternatives are [SOAPdenovo2](https://github.com/aquaskyline/SOAPdenovo2) GPL-3.0 at `7560c0b9d59e253cb0c819eca40d60f8636b4a11` (small-viral memory ≤4GB needs verification) and [fermi-lite](https://github.com/lh3/fermi-lite) MIT at `85f159e5a2e15a4c4fb41cdfce91ba0c9b68d2e1` (FASTA adapter and read-pair support need verification). They are **feasibility candidates, not yet substitutions**, and none has a build image or qualifying outcome.
+
+Founder order is unchanged: **P0 physical → P1 synthetic → P2 physical diagnostic metrics, including exact coverage → P3 other-comparator failures LAST**, with ten independently guarded, nonqualifying candidate assemblers being developed in parallel. The expanded seven-way scientific gate remains failing until complete honest future-version evidence establishes otherwise.
+
+Canonical source attestation: frozen seven-image manifest SHA-256 `9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f`. P0 Antonina issue: `Fz2R6jPtA0dzrkMgVuxD0f-solomon`; PX Antonina issue: `V9roZ0y80gjXs7WrOCgNbH-moral`.

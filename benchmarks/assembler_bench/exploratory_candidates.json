@@ -144,7 +144,12 @@
     "adapter_guard_checked_utc": "2026-11-22T09:30:00Z",
     "guard_source_branches_fixed": 7,
     "guard_source_branches_already_correct": 1,
-    "additional_binary_or_image_claims": false
+    "additional_binary_or_image_claims": false,
+    "adapter_packaging_verified_utc": "2026-11-22T09:35:00Z",
+    "dedicated_images_package_micall_adapter_modules": true,
+    "adapter_source_hashes_verified_at_build": true,
+    "adapter_binary_images_actually_built": 0,
+    "experimental_pilots_actually_run": 0
   },
   "storage_baseline_sha256": "e482773a20157b8585783bd6c3a9f3c5f351470805474d94c361454e47e28698",
   "blocked_original_candidates": [
@@ -182,15 +187,15 @@
   ],
   "adapter_baseline_commit": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
   "adapter_branch_commits": {
-    "skesa": "e6e6962ed8345f1a725788225ebe421f3cf093f6",
-    "idba-ud": "07c806bffc7ec7a9f61464dd8957dad73c97b10e",
-    "minia": "8ab5dc1748631c222454a6b262bcff4760e42234",
-    "ray": "cef87676b0b27e5d581113f8e8da73f7bc535010",
-    "unicycler": "1d3ddcaa37e868ce77640acbbcc0c50231b2e2ec",
-    "tadpole": "cf1d77882100fc4507356097adf14413281bc321",
+    "skesa": "dcf57bf112d185fc0c9f2744da6ea79c1c22225b",
+    "idba-ud": "7d487b3acc5dd30c04831e460a34f9d8344e0202",
+    "minia": "ea60f71c838e9b71d3115f49cfd59c7d763222a4",
+    "ray": "3d7de13241a029cf79c7b38023327ab6579a138b",
+    "unicycler": "4291afd9e06a06fc3a8a1dd7d53c6a0e3cbc87dd",
+    "tadpole": "4b0821d6a658ce6d3e8e9542fa70f783ab04a9ad",
     "soapdenovo2": null,
     "fermi-lite": null,
-    "penguin": "61b616c12b5f0d629e3759ffe8e8365391cda33b",
-    "savage-denovo": "3ff3bfc931dc036903de24d4dce727b454eaffe9"
+    "penguin": "9ec155c16fa9f0d37cf8a98215da810cbab5e00b",
+    "savage-denovo": "ade2c86699adb34fd0053bfbf7a46cf85eaa45e1"
   }
 }

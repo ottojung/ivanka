@@ -30,6 +30,15 @@ def watch(proc, config, *, interval=1, margin=1024**3, clock=time.monotonic,
             space = measure(config["registry"], config["baseline"],
                             config["root"], config["image_store"],
                             config["workspace"], margin)
+        except ValueError as exc:
+            # The admission checker reports a REAL cap breach as ValueError.
+            # It is not an unknown measurement: preserve its disk-stop cause.
+            if str(exc) == "exploration would breach disk budget or workspace reserve":
+                raise GuardExceeded("disk_limit") from exc
+            raise GuardExceeded("measurement_unavailable") from exc
+        except Exception as exc:
+            raise GuardExceeded("measurement_unavailable") from exc
+        try:
             now = rss(proc.pid)
         except Exception as exc:
             raise GuardExceeded("measurement_unavailable") from exc

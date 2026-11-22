@@ -29,6 +29,27 @@ For each of the seven changed branches: independent checkout and pinned baseline
 
 The missing two active candidates, SOAPdenovo2 and Fermi-lite, have genuine upstream source SHA-40s in [the separate replacement decision](px-licensed-source-replacements-20261122.md), but **have no MiCall adapter branches, native binary hashes, containers or pilots yet**. Never conflate upstream tool source hashes with fork integration source hashes.
 
+## Follow-up: package the exact adapter modules (November 22, 09:35 UTC)
+
+The guard-only HEADs above are preserved as the first-stage audit. A second source-only audit found **all eight experimental tool Dockerfiles installed native assemblers but never installed branch-specific MiCall `assembler_commands.py` and `assembler_dispatch.py`**. The common base image therefore could not dispatch the selected tool correctly even if its installation succeeded.
+
+This is now repaired: each tool-only image definition copies exactly those two source modules from its published fork branch into the base MiCall Python 3.12 package, verifies their SHA-256 values at build time, and records both hashes in its image labels. The build scripts compute and pass the same module hashes from the checked-out source and correctly query image labels; previously the Go template used a literal shell variable. No original frozen image is modified.
+
+| Adapter | Latest source-only packaging HEAD |
+| --- | --- |
+| SKESA | `dcf57bf112d185fc0c9f2744da6ea79c1c22225b` |
+| IDBA-UD | `7d487b3acc5dd30c04831e460a34f9d8344e0202` |
+| Minia | `ea60f71c838e9b71d3115f49cfd59c7d763222a4` |
+| Ray | `3d7de13241a029cf79c7b38023327ab6579a138b` |
+| Unicycler | `4291afd9e06a06fc3a8a1dd7d53c6a0e3cbc87dd` |
+| Tadpole | `4b0821d6a658ce6d3e8e9542fa70f783ab04a9ad` |
+| PenguiN | `9ec155c16fa9f0d37cf8a98215da810cbab5e00b` |
+| SAVAGE | `ade2c86699adb34fd0053bfbf7a46cf85eaa45e1` |
+
+Every branch passed source-bound shell-syntax, Git diff checks, and dedicated integration tests: **9/9 per branch for seven**, **8/8 for Unicycler**. All commits are independently pushed under `ottojung/MiCall`. The exact new fork SHAs supersede the prior branch HEADs **for future builds only**, not for preservation of earlier audit evidence.
+
+**Still untested:** whether the pinned common base image has the required Python package directory, the native tool binary builds reproducibly under available toolchains, the image labels match after an actual OCI build, and the tool meets 40-minute/4 GB and paired-FASTQ clinical constraints. Those are runtime build/pilot gates; no image build or pilot is claimed, and PX remains blocked by its independent 32 GiB free-space + 8 GiB incremental-storage rule.
+
 ## Admission and next work
 
 The [machine-readable registry](../../benchmarks/assembler_bench/exploratory_candidates.json) independently records the immutable *upstream tool source commit* and each existing *MiCall adapter branch HEAD*; new image receipts must attest both. A branch HEAD or a plausible image digest is **not** proof that the image can be built, that the binary satisfies the intended program/version, that a pilot returned true MiCall outcomes, or that a qualification check passed.

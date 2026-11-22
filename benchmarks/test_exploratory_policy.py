@@ -54,8 +54,8 @@ class TestExplorerRegistry(unittest.TestCase):
         branches = self.current["adapter_branch_commits"]
         self.assertEqual(set(branches),
                          {x["id"] for x in self.current["candidates"]})
-        self.assertEqual(sum(x is not None for x in branches.values()), 9)
-        self.assertIsNone(branches["soapdenovo2"])
+        self.assertEqual(sum(x is not None for x in branches.values()), 10)
+        self.assertEqual(len(branches["soapdenovo2"]), 40)
         self.assertEqual(len(branches["fermi-lite"]), 40)
         self.assertEqual(len(self.current["adapter_baseline_commit"]), 40)
         self.assertNotEqual(branches["minia"],

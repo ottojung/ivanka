@@ -3,15 +3,27 @@ import os
 import subprocess
 from pathlib import Path
 
+# This is the ONLY dedicated rootless store authorized by the PX policy.
+# Podman overlay subdirectories are remapped to container UIDs: ordinary
+# host 'du' returns permission errors while an image build is in progress.
+ROOTLESS_STORE = Path("/workspace/ivanka-exploratory-podman-20261121")
+
+
+def disk_measure_command(target):
+    """Count every allocated block or fail closed; never parse partial 'du'."""
+    command = ["du", "-sB1", "--", str(target)]
+    if target == ROOTLESS_STORE:
+        return ["podman", "unshare", *command]
+    return command
+
 
 def allocated(path):
-    """Use allocated blocks rather than logical file length."""
+    """Use exact allocated blocks, including rootless Podman overlay layers."""
     target = Path(path).resolve()
     if not target.is_dir():
         raise ValueError("missing measured directory: " + str(target))
-    result = subprocess.run(["du", "-sB1", "--", str(target)],
-                            check=True, text=True, capture_output=True,
-                            timeout=60)
+    result = subprocess.run(disk_measure_command(target), check=True,
+                            text=True, capture_output=True, timeout=15)
     return int(result.stdout.split()[0])
 
 

@@ -41,10 +41,12 @@ The source-pinned [machine-readable registry](../../benchmarks/assembler_bench/e
 4. [Ray](https://github.com/sebhtml/ray)
 5. [Unicycler (short-read-only)](https://github.com/rrwick/Unicycler)
 6. [Tadpole / BBTools](https://github.com/bbushnell/BBTools)
-7. [VICUNA / mvicuna](https://github.com/broadinstitute/mvicuna)
-8. [PEHaplo](https://github.com/chjiao/PEHaplo)
+7. [SOAPdenovo2](https://github.com/aquaskyline/SOAPdenovo2) — **source-only, high-risk 4 GB memory feasibility**
+8. [Fermi-lite](https://github.com/lh3/fermi-lite) — **source-only, requires faithful unitig FASTQ→FASTA conversion**
 9. [PenguiN / plass](https://github.com/soedinglab/plass)
 10. [SAVAGE (de novo mode only)](https://github.com/HaploConduct/HaploConduct)
+
+**Source-license correction (November 22):** Original candidates VICUNA and PEHaplo remain in the registry's preserved source-blocker history, but neither had an auditable distributable image path at its pinned revision. Their two **source-only** active slots now hold license-verified SOAPdenovo2 and Fermi-lite. See the [pinned source evidence and exact remaining engineering limitations](px-licensed-source-replacements-20261122.md). This is a candidate-roster correction, **not** two extra built or piloted assemblers. SOAPdenovo2's upstream stated 5 GB generic minimum may be incompatible with our strict 4 GB bound; it must fail closed if so. Source pins/images/experimental status are kept separate.
 
 For each: verify license/dependencies and reference-blind mode; pin a full source commit or immutable release source, native binary SHA and separate reproducible OCI digest; introduce a separate dedicated fork branch under ottojung/MiCall with adapter-only integration, without modifying its frozen common clinical code or the seven original images; run 1 real + 1 synthetic paired FASTQ canary with source-verified MiCall outputs, truthful failures, exact metrics and timing. Grow coverage gradually only if resources allow. All added programs are **separate experimental observations** and are excluded from the original seven-way qualification, all qualifying ranks and the formal pass denominator. New membership requires an explicit future founder decision and new separately versioned qualification definition.
 

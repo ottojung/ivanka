@@ -3,7 +3,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 # This is the ONLY dedicated rootless store authorized by the PX policy.
 # Podman overlay subdirectories are remapped to container UIDs: ordinary
 # host 'du' returns permission errors while an image build is in progress.

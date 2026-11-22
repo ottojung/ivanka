@@ -8,7 +8,11 @@ from unittest.mock import patch
 
 from assembler_bench.exploratory_policy import checked
 from assembler_bench.exploratory_space import (
-    ROOTLESS_STORE, admit, allocated, disk_measure_command, initial,
+    ROOTLESS_STORE,
+    admit,
+    allocated,
+    disk_measure_command,
+    initial,
 )
 
 PATH = Path(__file__).parent / "assembler_bench/exploratory_candidates.json"
@@ -52,13 +56,15 @@ class TestExploratorySpace(unittest.TestCase):
             self.assertTrue(run.call_args.kwargs["check"])
 
     def test_rootless_accounting_fails_closed_when_userns_cannot_read(self):
-        with patch("assembler_bench.exploratory_space.Path.is_dir",
-                   return_value=True), patch(
-                    "assembler_bench.exploratory_space.subprocess.run",
-                    side_effect=subprocess.CalledProcessError(
-                        1, ["podman", "unshare"], stderr="permission denied")):
-            with self.assertRaises(subprocess.CalledProcessError):
-                allocated(ROOTLESS_STORE)
+        with (
+            self.assertRaises(subprocess.CalledProcessError),
+            patch("assembler_bench.exploratory_space.Path.is_dir",
+                  return_value=True),
+            patch("assembler_bench.exploratory_space.subprocess.run",
+                  side_effect=subprocess.CalledProcessError(
+                      1, ["podman", "unshare"], stderr="permission denied")),
+        ):
+            allocated(ROOTLESS_STORE)
 
     def test_small_pilot_admitted(self):
         self.assertEqual(self.check(1024)["admitted_reservation_bytes"], 1024)

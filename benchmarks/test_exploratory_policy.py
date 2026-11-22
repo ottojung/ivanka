@@ -32,6 +32,24 @@ class TestExplorerRegistry(unittest.TestCase):
         self.assertTrue(all(not eligible(self.current, x["id"])
                             for x in self.current["candidates"]))
 
+    def test_blocked_originals_retained_with_auditable_replacements(self):
+        active = {x["id"]: x for x in self.current["candidates"]}
+        self.assertEqual(set(active) & {"vicuna", "pehaplo"}, set())
+        self.assertEqual(active["soapdenovo2"]["source_license"], "GPL-3.0")
+        self.assertEqual(active["fermi-lite"]["source_license"], "MIT")
+        blocked = {x["id"]: x for x in self.current["blocked_original_candidates"]}
+        self.assertEqual(set(blocked), {"vicuna", "pehaplo"})
+        self.assertEqual(blocked["vicuna"]["replacement"], "soapdenovo2")
+        self.assertEqual(blocked["pehaplo"]["replacement"], "fermi-lite")
+        self.assertTrue(all(x["qualifying"] is False and x["not_qualifying"] is True for x in blocked.values()))
+        self.mutate(PATH, lambda d: d.pop("blocked_original_candidates"))
+        self.mutate(PATH, lambda d: d["blocked_original_candidates"][0].update(
+            status="image-pinned"))
+        self.mutate(PATH, lambda d: d["candidates"][6].update(
+            source_license="unknown"))
+        self.mutate(PATH, lambda d: d["candidates"][7].update(
+            image_sha256="0" * 64, status="pilot"))
+
     def test_must_not_add_to_original_qualifiers(self):
         self.mutate(PATH, lambda d: d["baseline_assemblers"].append("skesa"))
         self.mutate(PATH, lambda d: d.update(qualifying=True))

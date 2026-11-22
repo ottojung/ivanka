@@ -134,7 +134,7 @@
   ],
   "source_pinning": {
     "method": "git ls-remote on the listed original GitHub repositories",
-    "observed_utc": "2026-11-22T09:20:00Z",
+    "observed_utc": "2026-11-22T09:55:00Z",
     "runtime_images_built": 0,
     "pilots_executed": 0,
     "substitutions_source_only": 2,
@@ -155,7 +155,14 @@
     "unicycler_native_and_spades_dependency_digests_separated": true,
     "actual_native_binary_hashes_computed": 0,
     "actual_new_images_built": 0,
-    "actual_new_pilots_executed": 0
+    "actual_new_pilots_executed": 0,
+    "active_source_adapter_branches_pushed": 10,
+    "source_only_integration_completed_utc": "2026-11-22T09:55:00Z",
+    "license_verified_source_pins": 10,
+    "experimentally_built_native_tools": 0,
+    "experimentally_built_images": 0,
+    "experimentally_executed_pilots": 0,
+    "software_and_benchmark_qualification_complete": false
   },
   "storage_baseline_sha256": "e482773a20157b8585783bd6c3a9f3c5f351470805474d94c361454e47e28698",
   "blocked_original_candidates": [
@@ -199,7 +206,7 @@
     "ray": "01e9b305eb67118c80b6ce72953c14ed4b7e821e",
     "unicycler": "2ae4983fcbe30e57e85d0bc6acd464084d57c3e9",
     "tadpole": "1f03b67750685c9410149b5c6759f1cd4e47b652",
-    "soapdenovo2": null,
+    "soapdenovo2": "a02075c1549160e61abd435b6bf75ee88aa4988e",
     "fermi-lite": "b8e6959b4943be32ee3b7698530d84690018ac1e",
     "penguin": "051836e97d461ddb2044cd59c154d22bc2edf591",
     "savage-denovo": "92360b67c8240c3fb5084cd32fbc531e6f6de2d8"

@@ -8,6 +8,7 @@ import time
 
 from assembler_bench.exploratory_space import admit
 
+from .cleanup import clean_stopped_build
 from .monitor import GuardExceeded, watch
 from .setup import prepare
 from .terminate import group
@@ -45,6 +46,16 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                         state["measurement_stderr_tail"] = str(cause.stderr)[-320:]
             finally:
                 state["exit_code"] = group(proc)
+                if mode == "build" and state["status"] != "finished":
+                    # External Buildah "Storage" work containers survive
+                    # SIGTERM and are invisible to ordinary podman ps/prune.
+                    # Cleanup is restricted to this project's exact graphroot
+                    # and occurs ONLY after the monitored build group stopped.
+                    try:
+                        state["orphan_cleanup"] = clean_stopped_build(root, env)
+                    except (OSError, ValueError, RuntimeError,
+                            subprocess.SubprocessError) as exc:
+                        state["orphan_cleanup_error"] = str(exc)[:320]
                 state["recorded_utc"] = time.time()
                 output.flush()
                 os.fsync(output.fileno())

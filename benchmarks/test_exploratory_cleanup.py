@@ -40,10 +40,12 @@ class TestGuardedBuildahCleanup(unittest.TestCase):
         self.assertEqual(sum(x[1] == "rm" for x in calls), 1)
 
     def test_wrong_store_never_attempts_removal(self):
-        with patch("assembler_bench.exploratory_runtime.cleanup.command",
-                   return_value="/workspace/wrong-store"):
-            with self.assertRaisesRegex(ValueError, "graphroot"):
-                clean_stopped_build(ROOT, ENV)
+        with (
+            patch("assembler_bench.exploratory_runtime.cleanup.command",
+                  return_value="/workspace/wrong-store"),
+            self.assertRaisesRegex(ValueError, "graphroot"),
+        ):
+            clean_stopped_build(ROOT, ENV)
         with self.assertRaisesRegex(ValueError, "dedicated"):
             clean_stopped_build("/workspace/not-exploratory", ENV)
 
@@ -57,7 +59,9 @@ class TestGuardedBuildahCleanup(unittest.TestCase):
                 return ""
             self.fail("cleanup must not run on unrecognized container")
 
-        with patch("assembler_bench.exploratory_runtime.cleanup.command",
-                   side_effect=stub):
-            with self.assertRaisesRegex(RuntimeError, "unrecognized"):
-                clean_stopped_build(ROOT, ENV)
+        with (
+            patch("assembler_bench.exploratory_runtime.cleanup.command",
+                  side_effect=stub),
+            self.assertRaisesRegex(RuntimeError, "unrecognized"),
+        ):
+            clean_stopped_build(ROOT, ENV)

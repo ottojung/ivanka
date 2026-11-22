@@ -4,7 +4,6 @@ After the monitored build group has stopped, old --external/Storage overlays
 can outlive podman build and exceed the eight-GiB exploratory disk limit.
 Never touch containers in another store or a running container.
 """
-import os
 import re
 import subprocess
 from pathlib import Path

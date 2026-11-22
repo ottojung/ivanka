@@ -1,12 +1,15 @@
 """Storage admission is conservative and requires source-pinned scope."""
 import copy
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from assembler_bench.exploratory_policy import checked
-from assembler_bench.exploratory_space import admit, initial
+from assembler_bench.exploratory_space import (
+    ROOTLESS_STORE, admit, allocated, disk_measure_command, initial,
+)
 
 PATH = Path(__file__).parent / "assembler_bench/exploratory_candidates.json"
 
@@ -31,6 +34,31 @@ class TestExploratorySpace(unittest.TestCase):
         with patch("assembler_bench.exploratory_space.available",
                    return_value=self.large if free is None else free):
             return admit(self.r, self.base, self.exp, self.store, self.work, reserve)
+
+    def test_rootless_overlay_uses_podman_userns_not_partial_host_du(self):
+        expected = ["podman", "unshare", "du", "-sB1", "--",
+                    str(ROOTLESS_STORE)]
+        self.assertEqual(disk_measure_command(ROOTLESS_STORE), expected)
+        self.assertEqual(disk_measure_command(self.store.resolve()),
+                         ["du", "-sB1", "--", str(self.store.resolve())])
+        result = subprocess.CompletedProcess(expected, 0,
+                                             "123456\t/store\n", "")
+        with patch("assembler_bench.exploratory_space.Path.is_dir",
+                   return_value=True), patch(
+                    "assembler_bench.exploratory_space.subprocess.run",
+                    return_value=result) as run:
+            self.assertEqual(allocated(ROOTLESS_STORE), 123456)
+            self.assertEqual(run.call_args.args[0], expected)
+            self.assertTrue(run.call_args.kwargs["check"])
+
+    def test_rootless_accounting_fails_closed_when_userns_cannot_read(self):
+        with patch("assembler_bench.exploratory_space.Path.is_dir",
+                   return_value=True), patch(
+                    "assembler_bench.exploratory_space.subprocess.run",
+                    side_effect=subprocess.CalledProcessError(
+                        1, ["podman", "unshare"], stderr="permission denied")):
+            with self.assertRaises(subprocess.CalledProcessError):
+                allocated(ROOTLESS_STORE)
 
     def test_small_pilot_admitted(self):
         self.assertEqual(self.check(1024)["admitted_reservation_bytes"], 1024)

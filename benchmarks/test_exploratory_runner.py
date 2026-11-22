@@ -74,15 +74,36 @@ class TestRunner(unittest.TestCase):
                 self.run_job()
 
     def test_insufficient_free_space_blocks_before_spawn(self):
-        with patch("assembler_bench.exploratory_space.available", return_value=0):
-            with self.assertRaisesRegex(ValueError, "workspace reserve"):
-                self.run_job()
+        with (
+            patch("assembler_bench.exploratory_space.available", return_value=0),
+            self.assertRaisesRegex(ValueError, "workspace reserve"),
+        ):
+            self.run_job()
         self.assertFalse(list(self.root.glob("run-*.json")))
 
     def test_tampered_baseline_rejected(self):
         self.baseline.write_text(self.baseline.read_text() + " ")
         with self.assertRaisesRegex(ValueError, "changed disk baseline"):
             self.run_job()
+
+    def test_measurement_failure_preserves_root_cause_but_never_passes(self):
+        from assembler_bench.exploratory_runtime.monitor import GuardExceeded
+
+        def failing_monitor(*args):
+            try:
+                raise OSError("rootless overlay accounting unavailable")
+            except OSError as exc:
+                raise GuardExceeded("measurement_unavailable") from exc
+
+        with patch("assembler_bench.exploratory_runtime.launch.watch",
+                   side_effect=failing_monitor):
+            result = self.run_job(argv=[
+                sys.executable, "-c", "import time;time.sleep(9)"])
+        self.assertEqual(result["status"], "killed")
+        self.assertEqual(result["reason"], "measurement_unavailable")
+        self.assertEqual(result["measurement_error_type"], "OSError")
+        self.assertIn("rootless overlay", result["measurement_error"])
+        self.assertEqual(len(list(self.root.glob("run-*.json"))), 1)
 
     def test_guard_violation_kills_group_and_records(self):
         from assembler_bench.exploratory_runtime.monitor import GuardExceeded

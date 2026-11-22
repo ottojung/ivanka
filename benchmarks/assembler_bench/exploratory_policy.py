@@ -106,16 +106,16 @@ def checked(path):
                 or (item["status"] == "source-pinned" and (src is None or img is not None))
                 or (item["status"] == "proposed" and (src is not None or img is not None))):
             raise ValueError("unproven or qualifying explorer: " + item["id"])
-        if item["status"] in ("image-pinned", "pilot", "benchmarked"):
-            if not verified_receipt(item, item.get("image_evidence"), "image"):
-                raise ValueError("no source-bound image proof: " + item["id"])
-        if item["status"] in ("pilot", "benchmarked"):
-            if not verified_receipt(item, item.get("pilot_evidence"), "pilot"):
-                raise ValueError("no genuine paired-FASTQ pilot proof: " + item["id"])
-        if item["status"] == "benchmarked":
-            if not verified_receipt(item, item.get("benchmark_evidence"),
-                                    "benchmark"):
-                raise ValueError("no nonqualifying benchmark proof: " + item["id"])
+        if (item["status"] in ("image-pinned", "pilot", "benchmarked")
+                and not verified_receipt(item, item.get("image_evidence"), "image")):
+            raise ValueError("no source-bound image proof: " + item["id"])
+        if (item["status"] in ("pilot", "benchmarked")
+                and not verified_receipt(item, item.get("pilot_evidence"), "pilot")):
+            raise ValueError("no genuine paired-FASTQ pilot proof: " + item["id"])
+        if (item["status"] == "benchmarked"
+                and not verified_receipt(item, item.get("benchmark_evidence"),
+                                         "benchmark")):
+            raise ValueError("no nonqualifying benchmark proof: " + item["id"])
     return data
 
 

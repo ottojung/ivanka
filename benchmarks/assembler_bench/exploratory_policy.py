@@ -100,7 +100,8 @@ def checked(path):
     if (not isinstance(branches, dict) or set(branches) != EXPERIMENTAL
             or not isinstance(baseline, str)
             or not SHA40.fullmatch(baseline)
-            or sum(value is not None for value in branches.values()) < 8
+            or sum(value is not None for value in branches.values()) != 9
+            or branches.get("soapdenovo2") is not None
             or any(value is not None and (not isinstance(value, str)
                    or not SHA40.fullmatch(value))
                    for value in branches.values())):

@@ -50,6 +50,30 @@ Every branch passed source-bound shell-syntax, Git diff checks, and dedicated in
 
 **Still untested:** whether the pinned common base image has the required Python package directory, the native tool binary builds reproducibly under available toolchains, the image labels match after an actual OCI build, and the tool meets 40-minute/4 GB and paired-FASTQ clinical constraints. Those are runtime build/pilot gates; no image build or pilot is claimed, and PX remains blocked by its independent 32 GiB free-space + 8 GiB incremental-storage rule.
 
+## Follow-up: the native-binary digest must actually be enforced
+
+**November 22, 09:51 UTC.** An audit found several source-only recipes accepted an arbitrary supplied `TOOL_BINARY_SHA256` and merely copied it to an OCI label. That is not independent evidence of a native executable.
+
+Seven further source-only changes now make the image build **fail** unless a real native artifact's SHA-256 equals the independently attested expected value:
+
+| Adapter | Exact native artifact checked *inside* future image | New fork source commit |
+| --- | --- | --- |
+| IDBA-UD | `/usr/local/bin/idba_ud` | `f9d1a147184ef932a5f0cda4f0eac4a9045b3c5b` |
+| Minia | `/usr/local/bin/minia` | `18de45342ea4723f18154a746ed2e13108f45b3a` |
+| Ray | `/usr/local/bin/Ray` | `01e9b305eb67118c80b6ce72953c14ed4b7e821e` |
+| Tadpole | `/opt/BBTools/tadpole.sh` **launcher only** | `1f03b67750685c9410149b5c6759f1cd4e47b652` |
+| PenguiN | `/usr/local/bin/penguin` | `051836e97d461ddb2044cd59c154d22bc2edf591` |
+| SAVAGE | `/opt/savage/haploconduct` native executable | `92360b67c8240c3fb5084cd32fbc531e6f6de2d8` |
+| Fermi-lite | `/usr/local/bin/fml-asm` | `b8e6959b4943be32ee3b7698530d84690018ac1e` |
+
+SKESA already checked the native binary and retains source HEAD `dcf57bf112d185fc0c9f2744da6ea79c1c22225b`. Unicycler was corrected separately at `2ae4983fcbe30e57e85d0bc6acd464084d57c3e9`: its former `TOOL_BINARY_SHA256` actually verified **SPAdes's** `spades-core`. The image now expects **two separately attested** digests: `SPADES_BINARY_SHA256` for that dependency, and `TOOL_BINARY_SHA256` for Unicycler's `unicycler/cpp_functions.so` native module. This resolves a misleading provenance claim without changing clinical input or source.
+
+Every new pin has a narrow corresponding source-level test and shell syntax check. Focused checks: **10/10 for each of the first six**, **24/24 for Fermi-lite**, **9/9 for Unicycler**; SKESA's previously verified binary check remains unchanged. **These are source-only recipe tests, not proof that the native programs have compiled, produced those exact digests, or run any sample.**
+
+The Tadpole SHA verifies its entry script, **not all Java classes**; its Java code is constrained by the pinned git source revision but build artifact provenance must include Java content integrity before an image can be accepted. Likewise, do not invent a successful SAVAGE executable if the pinned compiler generates a different path: the future image must fail and be investigated.
+
+The licensed Fermi-lite MiCall fork adapter is now source-committed with paired FASTQ interleaving, real unitig FASTQ-to-FASTA validation, zero-unitig success support, and 24/24 source-only tests. **SOAPdenovo2 remains source-only without a fork branch yet.** All active ten are **nonqualifying**, with **zero completed new OCI image builds or pilots**; strict PX disk/resource admission stays intact.
+
 ## Admission and next work
 
 The [machine-readable registry](../../benchmarks/assembler_bench/exploratory_candidates.json) independently records the immutable *upstream tool source commit* and each existing *MiCall adapter branch HEAD*; new image receipts must attest both. A branch HEAD or a plausible image digest is **not** proof that the image can be built, that the binary satisfies the intended program/version, that a pilot returned true MiCall outcomes, or that a qualification check passed.

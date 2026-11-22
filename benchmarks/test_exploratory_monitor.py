@@ -38,6 +38,22 @@ class TestMonitor(unittest.TestCase):
                 "incremental_bytes": 8*1024**3}, rss=lambda pid: 0,
                 clock=self.clock, sleep=lambda s: None)
 
+    def test_actual_disk_admission_overflow_is_not_unknown_telemetry(self):
+        def budget_exceeded(*args):
+            raise ValueError("exploration would breach disk budget or workspace reserve")
+
+        with self.assertRaisesRegex(GuardExceeded, "disk_limit"):
+            watch(Dummy(), self.params, measure=budget_exceeded,
+                  rss=lambda pid: 0, clock=self.clock, sleep=lambda s: None)
+
+    def test_bad_policy_measurement_still_fails_closed(self):
+        def bad_policy(*args):
+            raise ValueError("invalid or concurrently active exploration admission")
+
+        with self.assertRaisesRegex(GuardExceeded, "measurement_unavailable"):
+            watch(Dummy(), self.params, measure=bad_policy,
+                  rss=lambda pid: 0, clock=self.clock, sleep=lambda s: None)
+
     def test_measurement_failure_kills(self):
         with self.assertRaisesRegex(GuardExceeded, "measurement_unavailable"):
             watch(Dummy(), self.params, measure=lambda *a: 1/0,

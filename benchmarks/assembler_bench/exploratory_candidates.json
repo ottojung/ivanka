@@ -86,24 +86,30 @@
       "qualifying": false
     },
     {
-      "id": "vicuna",
-      "name": "VICUNA",
-      "source_repo": "https://github.com/broadinstitute/mvicuna",
-      "rationale": "diverse viral consensus assembly, no external reference",
-      "source_commit": "437843110f5e6b63087f57ded9b9c93654391451",
+      "id": "soapdenovo2",
+      "name": "SOAPdenovo2",
+      "source_repo": "https://github.com/aquaskyline/SOAPdenovo2",
+      "rationale": "GPL-3.0 short-read de Bruijn assembler with paired FASTQ and contig output; upstream generic RAM minimum 5 GB, must demonstrate viral pilot within strict 4 GB or mark infeasible",
+      "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11",
       "image_sha256": null,
       "status": "source-pinned",
-      "qualifying": false
+      "qualifying": false,
+      "source_license": "GPL-3.0",
+      "license_path": "LICENSE",
+      "replaces_blocked": "vicuna"
     },
     {
-      "id": "pehaplo",
-      "name": "PEHaplo",
-      "source_repo": "https://github.com/chjiao/PEHaplo",
-      "rationale": "paired-end de novo viral haplotypes",
-      "source_commit": "eeb564329ed7f5b5b99d1b79a81d7962fc13eeca",
+      "id": "fermi-lite",
+      "name": "Fermi-lite",
+      "source_repo": "https://github.com/lh3/fermi-lite",
+      "rationale": "MIT overlap/FM-index short-read assembler, supports low-memory Illumina regional assemblies; fml-asm FASTQ output requires auditable conversion to FASTA contigs",
+      "source_commit": "85f159e5a2e15a4c4fb41cdfce91ba0c9b68d2e1",
       "image_sha256": null,
       "status": "source-pinned",
-      "qualifying": false
+      "qualifying": false,
+      "source_license": "MIT",
+      "license_path": "LICENSE.txt",
+      "replaces_blocked": "pehaplo"
     },
     {
       "id": "penguin",
@@ -128,9 +134,46 @@
   ],
   "source_pinning": {
     "method": "git ls-remote on the listed original GitHub repositories",
-    "observed_utc": "2026-11-21T16:53:00Z",
+    "observed_utc": "2026-11-22T09:20:00Z",
     "runtime_images_built": 0,
-    "pilots_executed": 0
+    "pilots_executed": 0,
+    "substitutions_source_only": 2,
+    "licensed_substitution_pins_verified": true,
+    "prior_candidate_provenance_retained": true,
+    "resource_guard_unchanged": true
   },
-  "storage_baseline_sha256": "e482773a20157b8585783bd6c3a9f3c5f351470805474d94c361454e47e28698"
+  "storage_baseline_sha256": "e482773a20157b8585783bd6c3a9f3c5f351470805474d94c361454e47e28698",
+  "blocked_original_candidates": [
+    {
+      "id": "vicuna",
+      "name": "VICUNA",
+      "source_repo": "https://github.com/broadinstitute/mvicuna",
+      "rationale": "diverse viral consensus assembly, no external reference",
+      "source_commit": "437843110f5e6b63087f57ded9b9c93654391451",
+      "image_sha256": null,
+      "status": "source-only-infeasible",
+      "qualifying": false,
+      "blocked_reasons": [
+        "Pinned source has no source-licensed redistribution grant (repository license absent, reserved rights)",
+        "Only paired/merged FASTQ output; no contig FASTA production at frozen revision"
+      ],
+      "replacement": "soapdenovo2",
+      "not_qualifying": true
+    },
+    {
+      "id": "pehaplo",
+      "name": "PEHaplo",
+      "source_repo": "https://github.com/chjiao/PEHaplo",
+      "rationale": "paired-end de novo viral haplotypes",
+      "source_commit": "eeb564329ed7f5b5b99d1b79a81d7962fc13eeca",
+      "image_sha256": null,
+      "status": "source-only-infeasible",
+      "qualifying": false,
+      "blocked_reasons": [
+        "Pinned revision lacks auditable complete redistribution grant; bare __license__='GPL' without license text/version"
+      ],
+      "replacement": "fermi-lite",
+      "not_qualifying": true
+    }
+  ]
 }

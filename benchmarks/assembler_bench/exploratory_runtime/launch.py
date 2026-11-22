@@ -34,6 +34,14 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                 state["status"] = "finished" if proc.returncode == 0 else "failed"
             except GuardExceeded as exc:
                 state["status"], state["reason"] = "killed", str(exc)
+                cause = exc.__cause__
+                if cause is not None:
+                    # Preserve actual measurement failure; never invent an
+                    # allocated-byte or RSS reading. Cap forensic details.
+                    state["measurement_error_type"] = type(cause).__name__
+                    state["measurement_error"] = str(cause)[:320]
+                    if isinstance(cause, subprocess.CalledProcessError) and cause.stderr:
+                        state["measurement_stderr_tail"] = str(cause.stderr)[-320:]
             finally:
                 state["exit_code"] = group(proc)
                 state["recorded_utc"] = time.time()

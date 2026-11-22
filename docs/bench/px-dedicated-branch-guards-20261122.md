@@ -27,7 +27,7 @@ All eight branches are in the owner's `ottojung/MiCall` fork and are separate fr
 
 For each of the seven changed branches: independent checkout and pinned baseline tree comparison; only three allowed MiCall source files changed from the baseline; shell syntax PASS, source `git diff --check` PASS, branch-specific `micall/tests/test_assembler_integrations.py` **8/8 PASS**. Changes are restricted to its Dockerfile, build-driver script and existing test file. All seven are independently committed and pushed without a force update.
 
-The missing two active candidates, SOAPdenovo2 and Fermi-lite, have genuine upstream source SHA-40s in [the separate replacement decision](px-licensed-source-replacements-20261122.md), but **have no MiCall adapter branches, native binary hashes, containers or pilots yet**. Never conflate upstream tool source hashes with fork integration source hashes.
+At the **initial eight-branch audit**, SOAPdenovo2 and Fermi-lite had upstream SHA-40s but no integration branches; those two are **now source-integrated**, as the final update below records. No native binary hashes, real OCI images or sample pilots have yet been obtained for either. Never conflate upstream tool source hashes with fork integration source hashes.
 
 ## Follow-up: package the exact adapter modules (November 22, 09:35 UTC)
 
@@ -72,7 +72,15 @@ Every new pin has a narrow corresponding source-level test and shell syntax chec
 
 The Tadpole SHA verifies its entry script, **not all Java classes**; its Java code is constrained by the pinned git source revision but build artifact provenance must include Java content integrity before an image can be accepted. Likewise, do not invent a successful SAVAGE executable if the pinned compiler generates a different path: the future image must fail and be investigated.
 
-The licensed Fermi-lite MiCall fork adapter is now source-committed with paired FASTQ interleaving, real unitig FASTQ-to-FASTA validation, zero-unitig success support, and 24/24 source-only tests. **SOAPdenovo2 remains source-only without a fork branch yet.** All active ten are **nonqualifying**, with **zero completed new OCI image builds or pilots**; strict PX disk/resource admission stays intact.
+The licensed Fermi-lite MiCall fork adapter is now source-committed with paired FASTQ interleaving, real unitig FASTQ-to-FASTA validation, zero-unitig success support, and 24/24 source-only tests. **SOAPdenovo2 also now has a source-only fork branch**; see the final update below. All active ten are **nonqualifying**, with **zero completed new OCI image builds or pilots**; strict PX disk/resource admission stays intact.
+
+## Final source-adapter milestone — all ten branches committed
+
+As of **November 22, 09:55 UTC**, Fermi-lite's source-only fork branch is `bench/assembler-fermi-lite` at commit `b8e6959b4943be32ee3b7698530d84690018ac1e`, source-verified with 24 focused tests. SOAPdenovo2's source-only fork branch is `bench/assembler-soapdenovo2` at commit `a02075c1549160e61abd435b6bf75ee88aa4988e`, source-verified with **12/12** focused tests and Ruff/shell checks. Both changed only the nine integration-allowlisted fork files. Their exact pinned upstream GPL-3.0/MIT source commits are in the [separate license evidence](px-licensed-source-replacements-20261122.md).
+
+**All ten active experimental assembler fork source branches now exist and are independently pinned. This is not an executable benchmark.** Native binaries and MiCall image digests remain **zero validated**, physical/synthetic pilots **zero**. SOAPdenovo2's upstream generic 5 GB minimum must not be used as an excuse to violate our strict 4 GB cap; source inspection suggests dynamic allocation for small viral inputs, but this is an **unproven** hypothesis until a separately budget-admitted pilot. Its pinned Makefile does have the `SOAPdenovo-63mer` build target, and the BAM linker archives are bundled under `sparsePregraph/inc/libbam.a` and `standardPregraph/inc/libbam.a`; there is still no claim of a successful native build.
+
+The other nine current fork HEADs are independently pinned by the source registry, which also ensures source-branch revision, native-image and paired pilot receipts cannot be invented. The **32 GiB free / 8 GiB total incremental PX** gate is unchanged and currently forbids PX execution.
 
 ## Admission and next work
 

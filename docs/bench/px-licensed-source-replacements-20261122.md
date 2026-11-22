@@ -27,3 +27,11 @@ Upstream source pins, license paths, and evidence are independently checked. Exa
 5. Keep the founder's priority order: **P0 physical then P1 synthetic**, PX may progress independently under capacity safeguards; **P2** physical metrics follows core qualification, **P3** other original assembler failure repairs is last. The original frozen **4,634** terminal arms and `v0.1.0-alpha.4` remain untouched.
 
 **Status at decision:** 8/10 previous candidate adapter branches exist; 2/10 replacement candidates are now **source-pinned in the registry only**; **0 new** candidate OCI images and **0 new** candidate pilots. This does not make all ten experimentally benchmarked.
+
+## Updated milestone — November 22, 09:55 UTC
+
+Both replacements now have separate, **source-only** `ottojung/MiCall` fork integration branches: SOAPdenovo2 `bench/assembler-soapdenovo2` at `a02075c1549160e61abd435b6bf75ee88aa4988e`, **12/12** focused source tests; Fermi-lite `bench/assembler-fermi-lite` at `b8e6959b4943be32ee3b7698530d84690018ac1e`, **24/24** focused source tests. Exact fork SHAs are separately pinned in the experimental candidate registry. The earlier eight-branch counts above describe the decision-time state and do not represent current source integration completeness.
+
+**Ten of ten source branches exist; zero new validated native binary hashes, OCI images, authentic physical pilots, synthetic pilots or qualifying additions exist.** The originally blocked VICUNA and PEHaplo source/license records remain preserved. SOAPdenovo2's full physical-4GB feasibility remains unproven despite its dynamically allocated k-mer data structures; fail closed if actual pilots cannot satisfy the immutable 4,000,000,000-byte cap. The native `SOAPdenovo-63mer` target is present in the pinned upstream Makefile, with vendored BAM linker archives under `sparsePregraph/inc` and `standardPregraph/inc`. This is **source feasibility**, not a compiled artifact attestation.
+
+No image build or sample execution is permitted while `/workspace` free space is below 32 GiB or the independent 8 GiB incremental PX budget cannot be guaranteed. P0 physical qualification and its continuously supervised resource-bounded runs have priority; P1 synthetic, P2 physical diagnostics and P3 comparator repairs remain in the founder's order.

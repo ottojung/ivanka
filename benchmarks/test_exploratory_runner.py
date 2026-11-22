@@ -84,6 +84,25 @@ class TestRunner(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "changed disk baseline"):
             self.run_job()
 
+    def test_measurement_failure_preserves_root_cause_but_never_passes(self):
+        from assembler_bench.exploratory_runtime.monitor import GuardExceeded
+
+        def failing_monitor(*args):
+            try:
+                raise OSError("rootless overlay accounting unavailable")
+            except OSError as exc:
+                raise GuardExceeded("measurement_unavailable") from exc
+
+        with patch("assembler_bench.exploratory_runtime.launch.watch",
+                   side_effect=failing_monitor):
+            result = self.run_job(argv=[
+                sys.executable, "-c", "import time;time.sleep(9)"])
+        self.assertEqual(result["status"], "killed")
+        self.assertEqual(result["reason"], "measurement_unavailable")
+        self.assertEqual(result["measurement_error_type"], "OSError")
+        self.assertIn("rootless overlay", result["measurement_error"])
+        self.assertEqual(len(list(self.root.glob("run-*.json"))), 1)
+
     def test_guard_violation_kills_group_and_records(self):
         from assembler_bench.exploratory_runtime.monitor import GuardExceeded
         with patch("assembler_bench.exploratory_runtime.launch.watch",

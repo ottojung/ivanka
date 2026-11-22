@@ -5,7 +5,7 @@ from pathlib import Path
 
 ORIGINAL = frozenset(("ivanka", "iva", "haploflow", "megahit", "abyss", "spades", "velvet"))
 EXPERIMENTAL = frozenset(("skesa", "idba-ud", "minia", "ray", "unicycler",
-                          "tadpole", "vicuna", "pehaplo", "penguin", "savage-denovo"))
+                          "tadpole", "soapdenovo2", "fermi-lite", "penguin", "savage-denovo"))
 SHA40 = re.compile(r"[a-f0-9]{40}\Z")
 SHA64 = re.compile(r"[a-f0-9]{64}\Z")
 
@@ -29,6 +29,29 @@ def checked(path):
             or policy["max_sampled_process_tree_rss_bytes"] != 4_000_000_000
             or not SHA64.fullmatch(policy["frozen_seven_manifest_sha256"])):
         raise ValueError("exploratory-only roster or resource policy drift")
+    blocked = data.get("blocked_original_candidates")
+    if (not isinstance(blocked, list)
+            or {entry.get("id") for entry in blocked} != {"vicuna", "pehaplo"}
+            or len(blocked) != 2):
+        raise ValueError("lost original exploratory blockers")
+    expected_replacement = {"vicuna": "soapdenovo2", "pehaplo": "fermi-lite"}
+    for entry in blocked:
+        if (entry.get("replacement") != expected_replacement[entry["id"]]
+                or entry.get("status") != "source-only-infeasible"
+                or entry.get("qualifying") is not False
+                or entry.get("not_qualifying") is not True
+                or entry.get("image_sha256") is not None
+                or not SHA40.fullmatch(entry.get("source_commit", ""))
+                or not entry.get("blocked_reasons")):
+            raise ValueError("original source blocker was weakened")
+    for replacement, license_id, license_path, blocked_id in (
+            ("soapdenovo2", "GPL-3.0", "LICENSE", "vicuna"),
+            ("fermi-lite", "MIT", "LICENSE.txt", "pehaplo")):
+        entry = next(x for x in candidates if x["id"] == replacement)
+        if (entry.get("source_license") != license_id
+                or entry.get("license_path") != license_path
+                or entry.get("replaces_blocked") != blocked_id):
+            raise ValueError("license or substitution proof lost: " + replacement)
     for item in candidates:
         src, img = item["source_commit"], item["image_sha256"]
         if (item["qualifying"] is not False or item["status"] not in

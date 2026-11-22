@@ -1,3 +1,4 @@
+mod dedup;
 mod finish;
 mod prepare;
 mod read_backed;

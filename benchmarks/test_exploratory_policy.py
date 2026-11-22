@@ -50,6 +50,23 @@ class TestExplorerRegistry(unittest.TestCase):
         self.mutate(PATH, lambda d: d["candidates"][7].update(
             image_sha256="0" * 64, status="pilot"))
 
+    def test_dedicated_fork_branch_pins_are_independent_from_tool_pins(self):
+        branches = self.current["adapter_branch_commits"]
+        self.assertEqual(set(branches),
+                         {x["id"] for x in self.current["candidates"]})
+        self.assertEqual(sum(x is not None for x in branches.values()), 8)
+        self.assertIsNone(branches["soapdenovo2"])
+        self.assertIsNone(branches["fermi-lite"])
+        self.assertEqual(len(self.current["adapter_baseline_commit"]), 40)
+        self.assertNotEqual(branches["minia"],
+                            next(x["source_commit"] for x in
+                                 self.current["candidates"] if x["id"] == "minia"))
+        self.mutate(PATH, lambda d: d.pop("adapter_branch_commits"))
+        self.mutate(PATH, lambda d: d["adapter_branch_commits"].update(
+            minia="not-a-commit"))
+        self.mutate(PATH, lambda d: d["adapter_branch_commits"].update(
+            minia=None))
+
     def test_must_not_add_to_original_qualifiers(self):
         self.mutate(PATH, lambda d: d["baseline_assemblers"].append("skesa"))
         self.mutate(PATH, lambda d: d.update(qualifying=True))

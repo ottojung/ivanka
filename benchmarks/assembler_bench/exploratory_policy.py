@@ -1,4 +1,5 @@
 """Fail-closed registry for NONQUALIFYING additional benchmark assemblers."""
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -8,6 +9,47 @@ EXPERIMENTAL = frozenset(("skesa", "idba-ud", "minia", "ray", "unicycler",
                           "tadpole", "soapdenovo2", "fermi-lite", "penguin", "savage-denovo"))
 SHA40 = re.compile(r"[a-f0-9]{40}\Z")
 SHA64 = re.compile(r"[a-f0-9]{64}\Z")
+
+
+PROVENANCE_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121/receipts")
+
+
+def verified_receipt(item, evidence, kind):
+    """A digest alone is NOT evidence that a built image or pilot exists."""
+    if not isinstance(evidence, dict):
+        return False
+    name, expected = evidence.get("path"), evidence.get("sha256")
+    if (not isinstance(name, str) or not isinstance(expected, str)
+            or not SHA64.fullmatch(expected)):
+        return False
+    try:
+        path = Path(name).resolve(strict=True)
+        root = PROVENANCE_ROOT.resolve(strict=True)
+        if not path.is_relative_to(root) or not path.is_file():
+            return False
+        blob = path.read_bytes()
+        if hashlib.sha256(blob).hexdigest() != expected:
+            return False
+        data = json.loads(blob)
+    except (OSError, ValueError, TypeError):
+        return False
+    if (data.get("schema") != "ivanka.exploratory." + kind + ".receipt.v1"
+            or data.get("tool_id") != item["id"]
+            or data.get("source_commit") != item["source_commit"]
+            or data.get("image_sha256") != item["image_sha256"]
+            or data.get("qualifying") is not False):
+        return False
+    if kind == "image":
+        binary = data.get("native_binary_sha256")
+        return isinstance(binary, str) and bool(SHA64.fullmatch(binary))
+    if kind == "pilot":
+        return all(isinstance(data.get(cohort), dict)
+                   and data[cohort].get("source_input_sha256")
+                   and data[cohort].get("status") in {"success", "failure"}
+                   for cohort in ("physical", "synthetic"))
+    if kind == "benchmark":
+        return data.get("completed_nonqualifying_cohort") is True
+    return False
 
 
 def checked(path):
@@ -64,6 +106,16 @@ def checked(path):
                 or (item["status"] == "source-pinned" and (src is None or img is not None))
                 or (item["status"] == "proposed" and (src is not None or img is not None))):
             raise ValueError("unproven or qualifying explorer: " + item["id"])
+        if item["status"] in ("image-pinned", "pilot", "benchmarked"):
+            if not verified_receipt(item, item.get("image_evidence"), "image"):
+                raise ValueError("no source-bound image proof: " + item["id"])
+        if item["status"] in ("pilot", "benchmarked"):
+            if not verified_receipt(item, item.get("pilot_evidence"), "pilot"):
+                raise ValueError("no genuine paired-FASTQ pilot proof: " + item["id"])
+        if item["status"] == "benchmarked":
+            if not verified_receipt(item, item.get("benchmark_evidence"),
+                                    "benchmark"):
+                raise ValueError("no nonqualifying benchmark proof: " + item["id"])
     return data
 
 

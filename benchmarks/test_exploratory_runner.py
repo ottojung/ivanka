@@ -74,9 +74,11 @@ class TestRunner(unittest.TestCase):
                 self.run_job()
 
     def test_insufficient_free_space_blocks_before_spawn(self):
-        with patch("assembler_bench.exploratory_space.available", return_value=0):
-            with self.assertRaisesRegex(ValueError, "workspace reserve"):
-                self.run_job()
+        with (
+            patch("assembler_bench.exploratory_space.available", return_value=0),
+            self.assertRaisesRegex(ValueError, "workspace reserve"),
+        ):
+            self.run_job()
         self.assertFalse(list(self.root.glob("run-*.json")))
 
     def test_tampered_baseline_rejected(self):

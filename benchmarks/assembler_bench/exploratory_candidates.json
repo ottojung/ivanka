@@ -140,7 +140,11 @@
     "substitutions_source_only": 2,
     "licensed_substitution_pins_verified": true,
     "prior_candidate_provenance_retained": true,
-    "resource_guard_unchanged": true
+    "resource_guard_unchanged": true,
+    "adapter_guard_checked_utc": "2026-11-22T09:30:00Z",
+    "guard_source_branches_fixed": 7,
+    "guard_source_branches_already_correct": 1,
+    "additional_binary_or_image_claims": false
   },
   "storage_baseline_sha256": "e482773a20157b8585783bd6c3a9f3c5f351470805474d94c361454e47e28698",
   "blocked_original_candidates": [
@@ -175,5 +179,18 @@
       "replacement": "fermi-lite",
       "not_qualifying": true
     }
-  ]
+  ],
+  "adapter_baseline_commit": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
+  "adapter_branch_commits": {
+    "skesa": "e6e6962ed8345f1a725788225ebe421f3cf093f6",
+    "idba-ud": "07c806bffc7ec7a9f61464dd8957dad73c97b10e",
+    "minia": "8ab5dc1748631c222454a6b262bcff4760e42234",
+    "ray": "cef87676b0b27e5d581113f8e8da73f7bc535010",
+    "unicycler": "1d3ddcaa37e868ce77640acbbcc0c50231b2e2ec",
+    "tadpole": "cf1d77882100fc4507356097adf14413281bc321",
+    "soapdenovo2": null,
+    "fermi-lite": null,
+    "penguin": "61b616c12b5f0d629e3759ffe8e8365391cda33b",
+    "savage-denovo": "3ff3bfc931dc036903de24d4dce727b454eaffe9"
+  }
 }

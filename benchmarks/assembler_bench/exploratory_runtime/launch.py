@@ -10,6 +10,7 @@ from assembler_bench.exploratory_space import admit, px_temp_dir
 
 from .cleanup import clean_stopped_build
 from .monitor import GuardExceeded, watch
+from .pilot import bind_pilot, stop_pilot
 from .setup import prepare
 from .terminate import group
 
@@ -21,6 +22,7 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         admit(reg, base, root, base["image_store"], base["workspace"], reserve_bytes)
         ident = tool + "-" + str(time.time_ns())
+        argv, cidfile = bind_pilot(root, mode, argv, ident)
         record = root / ("run-" + ident + ".json")
         log = root / ("run-" + ident + ".log")
         # Podman/import/build temporaries must stay inside the metered project
@@ -51,6 +53,15 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                         state["measurement_stderr_tail"] = str(cause.stderr)[-320:]
             finally:
                 state["exit_code"] = group(proc)
+                if cidfile is not None:
+                    try:
+                        state["pilot_cleanup"] = stop_pilot(root, env, cidfile)
+                    except (OSError, ValueError, RuntimeError,
+                            subprocess.SubprocessError) as exc:
+                        state["pilot_cleanup_error"] = str(exc)[:320]
+                        if state["status"] == "finished":
+                            state["status"] = "failed"
+                            state["reason"] = "pilot_cleanup_unverified"
                 if mode == "build" and state["status"] != "finished":
                     # External Buildah "Storage" work containers survive
                     # SIGTERM and are invisible to ordinary podman ps/prune.

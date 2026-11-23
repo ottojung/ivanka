@@ -14,7 +14,8 @@ ROOTLESS_STORE = Path("/workspace/ivanka-exploratory-podman-20261121")
 # remain fail-closed rather than publishing partial disk measurements.
 TEMP_DIR_DISAPPEARED = re.compile(
     r"du: fts_read failed: " + re.escape(str(ROOTLESS_STORE))
-    + r"/store/overlay/tempdirs/temp-dir-[0-9]+/[^\n:]+: No such file or directory\n?"
+    + r"/store/overlay(?:/tempdirs/temp-dir-[0-9]+/[^\n:]+)?"
+    + r": No such file or directory\n?"
 )
 TEMP_NAME = "tmp"
 
@@ -34,7 +35,11 @@ def disk_measure_command(target):
     """Count every allocated block or fail closed; never parse partial 'du'."""
     command = ["du", "-sB1", "--", str(target)]
     if target == ROOTLESS_STORE:
-        return ["podman", "unshare", *command]
+        # A running Podman container mounts its complete virtual rootfs under
+        # graphroot/overlay/<id>/merged. Traversing it double-counts the
+        # immutable parent layers as NEW storage (verified: 9.29 vs 5.74 GB).
+        # -x keeps real writable overlay/diff layers but skips nested mounts.
+        return ["podman", "unshare", "du", "-sxB1", "--", str(target)]
     return command
 
 

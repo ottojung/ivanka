@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 from assembler_bench.exploratory_policy import checked
 from assembler_bench.exploratory_space import (
+    PROJECT_ROOT,
+    PROJECT_TMP,
     ROOTLESS_STORE,
     admit,
     allocated,
@@ -45,6 +47,12 @@ class TestExploratorySpace(unittest.TestCase):
         expected = ["podman", "unshare", "du", "-sxB1", "--",
                     str(ROOTLESS_STORE)]
         self.assertEqual(disk_measure_command(ROOTLESS_STORE), expected)
+        # Buildah's transient mount under project/tmp is not readable by host
+        # du, and must not count a second virtual copy of frozen MiCall.
+        for target in (PROJECT_ROOT, PROJECT_TMP):
+            self.assertEqual(disk_measure_command(target),
+                             ["podman", "unshare", "du", "-sxB1", "--",
+                              str(target)])
         self.assertEqual(disk_measure_command(self.store.resolve()),
                          ["du", "-sB1", "--", str(self.store.resolve())])
         result = subprocess.CompletedProcess(expected, 0,
@@ -67,6 +75,21 @@ class TestExploratorySpace(unittest.TestCase):
                       1, ["podman", "unshare"], stderr="permission denied")),
         ):
             allocated(ROOTLESS_STORE)
+
+    def test_unreadable_project_mounts_never_fall_back_to_host_du(self):
+        for target in (PROJECT_ROOT, PROJECT_TMP):
+            with (self.subTest(target=target),
+                  self.assertRaises(subprocess.CalledProcessError),
+                  patch("assembler_bench.exploratory_space.Path.is_dir",
+                        return_value=True),
+                  patch("assembler_bench.exploratory_space.subprocess.run",
+                        side_effect=subprocess.CalledProcessError(
+                            1, ["podman", "unshare", "du"],
+                            stderr="permission denied")) as run):
+                allocated(target)
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(run.call_args.args[0][0:2],
+                                 ["podman", "unshare"])
 
     def test_live_buildah_temporary_enoent_retries_complete_scan(self):
         stderr = ("du: fts_read failed: " + str(ROOTLESS_STORE)

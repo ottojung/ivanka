@@ -7,6 +7,9 @@ impl Args {
             return Err("max-contigs must be in 1..=1000".to_string());
         }
         let out = self.output.ok_or("missing --output")?;
+        if self.exclude_supplied_seed_duplicates && self.seeds.is_none() {
+            return Err("--exclude-supplied-seed-duplicates requires --seeds".to_string());
+        }
         validate_audit(
             self.a.as_deref(),
             self.b.as_deref(),
@@ -21,6 +24,7 @@ impl Args {
             max_contigs: self.max,
             max_pairs: self.max_pairs,
             seeds: self.seeds,
+            exclude_supplied_seed_duplicates: self.exclude_supplied_seed_duplicates,
             audit: self.snv_audit,
         })
     }

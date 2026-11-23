@@ -29,6 +29,10 @@ pub(crate) fn parse() -> Result<Config, String> {
                 parsed.apply(flag, &args[i + 1])?;
                 i += 2;
             }
+            "--exclude-supplied-seed-duplicates" => {
+                parsed.exclude_supplied_seed_duplicates = true;
+                i += 1;
+            }
             "--help" | "-h" => {
                 help::show();
                 std::process::exit(0);

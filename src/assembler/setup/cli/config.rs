@@ -7,5 +7,6 @@ pub(crate) struct Config {
     pub(crate) max_contigs: usize,
     pub(crate) max_pairs: Option<usize>,
     pub(crate) seeds: Option<String>,
+    pub(crate) exclude_supplied_seed_duplicates: bool,
     pub(crate) audit: Option<String>,
 }

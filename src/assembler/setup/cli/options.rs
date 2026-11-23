@@ -6,6 +6,7 @@ pub(super) struct Args {
     pub(super) max: usize,
     pub(super) max_pairs: Option<usize>,
     pub(super) seeds: Option<String>,
+    pub(super) exclude_supplied_seed_duplicates: bool,
     pub(super) snv_audit: Option<String>,
 }
 

@@ -12,6 +12,7 @@
   <script src="./distribution.js" defer></script>
   <script src="./compare_views.js" defer></script>
   <script src="./overview.js" defer></script>
+  <script src="./exploratory.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -149,6 +150,12 @@
       <section class="provenance" aria-label="Provenance">
         <div class="section-heading"><div><span class="overline">05 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
         <div id="provenanceContent"></div>
+      </section>
+      <section class="exploratory" aria-label="Nonqualifying PX candidates">
+        <div class="section-heading"><div><span class="overline">06 / PX EXPLORATION</span><h2>Ten nonqualifying candidates</h2></div></div>
+        <p class="subtle" id="exploratoryContext">Loading the experimental roster…</p>
+        <p class="dominance-key">These ten tools are source-pinned experiments. They never join the seven-way qualification, Ψ dominance matrices or release claims. Only receipt-verified per-case rows are shown when a pilot or benchmark actually ran.</p>
+        <div id="exploratoryRows"></div>
       </section>
     </main>
     <dialog id="sampleDialog" aria-labelledby="sampleDialogTitle">

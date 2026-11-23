@@ -17,7 +17,7 @@ const names = {iva:"IVA",ivanka:"Ivanka",haploflow:"Haploflow",megahit:"MEGAHIT"
 const state = {data:null,run:null,metric:"score",firstTool:null,tool:null,
   sort:"id",reverse:false,rows:[],diagnostics:null,
   direction:"higher",psiExponent:"all",psiMetric:"alignment",
-  distributionTool:null};
+  distributionTool:null,exploratory:null};
 
 function metricInfo() {
   return BenchRanks.definition(state.metric,state.diagnostics?.metric_catalog);
@@ -655,7 +655,14 @@ function render() {
   drawTable();
   drawDominance();
   drawProvenance();
+  drawExploratory();
   syncUrl();
+}
+
+function drawExploratory() {
+  if(!el("exploratoryRows"))return;
+  BenchExploratory.render(state.exploratory||null,el("exploratoryRows"),
+    el("exploratoryContext"));
 }
 
 function exportCsv() {
@@ -761,6 +768,10 @@ async function main() {
       const diagnosticResponse=await fetch("./data/mapping-diagnostics.json");
       state.diagnostics=diagnosticResponse.ok?await diagnosticResponse.json():null;
     } catch (_) {state.diagnostics=null;}
+    try {
+      const px=await fetch("./data/exploratory-candidates.json",{cache:"no-store"});
+      if(px.ok)state.exploratory=await px.json();
+    } catch (_) {state.exploratory=null;}
     if(state.data.schema!=="ivanka.assembler-bench.public.v1"||
        !Array.isArray(state.data.runs)||!state.data.runs.length)
       throw new Error("Unsupported or missing public data");

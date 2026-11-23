@@ -5,28 +5,48 @@ pub(super) fn locate(core: &[u8], mut present: impl FnMut(&[u8]) -> bool) -> Opt
     if core.len() < 2500 {
         return None;
     }
-    let (mut first, mut last, mut count) = (None, None, 0usize);
+    // A few supported windows can separate missing observations at one
+    // junction because reads cover the same adjacency at different offsets.
+    // Widely separated missing regions are not a uniquely localizable cut.
+    const MAX_SUPPORTED_BRIDGE: usize = 16;
+    let (mut first, mut last, mut missing) = (None, None, 0usize);
+    let (mut run, mut multi_runs, mut longest) = (0usize, 0usize, 0usize);
     for (position, window) in core.windows(SPAN).enumerate() {
         if present(window) {
+            if run >= 2 {
+                multi_runs += 1;
+            }
+            longest = longest.max(run);
+            run = 0;
             continue;
         }
-        if last.is_some_and(|previous| position != previous + 1) {
+        run += 1;
+        if last.is_some_and(|previous| position > previous + MAX_SUPPORTED_BRIDGE + 1) {
             return None;
         }
-        first.get_or_insert(position);
+        let start = *first.get_or_insert(position);
         last = Some(position);
-        count += 1;
-        if count > 2 * SPAN {
+        missing += 1;
+        if position - start + 1 > 2 * SPAN {
             return None;
         }
     }
-    let cut = first?
-        + if count <= 32 {
+    multi_runs += usize::from(run >= 2);
+    longest = longest.max(run);
+    if multi_runs != 1 || longest < 3 {
+        return None;
+    }
+    let start = first?;
+    let width = last? - start + 1;
+    // A missing long window covers SPAN bases, not just its start;
+    // a short interval's cut may follow the last missing start.
+    let cut = start
+        + if width <= 32 {
             SPAN / 2
         } else {
-            (count + SPAN) / 2
+            (width + SPAN) / 2
         };
-    if count < 3 || cut < SPAN || cut > core.len() - SPAN {
+    if missing < 3 || cut < SPAN || cut > core.len() - SPAN {
         return None;
     }
     Some(cut)

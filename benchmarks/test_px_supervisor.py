@@ -6,7 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from assembler_bench import exploratory_policy, px_cohort_scheduler as sched
+from assembler_bench import exploratory_policy
+from assembler_bench import px_cohort_scheduler as sched
 from assembler_bench import px_supervisor as sup
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -161,10 +162,10 @@ class SupervisorTests(unittest.TestCase):
         registry = self.registry()
         self.handoff_all(registry)
         calls = []
-        with patch.object(sched, "admit_arm",
-                          side_effect=ValueError("disk budget exceeded")):
-            with self.assertRaisesRegex(ValueError, "disk budget"):
-                self.supervisor(self.fake_runner(calls), registry).start(armed=True)
+        with (patch.object(sched, "admit_arm",
+                           side_effect=ValueError("disk budget exceeded")),
+              self.assertRaisesRegex(ValueError, "disk budget")):
+            self.supervisor(self.fake_runner(calls), registry).start(armed=True)
         self.assertEqual(calls, [])
         self.assertEqual(list((self.px / "receipts").glob("*.json")), [])
 

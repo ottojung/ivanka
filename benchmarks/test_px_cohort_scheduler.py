@@ -1,5 +1,4 @@
 """Adversarial proofs for the resumable NONQUALIFYING PX cohort planner."""
-import copy
 import hashlib
 import json
 import tempfile
@@ -7,7 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from assembler_bench import exploratory_policy, px_cohort_scheduler as sched
+from assembler_bench import exploratory_policy
+from assembler_bench import px_cohort_scheduler as sched
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "benchmarks/assembler_bench/exploratory_candidates.json"
@@ -223,9 +223,9 @@ class PlannerTests(unittest.TestCase):
     def test_checkpoint_is_atomic_verified_and_never_authoritative(self):
         registry = self.promoted_registry()
         plan = sched.build_plan(registry, self.source(), self.px)
-        with patch.object(sched.os, "replace", side_effect=OSError("crash")):
-            with self.assertRaises(OSError):
-                sched.write_checkpoint(self.px, plan, [])
+        with (patch.object(sched.os, "replace", side_effect=OSError("crash")),
+              self.assertRaises(OSError)):
+            sched.write_checkpoint(self.px, plan, [])
         self.assertFalse(sched.checkpoint_path(self.px).exists())
         self.assertEqual(sched.resume(plan, self.px), plan["pending"])
         arm = plan["pending"][0]
@@ -259,9 +259,9 @@ class PlannerTests(unittest.TestCase):
                    return_value=100 * 1024**3):
             decision = sched.admit_arm(registry, baseline, root, 1024**3)
         self.assertEqual(decision["admitted_reservation_bytes"], 1024**3)
-        with patch("assembler_bench.exploratory_space.available", return_value=0):
-            with self.assertRaisesRegex(ValueError, "disk budget|workspace reserve"):
-                sched.admit_arm(registry, baseline, root, 1024**3)
+        with (patch("assembler_bench.exploratory_space.available", return_value=0),
+              self.assertRaisesRegex(ValueError, "disk budget|workspace reserve")):
+            sched.admit_arm(registry, baseline, root, 1024**3)
         with self.assertRaisesRegex(ValueError, "reservation"):
             sched.admit_arm(registry, baseline, root, 8 * 1024**3)
 

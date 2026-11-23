@@ -9,7 +9,8 @@ import json
 import time
 from pathlib import Path
 
-from . import exploratory_policy, px_cohort_scheduler as sched
+from . import exploratory_policy
+from . import px_cohort_scheduler as sched
 
 HANDOFF_SCHEMA = "ivanka.px.supervisor.handoff.v1"
 PX_BOARD = "V9roZ0y80gjXs7WrOCgNbH-moral"

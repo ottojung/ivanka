@@ -1,4 +1,4 @@
-//! Original-pair evidence selects a defensible dominant contig without references.
+//! Read-backed, reference-free assembly preserving distinct supported components.
 mod circle;
 mod index;
 mod island;
@@ -10,7 +10,7 @@ mod tests;
 mod tiling;
 mod trimming;
 
-use super::{encode, Reads, K};
+use super::{encode, rolling_canonical_kmers, Reads, K};
 use std::io;
 
 type Entry = (String, Vec<u8>);
@@ -20,26 +20,23 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
         return output::write(path, &[]).map(|()| 0);
     }
     let hits = index::build(contigs);
-    let statistics = scoring::count(contigs, reads, &hits);
-    let chosen = ranking::best(contigs, &statistics);
-    let repaired = circle::repair(&contigs[chosen], &statistics.depth[chosen], reads);
-    let (sequence, depth): (&[u8], &[u32]) = match &repaired {
-        Some((seq, depths)) => (seq, depths),
-        None => (&contigs[chosen], &statistics.depth[chosen]),
-    };
-    let header = format!(">ivanka_{} len={}", chosen + 1, sequence.len());
-    if repaired.is_some() {
-        eprintln!("IVANKA_READ_BACKED_REOPENED_CYCLE len={}", sequence.len());
+    let stats = scoring::count(contigs, reads, &hits);
+    let keep = ranking::supported_components(contigs, &stats);
+    let mut output_contigs = Vec::new();
+    for &candidate in &keep {
+        let entries = output::one(contigs, &stats, reads, candidate);
+        let room = 16usize.saturating_sub(output_contigs.len());
+        output_contigs.extend(entries.into_iter().take(room));
+        if output_contigs.len() == 16 {
+            break;
+        }
     }
-    let (start, end) = island::bounds(sequence, depth);
-    let clipped = &sequence[start..end];
-    let observed = &depth[start..end.saturating_sub(K - 1).max(start)];
-    let selected = tiling::partition(&header, clipped, observed);
     eprintln!(
-        "IVANKA_READ_BACKED_SELECTION native {} selected [{}] covered_31mers [{}] supporting_pairs [{}] read_support_products [{}]",
-        contigs.len(), chosen, statistics.coverage[chosen], statistics.pairs[chosen],
-        statistics.coverage[chosen] * statistics.pairs[chosen]
+        "IVANKA_READ_BACKED_SELECTION native {} selected {:?} covered_31mers {:?} supporting_pairs {:?}",
+        contigs.len(), keep,
+        keep.iter().map(|&i| stats.coverage[i]).collect::<Vec<_>>(),
+        keep.iter().map(|&i| stats.pairs[i]).collect::<Vec<_>>()
     );
-    output::write(path, &selected)?;
-    Ok(selected.len())
+    output::write(path, &output_contigs)?;
+    Ok(output_contigs.len())
 }

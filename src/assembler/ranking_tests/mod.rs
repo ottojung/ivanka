@@ -5,4 +5,5 @@ mod alternatives;
 mod cap;
 mod contig_density;
 mod contig_density_evidence;
+mod contig_density_phase;
 mod coverage;

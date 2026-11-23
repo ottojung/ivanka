@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from .frozen_consensus import attest_outputs
 from .frozen_contract import IMAGES, verify_images
 
 INDEX = "854efc35af2811fa8af31eef013fed0fabcb7fe7f69cb012dc934c9fcb97eaa9"
@@ -44,6 +45,7 @@ def attest(root, expected=INDEX):
     result = hashlib.sha256("".join(sorted(entries)).encode()).hexdigest()
     if len(entries) != 4634 or failed != 205 or result != expected:
         raise ValueError("frozen historical results changed; no reruns permitted")
+    verified_outputs = attest_outputs(root)
     return {"physical_arms": 1386, "synthetic_arms": 3248,
             "synthetic_failed_arms": failed, "total": 4634,
-            "result_receipt_index_sha256": result}
+            "result_receipt_index_sha256": result, **verified_outputs}

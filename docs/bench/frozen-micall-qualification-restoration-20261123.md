@@ -20,6 +20,59 @@ The previously enabled hourly Ivanka development automation was **rewritten** to
 
 The original **4,634 terminal frozen seven-assembler outcomes**, including the original 198 physical and 464 synthetic cases, remain immutable. The source-frozen OCI manifest still has SHA256 `9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f`.
 
+## Revert is complete; original results verified without rerunning anything
+
+On November 23 at 06:34 UTC, the still-unmerged common MiCall
+PR #22 was CLOSED; the prohibited change was also actually
+REVERTED on its experimental fork branch at
+3382be77e7149c43212bb919c9fa0a08b4e296ee.
+The entire reverted source Git TREE is identical to the canonical
+master baseline 8458f9e5d34c39a6694b1fb6a40e055d7ce89553
+(tree 4174e1cd850352788f7de5fe6cd66f12fbe27a70).
+The experimental original commit remains in its ancestor history only
+for independent provenance of the nonqualifying prospective cases.
+The fork master was never changed. The original historical results
+have not been deleted or replaced.
+
+Independent immutable-read verification enumerated exactly
+**1,386 physical** checkpoint receipts (198 x 7), and
+**3,248 synthetic** execution receipts (464 x 7), including
+**205 historical failed synthetic arms**. All 4,634 were SHA256-indexed.
+No benchmark, assembly, or alignment was rerun.
+
+Exact reusable evidence pins:
+
+- Original MiCall shared source commit: 8458f9e5d34c39a6694b1fb6a40e055d7ce89553
+- Baseline source Git tree: 4174e1cd850352788f7de5fe6cd66f12fbe27a70
+- Seven-image OCI manifest SHA256: 9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f
+- Seven original images/source attestation SHA256: 7a996476751594d2878e31412c8590d0c27193fd543f2de687b36cda9163a8a5
+- Sorted receipt-path + SHA256 combined digest: 854efc35af2811fa8af31eef013fed0fabcb7fe7f69cb012dc934c9fcb97eaa9
+
+A new **fail-closed, read-only source and results preflight** lives at
+benchmarks/assembler_bench/frozen_preflight.py, with separate source,
+OCI, and all-4,634 receipt validators. It requires the original exact
+MiCall baseline commit, not just an equivalent tree, and clean sources.
+The reverted experiment is deliberately **rejected for qualifying
+new runs**: its HEAD commit is not the original pinned commit.
+
+Run this preflight before any new candidate execution or publication:
+
+    PYTHONPATH=benchmarks python3 -m assembler_bench.frozen_preflight       --frozen-root /workspace/micall-frozen-seven-20261117       --micall-source /workspace/micall-immutable-source-8458f9e5-20261123
+
+The canonical source checkout above is detached at the precise original
+baseline commit. The optional allow-reverted-tree flag is for
+source-tree inspection **only**, explicitly produces a nonqualifying
+attestation, and must NEVER authorize an actual prospective run.
+
+For a standalone Rust-only Ivanka candidate, the new
+assembler_bench.frozen_candidate helper verifies the candidate's own
+binary SHA and permits only a **read-only replacement of the Ivanka
+executable** at /usr/local/bin/ivanka in the otherwise original pinned
+Ivanka OCI image. It does not offer any capability to mount alternative
+MiCall source, edit the original seven images or replace original
+results. Any candidate-specific results belong in new isolated
+source-bound receipts and must not be promoted without actual tests.
+
 ## Correct benchmark path
 
 **P0 physical first:** investigate and improve Rust-only, default, reference-blind Ivanka against the original frozen common MiCall, without changing MiCall shared source or images. The original tagged Ivanka v0.1.0-alpha.4 passed its 198-case IVA physical criterion but did **not** pass the complete original seven-assembler all-r Ψ gate. The original frozen R042 deficit remains a Rust Ivanka problem to investigate, or a documented limitation if unavoidable. Reuse all valid completed original results; only rerun new **Ivanka code** on the independently necessary sample cases in separate source-attested namespaces. Keep ≤2,400 seconds wall, ≤4,000,000,000 bytes sampled RSS, 90% per sample and strict Ψ(r)>0 for all real r≥0 on qualifying metrics. The six rival frozen outputs may not be recomputed to make Ivanka win.

@@ -299,6 +299,7 @@ class IntegrationTests(unittest.TestCase):
         text = script.read_text()
         self.assertIn("flock -n", text)
         self.assertIn("$STOP", text)
+        self.assertIn("--check-ready", text)
         self.assertIn("--supervise --armed", text)
         self.assertNotIn("--memory", text)
 
@@ -311,6 +312,16 @@ class IntegrationTests(unittest.TestCase):
             capture_output=True, text=True, env=env, check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("armed", result.stderr)
+
+    def test_check_ready_refuses_unproven_tools(self):
+        env = dict(os.environ, PYTHONPATH=str(ROOT / "benchmarks"))
+        registry = json.loads(REGISTRY.read_text())
+        path = write_json(self.root / "unproven-registry.json", registry)
+        result = subprocess.run(
+            [sys.executable, "-m", "assembler_bench.px_execution",
+             "--registry", str(path), "--root", str(self.px), "--check-ready"],
+            capture_output=True, text=True, env=env, check=False)
+        self.assertEqual(result.returncode, 1)
 
     def test_private_paths_never_reach_receipts_or_results(self):
         plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)

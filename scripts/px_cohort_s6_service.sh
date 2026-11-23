@@ -18,11 +18,17 @@ while :; do
     if flock -n 9; then
         flock -u 9
         cd "$PX_ROOT"
-        PYTHONPATH="$PX_CODE/benchmarks" exec python3 \
+        if PYTHONPATH="$PX_CODE/benchmarks" python3 \
             -m assembler_bench.px_execution \
-            --registry "$PX_REGISTRY" --root "$PX_ROOT" \
-            --supervise --armed
+            --registry "$PX_REGISTRY" --root "$PX_ROOT" --check-ready; then
+            PYTHONPATH="$PX_CODE/benchmarks" exec python3 \
+                -m assembler_bench.px_execution \
+                --registry "$PX_REGISTRY" --root "$PX_ROOT" \
+                --supervise --armed
+        fi
+        echo "PX images or handoffs not certified; deferring 60s" >&2
+    else
+        echo "PX exclusive worker still held; deferring 60s" >&2
     fi
-    echo "PX exclusive worker still held; deferring 60s" >&2
     sleep 60
 done

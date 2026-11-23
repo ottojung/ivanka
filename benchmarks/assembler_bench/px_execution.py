@@ -219,7 +219,18 @@ def main():
     parser.add_argument("--plan", action="store_true")
     parser.add_argument("--supervise", action="store_true")
     parser.add_argument("--armed", action="store_true")
+    parser.add_argument("--check-ready", action="store_true",
+                        help="exit 0 only when certified tools and handoffs exist")
     args = parser.parse_args()
+    if args.check_ready:
+        data = exploratory_policy.checked(args.registry)
+        tools = [name for name in exploratory_policy.EXPERIMENTAL
+                 if exploratory_policy.eligible(data, name)]
+        if not tools or not all(sup.verify_handoff(args.root, args.registry, name)
+                                for name in tools):
+            return 1
+        print(json.dumps({"ready": tools}, sort_keys=True))
+        return 0
     if args.plan == args.supervise:
         parser.error("choose exactly one of --plan or --supervise")
     if args.supervise and not args.armed:
@@ -243,4 +254,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

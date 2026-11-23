@@ -27,15 +27,16 @@ class TestExplorerRegistry(unittest.TestCase):
         self.assertEqual(len(self.current["candidates"]), 10)
         promoted = {x["id"] for x in self.current["candidates"]
                     if x["status"] != "source-pinned"}
-        self.assertEqual(promoted, {"skesa"})
+        self.assertEqual(promoted, {"skesa", "idba-ud"})
         self.assertTrue(all(x["qualifying"] is False
                             and len(x["source_commit"]) == 40
                             for x in self.current["candidates"]))
-        self.assertTrue(eligible(self.current, "skesa"))
+        self.assertTrue(all(eligible(self.current, tool)
+                            for tool in ("skesa", "idba-ud")))
         self.assertTrue(all(x["image_sha256"] is None
                             and not eligible(self.current, x["id"])
                             for x in self.current["candidates"]
-                            if x["id"] != "skesa"))
+                            if x["id"] not in ("skesa", "idba-ud")))
 
     def test_blocked_originals_retained_with_auditable_replacements(self):
         active = {x["id"]: x for x in self.current["candidates"]}

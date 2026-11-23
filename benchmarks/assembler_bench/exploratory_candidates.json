@@ -49,9 +49,13 @@
       "source_repo": "https://github.com/loneknightpy/idba",
       "rationale": "uneven-depth multi-k assembly",
       "source_commit": "a1bafe6b012912cd9a76926ec75a98aee6213af6",
-      "image_sha256": null,
-      "status": "source-pinned",
-      "qualifying": false
+      "image_sha256": "59157a6dca8a2e8aadfc5091c17604977696077d7d6060c9aa8bc83993915686",
+      "status": "image-pinned",
+      "qualifying": false,
+      "image_evidence": {
+        "path": "/workspace/ivanka-exploratory-ten-20261121/receipts/image-idba-ud-frozen-8458f9e5-ea51b503.json",
+        "sha256": "03488b9c0f7df2a42466cd43a0a5fc6becb66870f755c14f9874e0974972be6a"
+      }
     },
     {
       "id": "minia",
@@ -209,7 +213,7 @@
   "adapter_baseline_commit": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
   "adapter_branch_commits": {
     "skesa": "2fb3cd5af8769f834635b21187738cf90565c349",
-    "idba-ud": "f9d1a147184ef932a5f0cda4f0eac4a9045b3c5b",
+    "idba-ud": "ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9",
     "minia": "18de45342ea4723f18154a746ed2e13108f45b3a",
     "ray": "01e9b305eb67118c80b6ce72953c14ed4b7e821e",
     "unicycler": "2ae4983fcbe30e57e85d0bc6acd464084d57c3e9",

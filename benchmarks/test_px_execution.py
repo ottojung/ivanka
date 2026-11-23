@@ -319,6 +319,18 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn("--check-ready", text)
         self.assertIn("--supervise --armed", text)
         self.assertNotIn("--memory", text)
+        # s6 runs from the PX data root: both package roots must be
+        # importable, and the executable service must actually be executable.
+        self.assertEqual(text.count('PYTHONPATH="$PX_CODE:$PX_CODE/benchmarks"'), 2)
+        self.assertTrue(script.stat().st_mode & 0o111)
+        with tempfile.TemporaryDirectory() as elsewhere:
+            env = dict(os.environ, PYTHONPATH=str(ROOT) + ":" +
+                       str(ROOT / "benchmarks"))
+            check = subprocess.run(
+                [sys.executable, "-m", "assembler_bench.px_execution", "--help"],
+                cwd=elsewhere, env=env, check=False, capture_output=True,
+                text=True)
+            self.assertEqual(check.returncode, 0, check.stderr)
 
     def test_live_baseline_must_match_immutable_budget_receipt(self):
         from assembler_bench.px_execution import checked_baseline

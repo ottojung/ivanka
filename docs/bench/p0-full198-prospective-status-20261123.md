@@ -2,6 +2,10 @@
 
 Verified on marceline-dev, November 23, 2026, 03:15 UTC. **This is NOT a seven-way or clinical-release qualification certificate.**
 
+**SUPERSEDED BY FOUNDER'S FROZEN-MiCall DIRECTIVE (03:39 UTC on November 23).** The source correction described below altered common MiCall even though the user explicitly froze it and all seven original images before benchmarking. The 198 candidate and partial new-version IVA runs were **unauthorized changed-source experiments**, and none of their results, despite measured provenance or positive cross-version Ψ, qualify Ivanka against the frozen MiCall baseline. The modified-source IVA service has been stopped and removed from the S6 scan directory. Its last operator-stopped attempt was not an algorithmic failure. Draft MiCall PR #22 must not merge. The governing plan is Rust-only Ivanka changes with **original frozen common MiCall** and the original seven unchanged comparator data; see [the correction audit](frozen-micall-qualification-restoration-20261123.md). Everything below is retained for historical diagnostics only, not instructions to restart the runs.
+
+
+
 ## All 198 authentic future-source Ivanka executions are complete
 
 The draft common MiCall native/G2P exact-contig correction is [ottojung/MiCall PR #22](https://github.com/ottojung/MiCall/pull/22) at commit a6c8195d95076325a07661f7f625a86361dfed45. Original frozen seven-assembler runs and images were not modified.

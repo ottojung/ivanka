@@ -27,7 +27,7 @@ class IndependentScoringTests(unittest.TestCase):
                 self.assertEqual(authenticate_scores(records, source, {"iva": "image"},
                                                      "panel"), "panel")
                 score.assert_called_once_with("iva", "ivanka", tuple(range(33)),
-                                              min_ratio=.90)
+                                              min_ratio=.90, score_cache={})
                 records["s"]["best_contig_acceptance"]["ivanka_score"] = 99.0
                 with self.assertRaisesRegex(ValueError, "disagrees"):
                     authenticate_scores(records, source, {"iva": "image"}, "panel")

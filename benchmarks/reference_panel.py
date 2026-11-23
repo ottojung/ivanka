@@ -117,10 +117,18 @@ def best_panel_alignment(sequences, references):
             "contig_length": winner[2], "contig_count": len(ordered)}
 
 
-def panel_acceptance(iva_dir, ivanka_dir, references, min_ratio=0.95):
+def panel_acceptance(iva_dir, ivanka_dir, references, min_ratio=0.95, score_cache=None):
     """Score all final MiCall MAX contigs against the SAME fixed reference panel."""
-    iva = best_panel_alignment(final_max_sequences(iva_dir), references)
-    ivanka = best_panel_alignment(final_max_sequences(ivanka_dir), references)
+    def score(directory):
+        sequences = tuple(final_max_sequences(directory))
+        if score_cache is None:
+            return best_panel_alignment(sequences, references)
+        if sequences not in score_cache:
+            score_cache[sequences] = best_panel_alignment(sequences, references)
+        return score_cache[sequences]
+
+    iva = score(iva_dir)
+    ivanka = score(ivanka_dir)
     threshold = min_ratio * iva["score"]
     return {
         "method": "best_final_max_contig_local_alignment_over_reference_panel",

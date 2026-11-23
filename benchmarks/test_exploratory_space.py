@@ -85,6 +85,22 @@ class TestExploratorySpace(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
             sleep.assert_called_once_with(0.1)
 
+    def test_disappearing_podman_overlay_on_auto_remove_retries(self):
+        stderr = ("du: fts_read failed: " + str(ROOTLESS_STORE)
+                  + "/store/overlay: No such file or directory\n")
+        transient = subprocess.CalledProcessError(
+            1, ["podman", "unshare", "du"], stderr=stderr)
+        valid = subprocess.CompletedProcess(
+            ["podman", "unshare", "du"], 0, "234567\t/store\n", "")
+        with (patch("assembler_bench.exploratory_space.Path.is_dir",
+                    return_value=True),
+              patch("assembler_bench.exploratory_space.subprocess.run",
+                    side_effect=[transient, valid]) as run,
+              patch("assembler_bench.exploratory_space.time.sleep") as sleep):
+            self.assertEqual(allocated(ROOTLESS_STORE), 234567)
+            self.assertEqual(run.call_count, 2)
+            sleep.assert_called_once_with(0.1)
+
     def test_repeated_live_temp_races_fail_closed(self):
         stderr = ("du: fts_read failed: " + str(ROOTLESS_STORE)
                   + "/store/overlay/tempdirs/temp-dir-40/0-addition:"

@@ -14,7 +14,8 @@ ROOTLESS_STORE = Path("/workspace/ivanka-exploratory-podman-20261121")
 # remain fail-closed rather than publishing partial disk measurements.
 TEMP_DIR_DISAPPEARED = re.compile(
     r"du: fts_read failed: " + re.escape(str(ROOTLESS_STORE))
-    + r"/store/overlay/tempdirs/temp-dir-[0-9]+/[^\n:]+: No such file or directory\n?"
+    + r"/store/overlay(?:/tempdirs/temp-dir-[0-9]+/[^\n:]+)?"
+    + r": No such file or directory\n?"
 )
 TEMP_NAME = "tmp"
 

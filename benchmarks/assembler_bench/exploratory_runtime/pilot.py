@@ -18,7 +18,10 @@ def bind_pilot(root, mode, argv, ident):
     cidfile = Path(root) / ("pilot-" + ident + ".cid")
     if cidfile.exists() or cidfile.is_symlink():
         raise ValueError("pilot container identifier already exists")
-    return [*argv[:2], "--cidfile", str(cidfile), *argv[2:]], cidfile
+    # --rm deletes the CID file before verification on natural completion.
+    # Keep the container ID until the exact-CID cleanup below runs.
+    tail = [arg for arg in argv[2:] if arg != "--rm"]
+    return [*argv[:2], "--cidfile", str(cidfile), *tail], cidfile
 
 
 def stop_pilot(root, env, cidfile):

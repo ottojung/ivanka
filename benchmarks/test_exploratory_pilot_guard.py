@@ -22,7 +22,8 @@ class TestPilotIdentity(unittest.TestCase):
         cmd, cid = pilot.bind_pilot(
             self.root, "pilot", ["podman", "run", "--rm", "test-image"], "x1")
         self.assertEqual(cmd[:4], ["podman", "run", "--cidfile", str(cid)])
-        self.assertEqual(cmd[4:], ["--rm", "test-image"])
+        self.assertEqual(cmd[4:], ["test-image"])
+        self.assertNotIn("--rm", cmd)
         self.assertEqual(cid.parent, self.root)
 
     def test_refuse_untracked_or_supplied_cidfile(self):

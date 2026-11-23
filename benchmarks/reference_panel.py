@@ -86,9 +86,14 @@ def best_panel_alignment(sequences, references):
         raise ValueError("Missing contigs or reference panel")
     from Bio.Seq import Seq
     aligner = None if parasail is not None else _aligner()
-    matrix = parasail.matrix_create("ACGTN", 1, -1) if parasail is not None else None
+    # Pinned references use A/C/G/T/N. Final MAX consensus can also contain
+    # X (unresolved base): an explicit X matrix entry preserves the original
+    # +1 identity / -1 mismatch objective but avoids slow scalar fallback.
+    simd_alphabet = "ACGTNX"
+    matrix = (parasail.matrix_create(simd_alphabet, 1, -1)
+              if parasail is not None else None)
     def exact_score(sequence, reference):
-        if matrix is not None and set(sequence) <= set("ACGTN"):
+        if matrix is not None and set(sequence) <= set(simd_alphabet):
             result = parasail.sw_striped_16(sequence, reference, 2, 1, matrix)
             if not result.saturated:
                 return float(result.score)

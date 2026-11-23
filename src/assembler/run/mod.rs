@@ -28,10 +28,7 @@ pub(crate) fn run() -> Result<(), Box<dyn std::error::Error>> {
         config.audit.as_deref(),
         standard,
         prepared,
-        config
-            .seeds
-            .as_deref()
-            .filter(|_| config.exclude_supplied_seed_duplicates),
+        config.seeds.as_deref(),
     )?;
     eprintln!(
         "Ivanka wrote {} contigs in {:.1}s",

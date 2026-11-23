@@ -13,7 +13,7 @@ pub(super) fn write(
 ) -> io::Result<usize> {
     if standard {
         read_backed::write(out, contigs, reads)
-    } else if let Some(path) = skip_matching_seeds {
+    } else if let Some(path) = skip_matching_seeds.filter(|_| !reads.seqs.is_empty()) {
         let keep = super::seed_duplicates::keep_indices(contigs, path)?;
         let mut output = BufWriter::new(File::create(out)?);
         for &i in &keep {

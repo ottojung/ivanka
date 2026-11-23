@@ -10,8 +10,6 @@ pub(super) fn show() {
 ",
         "          --seeds same-sample-reads.fasta
 ",
-        "          --exclude-supplied-seed-duplicates (requires --seeds)
-",
         "          --unphased-snv-audit OUTPUT.tsv
 ",
     ));

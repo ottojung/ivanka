@@ -39,7 +39,8 @@ def load_physical(root=PHYSICAL_ROOT, expected_sha=None):
         raise ValueError("physical manifest is not the frozen 198-case cohort")
     aliases = sched.canonical_aliases(ids, "physical")
     cases = []
-    for sample in ids:
+    # Dispatch in canonical source-ID order, never the arbitrary TSV row order.
+    for sample in sorted(ids):
         folder = Path(root) / "samples" / sample
         r1 = folder / (sample + "_L001_R1_001.fastq.gz")
         r2 = folder / (sample + "_L001_R2_001.fastq.gz")
@@ -60,7 +61,8 @@ def load_synthetic(root=SYNTHETIC_ROOT, cohort=None, expected_sha=None):
         raise ValueError("v6 cohort is not the frozen 464-case cohort")
     aliases = sched.canonical_aliases(ids, "synthetic")
     cases = []
-    for case_id in ids:
+    # Synthetic order follows canonical source-ID aliases as well.
+    for case_id in sorted(ids):
         reads = Path(root) / case_id / "reads"
         r1, r2 = reads / "R1.fastq.gz", reads / "R2.fastq.gz"
         if not r1.is_file() or not r2.is_file():

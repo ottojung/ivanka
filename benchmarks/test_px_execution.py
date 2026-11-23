@@ -136,6 +136,23 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(len(exe.load_cohort(self.physical, self.synthetic)
                              .cases("physical")), 198)
 
+    def test_loader_order_is_canonical_even_if_input_manifests_are_shuffled(self):
+        physical_manifest = self.physical / "manifest.tsv"
+        rows = physical_manifest.read_text().splitlines()
+        physical_manifest.write_text("\n".join([rows[0], *reversed(rows[1:])]) + "\n")
+        cohort_manifest = self.synthetic / "cohort.json"
+        cohort_data = json.loads(cohort_manifest.read_text())
+        cohort_data["cases"].reverse()
+        cohort_manifest.write_text(json.dumps(cohort_data))
+        with (patch.object(sched, "PHYSICAL_MANIFEST_SHA256", sha(physical_manifest)),
+              patch.object(sched, "SYNTHETIC_COHORT_SHA256", sha(cohort_manifest))):
+            physical = exe.load_physical(self.physical)
+            synthetic = exe.load_synthetic(self.synthetic)
+        self.assertEqual([c.alias for c in physical],
+                         [sched._alias(i, "physical") for i in range(1, 199)])
+        self.assertEqual([c.alias for c in synthetic],
+                         [sched._alias(i, "synthetic") for i in range(1, 465)])
+
     def test_changed_source_sha_is_rejected(self):
         (self.physical / "manifest.tsv").write_text("sample\nother\n")
         with self.assertRaisesRegex(ValueError, "manifest SHA256 changed"):

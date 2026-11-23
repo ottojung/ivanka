@@ -13,7 +13,7 @@ except ImportError:
     parasail = None
 
 
-from project_references import reference_names, final_max_sequences
+from project_references import final_max_sequences, reference_names
 
 HCV_GENOTYPES = (
     "HCV-1a", "HCV-1b", "HCV-2a", "HCV-2b",

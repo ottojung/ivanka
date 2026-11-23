@@ -4,8 +4,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from reference_panel import (best_panel_alignment, build_reference_panel,
-                             normalize_dna, panel_acceptance, panel_sha256)
+from reference_panel import (
+    best_panel_alignment,
+    build_reference_panel,
+    normalize_dna,
+    panel_acceptance,
+    panel_sha256,
+)
 
 
 def write_conseq(folder, sequences):
@@ -60,8 +65,9 @@ class ReferencePanelTests(TestCase):
         self.assertEqual(result["score"], float(len(query)))
 
     def test_optional_simd_backend_preserves_exact_scores(self):
-        import reference_panel
         from unittest.mock import patch
+
+        import reference_panel
         if reference_panel.parasail is None:
             self.skipTest("optional parasail accelerator not installed")
         seq = "ACGTGCAATGGCTAACGCTAGCGTATCAGTCGAT" * 12
@@ -76,8 +82,9 @@ class ReferencePanelTests(TestCase):
         self.assertEqual(simd, scalar)
 
     def test_masked_x_simd_matches_exact_scalar_local_alignment(self):
-        import reference_panel
         from unittest.mock import patch
+
+        import reference_panel
         if reference_panel.parasail is None:
             self.skipTest("optional parasail accelerator not installed")
         random_state = random.Random(41)
@@ -95,8 +102,9 @@ class ReferencePanelTests(TestCase):
             self.assertEqual(fast, scalar, (i, sample, reference))
 
     def test_long_masked_x_consensus_exact_score_and_reverse(self):
-        import reference_panel
         from unittest.mock import patch
+
+        import reference_panel
         if reference_panel.parasail is None:
             self.skipTest("optional parasail accelerator not installed")
         ref = ("ACGT" * 260)[:1017]

@@ -31,9 +31,17 @@
       "source_repo": "https://github.com/ncbi/SKESA",
       "rationale": "short-read de Bruijn graph; bacterial baseline",
       "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
-      "image_sha256": null,
-      "status": "source-pinned",
-      "qualifying": false
+      "image_sha256": "ed0770eec1d6e7ca9318a447e4f7fbe1cd12b98ea38b50ec766893b8d388392e",
+      "status": "pilot",
+      "qualifying": false,
+      "image_evidence": {
+        "path": "/workspace/ivanka-exploratory-ten-20261121/receipts/image-skesa-frozen-8458f9e5-2fb3cd5a.json",
+        "sha256": "752b2a6d2dee4cf4a86ea722adc49b9dbd14f5a5aedb6bb193b4650dc2d063be"
+      },
+      "pilot_evidence": {
+        "path": "/workspace/ivanka-exploratory-ten-20261121/receipts/pilot-skesa-frozen-8458f9e5-2fb3cd5a.json",
+        "sha256": "0e633f92300e6149ba8336e5c070b9e1b82a15a2d902e6e207ab3987fa638786"
+      }
     },
     {
       "id": "idba-ud",
@@ -200,7 +208,7 @@
   ],
   "adapter_baseline_commit": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
   "adapter_branch_commits": {
-    "skesa": "dcf57bf112d185fc0c9f2744da6ea79c1c22225b",
+    "skesa": "2fb3cd5af8769f834635b21187738cf90565c349",
     "idba-ud": "f9d1a147184ef932a5f0cda4f0eac4a9045b3c5b",
     "minia": "18de45342ea4723f18154a746ed2e13108f45b3a",
     "ray": "01e9b305eb67118c80b6ce72953c14ed4b7e821e",

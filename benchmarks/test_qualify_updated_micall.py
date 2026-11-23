@@ -3,8 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from qualify_updated_micall import verify, SAMPLE_COUNT
-
+from qualify_updated_micall import SAMPLE_COUNT, verify
 
 IVA_SHA = "a"*64
 IVANKA_SHA = "b"*64
@@ -74,6 +73,24 @@ class UpdatedMiCallQualificationTests(unittest.TestCase):
             self.assertFalse(verify(records[:-1], names, root, IVA_SHA, IVANKA_SHA, original_evidence)[
                 "real_data_numeric_gate_pass"])
 
+    def test_prospective_wall_cap_is_forty_minutes_not_legacy_thirty(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            names, records, evidence = self._build(root)
+            records[0]["iva"]["seconds"] = 2400
+            records[0]["iva"]["container_wall_seconds"] = 2400
+            records[0]["ivanka"]["seconds"] = 2398
+            records[0]["ivanka"]["container_wall_seconds"] = 2400
+            report = verify(records, names, root, IVA_SHA, IVANKA_SHA, evidence)
+            self.assertEqual(report["per_arm_wall_cap_seconds"], 2400)
+            self.assertEqual(report["errors"], [])
+            self.assertTrue(report["real_data_numeric_gate_pass"])
+            records[0]["ivanka"]["container_wall_seconds"] = 2400.01
+            report = verify(records, names, root, IVA_SHA, IVANKA_SHA, evidence)
+            self.assertFalse(report["real_data_numeric_gate_pass"])
+            self.assertIn("ivanka_time_limit_or_clock_invalid",
+                          repr(report["errors"]))
+
     def test_rejects_forged_original_input_provenance(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -88,7 +105,7 @@ class UpdatedMiCallQualificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             names, records, original_evidence = self._build(root)
-            records[0]["ivanka"]["container_wall_seconds"] = 1801
+            records[0]["ivanka"]["container_wall_seconds"] = 2401
             report = verify(records, names, root, IVA_SHA, IVANKA_SHA, original_evidence)
             self.assertFalse(report["real_data_numeric_gate_pass"])
             records[0]["ivanka"]["container_wall_seconds"] = 90

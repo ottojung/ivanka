@@ -15,9 +15,10 @@ nonqualifying and outside the frozen seven-way gate, the 198-sample gate, the
     read-pair paths stay inside this object; every exported structure carries
     only public aliases and SHA-256 input digests.
   - `build_plan()` admits only assemblers that already have a source-bound image
-    receipt and an eligible stage (`image-pinned`, `pilot`, `benchmarked`). For
-    each admitted assembler, **all physical arms precede all synthetic arms**,
-    in registry order. A source-pinned roster yields no arms.
+    receipt and an eligible stage (`image-pinned`, `pilot`, `benchmarked`).
+    **All 198 physical cases for every admitted assembler precede any of the
+    464 synthetic cases**, preserving registry order within each cohort. This is a global phase boundary, not merely per-assembler order.
+    A source-pinned roster yields no arms.
   - Input R1/R2 (and optional seeds) are hashed independently. Seeds are
     accepted only with `{"kind": "read-derived", "sample_alias": <same case>}`
     provenance; reference-derived or unlabelled seeds are rejected.

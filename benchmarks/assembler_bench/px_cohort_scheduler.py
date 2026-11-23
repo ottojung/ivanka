@@ -264,8 +264,10 @@ def build_plan(registry, source, root):
     data, tools = _tool_rows(registry)
     source.validate()
     arms, accepted_ids, pending = [], [], []
-    for tool in tools:
-        for cohort in COHORTS:
+    # Founder order applies globally: ALL tools complete the 198 physical
+    # cases before ANY tool begins a 464-synthetic case.
+    for cohort in COHORTS:
+        for tool in tools:
             for case in source.cases(cohort):
                 arm = {"tool_id": tool["id"], "cohort": cohort,
                        "alias": case.alias, "input_sha256": case.input_hashes(),

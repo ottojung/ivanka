@@ -104,9 +104,16 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(plan["pending_arms"], 2 * 662)
         self.assertEqual([a["alias"] for a in plan["pending"][:198]],
                          [sched._alias(i, "physical") for i in range(198)])
-        self.assertEqual(plan["pending"][198]["alias"], "PX-H000")
-        self.assertEqual(plan["pending"][662]["tool_id"], "minia")
-        self.assertEqual(plan["pending"][662]["alias"], "PX-R000")
+        self.assertEqual(plan["pending"][198]["tool_id"], "minia")
+        self.assertEqual(plan["pending"][198]["alias"], "PX-R000")
+        self.assertEqual(plan["pending"][396]["alias"], "PX-H000")
+        self.assertEqual(plan["pending"][396]["tool_id"], "skesa")
+        self.assertEqual(plan["pending"][860]["alias"], "PX-H000")
+        self.assertEqual(plan["pending"][860]["tool_id"], "minia")
+        self.assertTrue(all(a["cohort"] == "physical" for a in
+                            plan["pending"][:396]))
+        self.assertTrue(all(a["cohort"] == "synthetic" for a in
+                            plan["pending"][396:]))
         self.assertFalse(plan["qualifying"])
 
     def test_cohort_size_and_alias_validation(self):

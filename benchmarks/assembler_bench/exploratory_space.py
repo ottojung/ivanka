@@ -1,12 +1,21 @@
 """Fail-closed DISK ADMISSION CHECK, not a running-job quota/watcher."""
 import os
+import re
 import subprocess
+import time
 from pathlib import Path
 
 # This is the ONLY dedicated rootless store authorized by the PX policy.
 # Podman overlay subdirectories are remapped to container UIDs: ordinary
 # host 'du' returns permission errors while an image build is in progress.
 ROOTLESS_STORE = Path("/workspace/ivanka-exploratory-podman-20261121")
+# A live Buildah overlay can vanish between du's readdir and its stat.
+# Retry ONLY this exact, ephemeral ENOENT; permissions and all other failures
+# remain fail-closed rather than publishing partial disk measurements.
+TEMP_DIR_DISAPPEARED = re.compile(
+    r"du: fts_read failed: " + re.escape(str(ROOTLESS_STORE))
+    + r"/store/overlay/tempdirs/temp-dir-[0-9]+/[^\n:]+: No such file or directory\n?"
+)
 
 
 def disk_measure_command(target):
@@ -22,9 +31,18 @@ def allocated(path):
     target = Path(path).resolve()
     if not target.is_dir():
         raise ValueError("missing measured directory: " + str(target))
-    result = subprocess.run(disk_measure_command(target), check=True,
-                            text=True, capture_output=True, timeout=15)
-    return int(result.stdout.split()[0])
+    for attempt in range(3):
+        try:
+            result = subprocess.run(disk_measure_command(target), check=True,
+                                    text=True, capture_output=True, timeout=15)
+            return int(result.stdout.split()[0])
+        except subprocess.CalledProcessError as error:
+            if (target != ROOTLESS_STORE or attempt == 2
+                    or not isinstance(error.stderr, str)
+                    or not TEMP_DIR_DISAPPEARED.fullmatch(error.stderr)):
+                raise
+            time.sleep(0.1)
+    raise RuntimeError("unreachable disk accounting retry state")
 
 
 def available(path):

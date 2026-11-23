@@ -97,7 +97,8 @@ def _validate_samples(samples, expected, cohort):
             raise TypeError("invalid per-sample row")
         alias = sample.get("alias")
         if (not isinstance(alias, str) or not ALIAS.fullmatch(alias)
-                or alias[3] != prefix or alias in seen):
+                or alias[3] != prefix or alias in seen
+                or not 1 <= int(alias[4:]) <= expected):
             raise ValueError("invalid or duplicated public case alias")
         seen.add(alias)
         outcome = sample.get("outcome")
@@ -150,10 +151,42 @@ def _verified_results(path, item, status):
         raise ValueError("per-sample results differ from attested receipt")
     if PRIVATE.search(source.read_text()):
         raise ValueError("private identifier in per-sample results")
-    return {"cohort": data["cohort"], "expected": expected,
+    cohort = data["cohort"]
+    rows = _validate_samples(data.get("samples"), expected, cohort)
+    bound = {}
+    if status == "pilot":
+        # A pilot receipt represents exactly one paired-read case per cohort.
+        # A signed score file must not relabel the pilot as another sample.
+        case = proof.get(cohort, {})
+        canonical = case.get("canonical_alias")
+        if canonical is None:
+            canonical = proof.get("canonical_alias_evidence", {}).get(
+                cohort, {}).get("alias")
+        paired = case.get("source_input_sha256")
+        if (len(rows) != 1 or not isinstance(canonical, str)
+                or rows[0]["alias"] != canonical
+                or case.get("status") != "success"
+                or rows[0]["outcome"] != "success"
+                or not isinstance(paired, str) or not SHA64.fullmatch(paired)):
+            raise ValueError("pilot score does not match source-attested case")
+        canonical_proof = proof.get("canonical_alias_evidence", {}).get(cohort)
+        if (canonical_proof is not None
+                and canonical_proof.get("input_pair_sha256") != paired):
+            raise ValueError("pilot canonical alias has wrong read-pair digest")
+        bound[canonical] = paired
+    else:
+        # Benchmark cases need independent per-case input provenance. A digest
+        # of a cohort or just one mate cannot substantiate pairwise plots.
+        input_pairs = proof.get("case_input_sha256", {}).get(cohort, {})
+        if (not isinstance(input_pairs, dict)
+                or any(not isinstance(input_pairs.get(row["alias"]), str)
+                       or not SHA64.fullmatch(input_pairs[row["alias"]])
+                       for row in rows)):
+            raise ValueError("benchmark results lack per-case read-pair proof")
+        bound = {row["alias"]: input_pairs[row["alias"]] for row in rows}
+    return {"cohort": cohort, "expected": expected,
             "results_sha256": digest(source), "evidence_sha256": digest(receipt),
-            "samples": _validate_samples(data.get("samples"), expected,
-                                         data["cohort"])}
+            "samples": rows, "source_input_sha256": bound}
 
 
 def _blocked(registry):
@@ -179,6 +212,7 @@ def build(registry_path=DEFAULT_REGISTRY, results=None):
     if set(results) - exploratory_policy.EXPERIMENTAL:
         raise ValueError("per-sample results for an unknown explorer")
     candidates = []
+    verified_case_inputs = {}
     for raw in registry["candidates"]:
         item = dict(raw, adapter_commit=registry["adapter_branch_commits"][raw["id"]])
         evidence = _receipt_evidence(item)
@@ -204,6 +238,10 @@ def build(registry_path=DEFAULT_REGISTRY, results=None):
         }
         for path in results.get(item["id"], []):
             verified = _verified_results(path, item, item["status"])
+            for alias, input_sha in verified["source_input_sha256"].items():
+                existing = verified_case_inputs.setdefault(alias, input_sha)
+                if existing != input_sha:
+                    raise ValueError("same canonical alias has different input pairs")
             if "results" not in entry:
                 entry["results"] = {"evidence_sha256": verified["evidence_sha256"],
                                     "results_sha256": {}, "cohorts": [],

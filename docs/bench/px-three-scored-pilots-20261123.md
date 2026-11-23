@@ -1,5 +1,8 @@
 # PX: three source-attested pilot assemblers — November 23, 2026
 
+**Historical checkpoint.** The next verified publication includes Minia;
+see [four-source-pinned pilot report](px-four-scored-pilots-20261123.md).
+
 This is **NONQUALIFYING**, and does not change the frozen seven-image
 manifest `9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f`
 or any of the original 4,634 physical/synthetic attempts.

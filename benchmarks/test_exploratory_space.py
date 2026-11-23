@@ -66,6 +66,48 @@ class TestExploratorySpace(unittest.TestCase):
         ):
             allocated(ROOTLESS_STORE)
 
+    def test_live_buildah_temporary_enoent_retries_complete_scan(self):
+        stderr = ("du: fts_read failed: " + str(ROOTLESS_STORE)
+                  + "/store/overlay/tempdirs/temp-dir-409150334/0-addition:"
+                  + " No such file or directory\n")
+        transient = subprocess.CalledProcessError(
+            1, ["podman", "unshare", "du"], stderr=stderr)
+        result = subprocess.CompletedProcess(
+            ["podman", "unshare", "du"], 0, "234567\t/store\n", "")
+        with (patch("assembler_bench.exploratory_space.Path.is_dir",
+                    return_value=True),
+              patch("assembler_bench.exploratory_space.subprocess.run",
+                    side_effect=[transient, result]) as run,
+              patch("assembler_bench.exploratory_space.time.sleep") as sleep):
+            self.assertEqual(allocated(ROOTLESS_STORE), 234567)
+            self.assertEqual(run.call_count, 2)
+            sleep.assert_called_once_with(0.1)
+
+    def test_repeated_live_temp_races_fail_closed(self):
+        stderr = ("du: fts_read failed: " + str(ROOTLESS_STORE)
+                  + "/store/overlay/tempdirs/temp-dir-40/0-addition:"
+                  + " No such file or directory\n")
+        with (self.assertRaises(subprocess.CalledProcessError),
+              patch("assembler_bench.exploratory_space.Path.is_dir",
+                    return_value=True),
+              patch("assembler_bench.exploratory_space.subprocess.run",
+                    side_effect=subprocess.CalledProcessError(
+                        1, ["podman", "unshare", "du"], stderr=stderr)) as run):
+            allocated(ROOTLESS_STORE)
+            self.assertEqual(run.call_count, 3)
+
+    def test_unrelated_enoent_does_not_get_retried(self):
+        stderr = ("du: fts_read failed: /workspace/unrelated/tmp:"
+                  " No such file or directory\n")
+        with (self.assertRaises(subprocess.CalledProcessError),
+              patch("assembler_bench.exploratory_space.Path.is_dir",
+                    return_value=True),
+              patch("assembler_bench.exploratory_space.subprocess.run",
+                    side_effect=subprocess.CalledProcessError(
+                        1, ["podman", "unshare", "du"], stderr=stderr)) as run):
+            allocated(ROOTLESS_STORE)
+            self.assertEqual(run.call_count, 1)
+
     def test_small_pilot_admitted(self):
         self.assertEqual(self.check(1024)["admitted_reservation_bytes"], 1024)
 

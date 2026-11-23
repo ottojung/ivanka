@@ -3,8 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from qualify_updated_micall import verify, SAMPLE_COUNT
-
+from qualify_updated_micall import SAMPLE_COUNT, verify
 
 IVA_SHA = "a"*64
 IVANKA_SHA = "b"*64
@@ -78,6 +77,8 @@ class UpdatedMiCallQualificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             names, records, evidence = self._build(root)
+            records[0]["iva"]["seconds"] = 2400
+            records[0]["iva"]["container_wall_seconds"] = 2400
             records[0]["ivanka"]["seconds"] = 2398
             records[0]["ivanka"]["container_wall_seconds"] = 2400
             report = verify(records, names, root, IVA_SHA, IVANKA_SHA, evidence)

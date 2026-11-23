@@ -67,7 +67,7 @@ def verify(records, names, root, iva_image, ivanka_image, source_provenance):
         errors.append("not_198_terminal_rows")
     if len({r.get("sample") for r in records}) != len(records):
         errors.append("duplicate_samples")
-    if set(r.get("sample") for r in records) != set(names):
+    if {r.get("sample") for r in records} != set(names):
         errors.append("sample_identity_mismatch")
     invocations = {r.get("invocation") for r in records}
     if len(invocations) != 1 or not all(isinstance(x, str) and x for x in invocations):
@@ -84,7 +84,7 @@ def verify(records, names, root, iva_image, ivanka_image, source_provenance):
             if r.get("iva_baseline_reused") is True:
                 raise ValueError("not_fresh_both_arm_result")
             if not isinstance(r.get("provenance"), dict):
-                raise ValueError("missing_input_provenance")
+                raise TypeError("missing_input_provenance")
             if r["provenance"] != source_provenance.get(sample):
                 raise ValueError("original_fastq_provenance_mismatch")
             accepted = r["best_contig_acceptance"]

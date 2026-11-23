@@ -141,7 +141,10 @@ the Rust-only, reference-blind, unconfigured MiCall invocation contract:
   on final-output alignment/known-truth and runtime all-r Ψ, meeting
   the ≥90%-of-best-competitor per-sample final alignment floor; its
   integrated MiCall results must be published
-  under `/bench/` as required by Intent 007.
+  to the independent Assembler Bench under `/bench/` (Intent 007).
+  **Assembler Bench is not Ivanka's release dashboard:** it independently
+  displays any cohort-defined assembler set without project acceptance
+  labels. The requirements above belong to Ivanka itself, not the site.
 
 Missing, failed or partial runs cannot qualify. Neither a historical
 IVA-only pass nor a synthetic-only pass suffices. These requirements are

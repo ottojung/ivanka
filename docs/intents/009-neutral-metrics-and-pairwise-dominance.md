@@ -1,13 +1,17 @@
 # Intent 009: Assembler-neutral evaluation framework
 
-**Status: binding; the complete neutral interface is not yet qualified.**
+**Status: binding; the cohort-neutral site migration is not yet complete.**
 
-**Assembler Bench is a general framework for judging any assembler as
-integrated into MiCall**, not an Ivanka-specific showcase. Every assembler
-is a first-class candidate, and no tool has a privileged baseline, fixed
+**Assembler Bench is an independent comparison application**, not an
+Ivanka-specific showcase or acceptance evaluator. Every assembler is an
+ordinary cohort member, and no tool has a privileged baseline, fixed
 winning position, or exclusive right to be compared with the others.
-Support arbitrary tool sets with pinned implementations and comparable
-MiCall inputs and downstream processing.
+Each cohort owns its assembler roster and methods, including combined
+cohorts whose members may differ across constituent samples. Missing
+measurements must remain missing, never fabricated. No public-site
+project-acceptance or tool-eligibility framing is permitted. For existing
+MiCall cohorts, source-pinned implementations and downstream processing
+remain scientifically comparable.
 
 This intent establishes the **presentation and evaluation principles**.
 Its earlier technical requirements are retained as **independent, cumulative
@@ -33,10 +37,10 @@ offer tool-neutral selection, ordering, naming, filters, plots, tables,
 distributions, failure analysis, provenance and exports. A visitor can
 compare **any two** assemblers, study **all** contestants at once, and
 inspect each sample and cohort without implicitly assuming Ivanka wins.
-Show source-defined measures with a shared final MAX
-local-alignment scoring method for both cohorts. Retain raw
-alignment points in the combined view, and do not turn an optional
-diagnostic into an additional biological acceptance gate.
+Show the scoring method and unit defined by **each selected cohort**.
+Retain original per-sample scores in combined views, but never silently
+aggregate incompatible score units. All measured diagnostics are
+observational data, not product acceptance decisions.
 
 The interface must include the [all-pairs Ψ matrix](015-pairwise-psi-dominance.md)
 and the [per-assembler diagnostic panels](012-assembler-diagnostic-metrics.md),
@@ -52,18 +56,19 @@ container links must resolve to full immutable
 [`ottojung/MiCall` commits](011-ottojung-micall-fork-provenance.md);
 never write to [upstream MiCall](010-upstream-micall-read-only.md).
 
-## Acceptance
+## Verification of the evaluation framework
 
 - Three or more distinct named assemblers can be selected and compared
   in any direction, without hardcoded Ivanka-side metric logic.
-- For real and eligible synthetic runs, the public Pages interface
-  exposes tool-neutral sample, cohort, diagnostic, failure, distribution
-  and dominance views, with meaningful missing-data states.
+- For any cohort with a verified source and explicit assembler roster,
+  the public interface exposes tool-neutral sample, diagnostic, failure,
+  distribution and dominance views with meaningful missing-data states.
 - Every requirement from the former combined 009 document remains
   independently testable under Intents 012–015.
-- The benchmark's **original alignment/runtime** qualification gates in
-  [Intents 005](005-physical-198-qualification.md) and
-  [006](006-expanded-qualification.md) remain unchanged. Neither a
-  favorable diagnostic nor a polished Pages view counts as a numeric pass.
+- A cohort-specific roster is authoritative even when different from
+  every other cohort's roster. The site gives no special standing to
+  Ivanka or to any historical versus newly introduced assembler.
+- The application contains no external project-acceptance statuses,
+  and no tool is hidden because of missing or unfavorable measurements.
 
 All earlier and later intents apply cumulatively.

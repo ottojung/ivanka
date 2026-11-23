@@ -1,4 +1,14 @@
-# Assembler Bench — current source-attested comparison
+# Assembler Bench — independent cohort-driven comparisons
+
+**Assembler Bench is an independent benchmarking application**, not a
+presentation layer for Ivanka's product development. It reports observations,
+error states, provenance, signed-power comparisons and missing data, without
+project acceptance vocabulary. Every cohort defines its own assembler roster,
+including historical, combined and new-tool cohorts. The deployed GitHub Pages
+URL is a hosting detail, not Ivanka ownership.
+
+**The operational notes below describe the Ivanka experiment currently using
+the Bench; they do not prescribe the Bench's UI or public data model.**
 
 **Current work priority:** [physical P0 → synthetic P1 → physical diagnostics P2 → existing-comparator repairs P3, with ten nonqualifying assemblers in parallel](ordered-work-20261121.md). This ordering does not alter any frozen qualification gate or image.
 
@@ -29,8 +39,9 @@ cannot be substituted or relabeled as the 464-case source-attested cohort.
 The current synthetic score is length-balanced over every generating
 truth with nominal abundance ≥15% (inclusive).
 
-The public site shows three current-cohort views and selectable
-earlier execution runs. Measurements remain attached to their
+The independent site currently shows three benchmark views and selectable
+earlier execution runs, and can add any further cohort with its own assembler
+roster without rewriting the site. Measurements remain attached to their
 source/image identities; a scoring change does not require
 rerunning a retained MiCall consensus output. The three current
 cohort views are:
@@ -81,7 +92,9 @@ aliases, measured values, outcome/missing state and per-candidate
 completion counters. Original sample names, paths, reads, QNAMEs
 and patient identifiers stay on the host. The synthetic result uses
 H001-style aliases, and the combined view adds S- and R- prefixes.
-Each view shows seven assemblers even while some have zero results.
+Each cohort lists its declared assemblers, including those with zero
+observations. A combined cohort declares its own list, usually the union of
+its sources, with genuinely missing values where no measurement exists.
 
 The 23 diagnostic metrics (including CIGAR soft clipping, depth and
 contig summaries) include units, denominators and missing-data
@@ -92,10 +105,15 @@ to represent all 464 current synthetic cases.
 The single-metric total ranking uses observed measurements only,
 with a clear denominator. The directed Ψ matrix allows independently
 selected metrics; available paired-subset results stay visible even
-when full-cohort qualification is incomplete. Failures and missing
-competitor scores are never converted to zero or Ivanka victories.
+when complete-cohort evidence is missing. Failures and missing
+competitor scores are never converted to zero or assigned as victories.
 
-## Scientific status and checks
+## Ivanka-only acceptance checks (outside Assembler Bench)
+
+The rules below are **not part of the public website's statuses, data
+schema or presentation**. They belong to Ivanka's separate development
+and release process. The public Bench never reports approval decisions
+or distinguishes a privileged assembler class.
 
 The full expanded benchmark is **not qualified** until the separate
 464-synthetic and 198-real gates have all seven comparable MiCall
@@ -122,7 +140,7 @@ Before changing the public site, run:
 The site builder independently recomputes all-pairs Ψ matrices,
 validates the unchanged-score combined view against both
 underlying cohorts, checks diagnostic source values and denominators,
-and rejects source-attestation failures, false qualification or
+and rejects source-attestation failures, corrupted measurements or
 private metadata.
 
 
@@ -155,7 +173,7 @@ may be compared visually, but cannot be substituted into another
 image set's mandatory complete benchmark gate. The execution
 inventory is never erased when current progress changes.
 
-The single-metric ranking supports per-assembler histograms and
+The single-metric ranking supports every cohort-selected assembler's histograms and
 Gaussian kernel density estimates from individual measured cases.
 Constant or one-case measurements are shown without a KDE curve.
 All diagnostic units and missing-data states remain intact.

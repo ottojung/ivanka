@@ -1,0 +1,11 @@
+# Ivanka candidate uses precisely the same underlying experimental MiCall
+# as its IVA control, plus the pinned bounded-seed/one-contig binary and
+# assembler boundary from the already verified candidate image.
+FROM localhost/micall:newmicall-e0073cb5-k1-base
+ENV IVANKA_MAX_CONTIGS=1
+ENV IVANKA_SEED_EFFORT=20
+COPY --from=localhost/micall:ivanka-newmicall-seed20-contig1-20261110 /usr/local/bin/ivanka /usr/local/bin/ivanka
+COPY --from=localhost/micall:ivanka-newmicall-seed20-contig1-20261110 /opt/venv/lib/python3.12/site-packages/micall/core/denovo.py /opt/venv/lib/python3.12/site-packages/micall/core/denovo.py
+COPY benchmarks/verify_ivanka_binding.py /tmp/verify-ivanka-binding.py
+RUN python /tmp/verify-ivanka-binding.py && rm /tmp/verify-ivanka-binding.py
+LABEL org.ottojung.ivanka.experiment="same-MiCall-k1-base;bounded-seeds20;one-dominant-contig"

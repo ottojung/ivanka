@@ -1,5 +1,9 @@
 # PX first verified results — November 23, 2026
 
+**Historical first-publication snapshot.** Later evidence, including successful
+IDBA-UD and Fermi-lite pilots, is recorded in
+[the updated three-pilot report](px-three-scored-pilots-20261123.md).
+
 This is a **nonqualifying** exploratory publication; it does not change
 Ivanka's seven-way qualification, source, OCI pins, or 4,634 frozen runs.
 

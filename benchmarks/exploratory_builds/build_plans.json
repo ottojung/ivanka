@@ -461,7 +461,7 @@
     },
     {
       "adapter_branch": "bench/assembler-skesa",
-      "adapter_commit": "dcf57bf112d185fc0c9f2744da6ea79c1c22225b",
+      "adapter_commit": "2fb3cd5af8769f834635b21187738cf90565c349",
       "attestation_provenance": "pinned source 34c872e7, Debian bookworm g++ 12.2.0/libboost 1.74.0.3 toolchain; verified binary file /workspace/px-skesa-pqhG00h5412U4gNpP6e2KI-20261121/attest/skesa and receipt run-skesa-1795297065583019224.json",
       "attested_binary_sha256": "d7d97a95add33476e3b84ad8dab48db7278c3833ef8a9df76b08d1bbd78fb85c",
       "base_image_digest": null,
@@ -490,11 +490,11 @@
         "--file",
         "{ADAPTER_CHECKOUT}/Dockerfile.assembler-bench",
         "--tag",
-        "localhost/ivanka-exploratory-skesa:dcf57bf112d1",
+        "localhost/ivanka-exploratory-skesa:2fb3cd5af876",
         "--build-arg",
         "FORK_BASE_IMAGE={BASE_IMAGE_DIGEST}",
         "--build-arg",
-        "MICALL_FORK_SOURCE_COMMIT=dcf57bf112d185fc0c9f2744da6ea79c1c22225b",
+        "MICALL_FORK_SOURCE_COMMIT=2fb3cd5af8769f834635b21187738cf90565c349",
         "--build-arg",
         "MICALL_FORK_BASE_COMMIT=eeca0381808a6e9ba5ef791c80238a0e2940abb0",
         "--build-arg",
@@ -512,7 +512,7 @@
       "common_baseline_commit": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
       "extra_placeholders": [],
       "id": "skesa",
-      "image_tag": "localhost/ivanka-exploratory-skesa:dcf57bf112d1",
+      "image_tag": "localhost/ivanka-exploratory-skesa:2fb3cd5af876",
       "name": "SKESA",
       "nonqualifying": true,
       "qualifying": false,
@@ -790,5 +790,5 @@
     "total_incremental_storage_bytes": 8589934592
   },
   "schema": "ivanka.exploratory.build-plan.v1",
-  "source_registry_sha256": "b0c08fb9f2d2f3b59f308739f9bbb704967606b788e151467906856728328017"
+  "source_registry_sha256": "c17776a36778c9febef41da24e3311792ea65aea95c8c0740fce0a645c8c2d38"
 }

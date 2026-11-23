@@ -47,7 +47,8 @@ class TestRunner(unittest.TestCase):
         self.addCleanup(self.available.stop)
 
     def run_job(self, mode="build", argv=None):
-        return operate(REG, self.baseline, "skesa", mode,
+        # Generic build-mode checks use a still-source-pinned tool.
+        return operate(REG, self.baseline, "minia", mode,
                        argv or [sys.executable, "-c", "print('hello')"], 1024**3)
 
     def test_real_foreground_process_and_hashed_log(self):

@@ -1,0 +1,133 @@
+name: PX hosted build readiness audit
+
+# Source audit only. The current PX adapter branches derive from the eeca0381
+# lineage, not the frozen MiCall 8458f9e5 base used by the seven qualifying
+# images, so they are scientifically incomparable. This workflow NEVER builds,
+# pushes or pilots an image; it only audits whether a proposed rebased adapter
+# could ever be admissible. Manual dispatch keeps it off ordinary PR traffic.
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: "Explorer id (must stay source-pinned and nonqualifying)"
+        required: true
+        type: choice
+        options:
+          - skesa
+          - idba-ud
+          - minia
+          - ray
+          - unicycler
+          - tadpole
+          - soapdenovo2
+          - fermi-lite
+          - penguin
+          - savage-denovo
+      adapter_repo:
+        description: "Canonical fork URL of the proposed rebased adapter"
+        required: true
+        default: "https://github.com/ottojung/MiCall"
+        type: string
+      adapter_commit:
+        description: "Full 40-hex commit of the proposed rebased PX branch"
+        required: true
+        type: string
+      base_commit:
+        description: "Frozen MiCall base commit (must equal 8458f9e5...)"
+        required: true
+        default: "8458f9e5d34c39a6694b1fb6a40e055d7ce89553"
+        type: string
+      attestation_path:
+        description: "Repo-relative path to the shared-source attestation JSON"
+        required: true
+        type: string
+      common_base_digest:
+        description: "Immutable sha256:... digest of a real pinned common base"
+        required: false
+        default: ""
+        type: string
+      image_persistence:
+        description: "How a future verified image would be persisted"
+        required: true
+        default: "ghcr-by-digest"
+        type: choice
+        options:
+          - ghcr-by-digest
+          - oci-artifact
+
+permissions:
+  contents: read
+
+# One auditor at a time; nothing here is cancelled mid-flight.
+concurrency:
+  group: px-hosted-build-readiness
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit PX hosted build prerequisites
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      # The benchmark result tree is the frozen scientific record. Fingerprint
+      # the tracked index before and after to prove this audit changed nothing.
+      - name: Fingerprint benchmark results before audit
+        id: before
+        run: echo "tree=$(git ls-files -s benchmarks | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Reject pre-existing benchmark result drift
+        run: git diff --quiet -- benchmarks || (echo "benchmark tree is dirty" && exit 1)
+
+      - name: Audit hosted build prerequisites (fail closed)
+        env:
+          PYTHONPATH: benchmarks
+          INPUT_TOOL: ${{ inputs.tool }}
+          INPUT_ADAPTER_REPO: ${{ inputs.adapter_repo }}
+          INPUT_ADAPTER_COMMIT: ${{ inputs.adapter_commit }}
+          INPUT_BASE_COMMIT: ${{ inputs.base_commit }}
+          INPUT_ATTESTATION_PATH: ${{ inputs.attestation_path }}
+          INPUT_COMMON_BASE_DIGEST: ${{ inputs.common_base_digest }}
+          INPUT_IMAGE_PERSISTENCE: ${{ inputs.image_persistence }}
+        run: |
+          python -m benchmarks.px_build_readiness audit \
+            --tool "$INPUT_TOOL" \
+            --adapter-repo "$INPUT_ADAPTER_REPO" \
+            --adapter-commit "$INPUT_ADAPTER_COMMIT" \
+            --base-commit "$INPUT_BASE_COMMIT" \
+            --attestation-path "$INPUT_ATTESTATION_PATH" \
+            --common-base-digest "$INPUT_COMMON_BASE_DIGEST" \
+            --image-persistence "$INPUT_IMAGE_PERSISTENCE" \
+            --output "$RUNNER_TEMP/readiness.json"
+
+      - name: Publish audit summary
+        run: |
+          python - "$RUNNER_TEMP/readiness.json" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          print("## PX hosted build readiness\n")
+          print("- status: **%s**" % report["status"])
+          print("- builds_permitted: **%s**" % str(report["builds_permitted"]).lower())
+          print("- blockers: %d" % len(report["blockers"]))
+          for item in report["blockers"]:
+            print("  - " + item)
+          PY
+
+      - name: Confirm benchmark results unchanged
+        env:
+          EXPECTED: ${{ steps.before.outputs.tree }}
+        run: |
+          actual="$(git ls-files -s benchmarks | sha256sum | cut -d' ' -f1)"
+          test "$actual" = "$EXPECTED" || (echo "benchmark tree changed" && exit 1)
+
+      - name: Upload readiness report
+        uses: actions/upload-artifact@v4
+        with:
+          name: px-hosted-readiness-${{ inputs.tool }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/readiness.json
+          if-no-files-found: error

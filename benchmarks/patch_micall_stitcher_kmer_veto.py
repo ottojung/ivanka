@@ -15,6 +15,21 @@ def patched_source(source):
 import functools
 
 
+
+# MiCall's overlap aligners return deterministic coordinates for a frozen
+# contig, score threshold, relation, and probe. A single prospective path
+# can request the same expensive mapping many times. Cache the resulting
+# tuple, not a generator, preserving results and iteration order.
+@functools.lru_cache(maxsize=256)
+def _overlap_coordinates(contig, minimum_score, relation, probe):
+    from micall.utils.referenceless_contig_with_aligner import map_overlap as original
+    return tuple(original(contig, minimum_score, relation, probe))
+
+
+def map_overlap(contig, minimum_score, relation, probe):
+    yield from _overlap_coordinates(contig, minimum_score, relation, probe)
+
+
 @functools.lru_cache(maxsize=256)
 def _canonical_kmers_tuple(seq, k):
     """Encode canonical ACGT windows with a rolling forward/reverse pair.

@@ -1,18 +1,18 @@
 """Fail-closed, privacy-checked, static GitHub Pages publisher for /bench/."""
 import argparse
 import json
+import math
 import re
 import shutil
-import math
 from pathlib import Path
 
+from .current_validation import check_current
+from .exploratory_publication import validate as validate_exploratory
+from .history_validation import validate_archive_file
+from .public_case_metrics import validate_sample
+from .public_fork_provenance import check as check_fork_provenance
 from .publication import SCHEMA
 from .site_validation import check_mapping_snapshot, check_matrices
-from .public_fork_provenance import check as check_fork_provenance
-from .current_validation import check_current
-from .public_case_metrics import validate_sample
-from .history_validation import validate_archive_file
-from .exploratory_publication import validate as validate_exploratory
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -138,8 +138,17 @@ def validate_public_site(site=SITE):
     if ("BenchExploratory.render(" not in js
             or 'fetch("./data/exploratory-candidates.json"' not in js
             or "function render(" not in exploratory_js
-            or "resultLabel" not in exploratory_js):
+            or "resultLabel" not in exploratory_js
+            or "Pending: No image built" not in exploratory_js
+            or "compareTable" not in exploratory_js
+            or "side-by-side comparison" not in exploratory_js):
         raise ValueError("nonqualifying PX roster must render its own honest state")
+    if ("pending until authentic SHA-attested image, pilot and benchmark receipts exist"
+            not in html or "compared side by side below" not in html):
+        raise ValueError("PX section must disclose pending/nonqualifying state")
+    if any(token in exploratory_js for token in
+            ("dominance_matrix", "psi", "BenchRanks.summary", "BenchSubjects")):
+        raise ValueError("PX explorer must not touch qualifying Ψ/gate logic")
     if any(token in js for token in ("setInterval(", "setTimeout(",
                                       "EventSource(", "WebSocket(")):
         raise ValueError("static benchmark website must never poll or stream")
@@ -174,9 +183,9 @@ def validate_public_site(site=SITE):
                     raise ValueError("unexpected public sample metadata")
                 if not sample["floor_ok"] or sample["outcome"] != "success":
                     raise ValueError("unreported sample failure")
-        if run["status"] == "ineligible":
-            if run["eligible_for_expanded"] or run.get("psi"):
-                raise ValueError("ineligible run falsely presented as passing")
+        if (run["status"] == "ineligible"
+                and (run["eligible_for_expanded"] or run.get("psi"))):
+            raise ValueError("ineligible run falsely presented as passing")
         if run["status"] == "incomplete" and run["cohort"] == "synthetic":
             if run.get("progress_schema") == "ivanka.assembler-bench.active-progress.v1":
                 from .current_validation_v2 import check_run

@@ -298,4 +298,11 @@ section.exploratory{margin-top:61px}
 .px-cases summary{cursor:pointer;color:var(--cyan);font-size:12px}
 .exploratory-cases{width:100%;border-collapse:collapse;margin-top:10px}
 .exploratory-cases th,.exploratory-cases td{font-size:11px;padding:7px 10px}
-@media(max-width:850px){.exploratory-table{min-width:680px}}
+.px-compare{margin-top:22px;padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.px-compare-controls{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.px-compare-controls label{display:flex;flex-direction:column;gap:7px;min-width:220px;font-size:11px;letter-spacing:.09em;color:var(--muted)}
+.px-compare-controls select{min-height:40px;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:13px}
+.px-compare-hint{margin:8px 0 12px}
+.px-compare-table caption{text-align:left;color:var(--muted);font-size:12px;padding:0 0 10px;caption-side:top}
+.px-compare-table th,.px-compare-table td{white-space:nowrap}
+@media(max-width:850px){.exploratory-table{min-width:680px}.px-compare-controls label{min-width:160px}}

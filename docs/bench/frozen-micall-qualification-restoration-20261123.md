@@ -73,6 +73,42 @@ MiCall source, edit the original seven images or replace original
 results. Any candidate-specific results belong in new isolated
 source-bound receipts and must not be promoted without actual tests.
 
+## P0 blockers established from the ORIGINAL frozen 198 cases
+
+The new read-only gate in
+benchmarks/assembler_bench/frozen_physical_gate.py checks the historical
+source-pinned 198 original physical outputs for all seven tools, reusing the
+frozen receipts and the existing acceptance PSI solver.
+It neither remaps reads nor rescales scores nor runs a single assembly.
+
+Exactly **one** original Ivanka sample fails the 90% best-available
+competitor alignment floor: R042, source case SHA prefix bea55de8,
+Ivanka **102** versus frozen SPAdes **179**. The original Ivanka 198
+samples all succeeded. Alignment strict PSI(r)>0 for every r>=0 is
+positive against all six original rivals on their successful pairs.
+
+The original runtime strict PSI(r)>0 is positive against IVA,
+Haploflow, MEGAHIT, SPAdes, and Velvet. **ABySS is NOT a strict pass:**
+106 successful pairs, 53 runtime wins and 53 losses, so
+**Psi(0) = 0**, rather than >0. It remains a failure of the
+user's strict criterion despite positive mean runtime savings
+(Psi(1) approximately +70.21 seconds).
+
+Original successful paired counts: IVA 198, Haploflow 171,
+MEGAHIT 188, ABySS 106, SPAdes 130, Velvet 157. Genuine
+original rival failures remain failures and are not reclassified.
+Every successful physical wall time fits under 2400 seconds, but
+per-run peak process RSS is not recorded directly in these
+checkpoint objects and cannot be retroactively invented or
+claimed fully qualified at the 4 GB limit.
+
+This original-MiCall-only P0 analysis is completely separate from
+the invalid common-source experimental 198-case report, and gives
+a tight target for genuine Rust-only optimization: fix the R042
+score floor while nudging at least one valid ABySS-paired
+runtime comparison toward a win, without losing supported
+haplotypes or violating new-run memory/time constraints.
+
 ## Correct benchmark path
 
 **P0 physical first:** investigate and improve Rust-only, default, reference-blind Ivanka against the original frozen common MiCall, without changing MiCall shared source or images. The original tagged Ivanka v0.1.0-alpha.4 passed its 198-case IVA physical criterion but did **not** pass the complete original seven-assembler all-r Ψ gate. The original frozen R042 deficit remains a Rust Ivanka problem to investigate, or a documented limitation if unavoidable. Reuse all valid completed original results; only rerun new **Ivanka code** on the independently necessary sample cases in separate source-attested namespaces. Keep ≤2,400 seconds wall, ≤4,000,000,000 bytes sampled RSS, 90% per sample and strict Ψ(r)>0 for all real r≥0 on qualifying metrics. The six rival frozen outputs may not be recomputed to make Ivanka win.

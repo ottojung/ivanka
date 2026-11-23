@@ -129,10 +129,10 @@ class TestExploratorySpace(unittest.TestCase):
         temp.mkdir()
         huge = 9 * 1024**3
         sizes = {temp.resolve(): huge, self.exp.resolve(): huge}
-        with patch("assembler_bench.exploratory_space.allocated",
-                   side_effect=lambda p: sizes.get(Path(p).resolve(), 0)):
-            with self.assertRaisesRegex(ValueError, "disk budget"):
-                self.check(1024)
+        with (patch("assembler_bench.exploratory_space.allocated",
+                    side_effect=lambda p: sizes.get(Path(p).resolve(), 0)),
+              self.assertRaisesRegex(ValueError, "disk budget")):
+            self.check(1024)
 
     def test_missing_temporary_directory_counts_as_zero(self):
         self.assertEqual(allocated_optional(px_temp_dir(self.exp)), 0)

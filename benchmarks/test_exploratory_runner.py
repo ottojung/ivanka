@@ -60,8 +60,8 @@ class TestRunner(unittest.TestCase):
 
     def test_child_temporaries_are_redirected_into_metered_directory(self):
         argv = [sys.executable, "-c",
-                "import os, pathlib; p = pathlib.Path(os.environ['TMPDIR']); "
-                "(p / 'px-tmp-probe').write_text(str(p))"]
+                ("import os, pathlib; p = pathlib.Path(os.environ['TMPDIR']); "
+                 "(p / 'px-tmp-probe').write_text(str(p))")]
         result = self.run_job(argv=argv)
         self.assertEqual(result["status"], "finished")
         probe = self.root / "tmp" / "px-tmp-probe"

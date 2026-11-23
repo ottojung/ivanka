@@ -101,6 +101,40 @@ class TestExploratorySpace(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
             sleep.assert_called_once_with(0.1)
 
+    def test_pinned_dpkg_new_overlay_disappeared_retries_only_complete_du(self):
+        diff = (str(ROOTLESS_STORE) + "/store/overlay/" +
+                "0ac33a4f8c53afab54ce1b47fec6d325359d10d0d76f59af43411d7109722abc"
+                + "/diff/usr/include/x86_64-linux-gnu/openmpi.dpkg-new")
+        stderr = ("du: cannot access '" + diff + "': No such file or directory\n"
+                  + "du: cannot access '" + diff
+                  + "': No such file or directory\n")
+        transient = subprocess.CalledProcessError(
+            1, ["podman", "unshare", "du"], stderr=stderr)
+        result = subprocess.CompletedProcess(
+            ["podman", "unshare", "du"], 0, "234567\t/store\n", "")
+        with (patch("assembler_bench.exploratory_space.Path.is_dir",
+                    return_value=True),
+              patch("assembler_bench.exploratory_space.subprocess.run",
+                    side_effect=[transient, result]) as run,
+              patch("assembler_bench.exploratory_space.time.sleep") as sleep):
+            self.assertEqual(allocated(ROOTLESS_STORE), 234567)
+            self.assertEqual(run.call_count, 2)
+            sleep.assert_called_once_with(0.1)
+
+    def test_non_dpkg_enoent_during_overlay_scan_fails_closed(self):
+        path = (str(ROOTLESS_STORE) + "/store/overlay/" +
+                "0ac33a4f8c53afab54ce1b47fec6d325359d10d0d76f59af43411d7109722abc"
+                + "/diff/usr/lib/libimportant.so")
+        stderr = "du: cannot access '" + path + "': No such file or directory\n"
+        with (patch("assembler_bench.exploratory_space.Path.is_dir",
+                    return_value=True),
+              patch("assembler_bench.exploratory_space.subprocess.run",
+                    side_effect=subprocess.CalledProcessError(
+                        1, ["podman", "unshare", "du"], stderr=stderr)) as run,
+              self.assertRaises(subprocess.CalledProcessError)):
+            allocated(ROOTLESS_STORE)
+            self.assertEqual(run.call_count, 1)
+
     def test_repeated_live_temp_races_fail_closed(self):
         stderr = ("du: fts_read failed: " + str(ROOTLESS_STORE)
                   + "/store/overlay/tempdirs/temp-dir-40/0-addition:"

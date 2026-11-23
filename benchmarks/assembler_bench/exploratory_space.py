@@ -17,7 +17,20 @@ TEMP_DIR_DISAPPEARED = re.compile(
     + r"/store/overlay(?:/tempdirs/temp-dir-[0-9]+/[^\n:]+)?"
     + r": No such file or directory\n?"
 )
+EPHEMERAL_DPKG = re.compile(
+    r"du: cannot access '" + re.escape(str(ROOTLESS_STORE))
+    + r"/store/overlay/[a-f0-9]{64}/diff/[^'\n]+\.dpkg-new':"
+    + r" No such file or directory\n?"
+)
 TEMP_NAME = "tmp"
+
+
+def transient_overlay_enoent(stderr):
+    """Only verified PX Buildah/apt ephemeral ENOENT messages may be retried."""
+    return (isinstance(stderr, str) and bool(stderr.splitlines())
+            and all(TEMP_DIR_DISAPPEARED.fullmatch(line + "\n")
+                    or EPHEMERAL_DPKG.fullmatch(line + "\n")
+                    for line in stderr.splitlines()))
 
 
 def px_temp_dir(root):
@@ -55,8 +68,7 @@ def allocated(path):
             return int(result.stdout.split()[0])
         except subprocess.CalledProcessError as error:
             if (target != ROOTLESS_STORE or attempt == 2
-                    or not isinstance(error.stderr, str)
-                    or not TEMP_DIR_DISAPPEARED.fullmatch(error.stderr)):
+                    or not transient_overlay_enoent(error.stderr)):
                 raise
             time.sleep(0.1)
     raise RuntimeError("unreachable disk accounting retry state")

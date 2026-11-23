@@ -81,7 +81,7 @@
     },
     {
       "adapter_branch": "bench/assembler-idba-ud",
-      "adapter_commit": "f9d1a147184ef932a5f0cda4f0eac4a9045b3c5b",
+      "adapter_commit": "ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9",
       "attestation_provenance": null,
       "attested_binary_sha256": null,
       "base_image_digest": null,
@@ -111,11 +111,11 @@
         "--file",
         "{ADAPTER_CHECKOUT}/Dockerfile.assembler-bench",
         "--tag",
-        "localhost/ivanka-exploratory-idba-ud:f9d1a147184e",
+        "localhost/ivanka-exploratory-idba-ud:ea51b5030edf",
         "--build-arg",
         "FORK_BASE_IMAGE={BASE_IMAGE_DIGEST}",
         "--build-arg",
-        "MICALL_FORK_SOURCE_COMMIT=f9d1a147184ef932a5f0cda4f0eac4a9045b3c5b",
+        "MICALL_FORK_SOURCE_COMMIT=ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9",
         "--build-arg",
         "MICALL_FORK_BASE_COMMIT=eeca0381808a6e9ba5ef791c80238a0e2940abb0",
         "--build-arg",
@@ -133,7 +133,7 @@
       "common_baseline_commit": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
       "extra_placeholders": [],
       "id": "idba-ud",
-      "image_tag": "localhost/ivanka-exploratory-idba-ud:f9d1a147184e",
+      "image_tag": "localhost/ivanka-exploratory-idba-ud:ea51b5030edf",
       "name": "IDBA-UD",
       "nonqualifying": true,
       "qualifying": false,
@@ -790,5 +790,5 @@
     "total_incremental_storage_bytes": 8589934592
   },
   "schema": "ivanka.exploratory.build-plan.v1",
-  "source_registry_sha256": "c17776a36778c9febef41da24e3311792ea65aea95c8c0740fce0a645c8c2d38"
+  "source_registry_sha256": "15c4c0f852467d8117c02637d2d3b678598939b8e8a2b5555bad478253b05e79"
 }

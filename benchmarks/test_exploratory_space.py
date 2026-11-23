@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from assembler_bench.exploratory_policy import checked
 from assembler_bench.exploratory_space import (
+    PROJECT_ROOT,
     ROOTLESS_STORE,
     admit,
     allocated,
@@ -45,6 +46,10 @@ class TestExploratorySpace(unittest.TestCase):
         expected = ["podman", "unshare", "du", "-sxB1", "--",
                     str(ROOTLESS_STORE)]
         self.assertEqual(disk_measure_command(ROOTLESS_STORE), expected)
+        for path in (PROJECT_ROOT, PROJECT_ROOT / "tmp"):
+            self.assertEqual(disk_measure_command(path),
+                             ["podman", "unshare", "du", "-sxB1", "--",
+                              str(path)])
         self.assertEqual(disk_measure_command(self.store.resolve()),
                          ["du", "-sB1", "--", str(self.store.resolve())])
         result = subprocess.CompletedProcess(expected, 0,
@@ -67,6 +72,18 @@ class TestExploratorySpace(unittest.TestCase):
                       1, ["podman", "unshare"], stderr="permission denied")),
         ):
             allocated(ROOTLESS_STORE)
+
+    def test_project_tmp_unshare_permission_errors_fail_closed(self):
+        target = PROJECT_ROOT / "tmp"
+        denied = subprocess.CalledProcessError(
+            1, ["podman", "unshare", "du"], stderr="Permission denied")
+        with (patch("assembler_bench.exploratory_space.Path.is_dir",
+                    return_value=True),
+              patch("assembler_bench.exploratory_space.subprocess.run",
+                    side_effect=denied) as run,
+              self.assertRaises(subprocess.CalledProcessError)):
+            allocated(target)
+            self.assertEqual(run.call_count, 1)
 
     def test_live_buildah_temporary_enoent_retries_complete_scan(self):
         stderr = ("du: fts_read failed: " + str(ROOTLESS_STORE)

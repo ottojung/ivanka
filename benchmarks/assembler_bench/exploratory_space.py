@@ -9,6 +9,7 @@ from pathlib import Path
 # Podman overlay subdirectories are remapped to container UIDs: ordinary
 # host 'du' returns permission errors while an image build is in progress.
 ROOTLESS_STORE = Path("/workspace/ivanka-exploratory-podman-20261121")
+PROJECT_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121")
 # A live Buildah overlay can vanish between du's readdir and its stat.
 # Retry ONLY this exact, ephemeral ENOENT; permissions and all other failures
 # remain fail-closed rather than publishing partial disk measurements.
@@ -39,11 +40,12 @@ def allocated_optional(path):
 def disk_measure_command(target):
     """Count every allocated block or fail closed; never parse partial 'du'."""
     command = ["du", "-sB1", "--", str(target)]
-    if target == ROOTLESS_STORE:
-        # A running Podman container mounts its complete virtual rootfs under
-        # graphroot/overlay/<id>/merged. Traversing it double-counts the
-        # immutable parent layers as NEW storage (verified: 9.29 vs 5.74 GB).
-        # -x keeps real writable overlay/diff layers but skips nested mounts.
+    if target in (ROOTLESS_STORE, PROJECT_ROOT, PROJECT_ROOT / TEMP_NAME):
+        # Buildah mounts an idmapped, root-only virtual rootfs inside the
+        # project TMPDIR. Host du cannot read that mount (permission denied).
+        # Podman userns sees project bytes; -x skips the mounted virtual view.
+        # Writable overlay layers are counted separately in ROOTLESS_STORE.
+        # Never trust partial output or skip an actual project directory.
         return ["podman", "unshare", "du", "-sxB1", "--", str(target)]
     return command
 

@@ -238,6 +238,8 @@ class ExploratoryPublicationTests(unittest.TestCase):
             self.skipTest("Node unavailable")
         with tempfile.TemporaryDirectory() as temp:
             verified = Path(temp) / "verified.json"
+            pending = Path(temp) / "source-only.json"
+            write_json(pending, pub.build(REGISTRY))
             snapshot = copy.deepcopy(pub.build(REGISTRY))
             item = snapshot["candidates"][0]
             item["status"] = "pilot"
@@ -276,7 +278,7 @@ console.log('PX_ROSTER_RENDER_OK');
 """
             process = subprocess.run(
                 [node, "-e", code, str(ROOT / "site/bench/exploratory.js"),
-                 str(SITE / pub.DATA_FILE), str(verified)],
+                 str(pending), str(verified)],
                 capture_output=True, text=True, timeout=15, check=False)
             self.assertEqual(process.returncode, 0, process.stderr)
             self.assertIn("PX_ROSTER_RENDER_OK", process.stdout)

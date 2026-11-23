@@ -33,12 +33,4 @@ pub(super) fn keep_indices(contigs: &[Vec<u8>], path: &str) -> io::Result<Vec<us
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{canonical, rc};
-
-    #[test]
-    fn reverse_complemented_sequences_share_the_same_exact_key() {
-        let seq = b"ACGGTCTGCTTCAATGTCGGCAAGTACTAGG";
-        assert_eq!(canonical(seq), canonical(&rc(seq)));
-    }
-}
+mod tests;

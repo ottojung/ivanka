@@ -32,6 +32,23 @@ class TestExplorerBuildPlans(unittest.TestCase):
     def test_committed_plan_is_byte_identical_to_regeneration(self):
         self.assertEqual(plan.dumps(plan.generate()), plan.PLANS.read_text())
 
+    def test_promoted_private_rows_do_not_invalidate_build_templates(self):
+        promoted = copy.deepcopy(self.registry)
+        skesa = next(c for c in promoted["candidates"] if c["id"] == "skesa")
+        skesa["status"] = "image-pinned"
+        skesa["image_sha256"] = "a" * 64
+        skesa["image_evidence"] = {"path": "/private/image.json", "sha256": "c" * 64}
+        promoted["adapter_branch_commits"]["skesa"] = "b" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "private-registry.json"
+            target.write_text(json.dumps(promoted))
+            with mock.patch("assembler_bench.exploratory_policy.verified_receipt",
+                            return_value=True):
+                document = plan.generate(target)
+                plan.validate(document, target)
+        row = next(r for r in document["builds"] if r["id"] == "skesa")
+        self.assertEqual(row["status"], "source-pinned")
+
     def test_all_ten_tools_pinned_to_dedicated_adapter_branches(self):
         builds = {row["id"]: row for row in self.document["builds"]}
         self.assertEqual(set(builds), set(plan.EXPERIMENTAL))

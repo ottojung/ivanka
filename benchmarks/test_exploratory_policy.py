@@ -23,20 +23,14 @@ class TestExplorerRegistry(unittest.TestCase):
             with self.assertRaises(ValueError):
                 checked(target)
 
-    def test_only_receipt_backed_promotions_are_eligible(self):
+    def test_all_ten_source_pinned_but_unbuilt_and_nonqualifying(self):
         self.assertEqual(len(self.current["candidates"]), 10)
-        promoted = {x["id"] for x in self.current["candidates"]
-                    if x["status"] != "source-pinned"}
-        self.assertEqual(promoted, {"skesa", "idba-ud"})
-        self.assertTrue(all(x["qualifying"] is False
+        self.assertTrue(all(x["status"] == "source-pinned"
                             and len(x["source_commit"]) == 40
+                            and x["image_sha256"] is None
                             for x in self.current["candidates"]))
-        self.assertTrue(all(eligible(self.current, tool)
-                            for tool in ("skesa", "idba-ud")))
-        self.assertTrue(all(x["image_sha256"] is None
-                            and not eligible(self.current, x["id"])
-                            for x in self.current["candidates"]
-                            if x["id"] not in ("skesa", "idba-ud")))
+        self.assertTrue(all(not eligible(self.current, x["id"])
+                            for x in self.current["candidates"]))
 
     def test_blocked_originals_retained_with_auditable_replacements(self):
         active = {x["id"]: x for x in self.current["candidates"]}
@@ -79,8 +73,8 @@ class TestExplorerRegistry(unittest.TestCase):
         self.mutate(PATH, lambda d: d["candidates"][0].update(qualifying=True))
 
     def test_reject_unpinned_execution_or_unsafe_limits(self):
-        self.mutate(PATH, lambda d: d["candidates"][1].update(status="pilot"))
-        self.mutate(PATH, lambda d: d["candidates"][1].update(status="proposed"))
+        self.mutate(PATH, lambda d: d["candidates"][0].update(status="pilot"))
+        self.mutate(PATH, lambda d: d["candidates"][0].update(status="proposed"))
         self.mutate(PATH, lambda d: d["policy"].update(total_incremental_storage_bytes=9*1024**3))
         self.mutate(PATH, lambda d: d["policy"].update(max_concurrent_exploratory_workers=2))
 

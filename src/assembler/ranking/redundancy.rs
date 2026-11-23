@@ -1,4 +1,11 @@
-use super::{canonical_kmer, rolling_canonical_kmers, supported_snv_alternative, HashSet};
+use super::{canonical_kmer, rolling_canonical_kmers, supported_snv_alternative, HashSet, K};
+// A fraction-based overlap rule is length dependent: one substitution removes
+// K canonical windows, which is 3.5% of a 900-base contig but 11% of a
+// 310-base one. Treat a single-substitution neighbour as redundant at any
+// length so short contigs do not leak near-duplicates into the stitcher.
+pub(super) fn single_substitution_apart(valid: usize, shared: usize) -> bool {
+    shared * 2 >= valid && valid - shared <= K
+}
 pub(super) fn overlap(
     seq: &[u8],
     represented: &HashSet<u64>,

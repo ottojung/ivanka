@@ -1,4 +1,4 @@
-"""Adversarial proofs for the resumable NONQUALIFYING PX cohort planner."""
+"""Adversarial proofs for canonical aliases and the resumable PX planner."""
 import hashlib
 import json
 import tempfile
@@ -44,6 +44,154 @@ def make_receipt(root, data, tool, kind, extra, image_sha256=None):
     return {"path": str(path), "sha256": sha(path)}
 
 
+def cases_for(cohort, r1, r2, ids=None):
+    """Build cases whose canonical alias comes from sorted source identity."""
+    if ids is None:
+        ids = [f"P{i:03d}" if cohort == "physical" else f"S{i:03d}"
+               for i in range(1, sched.EXPECTED_COUNTS[cohort] + 1)]
+    canonical = sched.canonical_aliases(ids, cohort)
+    return [sched.CasePair(sid, canonical[sid], cohort, r1, r2) for sid in ids]
+
+
+class CanonicalAliasTests(unittest.TestCase):
+    def test_aliases_are_one_based_original_assembler_bench_aliases(self):
+        self.assertEqual(sched._alias(1, "physical"), "PX-R001")
+        self.assertEqual(sched._alias(198, "physical"), "PX-R198")
+        self.assertEqual(sched._alias(1, "synthetic"), "PX-H001")
+        self.assertEqual(sched._alias(464, "synthetic"), "PX-H464")
+        for bad, cohort in ((0, "physical"), (199, "physical"),
+                            (0, "synthetic"), (465, "synthetic")):
+            with (self.subTest(position=bad, cohort=cohort),
+                  self.assertRaisesRegex(ValueError, "out of cohort range")):
+                sched._alias(bad, cohort)
+
+    def test_alias_follows_sorted_source_identity_not_pilot_ordinal(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        r1, r2 = root / "R1.fastq.gz", root / "R2.fastq.gz"
+        r1.write_bytes(b"r1")
+        r2.write_bytes(b"r2")
+        ids = [f"P{i:03d}" for i in range(1, 199)]
+        shuffled = ids[::2] + ids[1::2]  # P053 is nowhere near list position 53
+        cases = cases_for("physical", r1, r2, shuffled)
+        source = sched.CohortSource(cases, cases_for("synthetic", r1, r2))
+        self.assertEqual(source.case("physical", "PX-R053").source_id, "P053")
+        self.assertEqual(source.case("physical", "PX-R001").source_id, "P001")
+        # Assigning the pilot ordinal alias instead of the canonical one fails.
+        target = cases[1]
+        cases[1] = sched.CasePair(target.source_id, "PX-R001", "physical",
+                                  r1, r2)
+        with self.assertRaisesRegex(ValueError, "canonical original alias"):
+            sched.CohortSource(cases, cases_for("synthetic", r1, r2))
+
+    def test_literal_original_manifest_ordering_and_sha(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        r1, r2 = root / "R1.fastq.gz", root / "R2.fastq.gz"
+        r1.write_bytes(b"r1")
+        r2.write_bytes(b"r2")
+        ids = [f"sample-{i:03d}" for i in range(1, 199)]
+        shuffled = ids[::-1]
+        manifest = root / "manifest.tsv"
+        manifest.write_text("sample\tkive_run_id\n" + "".join(
+            f"{sample}\trun-{sample}\n" for sample in shuffled))
+        pinned = sha(manifest)
+        cases = cases_for("physical", r1, r2, shuffled)
+        with patch.object(sched, "PHYSICAL_MANIFEST_SHA256", pinned):
+            source = sched.CohortSource(
+                cases, cases_for("synthetic", r1, r2), physical_manifest=manifest)
+        self.assertEqual(source.case("physical", "PX-R198").source_id,
+                         "sample-198")
+        self.assertEqual(source.case("physical", "PX-R053").source_id,
+                         "sample-053")
+        with (patch.object(sched, "PHYSICAL_MANIFEST_SHA256", "0" * 64),
+              self.assertRaisesRegex(ValueError, "manifest SHA256 changed")):
+            sched.CohortSource(cases, cases_for("synthetic", r1, r2),
+                               physical_manifest=manifest)
+
+    def test_literal_v6_cohort_ordering_sha_and_paired_input_sha(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        cohort = json.loads(sched.SYNTHETIC_COHORT.read_bytes())
+        records = cohort["cases"]
+        ids = [item["id"] for item in records]
+        ordered = sorted(ids)
+        canonical = sched.canonical_aliases(ids, "synthetic")
+        self.assertEqual(canonical[ordered[191]], "PX-H192")
+        expected = {item["id"]: {
+            "R1": item["sha256"]["reads/R1.fastq.gz"],
+            "R2": item["sha256"]["reads/R2.fastq.gz"]} for item in records}
+        paths = {}
+        for item in records:
+            r1 = root / (item["id"] + "-R1")
+            r2 = root / (item["id"] + "-R2")
+            r1.write_text(expected[item["id"]]["R1"])
+            r2.write_text(expected[item["id"]]["R2"])
+            paths[item["id"]] = (r1, r2)
+        shuffled = [item["id"] for item in reversed(records)]
+        cases = [sched.CasePair(sid, canonical[sid], "synthetic", *paths[sid])
+                 for sid in shuffled]
+        physical_r1, physical_r2 = root / "R1.fastq.gz", root / "R2.fastq.gz"
+        physical_r1.write_bytes(b"r1")
+        physical_r2.write_bytes(b"r2")
+        physical = cases_for("physical", physical_r1, physical_r2)
+        real_sha = sha(sched.SYNTHETIC_COHORT)
+
+        def digest(path):
+            target = Path(path)
+            return real_sha if target == sched.SYNTHETIC_COHORT else target.read_text()
+
+        with patch.object(sched, "sha256_file", side_effect=digest):
+            source = sched.CohortSource(
+                physical, cases, synthetic_cohort=sched.SYNTHETIC_COHORT)
+        self.assertEqual(source.case("synthetic", "PX-H192").source_id,
+                         ordered[191])
+        # Swapping two cases' paired reads while keeping their canonical aliases
+        # must be rejected instead of comparing mismatched aliased inputs.
+        swapped = list(cases)
+        a, b = swapped[0], swapped[1]
+        swapped[0] = sched.CasePair(a.source_id, a.alias, a.cohort,
+                                    b.r1, b.r2)
+        with (patch.object(sched, "sha256_file", side_effect=digest),
+              self.assertRaisesRegex(ValueError, "input SHA mismatch")):
+            sched.CohortSource(physical, swapped,
+                               synthetic_cohort=sched.SYNTHETIC_COHORT)
+
+    def test_attested_paired_input_sha_blocks_mismatched_aliases(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        r1, r2 = root / "R1.fastq.gz", root / "R2.fastq.gz"
+        r1.write_bytes(b"r1")
+        r2.write_bytes(b"r2")
+        cases = cases_for("physical", r1, r2)
+        distinct = {}
+        for index in (0, 1):
+            first, second = root / f"case-{index}-R1.fastq.gz", root / f"case-{index}-R2.fastq.gz"
+            first.write_bytes(f"r1-{index}".encode())
+            second.write_bytes(f"r2-{index}".encode())
+            distinct[cases[index].source_id] = (first, second)
+            cases[index] = sched.CasePair(cases[index].source_id,
+                                          cases[index].alias, "physical",
+                                          first, second)
+        expected = {case.source_id: case.input_hashes() for case in cases}
+        synthetic = cases_for("synthetic", r1, r2)
+        sched.CohortSource(cases, synthetic,
+                           attested_inputs={"physical": expected})
+        swapped = list(cases)
+        a, b = swapped[0], swapped[1]
+        swapped[0] = sched.CasePair(a.source_id, a.alias, "physical",
+                                    b.r1, b.r2)
+        swapped[1] = sched.CasePair(b.source_id, b.alias, "physical",
+                                    a.r1, a.r2)
+        with self.assertRaisesRegex(ValueError, "input SHA mismatch"):
+            sched.CohortSource(swapped, synthetic,
+                               attested_inputs={"physical": expected})
+
+
 class PlannerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -59,12 +207,9 @@ class PlannerTests(unittest.TestCase):
         self.policy.start()
         self.addCleanup(self.policy.stop)
 
-    def source(self, seeds_provenance=None):
-        physical = [sched.CasePair(sched._alias(i, "physical"), "physical",
-                                   self.r1, self.r2) for i in range(198)]
-        synthetic = [sched.CasePair(sched._alias(i, "synthetic"), "synthetic",
-                                    self.r1, self.r2) for i in range(464)]
-        return sched.CohortSource(physical, synthetic)
+    def source(self):
+        return sched.CohortSource(cases_for("physical", self.r1, self.r2),
+                                  cases_for("synthetic", self.r1, self.r2))
 
     def promoted_registry(self, tools=TOOLS, stage="pilot"):
         data = json.loads(REGISTRY.read_text())
@@ -103,43 +248,38 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(plan["total_arms"], 2 * 662)
         self.assertEqual(plan["pending_arms"], 2 * 662)
         self.assertEqual([a["alias"] for a in plan["pending"][:198]],
-                         [sched._alias(i, "physical") for i in range(198)])
+                         [sched._alias(i, "physical")
+                          for i in range(1, 199)])
         self.assertEqual(plan["pending"][198]["tool_id"], "minia")
-        self.assertEqual(plan["pending"][198]["alias"], "PX-R000")
-        self.assertEqual(plan["pending"][396]["alias"], "PX-H000")
+        self.assertEqual(plan["pending"][198]["alias"], "PX-R001")
+        self.assertEqual(plan["pending"][396]["alias"], "PX-H001")
         self.assertEqual(plan["pending"][396]["tool_id"], "skesa")
-        self.assertEqual(plan["pending"][860]["alias"], "PX-H000")
+        self.assertEqual(plan["pending"][860]["alias"], "PX-H001")
         self.assertEqual(plan["pending"][860]["tool_id"], "minia")
-        self.assertTrue(all(a["cohort"] == "physical" for a in
-                            plan["pending"][:396]))
-        self.assertTrue(all(a["cohort"] == "synthetic" for a in
-                            plan["pending"][396:]))
+        self.assertTrue(all(a["cohort"] == "physical"
+                            for a in plan["pending"][:396]))
+        self.assertTrue(all(a["cohort"] == "synthetic"
+                            for a in plan["pending"][396:]))
         self.assertFalse(plan["qualifying"])
 
     def test_cohort_size_and_alias_validation(self):
-        cases = [sched.CasePair(sched._alias(i, "physical"), "physical",
-                                self.r1, self.r2) for i in range(197)]
+        cases = cases_for("physical", self.r1, self.r2)[:197]
         with self.assertRaisesRegex(ValueError, "cohort size"):
             sched.CohortSource(cases, [])
-        cases = [sched.CasePair(sched._alias(i, "physical"), "physical",
-                                self.r1, self.r2) for i in range(198)]
-        cases[0] = sched.CasePair("PX-H000", "physical", self.r1, self.r2)
-        synthetic = [sched.CasePair(sched._alias(i, "synthetic"), "synthetic",
-                                    self.r1, self.r2) for i in range(464)]
-        with self.assertRaisesRegex(ValueError, "public alias"):
-            sched.CohortSource(cases, synthetic)
+        cases = cases_for("physical", self.r1, self.r2)
+        cases[0] = sched.CasePair(cases[0].source_id, "PX-H001", "physical",
+                                  self.r1, self.r2)
+        with self.assertRaisesRegex(ValueError, "canonical original alias"):
+            sched.CohortSource(cases, cases_for("synthetic", self.r1, self.r2))
 
     def test_read_derived_seed_provenance_is_enforced(self):
-        bad = sched.CasePair("PX-R000", "physical", self.r1, self.r2,
-                             seeds=self.r1,
-                             seeds_provenance={"kind": "reference-derived"})
-        physical = [sched.CasePair(sched._alias(i, "physical"), "physical",
-                                   self.r1, self.r2) for i in range(198)]
-        physical[0] = bad
-        synthetic = [sched.CasePair(sched._alias(i, "synthetic"), "synthetic",
-                                    self.r1, self.r2) for i in range(464)]
+        cases = cases_for("physical", self.r1, self.r2)
+        first = cases[0]
+        cases[0] = sched.CasePair(first.source_id, first.alias, first.cohort,
+                                  self.r1, self.r2, seeds=self.r1,
+                                  seeds_provenance={"kind": "reference-derived"})
         with self.assertRaisesRegex(ValueError, "read-derived"):
-            sched.CohortSource(physical, synthetic)
+            sched.CohortSource(cases, cases_for("synthetic", self.r1, self.r2))
 
     def test_success_and_failure_receipts_are_terminal_and_resumable(self):
         registry = self.promoted_registry()
@@ -266,7 +406,8 @@ class PlannerTests(unittest.TestCase):
                    return_value=100 * 1024**3):
             decision = sched.admit_arm(registry, baseline, root, 1024**3)
         self.assertEqual(decision["admitted_reservation_bytes"], 1024**3)
-        with (patch("assembler_bench.exploratory_space.available", return_value=0),
+        with (patch("assembler_bench.exploratory_space.available",
+                    return_value=0),
               self.assertRaisesRegex(ValueError, "disk budget|workspace reserve")):
             sched.admit_arm(registry, baseline, root, 1024**3)
         with self.assertRaisesRegex(ValueError, "reservation"):

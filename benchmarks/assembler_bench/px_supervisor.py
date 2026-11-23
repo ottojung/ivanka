@@ -27,7 +27,7 @@ def handoff_path(root, tool):
 
 
 def make_handoff(root, registry, tool):
-    """Write a handoff record only from a source-bound image receipt."""
+    """Write a handoff only from verified image AND two-cohort pilot receipts."""
     data = exploratory_policy.checked(registry)
     item = next(x for x in data["candidates"] if x["id"] == tool)
     if not exploratory_policy.eligible(data, tool):
@@ -36,10 +36,16 @@ def make_handoff(root, registry, tool):
     if not exploratory_policy.verified_receipt(
             bound, item.get("image_evidence"), "image"):
         raise HandoffRequired("image receipt is not source-bound")
+    pilot = item.get("pilot_evidence")
+    if not exploratory_policy.verified_receipt(bound, pilot, "pilot"):
+        # An image receipt alone proves no pilot: tests_passed must never be
+        # asserted from it. Both cohorts need their own attested receipt.
+        raise HandoffRequired("no SHA-verified two-cohort pilot evidence")
     record = {"schema": HANDOFF_SCHEMA, "tool_id": tool, "board": PX_BOARD,
               "agent": IMAGE_AGENT, "tests_passed": True,
               "image_sha256": item["image_sha256"],
-              "image_receipt_sha256": item["image_evidence"]["sha256"]}
+              "image_receipt_sha256": item["image_evidence"]["sha256"],
+              "pilot_receipt_sha256": pilot["sha256"]}
     path = handoff_path(root, tool)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
@@ -63,12 +69,17 @@ def verify_handoff(root, registry, tool):
         return False
     item = next(x for x in data["candidates"] if x["id"] == tool)
     evidence = item.get("image_evidence")
+    pilot = item.get("pilot_evidence")
     if (not isinstance(evidence, dict)
             or record.get("image_sha256") != item["image_sha256"]
-            or record.get("image_receipt_sha256") != evidence.get("sha256")):
+            or record.get("image_receipt_sha256") != evidence.get("sha256")
+            or not isinstance(pilot, dict)
+            or record.get("pilot_receipt_sha256") != pilot.get("sha256")):
         return False
     bound = dict(item, adapter_commit=data["adapter_branch_commits"][tool])
-    return exploratory_policy.verified_receipt(bound, evidence, "image")
+    if not exploratory_policy.verified_receipt(bound, evidence, "image"):
+        return False
+    return exploratory_policy.verified_receipt(bound, pilot, "pilot")
 
 
 class BackgroundSupervisor:
@@ -115,6 +126,12 @@ class BackgroundSupervisor:
         if not isinstance(report, dict) or report.get("outcome") not in (
                 "success", "failure"):
             raise ValueError("guarded runner returned no terminal outcome")
+        if (report.get("alias") != arm["alias"]
+                or report.get("cohort") != arm["cohort"]
+                or report.get("input_sha256") != arm["input_sha256"]):
+            # A result from another case must never be attributed to this
+            # canonical alias, even when read digests happen to be equal.
+            raise ValueError("guarded runner report does not match dispatched case")
         failure = report.get("failure_reason")
         if report["outcome"] == "failure" and failure not in sched.FAILURE_REASONS:
             raise ValueError("runner failure reason is not classified")

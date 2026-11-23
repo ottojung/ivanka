@@ -10,15 +10,22 @@ nonqualifying and outside the frozen seven-way gate, the 198-sample gate, the
 ## Source contract
 
 - `benchmarks/assembler_bench/px_cohort_scheduler.py`
-  - `CohortSource` enforces **exactly 198** physical cases (`PX-R000..PX-R197`)
-    and **exactly 464** synthetic cases (`PX-H000..PX-H463`). The private
-    read-pair paths stay inside this object; every exported structure carries
-    only public aliases and SHA-256 input digests.
+  - `CohortSource` enforces **exactly 198** physical cases (`PX-R001..PX-R198`)
+    and **exactly 464** synthetic cases (`PX-H001..PX-H464`). Aliases are the
+    original Assembler Bench one-based aliases: physical aliases come from
+    sorted original manifest sample names, synthetic aliases from sorted v6
+    cohort case IDs. They are never pilot ordinals. The private source
+    identity and read-pair paths stay inside this object; every exported
+    structure carries only public aliases and SHA-256 input digests.
+  - A source case is accepted only when its alias equals the canonical alias
+    derived from its sorted source identity, and (when attestation is supplied)
+    its independently hashed R1/R2 digests equal the recorded per-case digests.
+    A case with another sample's reads, or a receipt from another alias, is
+    rejected instead of being compared or resumed.
   - `build_plan()` admits only assemblers that already have a source-bound image
-    receipt and an eligible stage (`image-pinned`, `pilot`, `benchmarked`).
-    **All 198 physical cases for every admitted assembler precede any of the
-    464 synthetic cases**, preserving registry order within each cohort. This is a global phase boundary, not merely per-assembler order.
-    A source-pinned roster yields no arms.
+    receipt and an eligible stage (`image-pinned`, `pilot`, `benchmarked`). For
+    each admitted assembler, **all physical arms precede all synthetic arms**,
+    in registry order. A source-pinned roster yields no arms.
   - Input R1/R2 (and optional seeds) are hashed independently. Seeds are
     accepted only with `{"kind": "read-derived", "sample_alias": <same case>}`
     provenance; reference-derived or unlabelled seeds are rejected.

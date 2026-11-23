@@ -5,6 +5,7 @@ attests immutable receipts and exports only public aliases. It never launches a
 MiCall process. Execution belongs to the PR411 guarded single-worker launcher
 and is wired in by ``px_supervisor`` only after image-agent handoff.
 """
+import csv
 import hashlib
 import json
 import os
@@ -12,6 +13,8 @@ import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+from benchmarks.milestone198 import MANIFEST_SHA256 as PHYSICAL_MANIFEST_SHA256
 
 from . import exploratory_policy, exploratory_space
 
@@ -42,6 +45,11 @@ MAX_RESERVE = 4 * 1024**3
 MIN_RESERVE = 1024**3
 # MiCall's frozen final MAX consensus artifact, never a raw assembler contig.
 MAX_ARTIFACT = "conseq.csv"
+# The original v6 synthetic cohort is the authority for H001..H464 ordering.
+SYNTHETIC_COHORT = Path(__file__).resolve().parents[1] / (
+    "expanded/references/mixed-464-v6-cohort.json")
+SYNTHETIC_COHORT_SHA256 = (
+    "90990f6109553347d37f7754cde63398a4dce57c388f90c2ce4b648530bfdfe4")
 
 
 def sha256_file(path):
@@ -88,16 +96,32 @@ def _atomic_json(path, obj):
     return sha256_file(path)
 
 
-def _alias(index, cohort):
-    if not 0 <= index < EXPECTED_COUNTS[cohort]:
-        raise ValueError("public alias index out of cohort range")
-    return f"PX-{'R' if cohort == 'physical' else 'H'}{index:03d}"
+def _alias(position, cohort):
+    """One-based original Assembler Bench alias, never a pilot ordinal.
+
+    Physical aliases follow sorted physical manifest sample names; synthetic
+    aliases follow sorted v6 cohort case IDs. ``position`` is the 1-based rank
+    in that original ordering.
+    """
+    if not 1 <= position <= EXPECTED_COUNTS[cohort]:
+        raise ValueError("public alias position out of cohort range")
+    return f"PX-{'R' if cohort == 'physical' else 'H'}{position:03d}"
+
+
+def canonical_aliases(source_ids, cohort):
+    """Map private source identities to their canonical public aliases."""
+    ordered = sorted(source_ids)
+    if len(set(ordered)) != len(ordered):
+        raise ValueError("duplicated source identity in PX cohort source")
+    return {source_id: _alias(position, cohort)
+            for position, source_id in enumerate(ordered, 1)}
 
 
 @dataclass(frozen=True)
 class CasePair:
-    """Private read paths plus a stable public alias. Truth is never a field."""
+    """Private source identity and reads bound to a canonical public alias."""
 
+    source_id: str
     alias: str
     cohort: str
     r1: Path
@@ -116,11 +140,38 @@ class CasePair:
                 "input_sha256": self.input_hashes()}
 
 
-class CohortSource:
-    """Private manifest of exactly 198 physical then 464 synthetic read pairs."""
+def _physical_sample_ids(path):
+    """Read the original manifest only after its pinned SHA-256 verifies."""
+    if sha256_file(path) != PHYSICAL_MANIFEST_SHA256:
+        raise ValueError("original physical manifest SHA256 changed")
+    with Path(path).open(newline="") as stream:
+        rows = list(csv.DictReader(stream, delimiter="\t"))
+    if len(rows) != PHYSICAL_COUNT or len({row["sample"] for row in rows}) != PHYSICAL_COUNT:
+        raise ValueError("original physical manifest is not the 198-case cohort")
+    return {row["sample"] for row in rows}
 
-    def __init__(self, physical, synthetic):
+
+def _synthetic_case_hashes(path):
+    """Return v6 case-ID read digests only after its pinned SHA-256 verifies."""
+    if sha256_file(path) != SYNTHETIC_COHORT_SHA256:
+        raise ValueError("original v6 synthetic cohort SHA256 changed")
+    cases = json.loads(Path(path).read_bytes())["cases"]
+    if len(cases) != SYNTHETIC_COUNT or len({case["id"] for case in cases}) != SYNTHETIC_COUNT:
+        raise ValueError("original v6 cohort is not the 464-case cohort")
+    return {case["id"]: {"R1": case["sha256"]["reads/R1.fastq.gz"],
+                         "R2": case["sha256"]["reads/R2.fastq.gz"]}
+            for case in cases}
+
+
+class CohortSource:
+    """Private read pairs bound to one-based original Assembler Bench aliases."""
+
+    def __init__(self, physical, synthetic, *, physical_manifest=None,
+                 synthetic_cohort=None, attested_inputs=None):
         self._cases = {"physical": list(physical), "synthetic": list(synthetic)}
+        self._manifest = physical_manifest
+        self._cohort = synthetic_cohort
+        self._attested = attested_inputs or {}
         self.validate()
 
     def validate(self):
@@ -128,19 +179,39 @@ class CohortSource:
             cases = self._cases[cohort]
             if len(cases) != EXPECTED_COUNTS[cohort]:
                 raise ValueError("cohort size differs from the canonical PX queue")
-            aliases = [case.alias for case in cases]
-            if len(set(aliases)) != len(aliases):
-                raise ValueError("duplicated public alias in PX cohort source")
-            for index, case in enumerate(cases):
-                expected = _alias(index, cohort)
-                if case.alias != expected or case.cohort != cohort:
-                    raise ValueError("public alias or cohort label is inconsistent")
+            ids = [case.source_id for case in cases]
+            canonical = canonical_aliases(ids, cohort)
+            expected_inputs = self._expected_inputs(cohort, ids)
+            for case in cases:
+                if case.alias != canonical[case.source_id] or case.cohort != cohort:
+                    # Aliases are derived from original source ordering, never
+                    # from the order in which pilot arms happened to run.
+                    raise ValueError("public alias is not the canonical original alias")
                 if not case.r1.is_file() or not case.r2.is_file():
                     raise ValueError("paired FASTQ input is missing")
+                if expected_inputs is not None and case.input_hashes() != expected_inputs.get(
+                        case.source_id):
+                    raise ValueError("attested paired input SHA mismatch for " + case.alias)
                 if case.seeds is not None and case.seeds_provenance != {
                         "kind": "read-derived", "sample_alias": case.alias}:
                     # Only same-sample read-derived seeds may enter an arm.
                     raise ValueError("seed provenance is not read-derived same-sample")
+
+    def _expected_inputs(self, cohort, ids):
+        if (cohort == "physical" and self._manifest is not None
+                and _physical_sample_ids(self._manifest) != set(ids)):
+            raise ValueError("physical source identity differs from original manifest")
+        if cohort == "synthetic" and self._cohort is not None:
+            indexed = _synthetic_case_hashes(self._cohort)
+            if set(indexed) != set(ids):
+                raise ValueError("synthetic source identity differs from original cohort")
+            return indexed
+        attested = self._attested.get(cohort)
+        if attested is not None:
+            if set(attested) != set(ids):
+                raise ValueError("attested input identity differs from cohort source")
+            return attested
+        return None
 
     def cases(self, cohort):
         return list(self._cases[cohort])
@@ -264,8 +335,8 @@ def build_plan(registry, source, root):
     data, tools = _tool_rows(registry)
     source.validate()
     arms, accepted_ids, pending = [], [], []
-    # Founder order applies globally: ALL tools complete the 198 physical
-    # cases before ANY tool begins a 464-synthetic case.
+    # Founder order applies globally: every assembler finishes the 198 physical
+    # cases before any assembler starts a 464-synthetic case.
     for cohort in COHORTS:
         for tool in tools:
             for case in source.cases(cohort):

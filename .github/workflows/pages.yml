@@ -22,8 +22,10 @@ permissions:
   id-token: write
 
 concurrency:
-  group: assembler-bench-pages
-  cancel-in-progress: true
+  # PR checks must never cancel a production Pages push or manual deployment.
+  # Newer pushes queue behind the running deployment; PRs stay independent.
+  group: assembler-bench-pages-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'publish' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:

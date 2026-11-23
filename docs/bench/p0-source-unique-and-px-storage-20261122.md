@@ -25,6 +25,23 @@ Every next job requires the P0-specific **24 GiB shared disk free plus `max(512 
 
 **Next P0 hard requirements:** finish 70 genuine unique source-true runtimes, independently audit all 198 source-timed results, evaluate both final MAX score and MiCall runtime Ψ for **all real `r≥0`**, and establish a scientifically fair version-consistent comparison against applicable seven-way rivals. PR #22 remains draft; **no new future-version physical qualification or production release is claimed** until these pass.
 
+## P0 scientific early warning — strict signed-power Ψ on 125 affected cases only
+
+Before changing the Rust assembler or promoting the MiCall boundary patch, independently recomputed the exact **all-real-`r ≥ 0` signed-power Ψ** on genuine new-MiCall Ivanka observed alignment scores and in-container runtimes from the 125 affected ordinary cases. Rival outcomes are the **historical, older-common-MiCall** source-attested frozen records, reused rather than rerun. Scores come from the already verified full 33-reference local-alignment audit; each new execution receipt was rehashed, not recomputed. The proof is at `/workspace/ivanka-p0-prospective-allprojects-20261122/p0-affected125-all-historical-rivals-psi-diagnostic-20261123T0001Z.json`, SHA256 `45e61aabed08824c62c4fda7160056331a29cedbf2e48fe7c0f1d45573752d4b`.
+
+| Historical rival | Valid paired affected cases | Ivanka score Ψ(0) | Mean score advantage Ψ(1) | Score Ψ(r) positive for *all* r ≥ 0? | Runtime Ψ(r) positive for *all* r ≥ 0? |
+| --- | ---: | ---: | ---: | --- | --- |
+| IVA | 125 | +0.112 | +0.664 | Yes, diagnostic only | Yes, diagnostic only |
+| Haploflow | 125 | −0.064 | +1.352 | **No**; too many score losses (24 vs 16 wins) | Yes |
+| MEGAHIT | 125 | +0.016 | +0.360 | Yes, diagnostic only | Yes |
+| ABySS | 93 of 125 | +0.194 | +0.677 | **No**; one −15 loss exceeds largest +10 gain, so large-r limit fails | Yes |
+| SPAdes | 76 of 125 | −0.092 | −0.658 | **No**; 12 losses vs 5 gains; max observed loss −10 vs max gain +3 | Yes |
+| Velvet | 125 | +0.128 | +3.424 | Yes, diagnostic only | Yes |
+
+All six source-overlap runtime Ψ diagnostics are positive for all nonnegative real exponents, but this does **not** certify a final runtime gate: some rivals have missing or failed arms, 73 physical samples are not included in the 125-case diagnostic, and the common MiCall versions are not matched. The 125/125 per-sample 90%-of-best score floors can all pass while **a stronger cohort-wise all-r test still fails**. In particular, high-r negative outliers for ABySS and SPAdes and the Haploflow `r=0` win/loss imbalance are concrete P0 study targets.
+
+**Required next investigation:** after the 70 true new-source runtimes complete, check the complete **198-case source-coherent** candidate aggregation and proper common-version rival comparisons, then investigate outlier read/phase/contig evidence with *reference-blind assembly selection*. Do not chase the evaluator’s exact sample truths inside the assembler, change the scoring panel, silently filter failing rivals, retroactively mark missing panels as pass, or merge draft PR #22. This is P0 physical scientific optimization, **not P3 repair of old rival failures**.
+
 ## PX: the ten extra exploratory assemblers and storage protection
 
 All **ten** separately forked source adapters are pinned, independently tested as source-only integration, and remain **NONQUALIFYING** (including GPL-3.0 SOAPdenovo2 and MIT Fermi-lite substitutes). Native SKESA ELF was independently built and hashed `d7d97a95add33476e3b84ad8dab48db7278c3833ef8a9df76b08d1bbd78fb85c`; **none** of the ten has a validated dedicated OCI image or physical/synthetic MiCall pilot. Never turn a source build or standalone FASTA into a qualifying benchmark result.

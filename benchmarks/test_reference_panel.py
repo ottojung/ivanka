@@ -1,10 +1,16 @@
 """Focused acceptance tests: all final MAX contigs and all pinned references."""
+import random
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from reference_panel import (best_panel_alignment, build_reference_panel,
-                             normalize_dna, panel_acceptance, panel_sha256)
+from reference_panel import (
+    best_panel_alignment,
+    build_reference_panel,
+    normalize_dna,
+    panel_acceptance,
+    panel_sha256,
+)
 
 
 def write_conseq(folder, sequences):
@@ -59,8 +65,9 @@ class ReferencePanelTests(TestCase):
         self.assertEqual(result["score"], float(len(query)))
 
     def test_optional_simd_backend_preserves_exact_scores(self):
-        import reference_panel
         from unittest.mock import patch
+
+        import reference_panel
         if reference_panel.parasail is None:
             self.skipTest("optional parasail accelerator not installed")
         seq = "ACGTGCAATGGCTAACGCTAGCGTATCAGTCGAT" * 12
@@ -73,6 +80,40 @@ class ReferencePanelTests(TestCase):
         with patch.object(reference_panel, "parasail", None):
             scalar = reference_panel.best_panel_alignment(candidates, refs)
         self.assertEqual(simd, scalar)
+
+    def test_masked_x_simd_matches_exact_scalar_local_alignment(self):
+        from unittest.mock import patch
+
+        import reference_panel
+        if reference_panel.parasail is None:
+            self.skipTest("optional parasail accelerator not installed")
+        random_state = random.Random(41)
+        alphabet = "ACGTNX"
+        for i in range(90):
+            sample = "".join(random_state.choice(alphabet)
+                             for _ in range(random_state.randint(8, 90)))
+            reference = "".join(random_state.choice("ACGTN")
+                                for _ in range(random_state.randint(8, 125)))
+            inputs = [sample]
+            panel = [("source-blind-after-assembly", reference)]
+            fast = reference_panel.best_panel_alignment(inputs, panel)
+            with patch.object(reference_panel, "parasail", None):
+                scalar = reference_panel.best_panel_alignment(inputs, panel)
+            self.assertEqual(fast, scalar, (i, sample, reference))
+
+    def test_long_masked_x_consensus_exact_score_and_reverse(self):
+        from unittest.mock import patch
+
+        import reference_panel
+        if reference_panel.parasail is None:
+            self.skipTest("optional parasail accelerator not installed")
+        ref = ("ACGT" * 260)[:1017]
+        seq = ref[:503] + "X" + ref[504:]
+        seq = seq[::-1]  # both orientations are still scored
+        fast = reference_panel.best_panel_alignment([seq], [("ref", ref)])
+        with patch.object(reference_panel, "parasail", None):
+            scalar = reference_panel.best_panel_alignment([seq], [("ref", ref)])
+        self.assertEqual(fast, scalar)
 
     def test_missing_max_contigs_fail_closed(self):
         with TemporaryDirectory() as directory:

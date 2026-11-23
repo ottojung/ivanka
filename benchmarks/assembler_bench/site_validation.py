@@ -1,31 +1,25 @@
 """Fail-closed validation of pairwise evidence and public mapping densities."""
-import copy
 import json
 import math
 import re
 
-from .public_dominance import enrich
 from .public_metrics import CATALOG, SCHEMA as DIAGNOSTIC_SCHEMA
+from .public_psi import public_matrix
 from .metric_explanations import INFO
 
 SHA = re.compile(r"^[a-f0-9]{64}$")
 
 
 def check_matrices(report):
-    """Recompute the actual all-r proofs instead of trusting browser JSON."""
-    expected = enrich(copy.deepcopy(report))
-    for original, rebuilt in zip(report["runs"], expected["runs"]):
-        if original.get("dominance_matrix") != rebuilt["dominance_matrix"]:
+    """Recompute all-r proofs from public measurements, tool-neutrally."""
+    for run in report["runs"]:
+        rebuilt = public_matrix(run)
+        if run.get("dominance_matrix") != rebuilt:
             raise ValueError("pairwise PSI matrix differs from independent proof")
-        if original.get("micall_fork_provenance") != rebuilt["micall_fork_provenance"]:
-            raise ValueError("fork provenance is unverified or inconsistent")
-        grid = original["dominance_matrix"]
-        if grid["schema"] != "assembler-bench.directed-all-r-psi.v1":
-            raise ValueError("unexpected PSI matrix version")
-        if original.get("eligible_for_expanded") is True and (
-                original.get("micall_fork_provenance", {}).get("status")
-                != "verified"):
-            raise ValueError("expanded run lacks verified fork provenance")
+        if (rebuilt["tools"] != run["tools"]
+                or any("eligib" in key.lower() or "qualif" in key.lower()
+                       for key in rebuilt)):
+            raise ValueError("public matrix is incomplete or carries policy")
 
 
 def check_mapping_snapshot(site, report):
@@ -46,7 +40,8 @@ def check_mapping_snapshot(site, report):
                     sample["alias"] for sample in run["samples"]})
             or (snapshot.get("cases_measured") == 0
                 and snapshot.get("sample_alias") is not None)
-            or set(snapshot.get("tools", {})) != set(run["tools"])
+            or not set(snapshot.get("tools", {}))
+            or not set(snapshot.get("tools", {})) <= set(run["tools"])
             or set(snapshot.get("metric_catalog", {})) != set(CATALOG)):
         raise ValueError("unverified or incomplete diagnostic snapshot")
     for metric, (label, unit) in CATALOG.items():

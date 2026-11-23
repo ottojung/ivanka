@@ -6,13 +6,11 @@ import re
 import shutil
 from pathlib import Path
 
-from .current_validation import check_current
-from .exploratory_publication import validate as validate_exploratory
-from .history_validation import validate_archive_file
-from .public_case_metrics import validate_sample
 from .public_fork_provenance import check as check_fork_provenance
+from .public_validation import check_public_site
+from .public_vocabulary import assert_clean
 from .publication import SCHEMA
-from .site_validation import check_mapping_snapshot, check_matrices
+from .site_validation import check_mapping_snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -29,11 +27,11 @@ def validate_public_site(site=SITE):
     source = Path(site)
     required = ("index.html", "style.css", "subjects.js",
                 "rankings.js", "distribution.js", "compare_views.js",
-                "overview.js", "exploratory.js", "app.js",
+                "overview.js", "app.js",
                 "data/runs.json", "data/history.json",
                 "data/mapping-diagnostics.json",
                 "data/live-fork-attestation.json",
-                "data/exploratory-candidates.json")
+                "data/assembler-evidence.json")
     if any(not (source / name).is_file() for name in required):
         raise ValueError("incomplete /bench site assets")
     html = (source / "index.html").read_text()
@@ -51,8 +49,7 @@ def validate_public_site(site=SITE):
                  'id="diagnosticExplanation"',
                  'id="singleDirection"', 'id="psiExponent"',
                  'id="psiMetric"', 'id="momentLegend"',
-                 'src="./exploratory.js"', 'id="exploratoryRows"',
-                 'id="exploratoryContext"', 'class="exploratory"'):
+                 ):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
     if ("BenchDistribution.model(values)" not in js
@@ -134,21 +131,6 @@ def validate_public_site(site=SITE):
         raise ValueError("matrix lacks checked-metric Ψ(0,1,2) numeric views")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
-    exploratory_js = (source / "exploratory.js").read_text()
-    if ("BenchExploratory.render(" not in js
-            or 'fetch("./data/exploratory-candidates.json"' not in js
-            or "function render(" not in exploratory_js
-            or "resultLabel" not in exploratory_js
-            or "Pending: No image built" not in exploratory_js
-            or "compareTable" not in exploratory_js
-            or "side-by-side comparison" not in exploratory_js):
-        raise ValueError("nonqualifying PX roster must render its own honest state")
-    if ("pending until authentic SHA-attested image, pilot and benchmark receipts exist"
-            not in html or "compared side by side below" not in html):
-        raise ValueError("PX section must disclose pending/nonqualifying state")
-    if any(token in exploratory_js for token in
-            ("dominance_matrix", "psi", "BenchRanks.summary", "BenchSubjects")):
-        raise ValueError("PX explorer must not touch qualifying Ψ/gate logic")
     if any(token in js for token in ("setInterval(", "setTimeout(",
                                       "EventSource(", "WebSocket(")):
         raise ValueError("static benchmark website must never poll or stream")
@@ -158,111 +140,15 @@ def validate_public_site(site=SITE):
     report = json.loads((source / "data/runs.json").read_text())
     if report.get("schema") != SCHEMA or not isinstance(report.get("runs"), list):
         raise ValueError("unsupported public result schema")
-    if not report["runs"] or report.get("expanded_qualification") != "incomplete":
-        raise ValueError("current public gate status missing")
-    ids = set()
+    checked = check_public_site(source)
     for run in report["runs"]:
-        if not RUN.fullmatch(run["id"]) or run["id"] in ids:
-            raise ValueError("invalid or duplicate public run identifier")
-        ids.add(run["id"])
-        if run["status"] not in ("passed-original-only", "ineligible", "incomplete"):
-            raise ValueError("unattested public qualification status")
-        if run["status"] == "passed-original-only":
-            if (run["cohort"] != "real" or run["sample_count"] != 198 or
-                    len(run.get("samples", [])) != 198 or
-                    not run["psi"]["alignment"]["positive_all_nonnegative"] or
-                    not run["psi"]["runtime"]["positive_all_nonnegative"] or
-                    run["eligible_for_expanded"]):
-                raise ValueError("incorrect original-gate provenance")
-            seen = set()
-            for sample in run["samples"]:
-                if not ALIAS.fullmatch(sample["alias"]) or sample["alias"] in seen:
-                    raise ValueError("public aliases are unsafe or duplicated")
-                seen.add(sample["alias"])
-                if set(sample) != {"alias", "score", "seconds", "floor_ok", "outcome"}:
-                    raise ValueError("unexpected public sample metadata")
-                if not sample["floor_ok"] or sample["outcome"] != "success":
-                    raise ValueError("unreported sample failure")
-        if (run["status"] == "ineligible"
-                and (run["eligible_for_expanded"] or run.get("psi"))):
-            raise ValueError("ineligible run falsely presented as passing")
-        if run["status"] == "incomplete" and run["cohort"] == "synthetic":
-            if run.get("progress_schema") == "ivanka.assembler-bench.active-progress.v1":
-                from .current_validation_v2 import check_run
-                check_run(run)
-            else:
-                verify_hxb2_preview(run)
+        if not RUN.fullmatch(run["id"]):
+            raise ValueError("invalid public run identifier")
         check_fork_provenance(source, run)
-    check_current(report)
-    check_matrices(report)
     check_mapping_snapshot(source, report)
-    validate_exploratory(
-        json.loads((source / "data/exploratory-candidates.json").read_text()))
-    archived = validate_archive_file(source / "data/history.json", ids)
     if SECRET.search(json.dumps(report)):
         raise ValueError("private sample path or identifier in public report")
-    return len(report["runs"]) + archived
-
-
-def verify_hxb2_preview(run):
-    """Incomplete HXB2 cases must be honestly represented, never called wins."""
-    from benchmarks.expanded.adapters import ASSEMBLERS
-    required = set(ASSEMBLERS)
-    if (run.get("cohort") != "synthetic"
-            or run.get("hxb2_truth_verified") is not True
-            or run.get("eligible_for_expanded") is not False
-            or run.get("expanded_status") != "incomplete"
-            or run.get("cohort_manifest_sha256") != HXB2_COHORT_SHA
-            or run.get("expected_sample_count") != 400
-            or run.get("psi") != {}
-            or set(run.get("tools", [])) != required
-            or set(run.get("images", {})) != required):
-        raise ValueError("incomplete HXB2 run has incorrect scientific evidence")
-    if (any(not re.fullmatch("[0-9a-f]{64}", value)
-            for value in run["images"].values())
-            or not re.fullmatch("[0-9a-f]{64}", run.get("diagnostic_sha256", ""))):
-        raise ValueError("HXB2 run missing immutable tool/output hashes")
-    samples = run.get("samples")
-    if (not isinstance(samples, list) or not 0 <= len(samples) <= 400
-            or run.get("sample_count") != len(samples)
-            or len({sample.get("alias") for sample in samples}) != len(samples)):
-        raise ValueError("incomplete HXB2 run has invalid sample count/aliases")
-    for sample in samples:
-        validate_sample(sample, required)
-        if (not HXB2_ALIAS.fullmatch(sample["alias"])
-                or set(sample) not in (
-                    {"alias", "family", "score", "seconds", "failures",
-                     "outcome", "floor_ok"},
-                    {"alias", "family", "score", "seconds", "failures",
-                     "outcome", "floor_ok", "diagnostics", "exact_profiles"})
-                or not re.fullmatch("[a-z0-9_]+", sample["family"])
-                or set(sample["score"]) != required
-                or set(sample["seconds"]) != required
-                or not isinstance(sample["failures"], list)
-                or len(set(sample["failures"])) != len(sample["failures"])
-                or set(sample["failures"]) - required
-                or sample["outcome"] != ("failure" if sample["failures"]
-                                         else "success")):
-            raise ValueError("incomplete HXB2 result has invalid sample evidence")
-        if sample["failures"]:
-            if sample["floor_ok"] is not None:
-                raise ValueError("failed arm cannot have a qualified floor")
-        else:
-            highest = max(sample["score"][tool] for tool in required
-                          if tool != "ivanka")
-            if sample["floor_ok"] is not (
-                    sample["score"]["ivanka"] >= 0.9 * highest):
-                raise ValueError("HXB2 per-sample floor is misreported")
-        for tool in required:
-            quality, seconds = sample["score"][tool], sample["seconds"][tool]
-            if tool in sample["failures"]:
-                if quality is not None or seconds is not None:
-                    raise ValueError("failed competitor is shown as success")
-            elif (type(quality) not in (float, int)
-                  or not math.isfinite(quality) or quality < 0
-                  or type(seconds) not in (float, int)
-                  or not math.isfinite(seconds) or not 0 < seconds <= 1800):
-                raise ValueError("unverified success metric in HXB2 result")
+    return checked
 
 
 def build(output, site=SITE):

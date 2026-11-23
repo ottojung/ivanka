@@ -8,6 +8,7 @@ import tempfile
 
 from .current_inputs import PROGRESS_SCHEMA
 from .current_runs import current,write
+from .public_view import merge_evidence
 from .site_build import validate_public_site
 from .workload_activity import snapshot as worker_snapshot
 
@@ -65,6 +66,13 @@ def update(site,synth,physical,data,runner,attestation,images,physical_witness,p
     generated=current(synth,physical,data,runner,attestation,images,when,
                       physical_witness,physical_attestation,resources,real_retries,
                       synthetic_data=synthetic_data,synthetic_runner=synthetic_runner)
+    # Private canonical-seven validation happens on the source artifact,
+    # before the neutral public transform. Nothing below this point carries
+    # project acceptance into /bench/.
+    from .current_validation_v2 import check_current as check_canonical_seven
+    check_canonical_seven(generated)
+    evidence=json.loads((site/"data/assembler-evidence.json").read_text())
+    generated,_=merge_evidence(generated,evidence)
     if include_workload:
         generated["workload"]=worker_snapshot(synth,physical,images,
                                              order=cohort_order)

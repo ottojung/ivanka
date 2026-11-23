@@ -25,6 +25,13 @@ def write_json(path, data):
     return path
 
 
+def cases_for(cohort, r1, r2):
+    ids = [f"P{i:03d}" if cohort == "physical" else f"S{i:03d}"
+           for i in range(1, sched.EXPECTED_COUNTS[cohort] + 1)]
+    canonical = sched.canonical_aliases(ids, cohort)
+    return [sched.CasePair(sid, canonical[sid], cohort, r1, r2) for sid in ids]
+
+
 class SupervisorTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -51,11 +58,8 @@ class SupervisorTests(unittest.TestCase):
         self.addCleanup(self.admission.stop)
 
     def source(self):
-        physical = [sched.CasePair(sched._alias(i, "physical"), "physical",
-                                   self.r1, self.r2) for i in range(198)]
-        synthetic = [sched.CasePair(sched._alias(i, "synthetic"), "synthetic",
-                                    self.r1, self.r2) for i in range(464)]
-        return sched.CohortSource(physical, synthetic)
+        return sched.CohortSource(cases_for("physical", self.r1, self.r2),
+                                  cases_for("synthetic", self.r1, self.r2))
 
     def registry(self, tools=TOOLS):
         data = json.loads(REGISTRY.read_text())
@@ -69,15 +73,24 @@ class SupervisorTests(unittest.TestCase):
                 "image_sha256": "b" * 64, "qualifying": False,
                 "native_binary_sha256": "a" * 64}
             path = write_json(self.root / "receipts" / (tool + ".json"), receipt)
-            promotions[tool] = {"status": "image-pinned", "image_sha256": "b" * 64,
-                                "image_evidence": {"path": str(path),
-                                                   "sha256": sha(path)}}
-        result = write_json(self.root / "registry.json", data)
+            pilot_receipt = {
+                "schema": "ivanka.exploratory.pilot.receipt.v1",
+                "tool_id": tool, "source_commit": item["source_commit"],
+                "adapter_commit": data["adapter_branch_commits"][tool],
+                "image_sha256": "b" * 64, "qualifying": False,
+                "physical": {"source_input_sha256": "c" * 64, "status": "success"},
+                "synthetic": {"source_input_sha256": "d" * 64, "status": "success"}}
+            pilot_path = write_json(
+                self.root / "receipts" / (tool + "-pilot.json"), pilot_receipt)
+            promotions[tool] = {
+                "status": "pilot", "image_sha256": "b" * 64,
+                "image_evidence": {"path": str(path), "sha256": sha(path)},
+                "pilot_evidence": {"path": str(pilot_path),
+                                   "sha256": sha(pilot_path)}}
         for tool, changes in promotions.items():
             item = next(x for x in data["candidates"] if x["id"] == tool)
             item.update(changes)
-        write_json(result, data)
-        return result
+        return write_json(self.root / "registry.json", data)
 
     def baseline(self):
         return write_json(self.root / "baseline.json", {
@@ -101,6 +114,8 @@ class SupervisorTests(unittest.TestCase):
             if stop_after is not None and seen["n"] >= stop_after:
                 (self.px / sup.STOP_FILE).write_text("stop\n")
             return {"outcome": "success", "output_path": self.out,
+                    "alias": arm["alias"], "cohort": arm["cohort"],
+                    "input_sha256": arm["input_sha256"],
                     "seconds": 1.0, "peak_rss": 1_000_000,
                     "runner_receipt_sha256": "c" * 64}
         return runner
@@ -127,6 +142,16 @@ class SupervisorTests(unittest.TestCase):
         with self.assertRaisesRegex(sup.HandoffRequired, "proof"):
             sup.make_handoff(self.px, registry, "skesa")
 
+    def test_image_receipt_alone_cannot_assert_tests_passed(self):
+        registry = self.registry()
+        data = json.loads(registry.read_text())
+        item = next(x for x in data["candidates"] if x["id"] == "skesa")
+        item.pop("pilot_evidence")
+        item["status"] = "image-pinned"
+        image_only = write_json(self.root / "image-only.json", data)
+        with self.assertRaisesRegex(sup.HandoffRequired, "two-cohort pilot"):
+            sup.make_handoff(self.px, image_only, "skesa")
+
     def test_tampered_handoff_never_enables_execution(self):
         calls = []
         registry = self.registry()
@@ -146,17 +171,17 @@ class SupervisorTests(unittest.TestCase):
         first = self.supervisor(self.fake_runner(calls, stop_after=2),
                                 registry).start(armed=True)
         self.assertEqual(first["completed"], [
-            "skesa-physical-PX-R000", "skesa-physical-PX-R001"])
+            "skesa-physical-PX-R001", "skesa-physical-PX-R002"])
         self.assertEqual(first["status"], "stopped")
         (self.px / sup.STOP_FILE).unlink()
         second = self.supervisor(self.fake_runner(calls, stop_after=2),
                                  registry).start(armed=True)
         self.assertEqual(second["completed"][:2], [
-            "skesa-physical-PX-R002", "skesa-physical-PX-R003"])
+            "skesa-physical-PX-R003", "skesa-physical-PX-R004"])
         self.assertEqual(len(calls), 4)
         self.assertEqual(calls[:4], [
-            "skesa-physical-PX-R000", "skesa-physical-PX-R001",
-            "skesa-physical-PX-R002", "skesa-physical-PX-R003"])
+            "skesa-physical-PX-R001", "skesa-physical-PX-R002",
+            "skesa-physical-PX-R003", "skesa-physical-PX-R004"])
 
     def test_admission_stop_prevents_any_dispatch(self):
         registry = self.registry()
@@ -182,11 +207,28 @@ class SupervisorTests(unittest.TestCase):
         registry = self.registry()
         self.handoff_all(registry)
         calls = []
+
         def bad(arm, case):
             calls.append(1)
-            return {"outcome": "failure", "failure_reason": "spurious"}
+            return {"outcome": "failure", "failure_reason": "spurious",
+                    "alias": arm["alias"], "cohort": arm["cohort"],
+                    "input_sha256": arm["input_sha256"]}
+
         with self.assertRaisesRegex(ValueError, "not classified"):
             self.supervisor(bad, registry).start(armed=True)
+        self.assertEqual(list((self.px / "receipts").glob("*.json")), [])
+
+    def test_report_from_another_canonical_alias_is_rejected(self):
+        registry = self.registry()
+        self.handoff_all(registry)
+
+        def wrong_alias(arm, case):
+            return {"outcome": "success", "output_path": self.out,
+                    "alias": "PX-R053", "cohort": arm["cohort"],
+                    "input_sha256": arm["input_sha256"], "seconds": 1.0}
+
+        with self.assertRaisesRegex(ValueError, "does not match dispatched case"):
+            self.supervisor(wrong_alias, registry).start(armed=True)
         self.assertEqual(list((self.px / "receipts").glob("*.json")), [])
 
     def test_no_private_identity_reaches_receipts_or_checkpoint(self):

@@ -1,4 +1,7 @@
+use super::rolling_canonical_kmers;
+mod selection;
 use super::scoring::Statistics;
+pub(super) use selection::supported_components;
 use std::cmp::Ordering;
 
 /// Read-covered breadth squared, weighted by supporting original fragments.

@@ -1,0 +1,49 @@
+# Physical P0 status: authentic 198, all-r cross-version diagnostic, IVA retesting
+
+Verified on marceline-dev, November 23, 2026, 03:15 UTC. **This is NOT a seven-way or clinical-release qualification certificate.**
+
+## All 198 authentic future-source Ivanka executions are complete
+
+The draft common MiCall native/G2P exact-contig correction is [ottojung/MiCall PR #22](https://github.com/ottojung/MiCall/pull/22) at commit a6c8195d95076325a07661f7f625a86361dfed45. Original frozen seven-assembler runs and images were not modified.
+
+- All **128/128 source-affected physical** executions succeeded: 125 ordinary cases and three preselected controls.
+- All **70/70 source-unique physical** cases were genuinely timed under the corrected source: 69 ordinary cases and one preselected control. Their combined FASTA and final consensus stayed byte-identical to the frozen source, but previous runtime was **not** reused. All 69 ordinary scratch directories were archived losslessly and SHA verified. The unique-case controller finished successfully November 23 at 02:15 UTC.
+- All inputs, outputs, source commits, runtime provenance and wall/memory budgets were checked. Limits remain **2400 seconds wall, 4,000,000,000 bytes sampled peak RSS**, with one P0 worker and the original physical disk reserve.
+
+The read-only 33-reference panel audit SHA256 **87e71bf74ae90bac5807f62a0e9399e5d00ac126b246a2a082183d2383d179a6** is at /workspace/ivanka-p0-prospective-allprojects-20261122/p0-full198-crossversion-historical-psi-20261123T0300Z.json. It rehashed and reused all 125 prior scores and evaluated only 73 previously unscored cases; **no assembly was rerun**. The panel SHA256 is 018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8.
+
+**Provisional ≥90% alignment floors: 198/198 against historical IVA, and 198/198 against the best available successful historical comparator.** Score and runtime signed-power Ψ are positive for **all real exponents r ≥ 0** on all six available historical paired-success subsets:
+
+| Historical comparator | Paired cases | Mean alignment Ψ(1) | Mean runtime saved (s) Ψ(1) | Strict all-r score+runtime positive |
+|---|---:|---:|---:|---|
+| IVA | 198 | 4.081 | 112.454 | Yes |
+| Haploflow | 171 | 16.269 | 265.720 | Yes |
+| MEGAHIT | 188 | 28.069 | 168.847 | Yes |
+| ABySS | 106 | 8.368 | 114.141 | Yes |
+| SPAdes | 130 | 23.739 | 402.880 | Yes |
+| Velvet | 157 | 113.688 | 149.730 | Yes |
+
+**These are CROSS-VERSION only, because the historical rivals used the old common MiCall preprocessing.** Missing original comparator arms remain unavailable, not counted as wins. Even positive all-r on those subsets does not certify a fair updated seven-way gate.
+
+For posthoc scoring performance, [Ivanka PR #392](https://github.com/ottojung/ivanka/pull/392) merged a mathematically identical local-alignment SIMD matrix that includes unresolved consensus symbol X. There is no altered objective, score threshold or reference/truth-driven assembly. 37 regression tests and six subtests passed; 90 random scalar-versus-SIMD alignments and real X-masked control score 579 agree.
+
+## Same-prospective-source IVA real 198-case testing is underway
+
+A genuine **new** IVA cohort runs with the same corrected common MiCall source files overlaid read-only onto the independently pinned original IVA OCI image. The original frozen IVA cases are never overwritten or substituted. Pending further audit of the full image source diff, this is a **shared-common-source comparison**, not yet a formal byte-identical-base release assertion.
+
+- Live S6 service: /run/service/ivanka-p0-updated-micall-iva; source-pinned Python controller: /workspace/ivanka-p0-prospective-allprojects-20261122/continue_future_iva_physical_p0.py SHA256 **354763b0c5c5195b6e021579d90268d661bb19ab9ac89457e5083fe1d6d00519**.
+- Separate source-attested actual IVA runner SHA256 **7aad2acce485266220560e23cd48024092c80f0529cdf8e814ce6f386b46e370**, separately losslessly archiving cases with SHA256 **c686b185e55d2bc7369ad983235f4be63188b620ccfb7abb50848a1424d08f05**.
+- The original IVA OCI ID is **16afbb25642dae3ce9e09eeaf22ddc3c41ecf02f71fadef910494ef564d39fd9**, and both prospective arms use MiCall patch SHA a6c8195d95076325a07661f7f625a86361dfed45 for sample.py and unique_contigs.py. Input hashes, all-project processing, 2400s/4GB, P0 disk floor plus 128× paired FASTQ reservation, one worker, failure receipts and scratch archives are preserved.
+- An actual updated IVA R042 pilot scored **179** against corrected Ivanka **179** (both original scores **102**), IVA took **11.075 seconds**, Ivanka **10.793 seconds**. The important R042 correction is shared downstream, not an Ivanka-only gain.
+- The first **26** same-source-timed paired cases were posthoc evaluated with a hash-validated incremental scorer. Their 90% score floor passes 26/26 and score Ψ is positive, but **runtime Ψ is negative** (20 losses, six wins, mean Ivanka 1.471s slower). Initial samples were ordered by FASTQ size and are unrepresentative; **this is an early warning, not a 198-case verdict**. One source-affected case had a 24.275s relative runtime loss (IVA 39.920, Ivanka 64.195). Preserve and investigate the evidence.
+- The incremental scorer is at /workspace/ivanka-p0-prospective-allprojects-20261122/score_future_version_iva_incremental.py SHA256 **a435ec7749b12ba77f7ced479ddd741911d080099b1dd759ff003936df1dc371**. It independently rehashes old scores and only posthoc scores newly completed IVA outputs; its output is always incomplete/nonqualifying until **198/198** valid same-source pairs.
+
+**Next:** finish new IVA 198 real-run source attestation and check same-version alignment and runtime Ψ for all r≥0. If failed, identify general reference-blind improvements and rerun only prospective affected cases with source changes. Full seven-way qualification still additionally needs valid rival arms under comparable common source. Common MiCall PR #22 stays draft until the scientific gate truly passes.
+
+## Founder priority and other resource constraints
+
+P0 physical checks first; **P1 synthetic 464-case acceptance only after physical P0**, PX exactly ten extra **NONQUALIFYING** tool adapters in parallel only when disk conditions permit, P2 physical exact-coverage/depth/clips/concordance diagnostics after core, and P3 original rival failure repair LAST.
+
+PX ten source-only adapters exist but no valid new OCI images or genuine MiCall pilots. A full common MiCall experimental image builder exceeded the strict 8GiB storage footprint; eight abandoned external Buildah work containers were isolated and removed, recovering 8.744GB, with exact receipts. Hard PX policy remains **≥32GiB free, ≤8GiB total added exploration storage, at most one worker**, 2400s and 4GB measured. Do not retry that inherently oversized build until source-attested smaller build design/hard quota.
+
+The original seven frozen OCI manifest still has SHA256 **9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f**, with the historical 4634 terminal seven-arm observations immutable.

@@ -3,4 +3,6 @@ use super::{ranking, reads::K};
 
 mod alternatives;
 mod cap;
+mod contig_density;
+mod contig_density_evidence;
 mod coverage;

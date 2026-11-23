@@ -285,3 +285,17 @@ section.dominance,section.diagnostics{margin-top:61px}
 .global-notice[hidden]{display:none}
 .global-notice{font-size:12px;line-height:1.6}
 .compare .bar-count:empty{visibility:hidden}
+
+/* PX explorers are a separate, nonqualifying roster with no ranking bars. */
+section.exploratory{margin-top:61px}
+.exploratory-table{width:100%;border-collapse:collapse;min-width:820px}
+.exploratory-table th,.exploratory-table td{font-size:12px;padding:11px 13px;text-align:left}
+.exploratory-table td:nth-child(2),.exploratory-table td:nth-child(4){
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.exploratory-table td:last-child{color:var(--amber)}
+.px-case-row td{background:#0f1a24}
+.px-cases summary{cursor:pointer;color:var(--cyan);font-size:12px}
+.exploratory-cases{width:100%;border-collapse:collapse;margin-top:10px}
+.exploratory-cases th,.exploratory-cases td{font-size:11px;padding:7px 10px}
+@media(max-width:850px){.exploratory-table{min-width:680px}}

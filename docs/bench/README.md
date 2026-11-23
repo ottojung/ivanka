@@ -113,9 +113,11 @@ Before changing the public site, run:
 
     PYTHONPATH=benchmarks python3 -m pytest -q benchmarks/test_assembler_bench_*.py
     PYTHONPATH=benchmarks python3 -m benchmarks.assembler_bench.site_build --output /tmp/ivanka-pages-preview
+    PYTHONPATH=benchmarks python3 -m benchmarks.assembler_bench.exploratory_publication --check
     node --check site/bench/app.js
     node --check site/bench/rankings.js
     node --check site/bench/subjects.js
+    node --check site/bench/exploratory.js
 
 The site builder independently recomputes all-pairs Ψ matrices,
 validates the unchanged-score combined view against both

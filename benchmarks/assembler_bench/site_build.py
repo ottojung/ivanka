@@ -12,6 +12,7 @@ from .public_fork_provenance import check as check_fork_provenance
 from .current_validation import check_current
 from .public_case_metrics import validate_sample
 from .history_validation import validate_archive_file
+from .exploratory_publication import validate as validate_exploratory
 
 ROOT = Path(__file__).resolve().parents[2]
 SITE = ROOT / "site/bench"
@@ -27,10 +28,12 @@ SECRET = re.compile(r"/workspace/|/home/|_R[12]_[0-9]{3}|"
 def validate_public_site(site=SITE):
     source = Path(site)
     required = ("index.html", "style.css", "subjects.js",
-                "rankings.js", "distribution.js", "compare_views.js", "app.js",
+                "rankings.js", "distribution.js", "compare_views.js",
+                "overview.js", "exploratory.js", "app.js",
                 "data/runs.json", "data/history.json",
                 "data/mapping-diagnostics.json",
-                "data/live-fork-attestation.json")
+                "data/live-fork-attestation.json",
+                "data/exploratory-candidates.json")
     if any(not (source / name).is_file() for name in required):
         raise ValueError("incomplete /bench site assets")
     html = (source / "index.html").read_text()
@@ -47,7 +50,9 @@ def validate_public_site(site=SITE):
                  'id="diagnosticMetric"',
                  'id="diagnosticExplanation"',
                  'id="singleDirection"', 'id="psiExponent"',
-                 'id="psiMetric"', 'id="momentLegend"'):
+                 'id="psiMetric"', 'id="momentLegend"',
+                 'src="./exploratory.js"', 'id="exploratoryRows"',
+                 'id="exploratoryContext"', 'class="exploratory"'):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
     if ("BenchDistribution.model(values)" not in js
@@ -129,6 +134,12 @@ def validate_public_site(site=SITE):
         raise ValueError("matrix lacks checked-metric Ψ(0,1,2) numeric views")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
+    exploratory_js = (source / "exploratory.js").read_text()
+    if ("BenchExploratory.render(" not in js
+            or 'fetch("./data/exploratory-candidates.json"' not in js
+            or "function render(" not in exploratory_js
+            or "resultLabel" not in exploratory_js):
+        raise ValueError("nonqualifying PX roster must render its own honest state")
     if any(token in js for token in ("setInterval(", "setTimeout(",
                                       "EventSource(", "WebSocket(")):
         raise ValueError("static benchmark website must never poll or stream")
@@ -176,6 +187,8 @@ def validate_public_site(site=SITE):
     check_current(report)
     check_matrices(report)
     check_mapping_snapshot(source, report)
+    validate_exploratory(
+        json.loads((source / "data/exploratory-candidates.json").read_text()))
     archived = validate_archive_file(source / "data/history.json", ids)
     if SECRET.search(json.dumps(report)):
         raise ValueError("private sample path or identifier in public report")

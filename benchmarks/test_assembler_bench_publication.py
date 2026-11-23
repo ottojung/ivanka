@@ -49,11 +49,11 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             str(Path(__file__).resolve().parents[1]) + os.pathsep +
             str(Path(__file__).resolve().parents[0]))
         command = [sys.executable, "-S", "-c",
-                   "import sys; from assembler_bench.site_build import "
-                   "validate_public_site; assert callable(validate_public_site); "
-                   "assert 'Bio' not in sys.modules"]
-        process = subprocess.run(command, env=environment, text=True,
-                                 capture_output=True, timeout=20)
+                   ("import sys; from assembler_bench.site_build import "
+                    "validate_public_site; assert callable(validate_public_site); "
+                    "assert 'Bio' not in sys.modules")]
+        process = subprocess.run(command, check=False, env=environment,
+                                 text=True, capture_output=True, timeout=20)
         self.assertEqual(process.returncode, 0, process.stderr)
 
     def test_no_private_metadata(self):
@@ -146,9 +146,8 @@ class PublicAssemblerBenchTests(unittest.TestCase):
                           ("higher","lower","unspecified"))
 
     def test_partial_psi_proof_is_independently_recomputed(self):
-        import copy
-        from assembler_bench.site_validation import check_matrices
         from assembler_bench.public_dominance import enrich
+        from assembler_bench.site_validation import check_matrices
         runs=json.loads((SITE/"data/runs.json").read_text())
         check_matrices(runs)
         recorded=next(r for r in runs["runs"] if r.get("hxb2_truth_verified"))
@@ -187,6 +186,15 @@ class PublicAssemblerBenchTests(unittest.TestCase):
                 json.dumps(metrics))
             with self.assertRaisesRegex(ValueError,"density|must be null"):
                 validate_public_site(copy_site)
+
+    def test_pr_validation_cannot_cancel_production_pages_deployment(self):
+        workflow = (Path(__file__).resolve().parents[1]
+                    / ".github/workflows/pages.yml").read_text()
+        self.assertIn("format('pr-{0}', github.event.pull_request.number)", workflow)
+        self.assertIn("|| 'publish'", workflow)
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+                      workflow)
+        self.assertNotIn("group: assembler-bench-pages\n", workflow)
 
     def test_github_project_subpath_and_build(self):
         with tempfile.TemporaryDirectory() as tmp:

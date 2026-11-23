@@ -22,7 +22,7 @@ const BenchViews = (() => {
       if(!info)continue;
       const first=measured(run,snapshot,key,a).find(x=>x.id===alias);
       const second=measured(run,snapshot,key,b).find(x=>x.id===alias);
-      const stage=key==="score"||key==="seconds"?"Qualification":info.stage;
+      const stage=key==="score"||key==="seconds"?"Core measurements":info.stage;
       if(!groups.has(stage))groups.set(stage,[]);
       groups.get(stage).push({key,info,first:first?.value??null,
         second:second?.value??null});

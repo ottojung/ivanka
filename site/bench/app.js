@@ -13,11 +13,22 @@ const fmtPsi = x => {
     :x.toLocaleString("en",{maximumSignificantDigits:4});
   return x>0?"+"+value:value;
 };
-const names = {iva:"IVA",ivanka:"Ivanka",haploflow:"Haploflow",megahit:"MEGAHIT",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"};
+// Display names are presentation only. Roster membership is never read from
+// this map: selectors, matrix axes, plots and headings come from run.tools.
+// A cohort may publish its own labels; opaque ids fall back to a readable form.
+const DISPLAY_NAMES = {iva:"IVA",ivanka:"Ivanka",haploflow:"Haploflow",
+  megahit:"MEGAHIT",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"};
+function toolLabel(tool) {
+  const id=String(tool??"").toLowerCase();
+  const published=state.run?.tool_labels?.[id]||state.run?.tool_names?.[id];
+  if(typeof published==="string"&&published)return published;
+  return DISPLAY_NAMES[id]||
+    id.replace(/[_-]+/g," ").replace(/\b[a-z]/g,c=>c.toUpperCase());
+}
 const state = {data:null,run:null,metric:"score",firstTool:null,tool:null,
   sort:"id",reverse:false,rows:[],diagnostics:null,
   direction:"higher",psiExponent:"all",psiMetric:"alignment",
-  distributionTool:null,exploratory:null};
+  distributionTool:null};
 
 function metricInfo() {
   return BenchRanks.definition(state.metric,state.diagnostics?.metric_catalog);
@@ -99,24 +110,46 @@ function syncUrl() {
   history.replaceState(null,"","?"+params.toString());
 }
 
+function coverageStatus(run) {
+  const progress=run.tool_progress||{};
+  const tools=Array.isArray(run.tools)?run.tools:[];
+  let expected=0,finished=0,failed=0;
+  for(const tool of tools) {
+    const p=progress[tool]||{};
+    expected+=Number(p.expected||run.expected_sample_count||run.sample_count||0);
+    finished+=Number(p.finished||0);
+    failed+=Number(p.failed||0);
+  }
+  if(!expected) {
+    const samples=Array.isArray(run.samples)?run.samples.length:0;
+    return {text:samples? samples+" cases":"No measurements", cls:"status-neutral"};
+  }
+  const text=finished+"/"+expected+" measured";
+  const cls=finished>=expected?"status-complete":finished>0?"status-partial":"status-neutral";
+  return {text:failed?text+" · "+failed+" failed":text, cls};
+}
+
 function drawOverview() {
   const run=state.run,previous=!!run.archive;
-  const cohort=run.cohort==="combined"?"Combined · both cohorts":
-    run.cohort==="real"?"Physical · MiCall":"HXB2 · MiCall";
+  const cohortLabel=run.cohort==="combined"?"Combined cohort":
+    run.cohort==="real"?"Physical cohort":
+    run.cohort==="synthetic"?"Synthetic cohort":
+    (run.cohort_label||String(run.cohort||"Cohort"));
   const descriptions={
     synthetic:"Final MiCall MAX sequences scored by local alignment to their HXB2-derived generating truth; runtime measured in-container.",
     real:"Final MiCall MAX sequences scored against the fixed HIV/HCV reference panel; runtime measured in-container.",
     combined:"Physical and synthetic MiCall scores and runtimes combined without changing the per-case measurements."
   };
   el("runSelect").value=run.id;
-  el("runCohort").textContent=cohort;
-  el("runStatus").textContent=previous?"Historical":
-    run.eligible_for_expanded?"Qualified":
-    run.status==="incomplete"?"Pending evaluation":"Not qualified";
-  el("runStatus").className=previous?"status-neutral":"status-no";
+  el("runCohort").textContent=cohortLabel;
+  const cov=coverageStatus(run);
+  el("runStatus").textContent=previous?"Historical · "+cov.text:cov.text;
+  el("runStatus").className=previous?"status-neutral":cov.cls;
   el("runDate").textContent=run.date||"—";
-  el("runDescription").textContent=descriptions[run.cohort]||
-    "Final MiCall alignment and independently timed execution measurements.";
+  const rosterNote=el("rosterNote");
+  if(rosterNote)rosterNote.textContent=run.tools.length+" assemblers in this cohort.";
+  el("runDescription").textContent=run.description||descriptions[run.cohort]||
+    "Alignment and independently timed execution measurements for the selected cohort.";
   const note=BenchOverview.notice(state.data,run);
   const notice=el("globalNotice");
   notice.hidden=!note;
@@ -129,9 +162,9 @@ function drawOverview() {
   const lead=overview.alignmentLeader,fast=overview.runtimeLeader;
   el("metricCards").innerHTML=
     card("Highest mean alignment",lead?fmt(lead.mean,1)+" points":"—",
-      lead?(names[lead.tool]||lead.tool):"No alignment measurements")+
+      lead?toolLabel(lead.tool):"No alignment measurements")+
     card("Lowest mean runtime",fast?fmt(fast.mean,1)+" s":"—",
-      fast?(names[fast.tool]||fast.tool):"No runtime measurements")+
+      fast?toolLabel(fast.tool):"No runtime measurements")+
     card("Median alignment",overview.medianAlignment===null?"—":
       fmt(overview.medianAlignment,1)+" points",
       "Across recorded final MAX alignments")+
@@ -152,10 +185,10 @@ function drawCompare() {
   el("comparisonChart").innerHTML=ranking.map(row=>{
     const incomplete=BenchOverview.coverage(state.run,row.tool,row.observed);
     return '<button type="button" class="bar-line rank-trigger" data-tool="'+
-    esc(row.tool)+'" aria-label="Show '+esc(names[row.tool]||row.tool)+
+    esc(row.tool)+'" aria-label="Show '+esc(toolLabel(row.tool))+
     ' '+esc(info.label)+' distribution">'+
     '<span class="bar-name">'+row.rank+'. '+
-    esc(names[row.tool.toLowerCase()]||row.tool)+'</span>'+
+    esc(toolLabel(row.tool))+'</span>'+
     '<span class="bar-track"><span class="bar-fill '+
     (row.tool===state.firstTool?"":"other")+'" style="width:'+
     (row.mean===null?0:100*Math.abs(row.mean)/cap).toFixed(2)+'%"></span></span>'+
@@ -205,7 +238,7 @@ function drawExactProfiles(tool) {
   holder.innerHTML='<h4>Exact-read coverage along the final consensus</h4>'+
     '<svg viewBox="0 0 735 220" role="img" aria-label="'+
     esc("Mean exact full-span and interior coverage profiles for "+
-      cases.length+" measured "+(names[tool]||tool)+" cases")+'">'+
+      cases.length+" measured "+toolLabel(tool)+" cases")+'">'+
     '<line class="distribution-axis" x1="'+left+'" x2="'+right+
     '" y1="'+bottom+'" y2="'+bottom+'"/>'+curves+
     '<text x="'+left+'" y="208">Start</text>'+
@@ -229,7 +262,7 @@ function drawDistribution() {
   const values=readings.flatMap(row=>
     Array.from({length:Math.min(400,row.weight)},()=>row.value));
   const result=BenchDistribution.model(values);
-  const label=names[tool]||tool;
+  const label=toolLabel(tool);
   el("distributionTitle").textContent=label+" · "+info.label;
   el("distributionSummary").textContent=result.n+
     " measured cases · "+info.unit+
@@ -308,10 +341,8 @@ function drawTable() {
   const rows=currentRows();
   const info=metricInfo();
   const suffix=info?.unit==="seconds"?" s":"";
-  el("firstColumn").innerHTML=esc(names[state.firstTool?.toLowerCase()]||
-    state.firstTool)+' <span>↕</span>';
-  el("secondColumn").innerHTML=esc(names[state.tool?.toLowerCase()]||
-    state.tool)+' <span>↕</span>';
+  el("firstColumn").innerHTML=esc(toolLabel(state.firstTool))+' <span>↕</span>';
+  el("secondColumn").innerHTML=esc(toolLabel(state.tool))+' <span>↕</span>';
   el("resultRows").innerHTML=rows.map(row=>{
     const outcome=classify(row);
     const tone=outcome==="win"?"positive":
@@ -347,8 +378,8 @@ function showDetail(row) {
   const provenance=detail?.family?" · Family: "+detail.family:"";
   const floor=detail?.floor_ok===null||detail?.floor_ok===undefined
     ?"unresolved":detail.floor_ok?"met":"not met";
-  el("sampleDialogSummary").textContent=(names[a]||a)+" vs "+
-    (names[b]||b)+provenance+" · 90% alignment floor: "+floor+
+  el("sampleDialogSummary").textContent=toolLabel(a)+" vs "+
+    toolLabel(b)+provenance+" · 90% alignment floor: "+floor+
     " · Failed arms: "+(failures.length?failures.join(", "):"none")+".";
   el("sampleDialogMetrics").innerHTML=BenchViews.sampleTable(
     state.run,state.diagnostics,row.id,a,b);
@@ -368,7 +399,7 @@ function drawProvenance() {
     ["HXB2 cohort SHA256","cohort_manifest_sha256"],
     ["Benchmark source SHA256","source_manifest_sha256"],
     ["Result SHA256","results_sha256"],
-    ["Certificate SHA256","certificate_sha256"],
+    ["Proof SHA256","certificate_sha256"],
     ["Diagnostic SHA256","diagnostic_sha256"]]) {
     if(r[key])fields.push([label,r[key]]);
   }
@@ -379,7 +410,7 @@ function drawProvenance() {
     '<th>Assembler</th><th>Dedicated fork branch</th>'+
     '<th>Fork source commit</th><th>Immutable image ID</th></tr></thead><tbody>'+
     Object.entries(inventory).map(([name,item])=>
-      '<tr><th>'+esc(names[name]||name)+'</th>'+
+      '<tr><th>'+esc(toolLabel(name))+'</th>'+
       '<td>'+esc(item.source_branch||
         "Common source commit (not dedicated)")+'</td>'+
       '<td><a target="_blank" rel="noopener noreferrer" href="'+
@@ -396,7 +427,7 @@ function drawProvenance() {
 function drawSubjectControls() {
   const catalog=state.diagnostics?.metric_catalog||{};
   const groups=new Map([
-    ["Qualification",[
+    ["Core measurements",[
       {key:"alignment",label:"Final MiCall alignment",direction:"higher",
         description:"Highest local-alignment score across final MiCall MAX sequences and the specified reference panel; match +1, mismatch −1, gap open −2, gap extension −1."},
       {key:"runtime",label:"MiCall runtime",direction:"lower",
@@ -494,13 +525,13 @@ function proofDescription(entry) {
     "No observed-subset proof available. ";
   if(entry.proof) {
     const p=entry.proof;
-    return partial+"Independently certified Ψ(0) "+fmt(p.psi0,5)+
+    return partial+"Independently verified Ψ(0) "+fmt(p.psi0,5)+
       ", Ψ(1) "+fmt(p.psi1,5)+", Ψ(2) "+fmt(p.psi2,5)+
       (p.negative_witness_r===undefined?"":"; counterexample r="+
         fmt(p.negative_witness_r,5));
   }
   return partial+subsetText+
-    (entry.reason||"Complete-cohort certification not established");
+    (entry.reason||"Full-cohort proof unresolved");
 }
 function syncPsiControls(selected) {
   const numeric=state.psiExponent!=="all";
@@ -521,19 +552,18 @@ function syncPsiControls(selected) {
 function drawDominance() {
   const holder=el("dominanceMatrix"), details=el("dominanceDetails");
   details.classList.add("is-empty");
-  const report=state.run.dominance_matrix;
+  const report=state.run.dominance_matrix||{};
   const selected=selectedSubjects();
   syncSubjectCount();
   syncPsiControls(selected);
-  if(!report) {
-    holder.textContent="No independently certified pairwise Ψ matrix was published.";
-    details.textContent="No dominance is inferred from unavailable data.";return;
-  }
   if(!selected.length) {
     holder.innerHTML='<p class="hint">Select at least one checkbox to build an all-subjects dominance relation.</p>';
     details.textContent="The selected subjects form a conjunction: every selected metric must pass its own strict Ψ proof.";return;
   }
-  const tools=report.tools;
+  const tools=(Array.isArray(report.tools)&&report.tools.length
+    ?report.tools.filter(t=>state.run.tools.includes(t))
+    :state.run.tools).filter(t=>state.run.tools.includes(t));
+  const matrixTools=tools.length?tools:state.run.tools;
   const snapshot=state.diagnostics?.run_id===state.run.id
     ?state.diagnostics:null;
   const numeric=state.psiExponent!=="all";
@@ -554,20 +584,20 @@ function drawDominance() {
       "."
     :selected.length+" metrics: "+
       selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
-      ". Row dominates column when strict Ψ(r)>0 for every r≥0 "+
-      "on all selected metrics.";
+      ". Row dominates column when strict Ψ(r)>0 for every real r≥0 "+
+      "on all selected metrics; missing measurements remain unresolved.";
   holder.innerHTML='<table class="psi-matrix"><thead><tr><th>ROW A ↓ / B →</th>'+
-    tools.map(tool=>'<th>'+esc(names[tool.toLowerCase()]||tool)+'</th>').join("")+
+    matrixTools.map(tool=>'<th>'+esc(toolLabel(tool))+'</th>').join("")+
     '</tr></thead><tbody>'+
-    tools.map(a=>'<tr><th scope="row">'+esc(names[a.toLowerCase()]||a)+'</th>'+
-      tools.map(b=>{
+    matrixTools.map(a=>'<tr><th scope="row">'+esc(toolLabel(a))+'</th>'+
+      matrixTools.map(b=>{
         if(a===b)return '<td class="dom-self">—</td>';
         const result=BenchSubjects.evaluate(report,a,b,selected,snapshot,state.run);
         const verdict=BenchSubjects.observedVerdict(result);
         const evidence=BenchSubjects.evidence(result);
         const shortLabel=
-          ["certified","observed-yes","partial-yes"].includes(verdict.kind)
-          ?(verdict.kind==="certified"?verdict.label:"YES")
+          ["full-yes","observed-yes","partial-yes"].includes(verdict.kind)
+          ?(verdict.kind==="full-yes"?verdict.label:"YES")
           :verdict.kind==="observed-no"?"NO":"—";
         const moment=numeric?BenchSubjects.moment(
           result.entries.find(e=>e.key===chosen.key),r):null;
@@ -604,12 +634,12 @@ function drawDominance() {
         esc(chosen.label)+': <strong>'+esc(fmtPsi(number.value))+
         '</strong> · '+number.paired+'/'+number.expected+
         ' paired cases.</p>':'';
-      details.innerHTML='<h3>'+esc(names[a.toLowerCase()]||a)+' versus '+
-        esc(names[b.toLowerCase()]||b)+' · '+selected.length+
+      details.innerHTML='<h3>'+esc(toolLabel(a))+' versus '+
+        esc(toolLabel(b))+' · '+selected.length+
         ' selected subjects</h3>'+momentDetails+
-        '<p>Observed-subset all-r Ψ dominance: <strong>'+
+        '<p>Observed paired-subset dominance: <strong>'+
         esc(verdict.label)+'</strong> — '+esc(verdict.explanation)+
-        ' · '+esc(verdict.scope)+'. Full-cohort result: <strong>'+
+        ' · '+esc(verdict.scope)+'. Full-cohort status: <strong>'+
         esc(complete.label)+'</strong>.</p>'+
         '<div class="criterion-results">'+result.entries.map(item=>
           '<article><strong>'+esc(item.label)+'</strong>'+
@@ -621,10 +651,10 @@ function drawDominance() {
       el("firstTool").value=a;
       const choices=state.run.tools.filter(name=>name!==a);
       el("comparisonTool").innerHTML=choices.map(name=>
-        '<option value="'+esc(name)+'">'+esc(names[name.toLowerCase()]||name)+'</option>').join("");
+        '<option value="'+esc(name)+'">'+esc(toolLabel(name))+'</option>').join("");
       el("comparisonTool").value=b;
-      el("firstColumn").textContent=a;
-      el("secondColumn").textContent=b;
+      el("firstColumn").textContent=toolLabel(a);
+      el("secondColumn").textContent=toolLabel(b);
       drawCompare();drawTable();syncUrl();
     });
   });
@@ -632,18 +662,22 @@ function drawDominance() {
 
 function render() {
   const run=state.run;
-  if(!run.tools.includes(state.firstTool))state.firstTool=run.tools[0];
-  const tools=run.tools.filter(tool=>tool!==state.firstTool);
-  if(!tools.includes(state.tool))state.tool=tools[0];
+  const roster=Array.isArray(run.tools)?run.tools:[];
+  if(!roster.length) {
+    el("globalNotice").hidden=false;
+    el("globalNotice").textContent="Selected cohort declares no assembler roster.";
+    return;
+  }
+  if(!roster.includes(state.firstTool))state.firstTool=roster[0];
+  const tools=roster.filter(tool=>tool!==state.firstTool);
+  if(!tools.includes(state.tool))state.tool=tools[0]||roster[0];
   el("runSelect").value=run.id;
-  el("firstTool").innerHTML=run.tools.map(tool=>
-    '<option value="'+esc(tool)+'">'+
-    esc(names[tool.toLowerCase()]||tool)+'</option>').join("");
+  el("firstTool").innerHTML=roster.map(tool=>
+    '<option value="'+esc(tool)+'">'+esc(toolLabel(tool))+'</option>').join("");
   el("firstTool").value=state.firstTool;
   el("comparisonTool").innerHTML=tools.map(tool=>
-    '<option value="'+esc(tool)+'">'+
-    esc(names[tool.toLowerCase()]||tool)+'</option>').join("");
-  el("comparisonTool").value=state.tool;
+    '<option value="'+esc(tool)+'">'+esc(toolLabel(tool))+'</option>').join("");
+  if(state.tool)el("comparisonTool").value=state.tool;
   metricOptions();
   el("outcomeFilter").querySelector('[value="floor"]').disabled=
     state.metric!=="score";
@@ -655,15 +689,11 @@ function render() {
   drawTable();
   drawDominance();
   drawProvenance();
-  drawExploratory();
   syncUrl();
 }
 
-function drawExploratory() {
-  if(!el("exploratoryRows"))return;
-  BenchExploratory.render(state.exploratory||null,el("exploratoryRows"),
-    el("exploratoryContext"));
-}
+/* Cohort rosters are data-defined. Former experimental rows, if present in a
+   published run or separate file, are ordinary roster members in that cohort. */
 
 function exportCsv() {
   const info=metricInfo();
@@ -768,12 +798,7 @@ async function main() {
       const diagnosticResponse=await fetch("./data/mapping-diagnostics.json");
       state.diagnostics=diagnosticResponse.ok?await diagnosticResponse.json():null;
     } catch (_) {state.diagnostics=null;}
-    try {
-      const px=await fetch("./data/exploratory-candidates.json",{cache:"no-store"});
-      if(px.ok)state.exploratory=await px.json();
-    } catch (_) {state.exploratory=null;}
-    if(state.data.schema!=="ivanka.assembler-bench.public.v1"||
-       !Array.isArray(state.data.runs)||!state.data.runs.length)
+    if(!Array.isArray(state.data?.runs)||!state.data.runs.length)
       throw new Error("Unsupported or missing public data");
     runOptions();
     const params=new URLSearchParams(location.search);

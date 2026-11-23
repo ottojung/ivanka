@@ -12,7 +12,6 @@
   <script src="./distribution.js" defer></script>
   <script src="./compare_views.js" defer></script>
   <script src="./overview.js" defer></script>
-  <script src="./exploratory.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -23,7 +22,7 @@
         <span><b>ASSEMBLER BENCH</b><small>MiCall · comparative evaluation</small></span>
       </a>
       <nav aria-label="Resources">
-        <a href="https://github.com/ottojung/ivanka">Source</a>
+        <a href="./data/runs.json">Data</a>
         <a href="https://github.com/ottojung/ivanka/blob/main/docs/intents/007-assembler-bench.md">Method</a>
         <a href="https://github.com/ottojung/ivanka/blob/main/docs/intents/008-hxb2-synthetic-truth.md">Truth policy</a>
       </nav>
@@ -31,9 +30,9 @@
     <main>
       <section class="intro">
         <h1>Assembler <em>Bench</em></h1>
-        <p class="lede">Compare seven genome assemblers in MiCall. Explore alignment, runtime, mapping quality and pairwise Ψ dominance across synthetic and real DNA samples.</p>
-        <div class="global-notice" id="globalNotice" role="status">Loading verified benchmark summaries…</div>
-        <p class="subtle" id="resourcePolicyNotice">Current execution policy: at most 40 minutes and 4 GB per arm. Historical uncapped or 50-minute scores remain visible for provenance but are <strong>not</strong> automatically qualified under these limits. The host cannot currently enforce a delegated 4-GB kernel cgroup; an external process-memory guard is used. <a href="./data/resource-policy.json">Inspect the independently classified resource evidence</a>.</p>
+        <p class="lede">Compare the assemblers in the selected cohort as integrated in MiCall. Explore alignment, runtime, mapping quality and pairwise Ψ dominance across the measured samples. <span id="rosterNote" class="subtle"></span></p>
+        <div class="global-notice" id="globalNotice" role="status">Loading benchmark summaries…</div>
+        <p class="subtle" id="resourcePolicyNotice">Resource limits are measured execution facts: the current configuration allows at most 40 minutes and 4 GB per arm. Arms recorded under earlier limits keep their original measured values and configuration. The host cannot currently enforce a kernel-level 4-GB cgroup for these runs; an external process-memory guard is used. <a href="./data/resource-policy.json">Inspect the measured resource evidence</a>.</p>
       </section>
       <section class="run-controls" aria-label="Select a benchmark run">
         <div>
@@ -44,7 +43,7 @@
           <span class="meta-label">COHORT</span><strong id="runCohort">—</strong>
         </div>
         <div class="run-stamp">
-          <span class="meta-label">QUALIFICATION</span><strong id="runStatus">—</strong>
+          <span class="meta-label">COVERAGE</span><strong id="runStatus">—</strong>
         </div>
       </section>
       <section class="overview" aria-label="Run overview">
@@ -150,12 +149,6 @@
       <section class="provenance" aria-label="Provenance">
         <div class="section-heading"><div><span class="overline">05 / REPRODUCIBILITY</span><h2>Trace the evidence</h2></div></div>
         <div id="provenanceContent"></div>
-      </section>
-      <section class="exploratory" aria-label="Nonqualifying PX candidates">
-        <div class="section-heading"><div><span class="overline">06 / PX EXPLORATION</span><h2>Ten nonqualifying candidates</h2></div></div>
-        <p class="subtle" id="exploratoryContext">Loading the experimental roster…</p>
-        <p class="dominance-key">These ten tools are source-pinned experiments and remain pending until authentic SHA-attested image, pilot and benchmark receipts exist. They never join the seven-way qualification, Ψ dominance matrices or release claims. Receipt-verified per-case rows may be compared side by side below, without changing original seven qualifying metrics, gates, or source.</p>
-        <div id="exploratoryRows"></div>
       </section>
     </main>
     <dialog id="sampleDialog" aria-labelledby="sampleDialogTitle">

@@ -262,6 +262,7 @@ const mount={innerHTML:'',textContent:''},context={textContent:''};
 P.render(current,mount,context);
 assert.equal(current.candidates.length,10);
 assert(mount.innerHTML.includes('No image built'));
+assert(mount.innerHTML.includes('Pending:'));
 assert(!mount.innerHTML.includes('PX-R001'));
 assert(!mount.innerHTML.includes('align'));
 assert(context.textContent.includes('0 qualifying'));
@@ -279,6 +280,66 @@ console.log('PX_ROSTER_RENDER_OK');
                 capture_output=True, text=True, timeout=15, check=False)
             self.assertEqual(process.returncode, 0, process.stderr)
             self.assertIn("PX_ROSTER_RENDER_OK", process.stdout)
+
+    def test_browser_renders_nonqualifying_side_by_side_comparison(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node unavailable")
+        with tempfile.TemporaryDirectory() as temp:
+            verified = Path(temp) / "verified.json"
+            snapshot = copy.deepcopy(pub.build(REGISTRY))
+            first = snapshot["candidates"][0]
+            second = snapshot["candidates"][1]
+            for item, digest, score in ((first, "b", 145.5), (second, "c", 140.0)):
+                item["status"] = "pilot"
+                item["image_sha256"] = digest * 64
+                item["evidence"]["image_receipt_verified"] = True
+                item["evidence"]["pilot_receipt_verified"] = True
+                item["results_status"] = "verified-pilot"
+                item["results"] = {"evidence_sha256": "d" * 64,
+                                   "results_sha256": {"physical": "e" * 64},
+                                   "cohorts": ["physical"],
+                                   "expected_sample_count": {"physical": 198}}
+                item["samples"] = [{"alias": "PX-R001", "outcome": "success",
+                                    "score": score, "seconds": 72.25}]
+            write_json(verified, snapshot)
+            code = r"""
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const P=require(process.argv[1]);
+const snapshot=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+const mount={innerHTML:'',textContent:''},context={textContent:''};
+P.render(snapshot,mount,context);
+assert(mount.innerHTML.includes('side-by-side comparison'));
+assert(mount.innerHTML.includes('pxCompareA'));
+assert(mount.innerHTML.includes('pxCompareB'));
+const table=P.compareTable(snapshot.candidates,'skesa','idba-ud');
+assert(table.includes('Nonqualifying side-by-side comparison'));
+assert(table.includes('PX-R001'));
+assert(table.includes('145.5'));
+assert(table.includes('140'));
+assert(table.includes('Δ align'));
+assert(!table.includes('dominance'));
+assert(!table.includes('PSI'));
+console.log('PX_COMPARE_RENDER_OK');
+"""
+            process = subprocess.run(
+                [node, "-e", code, str(ROOT / "site/bench/exploratory.js"),
+                 str(verified)],
+                capture_output=True, text=True, timeout=15, check=False)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            self.assertIn("PX_COMPARE_RENDER_OK", process.stdout)
+
+    def test_site_build_rejects_missing_px_pending_disclosure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            staged = Path(temp) / "bench"
+            shutil.copytree(SITE, staged)
+            index = staged / "index.html"
+            index.write_text(index.read_text().replace(
+                "pending until authentic SHA-attested image, pilot and benchmark receipts exist",
+                "source-pinned experiments", 1))
+            with self.assertRaisesRegex(ValueError, "pending/nonqualifying state"):
+                validate_public_site(staged)
 
 
 if __name__ == "__main__":

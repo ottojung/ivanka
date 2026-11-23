@@ -138,8 +138,17 @@ def validate_public_site(site=SITE):
     if ("BenchExploratory.render(" not in js
             or 'fetch("./data/exploratory-candidates.json"' not in js
             or "function render(" not in exploratory_js
-            or "resultLabel" not in exploratory_js):
+            or "resultLabel" not in exploratory_js
+            or "Pending: No image built" not in exploratory_js
+            or "compareTable" not in exploratory_js
+            or "side-by-side comparison" not in exploratory_js):
         raise ValueError("nonqualifying PX roster must render its own honest state")
+    if ("pending until authentic SHA-attested image, pilot and benchmark receipts exist"
+            not in html or "compared side by side below" not in html):
+        raise ValueError("PX section must disclose pending/nonqualifying state")
+    if any(token in exploratory_js for token in
+            ("dominance_matrix", "psi", "BenchRanks.summary", "BenchSubjects")):
+        raise ValueError("PX explorer must not touch qualifying Ψ/gate logic")
     if any(token in js for token in ("setInterval(", "setTimeout(",
                                       "EventSource(", "WebSocket(")):
         raise ValueError("static benchmark website must never poll or stream")

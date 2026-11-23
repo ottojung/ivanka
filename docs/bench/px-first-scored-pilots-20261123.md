@@ -28,6 +28,10 @@ Ivanka's seven-way qualification, source, OCI pins, or 4,634 frozen runs.
   public scores are claimed for them.
 
 Private source input identities, sequencing paths, and read data are not
-published. `PX-R001` and `PX-H001` are publication aliases for these two
-pilots, not claims of completed cohort coverage. No PX result is admitted to
-the original seven-way Ψ matrices.
+published. The two public aliases are **PX-R053** and **PX-H192**, established
+from the original 198 physical source-manifest rows sorted by sample name and
+the exact 464-case v6 source manifest sorted by case ID (both one-based).
+Both paired-input SHA-256 checks and the physical source MD5 / synthetic source
+SHA-256 checks were verified against the selected source-manifest records.
+These two pilots do **not** imply completed cohort coverage. No PX result is
+admitted to the original seven-way Ψ matrices.

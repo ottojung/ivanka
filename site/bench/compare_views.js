@@ -6,8 +6,10 @@ const BenchViews = (() => {
     ?BenchDistribution:require("./distribution.js");
   const safe=value=>String(value??"").replace(/[&<>"']/g,c=>
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const label=tool=>({iva:"IVA",ivanka:"Ivanka",megahit:"MEGAHIT",
-    haploflow:"Haploflow",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"})[tool]||tool;
+  const NAMES={iva:"IVA",megahit:"MEGAHIT",haploflow:"Haploflow",
+    abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"};
+  const label=tool=>NAMES[tool]||String(tool??"")
+    .replace(/[_-]+/g," ").replace(/\b[a-z]/g,c=>c.toUpperCase());
   const value=x=>Number.isFinite(x)?x.toLocaleString("en",{
     maximumSignificantDigits:8}):"—";
   const keyFor=key=>key==="alignment"?"score":key==="runtime"?"seconds":key;
@@ -22,7 +24,7 @@ const BenchViews = (() => {
       if(!info)continue;
       const first=measured(run,snapshot,key,a).find(x=>x.id===alias);
       const second=measured(run,snapshot,key,b).find(x=>x.id===alias);
-      const stage=key==="score"||key==="seconds"?"Qualification":info.stage;
+      const stage=key==="score"||key==="seconds"?"Core measurements":info.stage;
       if(!groups.has(stage))groups.set(stage,[]);
       groups.get(stage).push({key,info,first:first?.value??null,
         second:second?.value??null});

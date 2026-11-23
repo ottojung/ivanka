@@ -1,11 +1,13 @@
 "use strict";
 /* Scientific overview and minimal, cohort-agnostic unfinished-work notice. */
 const BenchOverview = (() => {
-  const LABELS={ivanka:"Ivanka",iva:"IVA",haploflow:"Haploflow",
+  const LABELS={iva:"IVA",haploflow:"Haploflow",
     megahit:"MEGAHIT",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"};
   const COHORTS={real:"Physical",synthetic:"Synthetic"};
   const finite=x=>typeof x==="number"&&Number.isFinite(x);
-  const caption=(list)=>list.map(x=>LABELS[x]||x).join(", ");
+  const label=x=>LABELS[x]||
+    String(x).replace(/[_-]+/g," ").replace(/\b[a-z]/g,c=>c.toUpperCase());
+  const caption=(list)=>list.map(label).join(", ");
   function counts(run) {
     const expected=run.expected_sample_count||run.sample_count;
     return run.tool_progress||Object.fromEntries(run.tools.map(tool=>[
@@ -67,7 +69,7 @@ const BenchOverview = (() => {
       for(const tool of running[cohort]||[]) {
         if(!planned[cohort]?.includes(tool))continue;
         const measurement=counts(cohorts[cohort])[tool];
-        active.push((COHORTS[cohort]||cohort)+" "+(LABELS[tool]||tool)+
+        active.push((COHORTS[cohort]||cohort)+" "+label(tool)+
           " ("+measurement.finished+"/"+measurement.expected+")");
       }
     }

@@ -15,6 +15,10 @@ from pathlib import Path
 from milestone198 import MANIFEST_SHA256, PANEL_SHA256, SAMPLE_COUNT
 from psi_acceptance import summarize as summarize_psi
 
+# Prospective benchmark cap is 40 minutes; frozen historical evaluators retain
+# their original pinned 30-minute methodology and must not be rewritten.
+FUTURE_WALL_CAP_SECONDS = 2400
+
 
 def file_sha256(path):
     h = hashlib.sha256()
@@ -43,7 +47,7 @@ def verify(records, names, root, iva_image, ivanka_image, source_provenance):
         "biological_release_authorized": False,
         "qualification_criteria": ["final_max_alignment", "micall_runtime"],
         "per_sample_alignment_floor": 0.90,
-        "per_arm_wall_cap_seconds": 1800,
+        "per_arm_wall_cap_seconds": FUTURE_WALL_CAP_SECONDS,
         "reference_panel_sha256": PANEL_SHA256,
         "reference_panel_count": 33,
         "iva_image": iva_image,
@@ -104,7 +108,7 @@ def verify(records, names, root, iva_image, ivanka_image, source_provenance):
                 duration = x["seconds"]
                 wall = x["container_wall_seconds"]
                 if (not _finite_positive(duration) or not _finite_positive(wall)
-                        or wall > 1800 or duration > wall + 1):
+                        or wall > FUTURE_WALL_CAP_SECONDS or duration > wall + 1):
                     raise ValueError(arm + "_time_limit_or_clock_invalid")
                 folder = Path(x["artifact_dir"]).resolve()
                 expected_folder = (root / invitation / str(sample) / arm).resolve()

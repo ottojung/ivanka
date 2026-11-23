@@ -42,7 +42,7 @@ class TestExploratorySpace(unittest.TestCase):
             return admit(self.r, self.base, self.exp, self.store, self.work, reserve)
 
     def test_rootless_overlay_uses_podman_userns_not_partial_host_du(self):
-        expected = ["podman", "unshare", "du", "-sB1", "--",
+        expected = ["podman", "unshare", "du", "-sxB1", "--",
                     str(ROOTLESS_STORE)]
         self.assertEqual(disk_measure_command(ROOTLESS_STORE), expected)
         self.assertEqual(disk_measure_command(self.store.resolve()),

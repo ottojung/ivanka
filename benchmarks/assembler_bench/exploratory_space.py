@@ -34,7 +34,11 @@ def disk_measure_command(target):
     """Count every allocated block or fail closed; never parse partial 'du'."""
     command = ["du", "-sB1", "--", str(target)]
     if target == ROOTLESS_STORE:
-        return ["podman", "unshare", *command]
+        # A running Podman container mounts its complete virtual rootfs under
+        # graphroot/overlay/<id>/merged. Traversing it double-counts the
+        # immutable parent layers as NEW storage (verified: 9.29 vs 5.74 GB).
+        # -x keeps real writable overlay/diff layers but skips nested mounts.
+        return ["podman", "unshare", "du", "-sxB1", "--", str(target)]
     return command
 
 

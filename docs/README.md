@@ -30,9 +30,11 @@ must recover the most abundant identifiable haplotype.
   each sample ≥90% of IVA; strict alignment and runtime Ψ(r)>0 for all r≥0.
 - [Intent 006: expanded seven-assembler benchmark](intents/006-expanded-qualification.md) —
   mandatory 198-real + 400-synthetic, six-rival completion gate (not yet passed).
-- [Intent 007: public MiCall Assembler Bench](intents/007-assembler-bench.md) —
-  reproducible MiCall-integrated comparisons, independently reviewable on
-  Ivanka GitHub Pages at `/bench/`.
+- [Intent 007: independent Assembler Bench](intents/007-assembler-bench.md) —
+  a general-purpose, cohort-driven benchmarking application (currently
+  hosted at `/bench/`), not an Ivanka-specific dashboard. Each cohort
+  defines its assembler roster. The website contains scientific results
+  and missingness, never Ivanka project-acceptance terminology.
 - [Intent 008: HXB2-derived synthetic truth](intents/008-hxb2-synthetic-truth.md) —
   only HXB2 or random HXB2/other-subtype recombinants with optional ≤5%
   uniformly random mutations; no generic random A/C/G/T genomic truths.

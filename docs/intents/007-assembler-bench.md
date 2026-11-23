@@ -1,139 +1,101 @@
-# Intent 007: Public, reusable MiCall Assembler Bench
+# Intent 007: Independent, cohort-driven Assembler Bench
 
-**Status: required infrastructure and publication contract; not yet satisfied.**
+**Status: binding contract for a general-purpose assembler benchmark application.**
 
-An **Assembler Bench** must exist as a **general-purpose, assembler-neutral**
-framework for running, comparing, and judging **arbitrary assemblers as
-actually integrated into MiCall**. Ivanka has no privileged comparison role:
-all pairs and all diagnostics must be browsable, not only Ivanka-versus-IVA
-or Ivanka-versus-everyone. It is not a one-off Ivanka-versus-IVA script, an
-unreviewable JSON dump, or a suite of standalone assembler invocations
-that bypasses the MiCall pipeline. Adding an assembler must be an ordinary,
-documented adapter operation rather than a bespoke benchmark rewrite.
+**Assembler Bench is its own application.** It currently lives in the Ivanka
+repository and displays MiCall-integrated assembler measurements, but its
+model, comparisons, navigation and presentation are **not defined by Ivanka's
+development objectives**. Ivanka is an ordinary named assembler with no
+privileged comparison role, exclusive metric or special status. This contract
+must remain correct for cohorts that do not include Ivanka and if the Bench
+moves to another repository.
 
-## Execution and reproducibility
+## Report observations, not project acceptance decisions
 
-1. Execute each assembler through its **actual MiCall integration** on the
-   same pinned MiCall source/base, original paired reads, downstream stages,
-   resource limits, and evaluation rules. Verify the assembler executable,
-   version, immutable source/image identity, CLI, and effective environment.
-   All MiCall integrations and runtime images **must come from exact
-   committed revisions of [`ottojung/MiCall`](https://github.com/ottojung/MiCall)**;
-   **the shared MiCall base and seven already-pinned images are frozen,
-   with no MiCall fixes permitted even when a defect prevents success.**
-   Record such a failure as-is; never substitute a patched fork image.
-   See [the frozen-base rule](../bench/frozen-micall-base.md),
-   [Intent 011](011-ottojung-micall-fork-provenance.md)
-   and its mandatory [upstream read-only policy](010-upstream-micall-read-only.md).
-   For Ivanka, preserve [Intents 001](001-rust-only-execution.md) and
-   [002](002-default-invocation-parity.md): its Rust ELF is called directly
-   by MiCall, with an empty child environment, the three required
-   input/output flags and optional verified same-sample read-derived G2P
-   `--seeds` under ordinary MiCall forwarding rules. Benchmark-only wrappers
-   or reference-conditioned tuning are prohibited.
-2. The bench supports both frozen authentic **real MiCall samples** and
-   **synthetic samples** satisfying [Intent 008](008-hxb2-synthetic-truth.md).
-   The generator, its hidden truth, the read simulation, assembler execution,
-   MiCall processing and independent scoring remain separate, auditable
-   stages. Never mount or pass generating truth or evaluation references to
-   an assembler. **The synthetic dominant-haplotype score must come from
-   the final MiCall output**, after pipeline completion and with a pinned
-   documented extraction method, **not from the best raw assembler
-   contig**. Standalone contig-to-truth similarity, fragmentation,
-   contig length, count, or haplotype recall are supplementary diagnostics
-   only; they do not replace or satisfy integrated MiCall results.
-3. Store machine-readable, immutable, provenance-rich **per-run, per-sample,
-   per-assembler** results: outcome/error/timeout, alignment or known-truth
-   score, MiCall runtime, output counts, input manifest hashes, tool/image
-   digests, source commit, test family, and scoring definition. Preserve the
-   full evidence, including bad and missing outcomes, rather than filtering
-   for winners. Reruns must be identifiable, and comparisons must reject
-   incompatible cohorts, MiCall bases, and scoring methods.
-4. Apply [Intent 005](005-physical-198-qualification.md) and
-   [Intent 006](006-expanded-qualification.md) **without loosening their
-   gates**: every per-sample alignment floor, strict alignment/runtime
-   signed-power Ψ(r)>0 for all real r≥0, all competitors, both cohorts,
-   and complete failure/timeout accounting. Publish independent verification
-   and all-exponent proof/witness information with each qualification.
+The website **only reports observed evidence and limitations**. It must
+never classify an assembler, run, sample, cohort or release by an outside
+project's acceptance rules.
 
-## GitHub Pages review interface
+- Public HTML, browser code, user-facing labels, public JSON and site-specific
+  instructions must contain no outside-project approval or eligibility
+  framing. This includes variants of "qualifying", "nonqualifying",
+  "qualification", "qualified", "ineligible" and "gate".
+- Observational states include *complete*, *incomplete*, *pending*,
+  *measured*, *failed*, *timed out*, *missing*, *source-attested* and
+  *unresolved*. Execution failure is evidence, not an eligibility verdict.
+- Numerical comparisons, signed-power Psi proofs, counterexamples and
+  coverage observations are results of a scientific method, not a verdict
+  about releasing another project. Such results never cause a tool to be
+  hidden or downgraded in the site.
+- Ivanka-specific release and acceptance policy remains in Ivanka's own
+  documentation and evaluation code. The Bench must not import that policy
+  into its public schema or UI.
 
-The benchmark results must be **easily and usefully reviewable** on
-**Ivanka's public GitHub Pages site, at the site's `/bench/` URL subpath**.
-If hosted at the standard GitHub Pages project URL, that means
-`https://ottojung.github.io/ivanka/bench/`; a custom site root would use
-its own `/bench/`. A visitor must reach the report directly in a browser,
-without cloning a repository, downloading JSON files, installing software,
-logging in, or running Python.
+## Every cohort owns its assembler roster
 
-The Pages UI must provide at least:
+Each cohort declares **its own assembler list**, independently of other
+cohorts, along with sample identities, source and scoring method, provenance
+and available measurements. There is no global list of seven, ten, seventeen,
+or any other hard-coded number that determines membership. Adding an
+assembler or cohort is a data operation, not a special-case site rewrite.
 
-- A **run index** with date, source revision, cohort, tools, and clear
-  **PASS / FAIL / INCOMPLETE** gate status. A passing label requires actual
-  independently verified complete results, not a process exit code alone.
-- An accessible **run detail** comparing all assemblers side-by-side:
-  sample counts, per-sample floor violations, runtime distributions,
-  final MAX local-alignment distributions, wins/losses/ties, and
-  complete failure/timeout causes. Both sample cohorts use the same
-  local-alignment scoring function and parameters, with original
-  alignment points preserved in the combined comparison.
-- Useful **filters and drill-down** by assembler, project, synthetic
-  mechanism, sample, run, and failure class, with sortable per-sample
-  comparisons and a clearly identified worst-regression view.
-- A directed **all-assembler × all-assembler Ψ-dominance matrix**
-  for alignment and MiCall runtime (and their joint verdict), per cohort,
-  with independently checked proof, counterexample, unresolved and
-  incomplete states, as required by
-  [Intent 015](015-pairwise-psi-dominance.md).
-- **Per-assembler diagnostic charts and review** for final MiCall
-  consensus and alignment, mapped depth, read support, contig structure,
-  resources and failures under [Intent 012](012-assembler-diagnostic-metrics.md);
-  **CIGAR-derived soft-clipped read/event/base counts and normalized
-  densities** under [Intent 013](013-alignment-soft-clipping.md); and
-  **both exact-read-coverage tracks**, uncovered fractions and
-  distributions under [Intent 014](014-exact-read-coverage.md).
-  Present everything in the [assembler-neutral framework](
-  009-neutral-metrics-and-pairwise-dominance.md), without a privileged
-  Ivanka baseline.
-- Explicit independent **Ψ(r) all-nonnegative-exponent verdicts** for
-  alignment and runtime, per competitor and cohort, including evidence
-  certificates, zero/minimum diagnostics or counterexamples. Include the
-  original 198-only IVA gate separately from the mandatory expanded gate.
-- Readable provenance and navigable links to **exact immutable fork
-  MiCall commits** under `https://github.com/ottojung/MiCall/tree/<SHA>`,
-  including each assembler integration and shared MiCall baseline, as
-  required by [Intent 011](011-ottojung-micall-fork-provenance.md);
-  immutable run manifests, independently verified results, methods, and
-  versioned code.
-  The page should show when data is missing or a run is not qualified.
+- Physical, synthetic, historical and other cohorts may have different
+  assembler rosters. Tool names are opaque identifiers; no reserved Ivanka
+  identity or privileged baseline exists.
+- A combined cohort **explicitly defines its own roster**, normally the
+  union of its component cohorts. Data missing from a constituent cohort
+  remains missing; do not invent zeros, winners, scores or runtimes.
+  Preserve differing score units and methods instead of silently pooling
+  incomparable quantities.
+- A source-pinned tool with zero measurements appears in the same cohort
+  selector and result table as tools with results. There is **no separate
+  experimental-candidates sidebar** or second-class comparison UI.
+- Comparison selectors, diagnostics, charts, per-sample detail, all-pairs
+  directed Psi matrices and summaries derive their tools solely from the
+  selected cohort. With no valid paired observations, present the
+  incomplete or unresolved comparison honestly.
 
-Build and publish this site **automatically and reproducibly** from verified,
-versioned bench result artifacts using GitHub Pages. It may be a static
-site with locally bundled data and client-side interactivity; it must not
-need a live privileged backend or external private data. Publishing an
-updated run must not overwrite the provenance or history of an earlier run.
-The public output must **not include private FASTQs, patient identifiers,
-the original private sample mapping, access credentials, or protected
-metadata**. Use non-identifying sample aliases while preserving private
-source-to-result attestation separately.
+## Execution, evidence and provenance
 
-## Acceptance
+1. For a MiCall cohort, run assemblers through genuine MiCall integrations
+   under the cohort's pinned source, reads, downstream processing, resource
+   accounting and scoring rules. Additional pipelines may be supported as
+   independently identified methods; the website must not assume identical
+   code, images or scores across cohorts.
+2. Isolate hidden truth and scoring references from assembler execution.
+   Score the specified final pipeline outputs, not selectively preferred
+   raw contigs. Clearly mark independent supplementary diagnostics.
+3. Preserve immutable per-assembler, per-case evidence, including successes,
+   failed or timed-out arms, resource usage, input/image/source hashes and
+   missing observations. Never rerun valid work solely to update a report.
+   Reject comparisons where identities or methods are incompatible.
+4. Present distributions, independent metric comparisons and directed
+   all-pairs Psi evidence with counterexamples and missingness for **any
+   pair** in a cohort. Do not silently aggregate unlike score units.
+5. Separate the private verifier/publisher from the static browser. Public
+   data must not reveal patient identities, FASTQ paths, hidden truth,
+   secrets, private host paths or source-to-alias mappings.
 
-- A documented procedure can add a new MiCall-integrated assembler and
-  reproduce a small real/synthetic test and its immutable result without
-  changing the benchmark's scientific definitions.
-- CI tests the bench schema, input/reference isolation, tool binding,
-  source/result integrity, and the correctness of fail-closed gate reports.
-- CI builds the Pages report, tests its static links and navigation,
-  validates display of one passing, one failing and one incomplete example,
-  and checks that a deep link under `/bench/` works with the site's
-  deployed path prefix.
-- An actual published `/bench/` page presents real independently checked
-  benchmark outcomes for reviewers; having only local reports, a draft UI,
-  or a Pages workflow without a deployed, navigable result **does not
-  satisfy this intent**.
+## Public review interface and acceptance of the Bench itself
 
-Assembler Bench may use Python, JavaScript or other tools **only as
-benchmark infrastructure**. It never becomes part of the Rust Ivanka
-production execution path. The site's existence or visual polish does
-not substitute for a genuine passing numerical benchmark.
+The current deployment is <https://ottojung.github.io/ivanka/bench/>.
+That URL is a hosting location, **not an Ivanka ownership claim**.
+
+A visitor can review evidence directly without cloning a repository,
+installing software, logging in or seeing private data. For each cohort,
+the UI shows its assembler roster, anonymous samples, measured alignment
+and runtime, failures and missingness, sortable comparisons, metric
+distributions, resource use, CIGAR clipping and exact coverage when
+available, and immutable provenance with units and denominators. The
+same controls work for every pair of assemblers.
+
+Publication is automatic, privacy-safe and reproducible from verified
+artifacts. CI validates the public schema, links and deployed path,
+source/method integrity, directed comparisons and missingness.
+Regression tests **must reject project-specific acceptance vocabulary**
+throughout public assets and data; demonstrate different assembler rosters
+for different cohorts, a combined roster with genuine missing measurements,
+and no special behavior for Ivanka.
+
+Python and JavaScript may implement benchmark infrastructure and UI; they
+do not become part of Ivanka's Rust production assembly implementation.

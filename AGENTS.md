@@ -53,11 +53,16 @@ descriptions of what the existing qualifying image already implements:
 - **[Intent 006: expanded seven-way qualification](docs/intents/006-expanded-qualification.md).**
   **Require a passing** 464-synthetic + 198-real, seven-assembler gate
   before any completion or release claim; never weaken 005.
-- **[Intent 007: public MiCall Assembler Bench](docs/intents/007-assembler-bench.md).**
-  All assemblers must be benchmarked as genuinely integrated into MiCall.
-  Preserve individual outcomes, provenance, failures, and both Ψ gates.
-  Publish easily reviewable results via Ivanka's GitHub Pages at `/bench/`;
-  local JSON-only comparisons do not satisfy the infrastructure intent.
+- **[Intent 007: independent, cohort-driven Assembler Bench](docs/intents/007-assembler-bench.md).**
+  Assembler Bench is a **separate benchmark application**, currently hosted
+  under `/bench/`, not an Ivanka product dashboard. Each cohort declares its
+  own assembler roster; all assemblers receive identical comparison and
+  presentation treatment. The public website, schemas and site-specific
+  instructions must contain **no project-acceptance or eligibility framing**,
+  including the terms "qualifying", "nonqualifying", "qualification",
+  "ineligible" and "gate". Present measured data, provenance, failures and
+  missingness instead. Ivanka-specific release gates are enforced only by
+  Ivanka's private evaluation and project requirements, never the website.
 - **[Intent 008: HXB2-derived synthetic truth](docs/intents/008-hxb2-synthetic-truth.md).**
   All new synthetic biological genome truths must be HXB2, random
   homologous HXB2/other-HIV-subtype recombinants, or those with at most
@@ -65,10 +70,12 @@ descriptions of what the existing qualifying image already implements:
   generated random A/C/G/T genome truths; the existing generic-random
   400-case cohort is historical and ineligible for qualification.
 - **[Intent 009: assembler-neutral evaluation](docs/intents/009-neutral-metrics-and-pairwise-dominance.md).**
-  Assembler Bench is a general, tool-neutral MiCall evaluation framework,
-  not an Ivanka showcase. All comparisons, plots and result views support
-  any tested pair and all contenders equally. Detailed requirements are
-  separated into independent Intents 012–015.
+  Assembler Bench is a general, tool-neutral evaluation framework,
+  independent of Ivanka's objectives. A cohort may include any assembler
+  set; all plots, metrics and comparisons support any tested pair equally.
+  Site builders/publishers must derive rosters from cohort data rather
+  than the seven original MiCall implementations. Detailed requirements
+  are separated into independent Intents 012–015.
 - **[Intent 010: upstream MiCall is read-only](docs/intents/010-upstream-micall-read-only.md).**
   **NEVER push anything to or create a PR for `github.com/cfe-lab/MiCall`**,
   by Git, GitHub API, tooling, CI, or delegated agents. Read/fetch is fine.

@@ -37,7 +37,12 @@ have not been deleted or replaced.
 Independent immutable-read verification enumerated exactly
 **1,386 physical** checkpoint receipts (198 x 7), and
 **3,248 synthetic** execution receipts (464 x 7), including
-**205 historical failed synthetic arms**. All 4,634 were SHA256-indexed.
+**205 historical failed synthetic arms**. All 4,634 were SHA256-indexed. All **4,191 successful original consensus CSVs** (1,148 physical
+and 3,043 synthetic) were also independently opened and SHA256-verified
+against the scientific output digests stored in those original receipts.
+The 443 original failed arms remain failed. The preflight now refuses
+missing or modified consensus files even if their JSON receipts are
+untouched. No alignment, assembly or scoring benchmark is rerun.
 No benchmark, assembly, or alignment was rerun.
 
 Exact reusable evidence pins:

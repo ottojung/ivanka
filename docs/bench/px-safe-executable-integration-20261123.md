@@ -61,9 +61,25 @@ after the handoff below.
 5. No arm is recomputed: receipts are the resume authority; terminals are
    skipped. Posthoc scoring and scratch cleanup follow verified hashes.
 
+## Deployed gated service and exact blocker
+
+The s6 service `px-cohort-supervisor` is installed from
+`scripts/px_cohort_s6_service.sh`. It probes the existing `.global-worker.lock`
+without holding it, runs `--check-ready` (which exits 1 until the canonical
+registry promotes at least one tool with a source-bound image receipt, a genuine
+two-cohort pilot receipt and a matching handoff), and otherwise sleeps 60 s. It
+started and is waiting; **no PX worker, container or benchmark arm was started**.
+
+Exact blocker at deploy time: the canonical `exploratory_candidates.json` on
+`main` still lists all ten explorers as `source-pinned` with no image digest, so
+`exploratory_policy.eligible()` selects zero tools. The image engineer is still
+piloting Minia and the remaining tools, and a separate P0 frozen-native novelty
+MiCall run is active. The PX global lock itself was free, but no certified tool
+exists to schedule. Deployment is gated to remain inert until that changes.
+
 ## Tests and status
 
-`benchmarks/test_px_execution.py` (10), `test_px_cohort_scheduler.py` and
+`benchmarks/test_px_execution.py` (11), `test_px_cohort_scheduler.py` and
 `test_px_supervisor.py` pass with strict Ruff. No image, container or MiCall
 process was started by this work; all arms remain NONQUALIFYING. The frozen
 seven MiCall images, common clinical source, 4,634 original results and P0/P1

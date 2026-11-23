@@ -16,6 +16,18 @@ TEMP_DIR_DISAPPEARED = re.compile(
     r"du: fts_read failed: " + re.escape(str(ROOTLESS_STORE))
     + r"/store/overlay/tempdirs/temp-dir-[0-9]+/[^\n:]+: No such file or directory\n?"
 )
+TEMP_NAME = "tmp"
+
+
+def px_temp_dir(root):
+    """Return the project-owned directory that receives all job temporaries."""
+    return Path(root).resolve() / TEMP_NAME
+
+
+def allocated_optional(path):
+    """Count a measured path that may not exist yet, failing closed if unreadable."""
+    target = Path(path)
+    return allocated(target) if target.is_dir() else 0
 
 
 def disk_measure_command(target):
@@ -63,14 +75,20 @@ def admit(registry, baseline, root, image_store, workspace, proposed_bytes):
             or baseline.get("active_job") is not None):
         raise ValueError("invalid or concurrently active exploration admission")
     extra_layers = max(0, allocated(image_store) - baseline["base_store_bytes"])
-    retained = allocated(root)
-    used, free = retained + extra_layers, available(workspace)
+    retained_all = allocated(root)
+    # Podman image imports and builds spill large temporary layers into TMPDIR.
+    # The launcher redirects those files into the project-owned temp directory;
+    # count them explicitly and clamp against the parent total to avoid double-counting
+    # temporaries already included in the project total.
+    temp_bytes = min(allocated_optional(px_temp_dir(root)), retained_all)
+    retained = retained_all - temp_bytes
+    used, free = retained + temp_bytes + extra_layers, available(workspace)
     if (used + proposed_bytes > cfg["total_incremental_storage_bytes"]
             or free - proposed_bytes < cfg["min_workspace_free_bytes"]):
         raise ValueError("exploration would breach disk budget or workspace reserve")
-    return {"retained_bytes": retained, "new_image_bytes": extra_layers,
-            "incremental_bytes": used, "free_bytes": free,
-            "admitted_reservation_bytes": proposed_bytes}
+    return {"retained_bytes": retained, "temp_bytes": temp_bytes,
+            "new_image_bytes": extra_layers, "incremental_bytes": used,
+            "free_bytes": free, "admitted_reservation_bytes": proposed_bytes}
 
 
 def initial(root, image_store, workspace, registry):

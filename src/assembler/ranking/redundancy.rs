@@ -3,8 +3,10 @@ use super::{canonical_kmer, rolling_canonical_kmers, supported_snv_alternative, 
 // K canonical windows, which is 3.5% of a 900-base contig but 11% of a
 // 310-base one. Treat a single-substitution neighbour as redundant at any
 // length so short contigs do not leak near-duplicates into the stitcher.
-pub(super) fn single_substitution_apart(valid: usize, shared: usize) -> bool {
-    shared * 2 >= valid && valid - shared <= K
+pub(super) fn single_substitution_apart(seq: &[u8], retained: &[Vec<u8>]) -> bool {
+    retained.iter().any(|prior| {
+        prior.len() == seq.len() && prior.iter().zip(seq).filter(|(a, b)| a != b).count() == 1
+    })
 }
 pub(super) fn overlap(
     seq: &[u8],

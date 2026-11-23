@@ -39,7 +39,7 @@ pub(crate) fn select_supported_contigs_with_kmers(
         if !is_seed
             && valid > 0
             && (shared * 20 >= valid * 19
-                || redundancy::single_substitution_apart(valid, shared)
+                || redundancy::single_substitution_apart(&seq, &retained)
                 || short_shadow)
         {
             super::report::duplicate(snv, seq, support, &mut variants, &mut duplicates);

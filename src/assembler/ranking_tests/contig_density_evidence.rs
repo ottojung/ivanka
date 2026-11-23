@@ -28,3 +28,21 @@ fn short_single_snv_neighbour_keeps_read_evidence_in_audit() {
         select_supported_contigs_with_kmers(vec![major, minor], vec![300, 150], 16, 0, &sampled);
     assert_eq!((kept.len(), audit.len()), (1, 1));
 }
+
+// Two linked substitutions within one k-mer span encode a phased haplotype,
+// not an isolated unphased SNV. Preserve both when read support is abundant.
+#[test]
+fn short_linked_two_snv_minority_must_remain_phased() {
+    let major = path(0xabc0_1234_5678_9def, 310);
+    let mut minor = major.clone();
+    for pos in [20, 21] {
+        minor[pos] = if minor[pos] == 65 { 67 } else { 65 };
+    }
+    let mut sampled = HashMap::new();
+    for k in minor.windows(K).filter_map(ranking::canonical_kmer) {
+        sampled.insert(k, 30);
+    }
+    let (kept, _) =
+        select_supported_contigs_with_kmers(vec![major, minor], vec![300, 90], 16, 0, &sampled);
+    assert_eq!(kept.len(), 2, "linked minority haplotype was collapsed");
+}

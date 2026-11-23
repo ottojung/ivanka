@@ -18,7 +18,9 @@ INTERMEDIATE_CSV = {
     "aligned.csv", "unstitched_aligned.csv",
     "remap.csv", "unstitched_remap.csv",
 }
-FINAL_EXTENSIONS = {".csv", ".fasta", ".fa", ".json", ".svg"}
+FINAL_EXTENSIONS = {".csv", ".fasta", ".fa", ".json"}
+VISUAL_EXTENSIONS = frozenset({".png", ".svg", ".jpg", ".jpeg", ".gif",
+                               ".webp", ".bmp", ".tif", ".tiff", ".avif", ".eps"})
 PRESERVED_SUBDIRS = {"coverage_maps", "resistance_reports"}
 ARM_NAMES = {"iva", "ivanka", "haploflow", "megahit",
              "abyss", "spades", "velvet"}
@@ -92,6 +94,31 @@ def retain_arm(arm):
     return {"scratch_present": True, "removed": True,
             "promoted": promoted}
 
+
+
+def remove_visuals(arm):
+    """Remove plots from a completed arm, including failed executions.
+
+    Never traverse symlinks or remove scientific CSV/FASTA/JSON evidence.
+    The caller must wait until the container has terminated.
+    """
+    arm = Path(arm)
+    if arm.is_symlink() or not arm.is_dir():
+        raise ValueError(f"unsafe benchmark output: {arm}")
+    removed = 0
+    bytes_removed = 0
+    for parent, dirs, files in os.walk(arm, followlinks=False):
+        dirs[:] = [name for name in dirs
+                   if not (Path(parent) / name).is_symlink()]
+        for name in files:
+            path = Path(parent) / name
+            if path.suffix.lower() not in VISUAL_EXTENSIONS or path.is_symlink():
+                continue
+            if path.is_file():
+                bytes_removed += path.stat().st_size
+                path.unlink()
+                removed += 1
+    return {"removed_images": removed, "removed_image_bytes": bytes_removed}
 
 def _candidate_arms(root):
     """Only the known run/sample/assembler hierarchy; never project code."""

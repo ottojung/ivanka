@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from retained_artifacts import clean_workspace, retain_arm
+from retained_artifacts import clean_workspace, retain_arm, remove_visuals
 
 
 class RetainedArtifactsTests(unittest.TestCase):
@@ -70,6 +70,27 @@ class RetainedArtifactsTests(unittest.TestCase):
             self.assertEqual(score_outputs(arm, "ACGT"), original)
             self.assertEqual(final_max_sequences(arm), ["ACGT"])
             self.assertFalse(scratch.exists())
+
+    def test_generated_images_removed_without_touching_scientific_data(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d) / "arm"
+            subdir = arm / "diagnostics"
+            subdir.mkdir(parents=True)
+            for name in ("alignment.png", "coverage.svg", "plot.webp"):
+                (subdir / name).write_text("plot")
+            for name in ("nuc.csv", "conseq.fasta", "metrics.json"):
+                (arm / name).write_text("evidence")
+            outside = Path(d) / "outside.png"
+            outside.write_text("outside")
+            (arm / "linked.png").symlink_to(outside)
+            (arm / "linked-dir").symlink_to(Path(d), target_is_directory=True)
+            report = remove_visuals(arm)
+            self.assertEqual(report["removed_images"], 3)
+            self.assertEqual(remove_visuals(arm)["removed_images"], 0)
+            self.assertTrue(outside.is_file())
+            self.assertTrue((arm / "linked.png").is_symlink())
+            for name in ("nuc.csv", "conseq.fasta", "metrics.json"):
+                self.assertEqual((arm / name).read_text(), "evidence")
 
     def test_only_result_arms_are_cleaned(self):
         with TemporaryDirectory() as d:

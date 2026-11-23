@@ -1,0 +1,45 @@
+{
+  "schema": "ivanka.exploratory.build-admission-receipt.v1",
+  "observed_utc": "2026-11-23T19:59:00Z",
+  "tool": "skesa",
+  "mode": "build",
+  "intent": "pinned common MiCall base prerequisite at eeca0381808a6e9ba5ef791c80238a0e2940abb0 before the SKESA tool image",
+  "result": "admission_denied_fail_closed",
+  "launcher": "benchmarks/assembler_bench/exploratory_runtime/cli.py",
+  "launcher_error": "ValueError: exploration would breach disk budget or workspace reserve",
+  "reservation_bytes": 4294967296,
+  "measurements": {
+    "owner_free_bytes_1952_utc": 45293248512,
+    "local_free_bytes_first": 45370261504,
+    "local_free_bytes_second": 40648462336,
+    "local_free_bytes_at_launch": 37440393216,
+    "local_free_samples_after": [36471267328, 36233240576, 36000350208],
+    "workspace": "/workspace",
+    "incremental_store_bytes": 485556224,
+    "retained_project_bytes": 323584,
+    "min_workspace_free_bytes": 34359738368,
+    "total_incremental_storage_bytes": 8589934592,
+    "observed_decline_bytes_per_second_approx": 24000000
+  },
+  "blocks": [
+    "4 GiB reservation is inadmissible below 36 GiB free; only 34.87 GiB remained",
+    "1 GiB reservation would pass once but the 1 GiB-margin watchdog kills below about 35.4 GiB while free was still falling",
+    "dedicated store holds no pinned common base image, only the pinned Debian base and one 464 MB dangling MiCall-labelled partial layer",
+    "pinned common base is a roughly 3.3 GB install that prior supervised attempts could not finish under this floor"
+  ],
+  "claims": {
+    "oci_images_built": 0,
+    "image_sha256_recorded": 0,
+    "pilots_executed": 0,
+    "benchmarks_executed": 0,
+    "promotions": 0,
+    "frozen_seven_or_4634_terminal_arms_modified": 0,
+    "all_ten_status": "source-pinned",
+    "all_ten_image_sha256": null,
+    "qualification_claim": "none; NONQUALIFYING exploration only"
+  },
+  "frozen_seven_manifest_sha256": "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f",
+  "source_commit": "79b1c9c",
+  "source_branch": "px/oci-images-experimental-ten-20261123",
+  "next_safe_step": "recheck admission only after sustained free space above roughly 40 GiB with no concurrent decline; then build pinned common base through the launcher, verify revision label, build SKESA with audited adapter args and attested binary, record real digest, then one physical and one synthetic canary"
+}

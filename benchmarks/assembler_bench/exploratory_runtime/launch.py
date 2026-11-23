@@ -6,7 +6,7 @@ import os
 import subprocess
 import time
 
-from assembler_bench.exploratory_space import admit
+from assembler_bench.exploratory_space import admit, px_temp_dir
 
 from .cleanup import clean_stopped_build
 from .monitor import GuardExceeded, watch
@@ -23,7 +23,12 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         ident = tool + "-" + str(time.time_ns())
         record = root / ("run-" + ident + ".json")
         log = root / ("run-" + ident + ".log")
-        env = {**os.environ, "CONTAINERS_STORAGE_CONF": str(root / "storage.conf")}
+        # Podman/import/build temporaries must stay inside the metered project
+        # tree; inheriting the host TMPDIR would hide them from the 8 GiB cap.
+        temp = px_temp_dir(root)
+        temp.mkdir(exist_ok=True)
+        env = {**os.environ, "CONTAINERS_STORAGE_CONF": str(root / "storage.conf"),
+               "TMPDIR": str(temp), "TMP": str(temp), "TEMP": str(temp)}
         with log.open("xb") as output:
             proc = subprocess.Popen(argv, cwd=root, env=env,
                                     stdin=subprocess.DEVNULL, stdout=output,

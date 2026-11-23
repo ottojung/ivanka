@@ -11,8 +11,10 @@ from assembler_bench.exploratory_space import (
     ROOTLESS_STORE,
     admit,
     allocated,
+    allocated_optional,
     disk_measure_command,
     initial,
+    px_temp_dir,
 )
 
 PATH = Path(__file__).parent / "assembler_bench/exploratory_candidates.json"
@@ -110,6 +112,30 @@ class TestExploratorySpace(unittest.TestCase):
 
     def test_small_pilot_admitted(self):
         self.assertEqual(self.check(1024)["admitted_reservation_bytes"], 1024)
+
+    def test_temporary_files_are_counted_once_in_the_incremental_budget(self):
+        temp = px_temp_dir(self.exp)
+        temp.mkdir()
+        sizes = {temp.resolve(): 10_000, self.exp.resolve(): 30_000}
+        with patch("assembler_bench.exploratory_space.allocated",
+                   side_effect=lambda p: sizes.get(Path(p).resolve(), 0)):
+            result = self.check(1024)
+        self.assertEqual(result["temp_bytes"], 10_000)
+        self.assertEqual(result["retained_bytes"], 20_000)
+        self.assertEqual(result["incremental_bytes"], 30_000)
+
+    def test_temporary_files_alone_can_breach_the_cap(self):
+        temp = px_temp_dir(self.exp)
+        temp.mkdir()
+        huge = 9 * 1024**3
+        sizes = {temp.resolve(): huge, self.exp.resolve(): huge}
+        with (patch("assembler_bench.exploratory_space.allocated",
+                    side_effect=lambda p: sizes.get(Path(p).resolve(), 0)),
+              self.assertRaisesRegex(ValueError, "disk budget")):
+            self.check(1024)
+
+    def test_missing_temporary_directory_counts_as_zero(self):
+        self.assertEqual(allocated_optional(px_temp_dir(self.exp)), 0)
 
     def test_stop_when_reserve_breached(self):
         with self.assertRaisesRegex(ValueError, "disk budget"):

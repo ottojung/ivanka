@@ -58,6 +58,16 @@ class TestRunner(unittest.TestCase):
         self.assertEqual(json.loads(records[0].read_text()), result)
         self.assertIn("log_sha256", result)
 
+    def test_child_temporaries_are_redirected_into_metered_directory(self):
+        argv = [sys.executable, "-c",
+                ("import os, pathlib; p = pathlib.Path(os.environ['TMPDIR']); "
+                 "(p / 'px-tmp-probe').write_text(str(p))")]
+        result = self.run_job(argv=argv)
+        self.assertEqual(result["status"], "finished")
+        probe = self.root / "tmp" / "px-tmp-probe"
+        self.assertTrue(probe.is_file())
+        self.assertEqual(probe.read_text(), str(self.root.resolve() / "tmp"))
+
     def test_unbuilt_source_cannot_pilot(self):
         with self.assertRaises(ValueError):
             self.run_job("pilot")

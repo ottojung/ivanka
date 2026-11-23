@@ -132,9 +132,7 @@ class ExploratoryPublicationTests(unittest.TestCase):
 
             physical = results_file(root, skesa, "pilot", "physical", [
                 {"alias": "PX-R001", "outcome": "success", "score": 1234.5,
-                 "seconds": 88.2},
-                {"alias": "PX-R002", "outcome": "failure",
-                 "failure_reason": "timeout"}], 198)
+                 "seconds": 88.2}], 198)
             synthetic = results_file(root, skesa, "pilot", "synthetic", [
                 {"alias": "PX-H001", "outcome": "success", "score": 99.5,
                  "seconds": 51.0}], 464)
@@ -144,9 +142,9 @@ class ExploratoryPublicationTests(unittest.TestCase):
             skesa["image_evidence"] = receipt(root, skesa, "image", None)
             skesa["pilot_evidence"] = receipt(root, skesa, "pilot", None, {
                 "physical": {"source_input_sha256": "d" * 64,
-                             "status": "success"},
+                             "canonical_alias": "PX-R001", "status": "success"},
                 "synthetic": {"source_input_sha256": "e" * 64,
-                              "status": "success"},
+                              "canonical_alias": "PX-H001", "status": "success"},
                 "per_sample_results_sha256": {
                     "physical": sha(physical), "synthetic": sha(synthetic)}})
             idba["image_evidence"] = receipt(root, idba, "image", None)
@@ -157,6 +155,7 @@ class ExploratoryPublicationTests(unittest.TestCase):
                               "status": "success"}})
             idba["benchmark_evidence"] = receipt(root, idba, "benchmark", None, {
                 "completed_nonqualifying_cohort": True,
+                "case_input_sha256": {"synthetic": {"PX-H001": "e" * 64}},
                 "per_sample_results_sha256": {
                     "synthetic": sha(benchmark)}})
             registry = write_json(root / "registry.json", data)
@@ -168,10 +167,10 @@ class ExploratoryPublicationTests(unittest.TestCase):
                 by_id = {c["id"]: c for c in snapshot["candidates"]}
                 self.assertEqual(by_id["skesa"]["results_status"],
                                  "verified-pilot")
-                self.assertEqual(len(by_id["skesa"]["samples"]), 3)
+                self.assertEqual(len(by_id["skesa"]["samples"]), 2)
                 self.assertEqual({s["alias"] for s in
                                   by_id["skesa"]["samples"]},
-                                 {"PX-R001", "PX-R002", "PX-H001"})
+                                 {"PX-R001", "PX-H001"})
                 self.assertEqual(by_id["idba-ud"]["results_status"],
                                  "verified-benchmark")
                 self.assertEqual(by_id["idba-ud"]["samples"][0]["score"], 500)
@@ -184,6 +183,65 @@ class ExploratoryPublicationTests(unittest.TestCase):
                 (site / pub.DATA_FILE).write_text(
                     json.dumps(snapshot, sort_keys=True) + "\n")
                 validate_public_site(site)
+
+    def test_pilot_cannot_claim_a_different_canonical_case(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            data = json.loads(REGISTRY.read_text())
+            item = next(x for x in data["candidates"] if x["id"] == "skesa")
+            item.update(status="pilot", image_sha256="b" * 64,
+                        adapter_commit=data["adapter_branch_commits"]["skesa"])
+            path = results_file(root, item, "pilot", "physical", [
+                {"alias": "PX-R001", "outcome": "success",
+                 "score": 90.5, "seconds": 20.0}], 198)
+            item["image_evidence"] = receipt(root, item, "image", None)
+            item["pilot_evidence"] = receipt(root, item, "pilot", None, {
+                "physical": {"status": "success", "canonical_alias": "PX-R053",
+                             "source_input_sha256": "d" * 64},
+                "synthetic": {"status": "success", "canonical_alias": "PX-H192",
+                              "source_input_sha256": "e" * 64},
+                "per_sample_results_sha256": {"physical": sha(path)}})
+            registry = write_json(root / "registry.json", data)
+            with (patch.object(exploratory_policy, "PROVENANCE_ROOT", root),
+                  self.assertRaisesRegex(ValueError, "source-attested case")):
+                pub.build(registry, {"skesa": [str(path)]})
+
+    def test_same_alias_requires_identical_pair_hash_between_tools(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            data = json.loads(REGISTRY.read_text())
+            mapping = {}
+            for name, image_sha, pair_sha in (("skesa", "b", "d"),
+                                               ("idba-ud", "c", "e")):
+                item = next(x for x in data["candidates"] if x["id"] == name)
+                item.update(status="pilot", image_sha256=image_sha * 64,
+                            adapter_commit=data["adapter_branch_commits"][name])
+                path = results_file(root, item, "pilot", "physical", [
+                    {"alias": "PX-R053", "outcome": "success",
+                     "score": 298, "seconds": 11.5}], 198)
+                item["image_evidence"] = receipt(root, item, "image", None)
+                item["pilot_evidence"] = receipt(root, item, "pilot", None, {
+                    "physical": {"status": "success", "canonical_alias": "PX-R053",
+                                 "source_input_sha256": pair_sha * 64},
+                    "synthetic": {"status": "success", "canonical_alias": "PX-H192",
+                                  "source_input_sha256": "a" * 64},
+                    "per_sample_results_sha256": {"physical": sha(path)}})
+                mapping[name] = [str(path)]
+            registry = write_json(root / "registry.json", data)
+            with (patch.object(exploratory_policy, "PROVENANCE_ROOT", root),
+                  self.assertRaisesRegex(ValueError, "different input pairs")):
+                pub.build(registry, mapping)
+
+    def test_out_of_range_aliases_rejected(self):
+        for cohort, expected, aliases in (
+                ("physical", 198, ("PX-R000", "PX-R199")),
+                ("synthetic", 464, ("PX-H000", "PX-H465"))):
+            for alias in aliases:
+                with self.subTest(alias=alias), self.assertRaisesRegex(
+                        ValueError, "invalid or duplicated"):
+                    pub._validate_samples([{"alias": alias, "outcome": "success",
+                                            "score": 1, "seconds": 1}], expected,
+                                          cohort)
 
     def test_changed_results_no_longer_match_the_receipt(self):
         with tempfile.TemporaryDirectory() as temp:

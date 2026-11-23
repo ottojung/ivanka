@@ -211,6 +211,25 @@ class SupervisedRunner:
                            self.operate, self.reserve_bytes)
 
 
+def checked_baseline(root, registry):
+    """Require the actual immutable PX disk baseline before any worker arms."""
+    target = Path(root).resolve() / "budget-baseline.json"
+    if not target.is_file():
+        return None
+    if sched.sha256_file(target) != registry.get("storage_baseline_sha256"):
+        return None
+    data = json.loads(target.read_bytes())
+    if (data.get("schema") != "ivanka.exploratory.storage-baseline.v1"
+            or data.get("root") != str(Path(root).resolve())
+            or data.get("image_store") != registry["policy"]["dedicated_image_store_root"]
+            or data.get("workspace") != "/workspace"
+            or data.get("active_job") is not None
+            or data.get("frozen_manifest_sha256")
+            != registry["policy"]["frozen_seven_manifest_sha256"]):
+        return None
+    return target
+
+
 def main():
     """Inert CLI: only plan runs; supervise needs an explicit signed handoff."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -224,6 +243,8 @@ def main():
     args = parser.parse_args()
     if args.check_ready:
         data = exploratory_policy.checked(args.registry)
+        if checked_baseline(args.root, data) is None:
+            return 1
         tools = [name for name in exploratory_policy.EXPERIMENTAL
                  if exploratory_policy.eligible(data, name)]
         if not tools or not all(sup.verify_handoff(args.root, args.registry, name)
@@ -246,7 +267,9 @@ def main():
     for tool in plan["tools"]:
         if not sup.verify_handoff(args.root, args.registry, tool):
             raise sup.HandoffRequired("missing verified handoff for " + tool)
-    baseline = args.root / "baseline.json"
+    baseline = checked_baseline(args.root, exploratory_policy.checked(args.registry))
+    if baseline is None:
+        raise ValueError("missing or changed PX storage baseline")
     runner = SupervisedRunner(args.registry, baseline, launch.operate, args.root)
     result = sup.BackgroundSupervisor(args.registry, baseline, source,
                                       args.root, runner).start(armed=True)

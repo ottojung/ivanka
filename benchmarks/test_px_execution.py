@@ -303,6 +303,38 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn("--supervise --armed", text)
         self.assertNotIn("--memory", text)
 
+    def test_live_baseline_must_match_immutable_budget_receipt(self):
+        from assembler_bench.px_execution import checked_baseline
+        registry = json.loads(REGISTRY.read_text())
+        registry["policy"]["dedicated_image_store_root"] = str(self.px)
+        baseline = self.px / "budget-baseline.json"
+        contents = {
+            "schema": "ivanka.exploratory.storage-baseline.v1",
+            "root": str(self.px), "image_store": str(self.px),
+            "workspace": "/workspace", "active_job": None,
+            "frozen_manifest_sha256":
+            registry["policy"]["frozen_seven_manifest_sha256"],
+        }
+        write_json(baseline, contents)
+        registry["storage_baseline_sha256"] = sha(baseline)
+        self.assertEqual(checked_baseline(self.px, registry), baseline)
+        baseline.rename(self.px / "baseline.json")
+        self.assertIsNone(checked_baseline(self.px, registry))
+        old = self.px / "baseline.json"
+        old.rename(baseline)
+        contents["active_job"] = "fake running job"
+        write_json(baseline, contents)
+        self.assertIsNone(checked_baseline(self.px, registry))
+        contents["active_job"] = None
+        contents["workspace"] = "/unrelated"
+        write_json(baseline, contents)
+        registry["storage_baseline_sha256"] = sha(baseline)
+        self.assertIsNone(checked_baseline(self.px, registry))
+        contents["workspace"] = "/workspace"
+        write_json(baseline, contents)
+        registry["storage_baseline_sha256"] = sha(baseline)
+        self.assertEqual(checked_baseline(self.px, registry), baseline)
+
     def test_cli_cannot_supervise_without_arming(self):
         env = dict(os.environ, PYTHONPATH=str(ROOT / "benchmarks"))
         result = subprocess.run(

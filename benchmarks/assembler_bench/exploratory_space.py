@@ -9,6 +9,8 @@ from pathlib import Path
 # Podman overlay subdirectories are remapped to container UIDs: ordinary
 # host 'du' returns permission errors while an image build is in progress.
 ROOTLESS_STORE = Path("/workspace/ivanka-exploratory-podman-20261121")
+PROJECT_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121")
+PROJECT_TMP = PROJECT_ROOT / "tmp"
 # A live Buildah overlay can vanish between du's readdir and its stat.
 # Retry ONLY this exact, ephemeral ENOENT; permissions and all other failures
 # remain fail-closed rather than publishing partial disk measurements.
@@ -39,11 +41,12 @@ def allocated_optional(path):
 def disk_measure_command(target):
     """Count every allocated block or fail closed; never parse partial 'du'."""
     command = ["du", "-sB1", "--", str(target)]
-    if target == ROOTLESS_STORE:
-        # A running Podman container mounts its complete virtual rootfs under
-        # graphroot/overlay/<id>/merged. Traversing it double-counts the
-        # immutable parent layers as NEW storage (verified: 9.29 vs 5.74 GB).
-        # -x keeps real writable overlay/diff layers but skips nested mounts.
+    if target in (ROOTLESS_STORE, PROJECT_ROOT, PROJECT_TMP):
+        # The OCI store, project root and its TMPDIR contain Buildah mounts.
+        # During apt installs, project/tmp/buildah*/mnt can be inaccessible to
+        # host du. A rootless user namespace with -x skips only mounted virtual
+        # root filesystems while counting actual writable OCI layers and TMPDIR.
+        # This is read-only and scoped to exactly the two isolated PX roots.
         return ["podman", "unshare", "du", "-sxB1", "--", str(target)]
     return command
 

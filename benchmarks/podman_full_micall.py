@@ -24,7 +24,7 @@ from reference_catalog import load_micall_projects
 from diagnostic_metrics import extract as extract_diagnostics
 import milestone198
 from podman_detached_lifecycle import run_detached
-from retained_artifacts import retain_arm
+from retained_artifacts import retain_arm, remove_visuals
 from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
                                   authenticated_postrun_cleanup, startup_database_lock,
                                   no_micall_output, podman_attempt_diagnostics)
@@ -671,6 +671,7 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         # SAM, FASTQ, index and mapping-stage files. Never touch JSONL,
         # timings, podman logs, or the other assembler's artifacts.
         result["artifact_retention"] = retain_arm(folder)
+        result["visual_retention"] = remove_visuals(folder)
     if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
         result["podman_lifecycle"] = "serialized_detached_v1"
     if start_retries:

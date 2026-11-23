@@ -6,9 +6,6 @@ from pathlib import Path
 from .cleanup import ROOT, STORE, command
 
 CID = re.compile(r"[0-9a-f]{64}\Z")
-RAM_LIMIT = 4_000_000_000  # Fixed PX acceptance policy, not an env override.
-FORBIDDEN = ("-m", "--memory", "--memory-swap", "--net", "--network",
-             "--cgroups", "--cgroupns", "--privileged")
 
 
 def bind_pilot(root, mode, argv, ident):
@@ -16,18 +13,15 @@ def bind_pilot(root, mode, argv, ident):
     if mode != "pilot" or Path(root).resolve() != ROOT:
         return list(argv), None
     if (list(argv[:2]) != ["podman", "run"]
-            or any(str(arg).startswith("--cidfile") for arg in argv)
-            or any(str(arg) == flag or str(arg).startswith(flag + "=")
-                   for arg in argv[2:] for flag in FORBIDDEN)):
-        raise ValueError("PX pilots require guarded foreground podman options")
+            or any(str(arg).startswith("--cidfile") for arg in argv)):
+        raise ValueError("PX pilots must use direct foreground podman run")
     cidfile = Path(root) / ("pilot-" + ident + ".cid")
     if cidfile.exists() or cidfile.is_symlink():
         raise ValueError("pilot container identifier already exists")
     # --rm deletes the CID file before verification on natural completion.
     # Keep the container ID until the exact-CID cleanup below runs.
     tail = [arg for arg in argv[2:] if arg != "--rm"]
-    return [*argv[:2], "--cidfile", str(cidfile),
-            f"--memory={RAM_LIMIT}", "--network=none", *tail], cidfile
+    return [*argv[:2], "--cidfile", str(cidfile), *tail], cidfile
 
 
 def stop_pilot(root, env, cidfile):

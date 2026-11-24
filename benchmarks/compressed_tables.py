@@ -60,6 +60,30 @@ COMPRESSIBLE_TABLES = frozenset({
     "unstitched_genome_coverage.csv",
     "unstitched_multimap_depth.csv",
     "unique_aligned_fragments.csv",
+    # Non-receipt-bound unstitched diagnostics. These are read-level /
+    # per-position tables that no sealed receipt pins by SHA-256, no reader
+    # opens through a hardcoded plain path, and none is a consensus, contig or
+    # receipt-sized table. Allowing them here only permits lossless storage;
+    # live conversion stays gated on operator authorization. The final
+    # consensus, contig and receipt-sized tables are deliberately absent.
+    "unstitched_amino.csv",
+    "unstitched_amino_details.csv",
+    "unstitched_cascade.csv",
+    "unstitched_clipping.csv",
+    "unstitched_concordance.csv",
+    "unstitched_concordance_detailed.csv",
+    "unstitched_concordance_seed.csv",
+    "unstitched_coverage_scores.csv",
+    "unstitched_coverage_summary.csv",
+    "unstitched_failed.csv",
+    "unstitched_failed_align.csv",
+    "unstitched_insertions.csv",
+    "unstitched_minimap_hits.csv",
+    "unstitched_nuc.csv",
+    "unstitched_nuc_details.csv",
+    "unstitched_nuc_mutations.csv",
+    "unstitched_remap_counts.csv",
+    "unstitched_unique_aligned_fragments.csv",
 })
 
 _CLI_DEFAULT = ("/gnu/store/19576kzqs8adbvrq1b0c6ik8p01hs8ak-zstd-1.5.7"

@@ -3,6 +3,13 @@ import csv
 import hashlib
 from pathlib import Path
 
+# Imported both as benchmarks.project_references (python -m project paths) and as
+# top-level project_references by scripts whose sys.path only holds benchmarks/.
+try:
+    from benchmarks.compressed_tables import find_table, open_table
+except ModuleNotFoundError:
+    from compressed_tables import find_table, open_table
+
 
 
 def reference_names(projects, project_code):
@@ -18,11 +25,10 @@ def choose_reference(iva_dir, projects, project_code):
     """Select one reference from the IVA arm's MiCall remap, not the Ivanka arm."""
     names = reference_names(projects, project_code)
     candidates = []
-    for path in (Path(iva_dir) / "remap_counts.csv",
-                 Path(iva_dir) / "scratch" / "remap_counts.csv"):
-        if not path.is_file():
-            continue
-        with path.open(newline="") as handle:
+    path = find_table(Path(iva_dir) / "remap_counts.csv",
+                      Path(iva_dir) / "scratch" / "remap_counts.csv")
+    if path is not None:
+        with open_table(path, newline="") as handle:
             for row in csv.DictReader(handle):
                 label = row.get("type", "")
                 if not label.startswith("remap-final "):
@@ -34,7 +40,6 @@ def choose_reference(iva_dir, projects, project_code):
                 name = next((candidate for candidate in matches if candidate in names), None)
                 if name is not None:
                     candidates.append((int(row.get("count") or 0), name))
-        break
     if candidates:
         _, name = max(candidates, key=lambda x: (x[0], x[1]))
     elif len(names) == 1:
@@ -48,23 +53,22 @@ def choose_reference(iva_dir, projects, project_code):
 
 
 def final_max_sequences(directory):
-    path = next((p for p in (Path(directory) / "conseq.csv",
-                            Path(directory) / "scratch" / "conseq.csv") if p.is_file()), None)
+    path = find_table(Path(directory) / "conseq.csv",
+                      Path(directory) / "scratch" / "conseq.csv")
     if path is None:
         return []
-    with path.open(newline="") as handle:
+    with open_table(path, newline="") as handle:
         return [r.get("sequence", "").upper()
                 for r in csv.DictReader(handle)
                 if r.get("consensus-percent-cutoff") == "MAX" and r.get("sequence")]
 
 
 def raw_contigs(directory, maximum=16):
-    path = next((p for p in (Path(directory) / "unstitched_contigs.csv",
-                            Path(directory) / "scratch" / "unstitched_contigs.csv")
-                 if p.is_file()), None)
+    path = find_table(Path(directory) / "unstitched_contigs.csv",
+                      Path(directory) / "scratch" / "unstitched_contigs.csv")
     if path is None:
         return [], 0
-    with path.open(newline="") as handle:
+    with open_table(path, newline="") as handle:
         seqs = [r.get("contig", "").upper() for r in csv.DictReader(handle)
                 if r.get("contig")]
     return sorted(seqs, key=len, reverse=True)[:maximum], len(seqs)

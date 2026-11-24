@@ -9,6 +9,11 @@ import math
 import re
 from pathlib import Path
 
+try:
+    from benchmarks.compressed_tables import find_table, open_table
+except ModuleNotFoundError:
+    from compressed_tables import find_table, open_table
+
 # +1: larger values are preferred; -1: smaller values are preferred.
 # In particular, depth sums depend on contig/reference span; interpret
 # alongside the corresponding position denominator and saturation counts.
@@ -77,10 +82,7 @@ UNITS = {
 
 
 def _file(folder, name):
-    for candidate in (Path(folder) / name, Path(folder) / "scratch" / name):
-        if candidate.is_file():
-            return candidate
-    return None
+    return find_table(Path(folder) / name, Path(folder) / "scratch" / name)
 
 
 def _rows(folder, name):
@@ -88,7 +90,7 @@ def _rows(folder, name):
     if path is None:
         return None
     def stream():
-        with path.open(newline="", encoding="utf-8") as handle:
+        with open_table(path, newline="", encoding="utf-8") as handle:
             yield from csv.DictReader(handle)
     return stream()
 

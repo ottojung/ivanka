@@ -4,6 +4,8 @@ import json
 import math
 from pathlib import Path
 
+from benchmarks.compressed_tables import logical_digest
+
 from .metric_catalog_exact import values
 
 # SHA256 of the exact_coverage.py source in the pinned MiCall fork.
@@ -11,11 +13,7 @@ SOURCE_SHA256 = "3d3b3d38ea83d1a3bb6872ef20cc5a8f1177ee3e6a272c635aa28dd77ba6f4e
 
 
 def file_sha256(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1048576), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return logical_digest(path)[0]
 
 
 def sidecar(cache, cohort, sample, tool, candidate=None):

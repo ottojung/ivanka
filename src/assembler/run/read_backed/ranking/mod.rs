@@ -16,6 +16,12 @@ fn compare(a: usize, b: usize, contigs: &[Vec<u8>], stats: &Statistics) -> Order
     ratio
         .then_with(|| (y * q).cmp(&(x * p)))
         .then_with(|| y.cmp(&x))
+        // Raw observation frequency breaks exact ties only after all
+        // distinct-fragment evidence has been compared.
+        .then_with(|| {
+            let (r, s) = (stats.raw_pairs[a] as u128, stats.raw_pairs[b] as u128);
+            s.cmp(&r)
+        })
         .then_with(|| q.cmp(&p))
         .then_with(|| contigs[b].len().cmp(&contigs[a].len()))
         .then_with(|| a.cmp(&b))

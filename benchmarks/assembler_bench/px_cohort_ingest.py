@@ -15,6 +15,7 @@ import shutil
 from pathlib import Path
 
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
+from . import px_exact_supplement
 from .public_metrics import CATALOG
 from .public_view import (EVIDENCE_SCHEMA, assert_clean_object,
                           merge_evidence, scrub)
@@ -148,6 +149,12 @@ def _case(root, name, receipt, assembler, real_data):
                 and record[COMPARABLE_KEY] != observed_mib(raw)):
             raise ValueError("attested peak RAM differs from the raw receipt")
     coverage = diagnostics["metrics"].get("exact_coverage", {})
+    if receipt["outcome"] == "success":
+        # Join only a versioned, hash-bound supplement that matches the
+        # original receipt, image, final conseq, reads and pinned module.
+        # The immutable diagnostics record is never rewritten.
+        coverage = px_exact_supplement.join_at_publication(
+            coverage, root, name, receipt, diagnostics)
     metrics = _metrics(diagnostics)
     metrics.update(ram_diagnostics)
     fields.update({

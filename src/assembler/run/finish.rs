@@ -42,6 +42,9 @@ pub(super) fn write(
         // otherwise withhold the rescue to avoid losing distinct evidence.
         append_preserving_diversity(&mut contigs, rescue, max, protected_seed_count);
     }
+    if skip_matching_seeds.is_some() {
+        super::native_fragments::retain(&mut contigs, &reads, max, skip_matching_seeds)?;
+    }
     let count = super::write_results::write(out, &contigs, &reads, standard, skip_matching_seeds)?;
     if let Some(path) = audit_path {
         let count = write_snv_audit(&path, &audit, &contigs, &reads.seed_counts, canonical_kmer)?;

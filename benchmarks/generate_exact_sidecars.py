@@ -5,20 +5,16 @@ Original per-arm outputs and all input FASTQs are read-only; sidecar output
 uses exclusive creation to prevent replacing earlier evidence.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
+from compressed_tables import logical_digest
 from produce_exact_coverage import generate
 from micall.utils import exact_coverage
 
 
 def sha256(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as f:
-        for block in iter(lambda: f.read(1024*1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    return logical_digest(path)[0]
 
 
 def generate_sidecars(records_jsonl, fastq_root, output_root, names=None):

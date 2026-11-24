@@ -4,9 +4,10 @@ Input may contain private sample names and paths. No source strings or paths
 are copied to sample rows: only public numeric fields and fresh aliases.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
+
+from benchmarks.compressed_tables import logical_digest
 
 from .public_dominance import enrich
 
@@ -15,7 +16,7 @@ RUN_ID = "alpha3-original-real198-20261112"
 
 
 def digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return logical_digest(path)[0]
 
 
 def real_report(results_path, certificate_path):

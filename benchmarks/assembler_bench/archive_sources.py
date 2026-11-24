@@ -1,8 +1,7 @@
 """Preserve immutable execution identity independently of derived scores."""
-import hashlib
 import math
-from pathlib import Path
 
+from benchmarks.compressed_tables import logical_digest
 from benchmarks.expanded.adapters import ASSEMBLERS
 from benchmarks.expanded.micall_dominant import SCORE_ORIGIN
 from .public_metrics import CATALOG
@@ -12,7 +11,7 @@ SHA = set("0123456789abcdef")
 
 
 def digest(file):
-    return hashlib.sha256(Path(file).read_bytes()).hexdigest()
+    return logical_digest(file)[0]
 
 
 def is_hash(value):

@@ -23,9 +23,9 @@ EXPECTED = {
     "benchmarks/reference_panel.py":
         "b8307caf141eb92eabcee92da22bac994904a8220194a91839387a555aef5c5e",
     "benchmarks/project_references.py":
-        "306200abeb81492df2c56ac178cac85d581d94bd763b28d81ec7af00c5887c4f",
+        "6aa0b61a4e051219e82b4bdec7cea564f08d934a19894f65320a90513b2df39a",
     "benchmarks/assembler_bench/exact_cache.py":
-        "e9571c9f012e3dd73ed0a1d49b7db1895e7454d58a3049ddff4bb6dbe1aebf86",
+        "fccad0640a6309cb868196078dcb5ecc6c5d870075a08416f37d536afa68018c",
 }
 
 

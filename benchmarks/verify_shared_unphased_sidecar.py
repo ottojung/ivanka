@@ -4,12 +4,13 @@ This is an opt-in POSTPROCESSING consumer. It never mutates MiCall, claims
 haplotype-specific coverage, or feeds this evidence into 198 acceptance.
 """
 import argparse
-import hashlib
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+from compressed_tables import logical_digest
 
 
 class EvidenceContractError(ValueError):
@@ -17,11 +18,7 @@ class EvidenceContractError(ValueError):
 
 
 def digest(path):
-    h = hashlib.sha256()
-    with Path(path).open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            h.update(block)
-    return h.hexdigest()
+    return logical_digest(path)[0]
 
 
 def verify(sidecar_path, artifact_dir, original_r1=None, original_r2=None):

@@ -3,14 +3,15 @@ import hashlib
 import json
 from pathlib import Path
 
+from benchmarks.compressed_tables import logical_digest
+
 from .adapters import ASSEMBLERS
 from .micall_dominant import SCORE_ORIGIN, MULTITRUTH_SCORE_ORIGIN
 from .micall_synthetic_constants import TIMING_ORIGIN
 
 
 def digest(path):
-    stream = Path(path)
-    return hashlib.sha256(stream.read_bytes()).hexdigest()
+    return logical_digest(path)[0]
 
 
 def identity(identifier, manifest, proof):

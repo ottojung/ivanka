@@ -6,8 +6,9 @@ import os
 import subprocess
 import time
 
-from assembler_bench.exploratory_space import admit, px_temp_dir
+from assembler_bench.exploratory_space import admit
 
+from .. import job_temp
 from .cleanup import clean_stopped_build
 from .monitor import GuardExceeded, watch
 from .pilot import bind_pilot, stop_pilot
@@ -26,9 +27,10 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         record = root / ("run-" + ident + ".json")
         log = root / ("run-" + ident + ".log")
         # Podman/import/build temporaries must stay inside the metered project
-        # tree; inheriting the host TMPDIR would hide them from the 8 GiB cap.
-        temp = px_temp_dir(root)
-        temp.mkdir(exist_ok=True)
+        # tree; inheriting the host TMPDIR would hide them from the cap. A
+        # per-job directory makes teardown provably scoped to this job alone.
+        temp = job_temp.job_temp_dir(root, ident)
+        temp.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, "CONTAINERS_STORAGE_CONF": str(root / "storage.conf"),
                "TMPDIR": str(temp), "TMP": str(temp), "TEMP": str(temp)}
         with log.open("xb") as output:
@@ -72,6 +74,23 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                     except (OSError, ValueError, RuntimeError,
                             subprocess.SubprocessError) as exc:
                         state["orphan_cleanup_error"] = str(exc)[:320]
+                # Reclaim ONLY this job's temp directory after the monitored
+                # group is reaped and every pilot/build teardown check passed.
+                # A stopped infrastructure attempt is safe once its container
+                # is reaped; an unverified teardown keeps its temp for diagnosis.
+                teardown_ok = (
+                    state.get("exit_code") is not None
+                    and "pilot_cleanup_error" not in state
+                    and not state.get("orphan_cleanup_error"))
+                if teardown_ok:
+                    try:
+                        state["job_temp_cleanup"] = job_temp.clean_job_temp(
+                            root, ident, env=env, lock_held_by_caller=True)
+                    except (OSError, ValueError, RuntimeError) as exc:
+                        state["job_temp_cleanup_error"] = str(exc)[:320]
+                else:
+                    state["job_temp_cleanup"] = {
+                        "removed": False, "reason": "teardown_unverified"}
                 state["recorded_utc"] = time.time()
                 output.flush()
                 os.fsync(output.fileno())

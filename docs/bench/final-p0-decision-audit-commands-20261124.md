@@ -13,10 +13,14 @@ outside both audited roots.
 ROOT   = /workspace/ivanka-p0-novelty-canary-20261123
 FROZEN = /workspace/micall-frozen-seven-20261117
 PY     = /workspace/micall-frozen-seven-20261117/bench-ci-venv/bin/python
-PROJECTS = /workspace/micall-frozen-seven-20261117/iva/micall/projects.json
+PROJECTS = /workspace/p0_prairies_projects_20261121.json
 HXB2   = /workspace/denovo-example-io-1/hxb2.fasta
 ```
 
+`PROJECTS` is the catalog named in the final-audit board issue. The equivalent
+frozen-image catalog
+`/workspace/micall-frozen-seven-20261117/iva/micall/projects.json` yields the
+same 33-reference panel hash and was used for the partial validation below.
 Pinned digests checked by both tools: image `73f29f…81b`, frozen manifest
 `9db6e1b…84f`, 33-reference panel `018f6a…c4a8`. A drift in any of them
 fails closed.
@@ -82,3 +86,15 @@ read as a numerical result.
 
 Output is anonymized: counts, category names, rival tool names and public
 pinned digests only, never a sample identifier.
+
+## Controller classification boundary
+
+The decision states replace the live controller's ambiguous
+`QUALIFIED_ALL_ORIGINAL_SEVEN` fallback and `PHYSICAL_COHORT_INCOMPLETE`
+label for a fully measured but numerically failing cohort. In particular,
+the controller's `P0_FULL_SEVEN_QUALIFIED` state name overclaims against
+Intent 006 because the original physical-198 IVA gate does not include the
+464-synthetic seven-way gate. The final audit should record the decision
+state from this tool alongside, not in place of, an independent review of the
+controller's emitted classification; a physical full-seven numerical pass is
+not a completion or release tag.

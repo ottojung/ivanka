@@ -8,6 +8,7 @@ and is wired in by ``px_supervisor`` only after image-agent handoff.
 import csv
 import hashlib
 import json
+import math
 import os
 import re
 import uuid
@@ -41,6 +42,9 @@ FAILURE_REASONS = frozenset((
     "error", "timeout", "no_contigs", "no_final_max", "disk_stop",
     "wall_limit", "observed_rss_limit", "measurement_unavailable",
 ))
+# Infrastructure failures preserve attempts and may be retried boundedly.
+INFRASTRUCTURE_FAILURE_REASONS = frozenset(("disk_stop", "measurement_unavailable"))
+MAX_INFRA_ATTEMPTS = 2
 MAX_RESERVE = 4 * 1024**3
 MIN_RESERVE = 1024**3
 # MiCall's frozen final MAX consensus artifact, never a raw assembler contig.
@@ -62,6 +66,33 @@ def sha256_file(path):
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def peak_ram_observed_mib(receipt):
+    """Convert an immutable receipt's observed RSS to a public MiB metric."""
+    value = receipt.get("peak_rss_bytes") if isinstance(receipt, dict) else None
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("observed peak RSS is not numeric")
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("observed peak RSS is not finite and non-negative")
+    return round(value / 1048576, 6)
+
+
+def write_resource(root, arm, receipt):
+    """Publish comparable resource evidence for every terminal arm."""
+    path = Path(root) / "results" / (receipt_id(arm) + "-resource.json")
+    record = {
+        "schema": "ivanka.px.arm-resource.v1", "tool_id": arm["tool_id"],
+        "cohort": arm["cohort"], "alias": arm["alias"],
+        "outcome": receipt["outcome"], "attempt": receipt.get("attempt", 1),
+        "peak_rss_bytes": receipt.get("peak_rss_bytes"),
+        "peak_ram_observed_mib": peak_ram_observed_mib(receipt),
+        "measurement_present": receipt.get("peak_rss_bytes") is not None,
+    }
+    _assert_public(record)
+    return path, _atomic_json(path, record)
 
 
 def _json_bytes(obj):
@@ -248,8 +279,29 @@ def receipt_path(root, arm):
     return Path(root) / "receipts" / (receipt_id(arm) + ".json")
 
 
+def attempt_path(root, arm, attempt):
+    return Path(root) / "receipts" / "attempts" / (
+        receipt_id(arm) + f".attempt-{attempt:03d}.json")
+
+
 def index_path(root):
     return Path(root) / "receipts" / "index.json"
+
+
+def arm_from_receipt(root, identifier):
+    """Recover canonical arm identity from an indexed terminal receipt."""
+    entries = _load_index(root)
+    if identifier not in entries:
+        return None
+    path = Path(root) / "receipts" / (identifier + ".json")
+    if not path.is_file() or sha256_file(path) != entries[identifier]:
+        raise ValueError("PX receipt is unindexed or changed")
+    data = json.loads(path.read_bytes())
+    if data.get("schema") != RECEIPT_SCHEMA or data.get("terminal") is not True:
+        raise ValueError("PX receipt is not terminal")
+    return {key: data[key] for key in (
+        "tool_id", "cohort", "alias", "input_sha256", "source_commit",
+        "adapter_commit", "image_sha256")}
 
 
 def _load_index(root):
@@ -266,16 +318,7 @@ def _write_index(root, entries):
     return _atomic_json(index_path(root), {"schema": INDEX_SCHEMA, "entries": entries})
 
 
-def verify_receipt(root, arm):
-    """Only a content-hashed, terminal, pin-bound receipt can end an arm."""
-    path = receipt_path(root, arm)
-    if not path.is_file():
-        return None
-    recorded = _load_index(root).get(receipt_id(arm))
-    blob = path.read_bytes()
-    if not isinstance(recorded, str) or sha256_file(path) != recorded:
-        raise ValueError("PX case receipt is unindexed or changed")
-    data = json.loads(blob)
+def _verify_receipt_data(data, arm):
     for key, expected in (("schema", RECEIPT_SCHEMA), ("tool_id", arm["tool_id"]),
                           ("cohort", arm["cohort"]), ("alias", arm["alias"]),
                           ("source_commit", arm["source_commit"]),
@@ -287,6 +330,10 @@ def verify_receipt(root, arm):
             or data.get("outcome") not in TERMINAL_OUTCOMES
             or data.get("input_sha256") != arm["input_sha256"]):
         raise ValueError("PX receipt is incomplete or not terminal")
+    attempt = data.get("attempt", 1)
+    if (not isinstance(attempt, int) or attempt < 1
+            or attempt > MAX_INFRA_ATTEMPTS):
+        raise ValueError("PX receipt attempt is invalid")
     if data["outcome"] == "success":
         if not SHA256.fullmatch(data.get("output_sha256") or ""):
             raise ValueError("successful PX receipt lacks hashed final MAX output")
@@ -296,11 +343,51 @@ def verify_receipt(root, arm):
     return data
 
 
+def verify_receipt(root, arm):
+    """Only a content-hashed, terminal, pin-bound receipt can end an arm."""
+    path = receipt_path(root, arm)
+    if not path.is_file():
+        return None
+    recorded = _load_index(root).get(receipt_id(arm))
+    blob = path.read_bytes()
+    if not isinstance(recorded, str) or sha256_file(path) != recorded:
+        raise ValueError("PX case receipt is unindexed or changed")
+    data = _verify_receipt_data(json.loads(blob), arm)
+    attempt = data.get("attempt", 1)
+    if attempt > 1:
+        original = attempt_path(root, arm, 1)
+        if not original.is_file():
+            raise ValueError("versioned retry missing preserved original failure")
+        prior = _verify_receipt_data(json.loads(original.read_bytes()), arm)
+        if (prior.get("outcome") != "failure"
+                or prior.get("failure_reason") not in INFRASTRUCTURE_FAILURE_REASONS):
+            raise ValueError("only infrastructure failures may be retried")
+    return data
+
+
+def _write_canonical_receipt(root, arm, receipt):
+    digest = _atomic_json(receipt_path(root, arm), receipt)
+    entries = _load_index(root)
+    entries[receipt_id(arm)] = digest
+    _write_index(root, entries)
+    return receipt
+
+
 def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
                    failure_reason=None, runner_receipt_sha256=None):
-    """Write an immutable terminal receipt; refuse to overwrite a prior one."""
-    if verify_receipt(root, arm) is not None:
-        raise ValueError("terminal PX arm may not be recomputed or overwritten")
+    """Write an immutable terminal receipt; preserve original infra failures."""
+    existing = verify_receipt(root, arm)
+    attempt = 1
+    if existing is not None:
+        if (existing.get("outcome") == "failure"
+                and existing.get("failure_reason") in INFRASTRUCTURE_FAILURE_REASONS
+                and existing.get("attempt", 1) < MAX_INFRA_ATTEMPTS):
+            original = attempt_path(root, arm, 1)
+            if not original.is_file():
+                _atomic_write(original, _json_bytes(existing))
+            attempt = existing.get("attempt", 1) + 1
+        else:
+            raise ValueError("terminal PX arm may not be recomputed or overwritten")
     if outcome not in TERMINAL_OUTCOMES:
         raise ValueError("outcome must be terminal")
     if outcome == "success" and Path(output_path).name != MAX_ARTIFACT:
@@ -316,18 +403,23 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
         "seconds": seconds, "peak_rss_bytes": peak_rss,
         "failure_reason": failure_reason,
         "runner_receipt_sha256": runner_receipt_sha256, "terminal": True,
+        "attempt": attempt,
     }
     if outcome == "success" and (not isinstance(seconds, (int, float))
                                  or seconds <= 0):
         raise ValueError("successful arm needs a positive runtime")
+    # An observed peak is retained for failed arms as well; null is honest
+    # when monitoring never produced a measurement.
+    if peak_rss is not None:
+        if (isinstance(peak_rss, bool) or not isinstance(peak_rss, (int, float))
+                or not math.isfinite(peak_rss) or peak_rss < 0):
+            raise ValueError("observed peak RSS is invalid")
     if outcome == "failure" and failure_reason not in FAILURE_REASONS:
         raise ValueError("unclassified failure is never terminal")
     _assert_public(receipt)
-    digest = _atomic_json(receipt_path(root, arm), receipt)
-    entries = _load_index(root)
-    entries[receipt_id(arm)] = digest
-    _write_index(root, entries)
-    return receipt
+    if attempt > 1:
+        _atomic_json(attempt_path(root, arm, attempt), receipt)
+    return _write_canonical_receipt(root, arm, receipt)
 
 
 def build_plan(registry, source, root):
@@ -345,7 +437,13 @@ def build_plan(registry, source, root):
                        **{key: tool[key] for key in (
                            "source_commit", "adapter_commit", "image_sha256")}}
                 arms.append(arm)
-                if verify_receipt(root, arm) is not None:
+                receipt = verify_receipt(root, arm)
+                retryable = (
+                    isinstance(receipt, dict)
+                    and receipt.get("outcome") == "failure"
+                    and receipt.get("failure_reason") in INFRASTRUCTURE_FAILURE_REASONS
+                    and receipt.get("attempt", 1) < MAX_INFRA_ATTEMPTS)
+                if receipt is not None and not retryable:
                     accepted_ids.append(receipt_id(arm))
                 else:
                     pending.append(arm)
@@ -409,18 +507,28 @@ def admit_arm(registry, baseline, root, reserve_bytes):
                                    reserve_bytes)
 
 
-def posthoc_score(root, arm, scorer, expected_source_sha256):
+def posthoc_score(root, arm, scorer, expected_source_sha256, *,
+                   output_dir=None, case=None):
     """Score only after the output is hashed; truth stays inside the scorer."""
     receipt = verify_receipt(root, arm)
     if receipt is None or receipt["outcome"] != "success":
         raise ValueError("only a terminal successful arm can be scored")
     if getattr(scorer, "source_sha256", None) != expected_source_sha256:
         raise ValueError("source-frozen scorer identity changed")
-    row = scorer.score(alias=arm["alias"], cohort=arm["cohort"],
-                       output_sha256=receipt["output_sha256"])
+    kwargs = dict(alias=arm["alias"], cohort=arm["cohort"],
+                  output_sha256=receipt["output_sha256"],
+                  output_dir=output_dir, receipt=receipt, arm=arm, case=case)
+    try:
+        row = scorer.score(**kwargs)
+    except TypeError:
+        row = scorer.score(alias=arm["alias"], cohort=arm["cohort"],
+                           output_sha256=receipt["output_sha256"])
     if (not isinstance(row, dict) or row.get("alias") != arm["alias"]
             or row.get("outcome") not in ("success", "failure")):
         raise ValueError("independent scorer returned an invalid row")
+    # The founder's comparable RAM metric comes from the immutable receipt,
+    # never from the scorer; preserve null when the arm was not monitored.
+    row["peak_ram_observed_mib"] = peak_ram_observed_mib(receipt)
     _assert_public(row)
     return {"schema": RESULT_SCHEMA, "tool_id": arm["tool_id"],
             "source_commit": arm["source_commit"],

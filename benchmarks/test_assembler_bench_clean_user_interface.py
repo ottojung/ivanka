@@ -58,6 +58,9 @@ for(const run of runs){
   const commit=image?.source_commit||provenance.adapter_commit;
   if(digest)assert.equal(html.split(digest).length-1,1,tool);
   if(commit)assert(html.includes(commit),tool);
+  const branch=image?.source_branch||provenance.source_branch;
+  assert(branch,tool+" missing branch");
+  assert(html.includes("<td>"+branch+"</td>"),tool+" branch not rendered");
   if(!digest)assert(html.includes('Not recorded'),tool);
  }
  // A cohort with a different roster must never show out-of-cohort builds.

@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from . import exploratory_policy
+from .adapter_branch_refs import adapter_provenance
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
 from .current_validation_v2 import V6_COHORT_SHA
 from .exploratory_publication import validate as validate_exploratory
@@ -178,6 +179,8 @@ def build_evidence(snapshot, receipts, original_runs):
                 "verified-") else "pending",
             "cases": [],
         }
+        if item["adapter_commit"]:
+            item.update(adapter_provenance(item["id"], item["adapter_commit"]))
         results = entry.get("results", {})
         digest = results.get("evidence_sha256")
         receipt = receipts.get(digest) if digest else None

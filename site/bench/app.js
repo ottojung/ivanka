@@ -416,8 +416,8 @@ function drawProvenance() {
       const item=inventory[name]||{
         source_branch:provenance.source_branch,
         source_commit:adapter,
-        source_url:/^[a-f0-9]{40}$/.test(adapter||"")?
-          "https://github.com/ottojung/MiCall/tree/"+adapter:null,
+        source_url:provenance.source_url||(/^[a-f0-9]{40}$/.test(adapter||"")?
+          "https://github.com/ottojung/MiCall/tree/"+adapter:null),
         image_sha256:provenance.image_sha256||r.images?.[name]
       };
       const branch=item.source_branch||(inventory[name]?

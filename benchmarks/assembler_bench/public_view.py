@@ -121,6 +121,7 @@ def _provenance(item):
             ("adapter_commit", item.get("adapter_commit")),
             ("image_sha256", item.get("image_sha256")),
             ("source_url", item.get("source_url")),
+            ("source_branch", item.get("source_branch")),
         ) if value is not None
     }
 

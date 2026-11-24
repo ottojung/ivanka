@@ -45,14 +45,14 @@ while :; do
     # Optional new PX receipts are routed to the neutral evidence publisher,
     # never to the retired exploratory-candidates snapshot.
     if [ -n "${PX_RESULTS:-}" ]; then
-      PYTHONPATH="$REPO/benchmarks" "$PY" -m \
+      PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
         benchmarks.assembler_bench.exploratory_publication \
         --site "$WEB/site/bench" \
         $(for spec in $PX_RESULTS; do printf '%s' "--results $spec "; done) \
         --publish-neutral
     fi
 
-    PYTHONPATH="$REPO/benchmarks" "$PY" -m \
+    PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
       benchmarks.assembler_bench.current_publish \
       --site "$WEB/site/bench" \
       --synthetic "$R/phase-synthetic464" \
@@ -77,17 +77,17 @@ while :; do
       PYTHONPATH="$Q:$Q/benchmarks" "$PY" -m \
         benchmarks.resource_limits.report_cli --root "$R" \
         --output "$WEB/site/bench/data/resource-policy.json"
-      PYTHONPATH="$REPO/benchmarks" "$PY" -m \
+      PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
         benchmarks.assembler_bench.resource_policy_neutral \
         --path "$WEB/site/bench/data/resource-policy.json"
     else
       echo "RESOURCE_POLICY_SOURCE_DRIFT"; exit 3
     fi
 
-    PYTHONPATH="$REPO/benchmarks" "$PY" -m \
+    PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
       benchmarks.assembler_bench.site_build --output "$R/neutral-site-verify" || \
       { echo "NEUTRAL_SITE_VERIFY_FAILED"; exit 3; }
-    PYTHONPATH="$REPO/benchmarks" "$PY" -m \
+    PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
       benchmarks.assembler_bench.public_vocabulary --site "$WEB/site/bench" || \
       { echo "NEUTRAL_VOCABULARY_FAILED"; exit 3; }
 

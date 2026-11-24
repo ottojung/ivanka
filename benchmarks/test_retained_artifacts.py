@@ -102,7 +102,7 @@ class RetainedArtifactsTests(unittest.TestCase):
             for name in ("nuc.csv", "conseq.fasta", "metrics.json"):
                 self.assertEqual((arm / name).read_text(), "evidence")
 
-    def test_only_result_arms_are_cleaned(self):
+    def test_workspace_inventory_cannot_infer_terminal_liveness(self):
         with TemporaryDirectory() as d:
             workspace = Path(d)
             root = workspace / "ivanka-physical-results"
@@ -116,8 +116,9 @@ class RetainedArtifactsTests(unittest.TestCase):
             self.assertEqual(clean_workspace(workspace)["scratch_directories"], 1)
             self.assertTrue((arm / "scratch").exists())
             report = clean_workspace(workspace, apply=True)
-            self.assertEqual(report["retired"], 1)
-            self.assertEqual((arm / "nuc.csv").read_text(), "measured")
+            self.assertEqual(report["retired"], 0)
+            self.assertTrue(report["errors"])
+            self.assertEqual((arm / "scratch" / "nuc.csv").read_text(), "measured")
             self.assertTrue((source_scratch / "precious").is_file())
 
 
@@ -229,6 +230,75 @@ class TerminalRetentionTests(unittest.TestCase):
             self.assertTrue(scratch.is_dir())
             self.assertEqual((scratch / "nuc.csv").read_text(), "original")
             self.assertFalse((arm / "nuc.csv").exists())
+
+    def test_collated_scored_output_is_verified_before_deletion(self):
+        for state in ("changed", "missing", "symlink", "ambiguous"):
+            with self.subTest(state=state), TemporaryDirectory() as d:
+                arm = Path(d) / "arm"
+                scratch = arm / "scratch"
+                scratch.mkdir(parents=True)
+                (scratch / "temp.fastq").write_text("reads")
+                final = arm / "nuc.csv"
+                if state == "changed":
+                    final.write_text("different")
+                elif state == "symlink":
+                    outside = Path(d) / "outside.csv"
+                    outside.write_text("measured")
+                    final.symlink_to(outside)
+                elif state == "ambiguous":
+                    final.write_text("measured")
+                    with gzip.open(arm / "nuc.csv.gz", "wt") as stream:
+                        stream.write("measured")
+                hashes = {"input.fastq.gz": "c" * 64}
+                evidence, _ = seal_terminal_evidence(
+                    arm, {"metrics": {"outputs": {
+                        "nuc.csv": {"sha256": digest("measured")}}}}, hashes)
+                with self.assertRaises((RetentionGateError, ValueError)):
+                    terminal_retire(arm, evidence_path=evidence,
+                                    container_dead=True, source_hashes=hashes)
+                self.assertTrue((scratch / "temp.fastq").is_file())
+
+    def test_native_assembly_evidence_kept_without_nested_scratch(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            work = arm / "scratch" / "assembly_123"
+            work.mkdir(parents=True)
+            for name in ("contigs.fasta", "seeds.fasta", "assembler.log", "temp.fastq"):
+                (work / name).write_text(name)
+            (arm / "scratch" / "pipeline.log").write_text("failure detail")
+            hashes = {"input.fastq.gz": "c" * 64}
+            evidence, _ = seal_terminal_evidence(
+                arm, {"failure": {"exit_code": 1}}, hashes)
+            terminal_retire(arm, evidence_path=evidence,
+                            container_dead=True, source_hashes=hashes)
+            self.assertFalse((arm / "scratch").exists())
+            for name in ("contigs.fasta", "seeds.fasta", "assembler.log"):
+                self.assertEqual((arm / "assembly_123" / name).read_text(), name)
+            self.assertFalse((arm / "assembly_123" / "temp.fastq").exists())
+            self.assertEqual((arm / "pipeline.log").read_text(), "failure detail")
+
+    def test_seal_rejects_symlinked_sidecar_and_temp(self):
+        for name in ("terminal_evidence.json.sha256", ".terminal_evidence.json.part"):
+            with self.subTest(name=name), TemporaryDirectory() as d:
+                arm = Path(d) / "arm"
+                arm.mkdir()
+                outside = Path(d) / "precious"
+                outside.write_text("unchanged")
+                (arm / name).symlink_to(outside)
+                with self.assertRaises(ValueError):
+                    seal_terminal_evidence(arm, {"failure": {"exit_code": 1}},
+                                           {"input.fastq.gz": "c" * 64})
+                self.assertEqual(outside.read_text(), "unchanged")
+
+    def test_source_hashes_required_for_terminal_retirement(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            (arm / "scratch").mkdir()
+            evidence, _ = seal_terminal_evidence(
+                arm, {"failure": {"exit_code": 1}}, {"input.fastq.gz": "c" * 64})
+            with self.assertRaises(RetentionGateError):
+                terminal_retire(arm, evidence_path=evidence, container_dead=True)
+            self.assertTrue((arm / "scratch").is_dir())
 
     def test_failed_arm_keeps_logs_but_loses_disposable_scratch_and_visuals(self):
         with TemporaryDirectory() as d:
@@ -386,6 +456,22 @@ class CompressionInterfaceTests(unittest.TestCase):
             compressor = ZstdCompressor()
             path.write_bytes(compressor.compress(plain, compressor.FLUSH_FRAME))
             self.assertEqual(content_sha256(path), hashlib.sha256(plain).hexdigest())
+
+    def test_zst_rejects_trailing_bytes_and_large_frames_stream(self):
+        from backports.zstd import ZstdCompressor
+        prior_hasher = retained_artifacts.CONTENT_HASHER
+        self.addCleanup(lambda: retained_artifacts.set_content_hasher(prior_hasher))
+        retained_artifacts.set_content_hasher(None)
+        plain = b"ref,coverage\na,10\n" * 500000
+        with TemporaryDirectory() as d:
+            path = Path(d) / "nuc.csv.zst"
+            compressor = ZstdCompressor()
+            payload = compressor.compress(plain, compressor.FLUSH_FRAME)
+            path.write_bytes(payload)
+            self.assertEqual(content_sha256(path), hashlib.sha256(plain).hexdigest())
+            path.write_bytes(payload + b"trailing")
+            with self.assertRaises(RetentionGateError):
+                content_sha256(path)
 
     def test_corrupt_compressed_final_rolls_back_every_codec_error(self):
         plain = "ref,coverage\na,10\n"

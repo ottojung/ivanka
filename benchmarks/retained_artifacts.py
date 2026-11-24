@@ -29,7 +29,8 @@ INTERMEDIATE_CSV = {
     "aligned.csv", "unstitched_aligned.csv",
     "remap.csv", "unstitched_remap.csv",
 }
-FINAL_EXTENSIONS = {".csv", ".fasta", ".fa", ".json"}
+FINAL_EXTENSIONS = {".csv", ".fasta", ".fa", ".json", ".log"}
+NATIVE_FILES = frozenset({"contigs.fasta", "seeds.fasta", "assembler.log"})
 # Visual outputs are never scientific evidence, at any nesting depth. PDFs are
 # included alongside raster/vector plots and page-layout figures.
 VISUAL_EXTENSIONS = frozenset({".png", ".svg", ".jpg", ".jpeg", ".gif",
@@ -107,27 +108,17 @@ class _BackportsZstdStream:
         if size == 0:
             return b""
         while not self._eof and (size < 0 or len(self._buffer) < size):
-            block = self._source.read(1048576)
-            if not block:
-                if not self._decoder.eof:
-                    raise RetentionGateError(
-                        "incomplete zstd frame: " + self._source.name)
-                self._eof = True
-                break
-            if self._decoder.eof:
-                raise RetentionGateError(
-                    "bytes follow zstd frame: " + self._source.name)
-            output = self._decoder.decompress(block, 1048576)
+            block = self._source.read(65536) if self._decoder.needs_input else b""
+            if not block and self._decoder.needs_input:
+                raise RetentionGateError("incomplete zstd frame: " + self._source.name)
+            limit = 1048576 if size < 0 else size - len(self._buffer)
+            output = self._decoder.decompress(block, limit)
             if output:
                 self._buffer.extend(output)
-            while (not self._decoder.needs_input
-                   and not self._decoder.eof):
-                output = self._decoder.decompress(b"", 1048576)
-                if output:
-                    self._buffer.extend(output)
             if self._decoder.eof:
+                if self._decoder.unused_data or self._source.read(1):
+                    raise RetentionGateError("bytes follow zstd frame: " + self._source.name)
                 self._eof = True
-                break
         if size < 0:
             data = bytes(self._buffer)
             self._buffer.clear()
@@ -160,12 +151,6 @@ def _logical_stream(path):
     if suffix == ".xz":
         return lzma.open(path, "rb")
     if suffix == ".zst":
-        try:
-            import zstandard as zstd
-        except ImportError:
-            zstd = None
-        if zstd is not None:
-            return zstd.ZstdDecompressor().stream_reader(path.open("rb"))
         try:
             from backports.zstd import ZstdDecompressor
         except ImportError as exc:
@@ -247,6 +232,20 @@ def _promotion_plan(arm):
                 if target.exists() or target.is_symlink():
                     raise ValueError(f"conflicting metrics directory: {target}")
             chosen.append((item, target))
+        elif item.is_dir() and item.name.startswith("assembly_"):
+            directory = arm / item.name
+            if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+                raise ValueError(f"unsafe retained native assembly directory: {directory}")
+            for name in sorted(NATIVE_FILES):
+                source = item / name
+                if source.is_symlink():
+                    raise ValueError(f"unsafe native assembly evidence: {source}")
+                if not source.is_file():
+                    continue
+                target = directory / name
+                _assert_inside(target, arm)
+                _safe_existing(target, source)
+                chosen.append((source, target))
     return chosen
 
 
@@ -256,12 +255,23 @@ def promote_finals(arm):
     if plan is None:
         return []
     promoted = []
-    for source, target in plan:
-        if target.exists():
-            continue
-        os.replace(source, target)
-        promoted.append((source, target))
+    try:
+        for source, target in plan:
+            if target.exists():
+                continue
+            target.parent.mkdir(exist_ok=True)
+            os.replace(source, target)
+            promoted.append((source, target))
+    except Exception:
+        _rollback_promotion(promoted)
+        raise
     return promoted
+
+
+def _rollback_promotion(promoted):
+    for source, target in reversed(promoted):
+        if target.exists() and not source.exists() and not target.is_symlink():
+            os.replace(target, source)
 
 
 def _discard_scratch(arm):
@@ -285,12 +295,7 @@ def retain_arm(arm):
     if plan is None:
         return {"scratch_present": False, "removed": False,
                 "promoted": [], "bytes_before": 0}
-    promoted = []
-    for source, target in plan:
-        if target.exists():
-            continue
-        os.replace(source, target)
-        promoted.append(target.name)
+    promoted = [target.name for _, target in promote_finals(arm)]
     _discard_scratch(arm)
     return {"scratch_present": True, "removed": True, "promoted": promoted}
 
@@ -330,27 +335,36 @@ def seal_terminal_evidence(arm, evidence, source_hashes,
     arm = Path(arm)
     if arm.is_symlink() or not arm.is_dir():
         raise ValueError(f"unsafe benchmark output: {arm}")
+    if Path(name).name != name:
+        raise ValueError("invalid evidence filename")
     target = arm / name
-    _assert_inside(target, arm.resolve())
+    root = arm.resolve()
+    sidecar = target.with_name(target.name + ".sha256")
+    temporary = target.with_name("." + name + ".part")
+    side_temp = sidecar.with_name("." + sidecar.name + ".part")
+    for path in (target, sidecar, temporary, side_temp):
+        _assert_inside(path, root)
     payload = {**evidence, "schema": RECEIPT_SCHEMA, "sealed": True,
                "source_hashes": dict(source_hashes), "sealed_at": time.time()}
-    temporary = target.with_name("." + name + ".part")
-    with temporary.open("w") as stream:
+    with temporary.open("x") as stream:
         json.dump(payload, stream, sort_keys=True)
         stream.write("\n")
         stream.flush()
         os.fsync(stream.fileno())
     digest = _hash(temporary)
+    with side_temp.open("x") as stream:
+        stream.write(digest + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
     temporary.replace(target)
-    sidecar = target.with_name(target.name + ".sha256")
-    sidecar.write_text(digest + "\n")
+    side_temp.replace(sidecar)
     return target, sidecar
 
 
 def _load_sealed_evidence(evidence_path, source_hashes):
     path = Path(evidence_path)
     sidecar = Path(str(path) + ".sha256")
-    if not path.is_file() or not sidecar.is_file() or path.is_symlink():
+    if not path.is_file() or not sidecar.is_file() or path.is_symlink() or sidecar.is_symlink():
         raise RetentionGateError("terminal evidence is not sealed on disk")
     if sidecar.read_text().strip() != _hash(path):
         raise RetentionGateError("terminal evidence hash mismatch")
@@ -366,24 +380,33 @@ def _load_sealed_evidence(evidence_path, source_hashes):
             or not any(re.fullmatch(r"[0-9a-f]{64}", value)
                        for value in sealed_hashes.values())):
         raise RetentionGateError("terminal evidence has no valid source hashes")
-    if source_hashes is not None and sealed_hashes != dict(source_hashes):
+    if source_hashes is None or sealed_hashes != dict(source_hashes):
         raise RetentionGateError("source hashes differ from the sealed receipt")
     return evidence
 
 
-def _verify_metrics(metrics, promoted, root):
-    """Re-check sealed output digests before any scratch bytes are removed."""
+def _verify_metrics(metrics, root):
+    """Check every scored output, whether previously collated or promoted."""
     outputs = metrics.get("outputs") if isinstance(metrics, dict) else None
     if not isinstance(outputs, dict):
         raise RetentionGateError("sealed metrics carry no per-output digests")
     checked = 0
-    for source, target in promoted:
-        logical = logical_name(target.name)
-        record = outputs.get(logical) or outputs.get(target.name)
-        if not isinstance(record, dict) or not record.get("sha256"):
-            continue  # not a scored output; promotion alone preserves it
-        if content_sha256(target) != record["sha256"]:
-            raise RetentionGateError(f"retained output changed: {target.name}")
+    for name, record in outputs.items():
+        if not isinstance(name, str) or Path(name).name != name or not isinstance(record, dict):
+            raise RetentionGateError("invalid scored output record")
+        expected = record.get("sha256")
+        if expected is None and record.get("exists") is False:
+            continue
+        if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+            raise RetentionGateError(f"invalid scored output digest: {name}")
+        options = [root / name] + [root / (name + suffix) for suffix in sorted(COMPRESSED_SUFFIXES)]
+        candidates = [p for p in options if p.exists() or p.is_symlink()]
+        if len(candidates) != 1:
+            raise RetentionGateError(f"missing or ambiguous scored output: {name}")
+        path = candidates[0]
+        _assert_inside(path, root)
+        if not path.is_file() or content_sha256(path) != expected:
+            raise RetentionGateError(f"retained output changed: {name}")
         checked += 1
     return checked
 
@@ -405,13 +428,16 @@ def terminal_retire(arm, *, evidence_path, container_dead, source_hashes=None,
     dead = container_dead() if callable(container_dead) else container_dead
     if dead is not True:
         raise RetentionGateError("container has not terminated")
-    evidence = _load_sealed_evidence(evidence_path, source_hashes)
     root = arm.resolve()
     evidence_path = _assert_inside(evidence_path, root)
+    _assert_inside(Path(str(evidence_path) + ".sha256"), root)
+    evidence = _load_sealed_evidence(evidence_path, source_hashes)
     report = {"scratch_present": (arm / "scratch").exists(),
               "retired": False, "promoted": [], "verified_outputs": 0,
               "removed_images": 0, "archived": False}
     if not report["scratch_present"]:
+        if "metrics" in evidence:
+            report["verified_outputs"] = _verify_metrics(evidence["metrics"], root)
         visuals = remove_visuals(arm)
         report.update(visuals)
         return report
@@ -420,7 +446,7 @@ def terminal_retire(arm, *, evidence_path, container_dead, source_hashes=None,
         promoted = promote_finals(arm)
         if "metrics" in evidence:
             report["verified_outputs"] = _verify_metrics(
-                evidence["metrics"], promoted, root)
+                evidence["metrics"], root)
         if archive_scratch:
             archive = arm / "scratch.tar.gz"
             _assert_inside(archive, root)
@@ -434,9 +460,7 @@ def terminal_retire(arm, *, evidence_path, container_dead, source_hashes=None,
         # EOFError) that is not an OSError/ValueError. Rollback must cover any
         # failure after promotion; the original exception is re-raised so the
         # caller still sees the exact diagnostic.
-        for source, target in reversed(promoted):
-            if target.exists() and not source.exists() and not target.is_symlink():
-                os.replace(target, source)
+        _rollback_promotion(promoted)
         raise
     report["promoted"] = [target.name for _, target in promoted]
     report.update(remove_visuals(arm))
@@ -482,7 +506,7 @@ def result_roots(workspace):
 
 
 def clean_workspace(workspace, apply=False):
-    """Conservative discovery, aggressive removal *inside* verified arms."""
+    """Inventory candidate scratch only; never infer terminal liveness from paths."""
     roots = list(result_roots(workspace))
     arms = [arm for root in roots for arm in _candidate_arms(root)]
     report = {"workspace": str(Path(workspace).resolve()),
@@ -490,16 +514,10 @@ def clean_workspace(workspace, apply=False):
               "results_roots": len(roots), "scratch_directories": len(arms),
               "retired": 0, "errors": [], "promoted_files": 0,
               "retired_results_roots": []}
-    for arm in arms:
-        if not apply:
-            continue
-        try:
-            result = retain_arm(arm)
-            report["retired"] += int(result["removed"])
-            report["promoted_files"] += len(result["promoted"])
-            report["retired_results_roots"].append(str(arm))
-        except (OSError, ValueError) as exc:
-            report["errors"].append(f"{arm}: {type(exc).__name__}: {exc}")
+    if apply:
+        report["errors"].append(
+            "workspace-wide deletion cannot attest terminal liveness; "
+            "use terminal_retire or the source-attested migration tool")
     return report
 
 
@@ -507,7 +525,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", type=Path, default=Path("/workspace"))
     parser.add_argument("--apply", action="store_true",
-                        help="Actually promote terminal files and remove scratch")
+                        help="Refuse unsafe legacy bulk deletion; use an attested migration")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args(argv)
     report = clean_workspace(args.workspace, args.apply)

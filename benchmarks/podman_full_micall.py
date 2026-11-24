@@ -547,16 +547,16 @@ def retire_terminal_arm(folder, result, fastqs, image, exitcode, wall_seconds,
             hashes["micall_internal_timing.json"] = sha(timing_file)
         return hashes
 
-    source_hashes = _source_hashes()
-    if exitcode == 0 and "metrics" in result:
-        evidence = {"metrics": result["metrics"]}
-    else:
-        stderr = folder / "podman.stderr.log"
-        tail = stderr.read_text()[-1200:] if stderr.is_file() else ""
-        evidence = {"failure": {"exit_code": exitcode,
-                                "container_wall_seconds": wall_seconds,
-                                "error_tail": tail}}
     try:
+        source_hashes = _source_hashes()
+        if exitcode == 0 and "metrics" in result:
+            evidence = {"metrics": result["metrics"]}
+        else:
+            stderr = folder / "podman.stderr.log"
+            tail = stderr.read_text()[-1200:] if stderr.is_file() else ""
+            evidence = {"failure": {"exit_code": exitcode,
+                                    "container_wall_seconds": wall_seconds,
+                                    "error_tail": tail}}
         evidence_path, _ = seal_terminal_evidence(folder, evidence, source_hashes)
         # Re-hash from disk: a post-seal source change must not pass the
         # sealed-receipt comparison against a stale in-memory dict.

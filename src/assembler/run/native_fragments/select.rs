@@ -1,5 +1,5 @@
-use super::support;
 use super::Reads;
+use super::{represent, support};
 use std::collections::HashSet;
 use std::io;
 
@@ -22,13 +22,13 @@ pub(crate) fn retain(
         return Ok(0);
     }
     let mut represented = HashSet::new();
-    support::covered(&mut represented, contigs, supplied)?;
+    represent::covered(&mut represented, contigs, supplied)?;
     let mut added = 0;
     for (seq, observed_pairs) in support::ranked(reads) {
         if contigs.len() >= limit {
             break;
         }
-        if !support::uncovered(&represented, &seq) {
+        if !represent::uncovered(&represented, &seq) {
             continue;
         }
         eprintln!(
@@ -36,7 +36,7 @@ pub(crate) fn retain(
             seq.len(),
             observed_pairs
         );
-        support::cover(&mut represented, &seq);
+        represent::cover(&mut represented, &seq);
         contigs.push(seq);
         added += 1;
     }

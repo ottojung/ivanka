@@ -1,8 +1,14 @@
 """Regression tests: every assembler's evidence is checked independently."""
 import copy
+import json
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
 
+from assembler_bench.exploratory_publication import publish_neutral
 from assembler_bench.public_validation import check_joined_measurements
+from assembler_bench.site_build import SITE
 
 
 class JoinedMeasurementTests(unittest.TestCase):
@@ -62,6 +68,36 @@ class JoinedMeasurementTests(unittest.TestCase):
         corrupted["samples"][0]["seconds"]["arbitrary_a"] = 121.5
         with self.assertRaisesRegex(ValueError, "launcher wall time"):
             check_joined_measurements(corrupted, self.evidence)
+
+
+class RosterStatusTests(unittest.TestCase):
+    def test_observation_status_never_uses_placeholder_cases(self):
+        report = json.loads((SITE / "data/runs.json").read_text())
+        for run in report["runs"]:
+            for item in run["roster"]:
+                self.assertNotIn({"cohort": run["cohort"]}, item["cases"])
+                measured = any(isinstance(sample.get("score", {}).get(
+                    item["id"]), (int, float)) for sample in run["samples"])
+                if measured:
+                    self.assertEqual(item["status"], "measured")
+                elif item["status"] == "measured":
+                    self.assertTrue(any(isinstance(case.get("score"), (int, float))
+                                        for case in item["cases"]))
+
+    def test_new_receipts_can_be_published_without_losing_measurements(self):
+        """The live receipt publisher updates neutral evidence and rosters."""
+        with tempfile.TemporaryDirectory() as temp:
+            staged = Path(temp) / "bench"
+            shutil.copytree(SITE, staged)
+            evidence, merged, joined = publish_neutral(staged)
+            self.assertEqual(len(evidence["assemblers"]), 10)
+            self.assertTrue(all(run["tools"] == run["dominance_matrix"]["tools"]
+                                for run in merged["runs"]))
+            prior = json.loads((SITE / "data/runs.json").read_text())
+            for before, after in zip(prior["runs"], merged["runs"]):
+                for old, new in zip(before["samples"], after["samples"]):
+                    self.assertEqual(old["score"], new["score"])
+                    self.assertEqual(old["seconds"], new["seconds"])
 
 
 if __name__ == "__main__":

@@ -126,11 +126,14 @@ def _provenance(item):
 
 
 def _status(run, tool_id, cases):
+    """Status reflects actual observations, never placeholder roster rows."""
     samples = run.get("samples", [])
-    if any(isinstance(s.get("score", {}).get(tool_id), (int, float))
-           for s in samples):
-        return "measured"
-    if cases:
+    observed = any(isinstance(s.get("score", {}).get(tool_id), (int, float))
+                   for s in samples)
+    # A case is genuine evidence only when it carries a measured score.
+    attested = any(isinstance(case.get("score"), (int, float))
+                   for case in cases)
+    if observed or attested:
         return "measured"
     if run.get("images", {}).get(tool_id):
         return "pending"
@@ -232,7 +235,11 @@ def merge_evidence(report, evidence):
         tools = cohort_tools(evidence, run["cohort"])
         if not baseline <= set(tools):
             raise ValueError("declared roster lost a measured assembler")
-        declared = set(tools) - baseline
+        # Tools with attested per-case evidence are the only join candidates.
+        # Re-running on an already transformed report preserves genuine scores
+        # and can admit newly receipted measurements without fabrication.
+        declared = {tool for tool in tools
+                    if by_id.get(tool, {}).get("cases")}
         run["tools"] = tools
         for sample in run.get("samples", []):
             for key in ("score", "seconds"):
@@ -250,8 +257,8 @@ def merge_evidence(report, evidence):
                      if case.get("cohort") == run["cohort"]
                      or (run["cohort"] == "combined" and
                          case.get("cohort") in ("real", "synthetic"))]
-            if tool in baseline and not cases:
-                cases = [{"cohort": run["cohort"]}]
+            # Baseline observations live in the case rows, not in a synthetic
+            # roster marker. Keep cases empty unless genuine attested rows exist.
             run.setdefault("_cases", {})[tool] = cases
         run["roster"] = [{
             "id": tool,

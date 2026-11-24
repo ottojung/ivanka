@@ -366,6 +366,46 @@ def publish(site=DEFAULT_SITE, registry_path=DEFAULT_REGISTRY, results=None):
     return snapshot
 
 
+def publish_neutral(site=DEFAULT_SITE, registry_path=DEFAULT_REGISTRY,
+                    results=None, receipts_root=None):
+    """Publish newly receipted assemblers into the neutral /bench/ contract.
+
+    The private snapshot is never written to the public site. Its verified
+    evidence is merged into the cohort-owned rosters and measured case rows;
+    both public files are replaced atomically only after full-site validation.
+    """
+    from .neutralize_public_site import evidence_from_snapshot
+    from .public_view import merge_evidence
+    from .site_build import validate_public_site
+
+    snapshot = build(registry_path, results)
+    validate(snapshot)
+    destination = Path(site)
+    original = json.loads((destination / "data/runs.json").read_text())
+    evidence = evidence_from_snapshot(snapshot, original, receipts_root)
+    merged, joined = merge_evidence(original, evidence)
+    attestation = (destination / "data/live-fork-attestation.json").read_bytes()
+    digest = hashlib.sha256(attestation).hexdigest()
+    for run in merged["runs"]:
+        proof = run.get("micall_fork_provenance", {})
+        if proof.get("status") == "verified" and "attestation_sha256" in proof:
+            proof["attestation_sha256"] = digest
+    with tempfile.TemporaryDirectory(prefix="neutral-bench-site-") as scratch:
+        staged = Path(scratch) / "bench"
+        shutil.copytree(destination, staged)
+        (staged / "data/assembler-evidence.json").write_text(
+            _text(evidence) + "\n")
+        (staged / "data/runs.json").write_text(_text(merged) + "\n")
+        validate_public_site(staged)
+        for name in ("assembler-evidence.json", "runs.json"):
+            source = staged / "data" / name
+            target = destination / "data" / name
+            pending = target.with_name(target.name + ".pending")
+            pending.write_bytes(source.read_bytes())
+            pending.replace(target)
+    return evidence, merged, joined
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)

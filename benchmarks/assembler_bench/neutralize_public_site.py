@@ -37,8 +37,8 @@ def _write(name, document):
         json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n")
 
 
-def _receipts_by_sha():
-    root = exploratory_policy.PROVENANCE_ROOT
+def _receipts_by_sha(root=None):
+    root = Path(root) if root is not None else exploratory_policy.PROVENANCE_ROOT
     found = {}
     for path in sorted(root.rglob("*.json")):
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -214,6 +214,15 @@ def build_evidence(snapshot, receipts, original_runs):
     return {"schema": EVIDENCE_SCHEMA,
             "title": "Assembler Bench source and measurement evidence",
             "cohorts": declarations, "assemblers": assemblers}
+
+
+def evidence_from_snapshot(snapshot, original_runs, receipts_root=None):
+    """Convert a receipt-validated publisher snapshot into neutral evidence."""
+    root = Path(receipts_root) if receipts_root is not None else (
+        exploratory_policy.PROVENANCE_ROOT)
+    checked = json.loads(json.dumps(snapshot))
+    supplement_pilots(checked, root)
+    return build_evidence(checked, _receipts_by_sha(root), original_runs)
 
 
 def migrate():

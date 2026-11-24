@@ -1,36 +1,14 @@
-use super::{Hits, Key, K};
-
-fn reverse_complement(kmer: &Key) -> Key {
-    let mut reverse = [0u8; K];
-    for (index, base) in kmer.iter().rev().enumerate() {
-        reverse[index] = match base {
-            b'A' => b'T',
-            b'C' => b'G',
-            b'G' => b'C',
-            _ => b'A',
-        };
-    }
-    reverse
-}
+use super::{rolling, Hits};
 
 /// Repeats with more than eight oriented placements cannot anchor evidence.
+/// K is odd, so no window equals its reverse complement: one canonical insert
+/// per window preserves the byte index's two oriented loci, hence its retain
+/// threshold and every lookup's locus multiset.
 pub(crate) fn build(contigs: &[Vec<u8>]) -> Hits {
     let mut index = Hits::new();
     for (candidate, sequence) in contigs.iter().enumerate() {
-        for (position, window) in sequence.windows(K).enumerate() {
-            if !window
-                .iter()
-                .all(|base| matches!(base, b'A' | b'C' | b'G' | b'T'))
-            {
-                continue;
-            }
-            let key: Key = window.try_into().expect("fixed-length window");
+        for (position, key) in rolling(sequence) {
             index.entry(key).or_default().push((candidate, position));
-            let reverse = reverse_complement(&key);
-            index
-                .entry(reverse)
-                .or_default()
-                .push((candidate, position));
         }
     }
     index.retain(|_, loci| loci.len() <= 8);

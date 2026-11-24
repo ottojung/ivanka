@@ -1,7 +1,10 @@
 use super::accumulate::Accumulator;
-use super::{index::Hits, Reads, K};
+use super::index::{self, Hits};
+use super::{Reads, K};
 
 /// Scan original read pairs, accumulating depth, pair counts and per-pair masks.
+/// Sampled start positions and the both-orientation scan are unchanged; only
+/// the probe identity is a rolling canonical packed key instead of 31 bytes.
 pub(super) fn scan(
     contigs: &[Vec<u8>],
     reads: &Reads,
@@ -18,11 +21,11 @@ pub(super) fn scan(
     for oriented in reads.seqs.chunks_exact(4).take(80_000) {
         accum.begin();
         for read in [&oriented[0], &oriented[2]] {
-            if read.len() < K {
-                continue;
-            }
-            for pos in (0..=read.len() - K).step_by(2) {
-                if let Some(locations) = hits.get(&read[pos..pos + K]) {
+            for (start, key) in index::rolling(read) {
+                if start & 1 != 0 {
+                    continue;
+                }
+                if let Some(locations) = hits.get(&key) {
                     for &(candidate, locus) in locations {
                         accum.insert(candidate, locus);
                     }

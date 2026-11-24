@@ -137,6 +137,9 @@ class BackgroundSupervisor:
                 self._preserve_attempt(arm, receipt.get("attempt", 1))
                 continue
             self._posthoc(arm, case, receipt)
+            if report.get("retention_container_id"):
+                from .px_retention import retire_finished_arm
+                retire_finished_arm(self.root, arm, receipt, report)
             completed.append(sched.receipt_id(arm))
             sched.write_checkpoint(self.root, plan, completed)
             return

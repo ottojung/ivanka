@@ -466,6 +466,101 @@ class IntegrationTests(unittest.TestCase):
         self.assertFalse(scratch.exists())
         self.assertEqual(removed["reason"], "diagnostics_measured_hashes_verified")
 
+    def test_terminal_failed_arm_requires_teardown_and_preserves_products(self):
+        from assembler_bench import px_retention
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        output = self._arm_output(arm)
+        scratch = output / "scratch"
+        scratch.mkdir()
+        (scratch / "nuc.csv").write_text("coverage\n1\n")
+        (scratch / "assembler.log").write_text("failure log")
+        (scratch / "alignments.csv").write_text("reads")
+        (scratch / "temp.sam").write_text("reads")
+        (output / "plot.pdf").write_bytes(b"plot")
+        receipt = sched.record_outcome(
+            self.px, arm, None, "failure", failure_reason="error",
+            runner_receipt_sha256="d" * 64)
+        report = {"runner_receipt_sha256": "d" * 64,
+                  "retention_container_id": "c" * 64}
+        with patch.object(px_retention, "_observed_dead", return_value=False):
+            self.assertIsNone(px_retention.retire_finished_arm(self.px, arm, receipt, report))
+        self.assertTrue(scratch.is_dir())
+        with patch.object(px_retention, "_observed_dead", return_value=True):
+            retired = px_retention.retire_finished_arm(self.px, arm, receipt, report)
+        self.assertTrue(retired["retired"])
+        self.assertFalse(scratch.exists())
+        self.assertTrue((output / "nuc.csv").is_file())
+        self.assertTrue((output / "assembler.log").is_file())
+        self.assertFalse((output / "alignments.csv").exists())
+        self.assertFalse((output / "plot.pdf").exists())
+        self.assertEqual(sched.verify_receipt(self.px, arm), receipt)
+        seal = output / "terminal_evidence.json"
+        before = seal.read_bytes()
+        with patch.object(px_retention, "_observed_dead", return_value=True):
+            repeated = px_retention.retire_finished_arm(self.px, arm, receipt, report)
+        self.assertFalse(repeated["retired"])
+        self.assertEqual(seal.read_bytes(), before)
+
+    def test_supervisor_retires_failed_arm_after_guarded_teardown(self):
+        from assembler_bench import px_retention
+        registry = self.promoted_registry()
+        for tool in TOOLS:
+            sup.make_handoff(self.px, registry, tool)
+        source = self.source()
+        arm = sched.build_plan(registry, source, self.px)["pending"][0]
+        output = self._arm_output(arm)
+
+        def operate(*args):
+            scratch = output / "scratch"
+            scratch.mkdir()
+            (scratch / "assembler.log").write_text("failed")
+            (scratch / "temp.sam").write_text("reads")
+            (self.px / sup.STOP_FILE).write_text("stop")
+            return {"status": "failed", "log_sha256": "d" * 64,
+                    "pilot_cleanup": {"pilot_container_id": "c" * 64,
+                                      "container_removed": True}}
+
+        with patch.object(px_retention, "_observed_dead", return_value=True), patch(
+                "assembler_bench.exploratory_space.admit",
+                return_value={"incremental_bytes": 0,
+                              "free_bytes": 100 * 1024**3,
+                              "admitted_reservation_bytes": 1024**3}):
+            supervisor = sup.BackgroundSupervisor(
+                registry, self.baseline(), source, self.px,
+                exe.SupervisedRunner(registry, self.baseline(), operate, self.px),
+                diagnostics=no_posthoc)
+            result = supervisor.start(armed=True)
+        self.assertEqual(len(result["completed"]), 1)
+        self.assertFalse((output / "scratch").exists())
+        self.assertEqual((output / "assembler.log").read_text(), "failed")
+        self.assertEqual(sched.verify_receipt(self.px, arm)["outcome"], "failure")
+
+    def test_terminal_success_preserves_scientific_scratch(self):
+        from assembler_bench import px_retention
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        case = self.source().case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
+        receipt = sched.record_outcome(self.px, arm, output / "conseq.csv",
+                                       "success", seconds=3.0, runner_receipt_sha256="d" * 64)
+        scratch = output / "scratch"
+        scratch.mkdir()
+        (scratch / "nuc.csv").write_text("coverage\n1\n")
+        (scratch / "temp.sam").write_text("reads")
+        exe.posthoc(self.px, arm, self._scorer(), self._scorer().source_sha256)
+        exe.extract_diagnostics(self.px, arm, output,
+                                fastq_sha256=[case.input_hashes()["R1"], case.input_hashes()["R2"]])
+        report = {"runner_receipt_sha256": "d" * 64,
+                  "retention_container_id": "c" * 64}
+        with patch.object(px_retention, "_observed_dead", return_value=True):
+            retired = px_retention.retire_finished_arm(self.px, arm, receipt, report)
+        self.assertTrue(retired["retired"])
+        self.assertFalse(scratch.exists())
+        self.assertEqual((output / "nuc.csv").read_text(), "coverage\n1\n")
+        self.assertEqual(sched.verify_receipt(self.px, arm), receipt)
+
     def test_retention_revalidates_stale_plan(self):
         plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
         arm = plan["pending"][0]

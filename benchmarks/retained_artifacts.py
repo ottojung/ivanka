@@ -180,7 +180,7 @@ def content_sha256(path):
 def _retained(name):
     logical = logical_name(name)
     if (logical in INTERMEDIATE_CSV or logical in {"temp.fasta", "temp.fa"}
-            or re.fullmatch(r"nuc_read_counts[^/]*\.csv", logical)):
+            or re.fullmatch(r"(?:nuc_read_counts|alignments|unstitched_alignments)[^/]*\.csv", logical)):
         return False
     if Path(logical).suffix.lower() in DISPOSABLE_SUFFIXES:
         return False

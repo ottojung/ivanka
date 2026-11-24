@@ -440,7 +440,7 @@ def main(argv=None):
             parser.error("--report or all four readback/root options are required")
         try:
             result = from_root(args.root, args.frozen_root, args.projects_json, args.hxb2_fasta)
-        except (OSError, UnicodeError, json.JSONDecodeError, ValueError, KeyError):
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError, KeyError, TypeError):
             result = _result(INTEGRITY_FAILURE, None,
                              reasons=["root_evidence_unreadable_or_malformed"])
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"

@@ -1,11 +1,13 @@
 """Adversarial tests for the fail-closed final physical P0 decision tool."""
 
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import final_p0_decision as decision
 import independent_frozen_psi_audit as audit
@@ -265,6 +267,16 @@ class FinalDecisionTests(unittest.TestCase):
             self.assertEqual(run.returncode, 0)
             self.assertIn(decision.INTEGRITY_FAILURE, run.stdout)
             self.assertIn("root_evidence_unreadable_or_malformed", run.stdout)
+
+    def test_malformed_root_metric_cli_fails_closed(self):
+        with mock.patch.object(decision, "from_root", side_effect=TypeError("bad metric")), \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as output:
+            code = decision.main(["--root", "cases", "--frozen-root", "frozen",
+                                  "--projects-json", "projects.json",
+                                  "--hxb2-fasta", "hxb2.fasta"])
+        self.assertEqual(code, 0)
+        self.assertIn(decision.INTEGRITY_FAILURE, output.getvalue())
+        self.assertIn("root_evidence_unreadable_or_malformed", output.getvalue())
 
     def test_integrity_precedes_measured_failure(self):
         report = make_report(readback=False)

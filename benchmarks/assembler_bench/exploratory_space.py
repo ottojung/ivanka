@@ -97,9 +97,11 @@ def admit(registry, baseline, root, image_store, workspace, proposed_bytes):
     temp_bytes = min(allocated_optional(px_temp_dir(root)), retained_all)
     retained = retained_all - temp_bytes
     used, free = retained + temp_bytes + extra_layers, available(workspace)
-    if (used + proposed_bytes > cfg["total_incremental_storage_bytes"]
-            or free - proposed_bytes < cfg["min_workspace_free_bytes"]):
-        raise ValueError("exploration would breach disk budget or workspace reserve")
+    # Real incremental usage is measured and reported, never compared to an
+    # invented project ceiling. The independent shared-filesystem reserve is
+    # the only hard bound and still fails closed for every proposed arm.
+    if free - proposed_bytes < cfg["min_workspace_free_bytes"]:
+        raise ValueError("exploration would breach the workspace reserve")
     return {"retained_bytes": retained, "temp_bytes": temp_bytes,
             "new_image_bytes": extra_layers, "incremental_bytes": used,
             "free_bytes": free, "admitted_reservation_bytes": proposed_bytes}
@@ -112,8 +114,8 @@ def initial(root, image_store, workspace, registry):
         raise ValueError("admission baseline must start with an empty project root")
     cfg = registry["policy"]
     free = available(workspace)
-    if free < cfg["min_workspace_free_bytes"] + cfg["total_incremental_storage_bytes"]:
-        raise ValueError("not enough space to reserve the complete exploration budget")
+    if free < cfg["min_workspace_free_bytes"]:
+        raise ValueError("not enough space to keep the shared filesystem reserve")
     return {"schema": "ivanka.exploratory.storage-baseline.v1",
             "root": str(target), "image_store": str(Path(image_store).resolve()),
             "workspace": str(Path(workspace).resolve()),

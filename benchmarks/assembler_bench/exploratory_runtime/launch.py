@@ -40,7 +40,7 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         record = root / ("run-" + ident + ".json")
         log = root / ("run-" + ident + ".log")
         # Podman/import/build temporaries must stay inside the metered project
-        # tree; inheriting the host TMPDIR would hide them from the 20 GiB cap.
+        # tree; inheriting the host TMPDIR would hide them from real disk accounting.
         # A per-job directory makes teardown provably scoped to this job alone.
         temp = job_temp.job_temp_dir(root, ident)
         temp.mkdir(parents=True, exist_ok=True)

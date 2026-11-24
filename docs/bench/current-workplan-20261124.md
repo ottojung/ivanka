@@ -3,7 +3,8 @@
 This is a **live status layer** over the founder-ordered
 [2026-11-21 workplan](ordered-work-20261121.md). It records the present state
 of the alpha.7/P0 transition, the running 464-case P1 candidate and the
-founder-authorized 20 GiB PX policy. It does **not** waive, rewrite or delete
+founder-directed removal of the PX incremental ceiling. It does **not** waive,
+rewrite or delete
 any frozen policy, historical result, receipt or acceptance threshold; the
 earlier workplan sections remain on record.
 
@@ -69,12 +70,16 @@ gives the go. Then sequence independent final evaluation, a separately
 namespaced PR #458 coverage-hole pilot with control families and P0
 regression check, and byte-equivalent runtime evidence.
 
-## 4. PX — ten nonqualifying tools: 20 GiB policy
+## 4. PX — ten nonqualifying tools: no incremental ceiling
 
-- The founder raised the incremental ceiling from 8 GiB to **20 GiB** at
-  17:16Z, with the **32 GiB shared free floor, one worker, 2400 s per case and
-  4 GB observed memory unchanged**. The earlier 8 GiB measurements and their
-  receipts remain valid historical evidence for that policy version.
+- The founder ordered the project-specific incremental ceiling **removed** at
+  23:15Z on November 24, 2026 (superseding the earlier 8 GiB then 20 GiB
+  ceilings). Real incremental usage is still measured fail-closed and reserved
+  per arm, but no project size cap is applied. The **32 GiB shared free floor,
+  one worker, 2400 s per case and 4 GB observed memory are unchanged**. Earlier
+  8 GiB and 20 GiB registries, receipts and measurements remain valid historical
+  evidence for their policy versions and are never rewritten; the obsolete
+  `total_incremental_storage_bytes` field is ignored when present.
 - **PR #459** (head `f3b63ad8…`) is open on GitHub and locally deployed as
   `/workspace/ivanka-px-budget20-20261124` with registry
   `private-frozen-ten-pilot-registry-20gib-20261124.json`: 21,474,836,480 B

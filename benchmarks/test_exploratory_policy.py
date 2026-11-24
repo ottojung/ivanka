@@ -72,10 +72,36 @@ class TestExplorerRegistry(unittest.TestCase):
         self.mutate(PATH, lambda d: d.update(qualifying=True))
         self.mutate(PATH, lambda d: d["candidates"][0].update(qualifying=True))
 
+    def accept_mutant(self, change):
+        import json
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as temp:
+            target = Path(temp) / "candidates.json"
+            data = copy.deepcopy(self.current)
+            change(data)
+            target.write_text(json.dumps(data))
+            self.assertEqual(checked(target)["schema"],
+                             "ivanka.exploratory.assemblers.v1")
+
+    def test_legacy_incremental_ceiling_field_is_accepted_and_ignored(self):
+        # Historical registries (including the live 20 GiB one) are accepted
+        # byte-for-byte; the obsolete field is never enforced or rewritten.
+        for value in (9 * 1024**3, 20 * 1024**3, 0, 999 * 1024**3):
+            with self.subTest(value=value):
+                self.accept_mutant(lambda d, v=value: d["policy"].update(
+                    total_incremental_storage_bytes=v))
+        self.assertNotIn("total_incremental_storage_bytes",
+                         self.current["policy"])
+
+    def test_current_registry_has_no_incremental_ceiling(self):
+        self.assertNotIn("total_incremental_storage_bytes",
+                         self.current["policy"])
+        self.assertEqual(self.current["policy"]["min_workspace_free_bytes"],
+                         32 * 1024**3)
+
     def test_reject_unpinned_execution_or_unsafe_limits(self):
         self.mutate(PATH, lambda d: d["candidates"][0].update(status="pilot"))
         self.mutate(PATH, lambda d: d["candidates"][0].update(status="proposed"))
-        self.mutate(PATH, lambda d: d["policy"].update(total_incremental_storage_bytes=9*1024**3))
         self.mutate(PATH, lambda d: d["policy"].update(max_concurrent_exploratory_workers=2))
 
     def test_reject_duplicate_or_replacement(self):

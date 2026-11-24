@@ -113,7 +113,7 @@ console.log('ACTUAL_PARTIAL_EVIDENCE_VISIBLE');
         self.assertNotIn('No paired measurements</span>',matrix)
         self.assertIn('class="dominance-key"',html)
         self.assertNotIn('class="dominance-legend"',html)
-        self.assertIn('min-width:680px;width:100%;table-layout:fixed',css)
+        self.assertIn('min-width:max(680px,calc(112px + 60px * var(--matrix-columns,7)));width:100%;table-layout:fixed',css)
         self.assertNotIn('min-width:1020px',css)
         self.assertNotIn('min-width:122px',css)
         self.assertNotIn('background:#373025',css)

@@ -403,21 +403,34 @@ function drawProvenance() {
     ["Diagnostic SHA256","diagnostic_sha256"]]) {
     if(r[key])fields.push([label,r[key]]);
   }
-  const inventory=r.micall_fork_provenance?.images;
-  const buildLinks=inventory?
+  const inventory=r.micall_fork_provenance?.images||{};
+  const roster=new Map((r.roster||[]).map(item=>[item.id,item]));
+  const buildLinks=r.tools?.length?
     '<section class="dedicated-builds"><h3>Assembler builds</h3>'+
     '<div class="table-scroll provenance-scroll"><table class="dedicated-table"><thead><tr>'+
     '<th>Assembler</th><th>Dedicated fork branch</th>'+
     '<th>Fork source commit</th><th>Immutable image ID</th></tr></thead><tbody>'+
-    Object.entries(inventory).map(([name,item])=>
-      '<tr><th>'+esc(toolLabel(name))+'</th>'+
-      '<td>'+esc(item.source_branch||
-        "Common source commit (not dedicated)")+'</td>'+
-      '<td><a target="_blank" rel="noopener noreferrer" href="'+
-        esc(item.source_url)+'">'+esc(item.source_commit)+
-      '</a></td><td class="code-hash">'+esc(item.image_sha256)+
-      '</td></tr>').join("")+
-    '</tbody></table></div></section>':
+    r.tools.map(name=>{
+      const provenance=roster.get(name)?.provenance||{};
+      const adapter=provenance.adapter_commit;
+      const item=inventory[name]||{
+        source_branch:provenance.source_branch,
+        source_commit:adapter,
+        source_url:/^[a-f0-9]{40}$/.test(adapter||"")?
+          "https://github.com/ottojung/MiCall/tree/"+adapter:null,
+        image_sha256:provenance.image_sha256||r.images?.[name]
+      };
+      const branch=item.source_branch||(inventory[name]?
+        "Common source commit (not dedicated)":"—");
+      const commit=item.source_commit?
+        (item.source_url?'<a target="_blank" rel="noopener noreferrer" href="'+
+          esc(item.source_url)+'">'+esc(item.source_commit)+'</a>':
+          esc(item.source_commit)):"—";
+      return '<tr><th scope="row">'+esc(toolLabel(name))+'</th>'+
+        '<td>'+esc(branch)+'</td><td>'+commit+
+        '</td><td class="code-hash">'+(esc(item.image_sha256)||"Not recorded")+
+        '</td></tr>';
+    }).join("")+'</tbody></table></div></section>':
     '<p class="hint">Assembler build details unavailable.</p>';
   el("provenanceContent").innerHTML='<div class="provenance-box"><dl>'+fields.map(([k,v])=>
     '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>').join("")+
@@ -586,8 +599,8 @@ function drawDominance() {
       selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
       ". Row dominates column when strict Ψ(r)>0 for every real r≥0 "+
       "on all selected metrics; missing measurements remain unresolved.";
-  holder.innerHTML='<table class="psi-matrix"><thead><tr><th>ROW A ↓ / B →</th>'+
-    matrixTools.map(tool=>'<th>'+esc(toolLabel(tool))+'</th>').join("")+
+  holder.innerHTML='<table class="psi-matrix" style="--matrix-columns:'+matrixTools.length+'"><thead><tr><th>ROW A ↓ / B →</th>'+
+    matrixTools.map(tool=>'<th scope="col">'+esc(toolLabel(tool))+'</th>').join("")+
     '</tr></thead><tbody>'+
     matrixTools.map(a=>'<tr><th scope="row">'+esc(toolLabel(a))+'</th>'+
       matrixTools.map(b=>{

@@ -63,8 +63,17 @@ class DedicatedViewsTests(unittest.TestCase):
         evidence = self.evidence()
         proofs = {run["cohort"]: check_joined_measurements(run, evidence)
                   for run in report["runs"]}
-        self.assertEqual(len(proofs["real"].get("skesa", ())), 1)
-        self.assertEqual(len(proofs["combined"].get("minia", ())), 2)
+        def attested(tool, cohorts):
+            return sum(1 for item in evidence["assemblers"]
+                       if item["id"] == tool
+                       for case in item.get("cases", [])
+                       if case.get("cohort") in cohorts)
+        real_skesa = attested("skesa", {"real"})
+        combined_minia = attested("minia", {"real", "synthetic"})
+        self.assertGreater(real_skesa, 0)
+        self.assertEqual(len(proofs["real"].get("skesa", ())), real_skesa)
+        self.assertEqual(len(proofs["combined"].get("minia", ())),
+                         combined_minia)
         corrupted = self.report()
         for sample in corrupted["runs"][2]["samples"]:
             if sample["alias"] == "R-R053":

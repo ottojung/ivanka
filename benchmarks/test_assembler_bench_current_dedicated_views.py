@@ -63,8 +63,24 @@ class DedicatedViewsTests(unittest.TestCase):
         evidence = self.evidence()
         proofs = {run["cohort"]: check_joined_measurements(run, evidence)
                   for run in report["runs"]}
-        self.assertEqual(len(proofs["real"].get("skesa", ())), 1)
-        self.assertEqual(len(proofs["combined"].get("minia", ())), 2)
+        # The published case population grows as benchmarks finish.
+        for run in report["runs"]:
+            cohort = run["cohort"]
+            aliases = {row["alias"] for row in run["samples"]}
+            for item in evidence["assemblers"]:
+                expected = set()
+                for case in item.get("cases", []):
+                    source = case["cohort"]
+                    alias = case["canonical_alias"]
+                    if cohort == "combined":
+                        alias = ("R-" if source == "real" else "S-") + alias
+                    elif source != cohort:
+                        continue
+                    if alias in aliases:
+                        expected.add(alias)
+                self.assertEqual(proofs[cohort].get(item["id"], set()), expected)
+        self.assertTrue(proofs["real"].get("skesa"))
+        self.assertIn("R-R053", proofs["combined"].get("minia", set()))
         corrupted = self.report()
         for sample in corrupted["runs"][2]["samples"]:
             if sample["alias"] == "R-R053":

@@ -87,7 +87,7 @@ class BackgroundSupervisor:
 
     def __init__(self, registry, baseline, source, root, runner,
                  reserve_bytes=1024**3, clock=time.monotonic, sleep=time.sleep,
-                 diagnostics=None, retain=None):
+                 diagnostics=None, retain=None, scorer=None, scorer_sha=None):
         self.registry = Path(registry)
         self.baseline = json.loads(Path(baseline).read_text())
         self.source, self.root = source, Path(root)
@@ -96,6 +96,8 @@ class BackgroundSupervisor:
         self.clock, self.sleep = clock, sleep
         self.diagnostics = diagnostics
         self.retain = retain
+        self.scorer = scorer
+        self.scorer_sha = scorer_sha
         if not sched.MIN_RESERVE <= reserve_bytes <= sched.MAX_RESERVE:
             raise ValueError("PX supervisor reservation must be 1-4 GiB")
 
@@ -129,6 +131,7 @@ class BackgroundSupervisor:
                          in sched.INFRASTRUCTURE_FAILURE_REASONS
                          and receipt.get("attempt", 1) < sched.MAX_INFRA_ATTEMPTS)
             if retryable and not (self.root / STOP_FILE).is_file():
+                self._preserve_attempt(arm, receipt.get("attempt", 1))
                 continue
             self._posthoc(arm, case, receipt)
             completed.append(sched.receipt_id(arm))
@@ -136,6 +139,18 @@ class BackgroundSupervisor:
             return
         completed.append(sched.receipt_id(arm))
         sched.write_checkpoint(self.root, plan, completed)
+
+    def _preserve_attempt(self, arm, attempt):
+        output = self.root / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
+        if not output.exists():
+            return
+        archive = (self.root / "outputs" / "attempts"
+                   / (arm["tool_id"] + "-" + arm["alias"]
+                      + f".attempt-{attempt:03d}"))
+        if archive.exists():
+            raise ValueError("attempt output already preserved")
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        output.rename(archive)
 
     def _posthoc(self, arm, case, receipt):
         if receipt.get("outcome") != "success":
@@ -150,7 +165,9 @@ class BackgroundSupervisor:
             return
         try:
             from .px_execution import posthoc_extract_and_retain
-            posthoc_extract_and_retain(self.root, arm, case, receipt)
+            posthoc_extract_and_retain(self.root, arm, case, receipt,
+                                       scorer=self.scorer,
+                                       scorer_sha=self.scorer_sha)
         except Exception:  # noqa: BLE001
             return
 

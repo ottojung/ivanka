@@ -457,15 +457,22 @@ def admit_arm(registry, baseline, root, reserve_bytes):
                                    reserve_bytes)
 
 
-def posthoc_score(root, arm, scorer, expected_source_sha256):
+def posthoc_score(root, arm, scorer, expected_source_sha256, *,
+                   output_dir=None, case=None):
     """Score only after the output is hashed; truth stays inside the scorer."""
     receipt = verify_receipt(root, arm)
     if receipt is None or receipt["outcome"] != "success":
         raise ValueError("only a terminal successful arm can be scored")
     if getattr(scorer, "source_sha256", None) != expected_source_sha256:
         raise ValueError("source-frozen scorer identity changed")
-    row = scorer.score(alias=arm["alias"], cohort=arm["cohort"],
-                       output_sha256=receipt["output_sha256"])
+    kwargs = dict(alias=arm["alias"], cohort=arm["cohort"],
+                  output_sha256=receipt["output_sha256"],
+                  output_dir=output_dir, receipt=receipt, arm=arm, case=case)
+    try:
+        row = scorer.score(**kwargs)
+    except TypeError:
+        row = scorer.score(alias=arm["alias"], cohort=arm["cohort"],
+                           output_sha256=receipt["output_sha256"])
     if (not isinstance(row, dict) or row.get("alias") != arm["alias"]
             or row.get("outcome") not in ("success", "failure")):
         raise ValueError("independent scorer returned an invalid row")

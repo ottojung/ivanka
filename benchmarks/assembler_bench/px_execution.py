@@ -187,18 +187,68 @@ def extract_diagnostics(root, arm, output_dir, *, fastq_sha256,
                              exact_report=exact_report)
 
 
-def posthoc_extract_and_retain(root, arm, case, receipt):
-    """Default post-arm hook: extract diagnostics, then reclaim disposable."""
-    del receipt
-    output_dir = Path(root) / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
-    exact_report = None
-    report_path = output_dir / "exact_coverage.json"
+def _exact_report(output_dir, case, receipt):
+    report_path = Path(output_dir) / "exact_coverage.json"
     if report_path.is_file():
-        exact_report = json.loads(report_path.read_bytes())
+        return json.loads(report_path.read_bytes())
+    artifact = final_max(output_dir)
+    if artifact is None:
+        return None
+    try:
+        from benchmarks.produce_exact_coverage import generate
+    except Exception:
+        return None
+    csv_path = Path(output_dir) / "exact_coverage.csv"
+    temp = Path(output_dir) / ".exact_coverage.csv.partial"
+    try:
+        report = generate(case.r1, case.r2, artifact, temp, overlap_size=70)
+        temp.replace(csv_path)
+        report.update({
+            "method": "micall-longest-final-MAX-exact-v2",
+            "source_conseq_sha256": receipt["output_sha256"],
+            "source_image_sha256": arm_image(receipt),
+            "source_fastq_sha256": [case.input_hashes()["R1"],
+                                    case.input_hashes()["R2"]],
+            "micall_exact_coverage_module_sha256": (
+                __import__("benchmarks.assembler_bench.exact_cache", fromlist=["SOURCE_SHA256"]).SOURCE_SHA256),
+            "exact_coverage_sha256": sched.sha256_file(csv_path),
+            "exact_coverage_csv": str(csv_path),
+        })
+        report_path.write_text(json.dumps(report, sort_keys=True) + "\n")
+        return report
+    except Exception:
+        temp.unlink(missing_ok=True)
+        return None
+
+
+def arm_image(receipt):
+    value = receipt.get("image_sha256")
+    if not isinstance(value, str) or not sched.SHA256.fullmatch(value):
+        raise ValueError("receipt missing image sha256")
+    return value
+
+
+def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
+                               scorer_sha=None):
+    """Score, extract diagnostics, then reclaim only verified disposable."""
+    output_dir = Path(root) / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
+    if scorer is None:
+        try:
+            from .px_posthoc import build_default_scorer
+            scorer = build_default_scorer()
+            scorer_sha = scorer.source_sha256
+        except Exception:
+            scorer = None
+    if scorer is not None and scorer_sha is not None:
+        result = sched.posthoc_score(root, arm, scorer, scorer_sha,
+                                     output_dir=output_dir, case=case)
+        path, digest = sched.write_results(root, arm, result)
+        Path(str(path) + ".sha256").write_text(digest + "\n")
+    exact = _exact_report(output_dir, case, receipt)
     hashes = case.input_hashes()
     px_metrics.record(root, arm, output_dir,
                       fastq_sha256=[hashes["R1"], hashes["R2"]],
-                      exact_report=exact_report)
+                      exact_report=exact)
     for target in px_retention._disposable_entries(Path(root), arm):
         px_retention.reclaim_one(root, arm, target=target)
 

@@ -21,9 +21,8 @@ DISPOSABLE_DIRS = frozenset(("scratch", "tmp"))
 # and complete diagnostics are preserved; they are never removed before that.
 DISPOSABLE_FILES = frozenset(("scratch.tar.gz", "scratch.tgz"))
 INFRASTRUCTURE_REASONS = frozenset(("disk_stop", "measurement_unavailable"))
-DIAGNOSTICS_SCHEMA = "ivanka.px.diagnostics.v2"
-METRICS = ("final_max", "soft_clips", "mapping_depth_concordance",
-           "exact_coverage")
+DIAGNOSTICS_SCHEMA = "ivanka.px.diagnostics.v3"
+METRICS = ("final_max", "canonical_micall", "exact_coverage")
 
 
 def arm_output_dir(root, arm):

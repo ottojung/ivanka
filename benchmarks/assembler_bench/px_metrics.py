@@ -12,16 +12,17 @@ import hashlib
 import math
 from pathlib import Path
 
+from benchmarks.diagnostic_metrics import extract as extract_canonical
+
 from . import exact_cache
 from . import px_cohort_scheduler as sched
 from .metric_catalog_exact import values as exact_values
 
-SCHEMA = "ivanka.px.diagnostics.v2"
+SCHEMA = "ivanka.px.diagnostics.v3"
 OVERLAP_SIZE = 70
 TRACKS = ("exact_coverage", "exact_coverage_overlapped")
 METHOD = "micall-longest-final-MAX-exact-v2"
-METRICS = ("final_max", "soft_clips", "mapping_depth_concordance",
-           "exact_coverage")
+METRICS = ("final_max", "canonical_micall", "exact_coverage")
 EXTRACTED = "extracted"
 UNAVAILABLE = "unavailable"
 
@@ -98,57 +99,21 @@ def _final_max_metric(artifact, output_sha256):
     }, evidence=evidence), lengths
 
 
-def _soft_clip_metric(output_dir):
-    nuc = Path(output_dir) / "scratch" / "nuc.csv"
-    if not nuc.is_file():
-        nuc = Path(output_dir) / "nuc.csv"
-    if not nuc.is_file():
-        return _unavailable("nuc.csv not retained in output artifacts")
-    with nuc.open(newline="") as stream:
-        rows = list(csv.DictReader(stream))
-    total = 0
-    seen = False
-    for row in rows:
-        value = row.get("soft_clips_count")
-        if value in (None, ""):
-            continue
-        seen = True
-        total += int(float(value))
-    if not seen:
-        return _unavailable("nuc.csv has no soft_clips_count values")
-    return _metric(EXTRACTED, values={"soft_clips_count": total},
-                   evidence={"nuc_csv_sha256": sched.sha256_file(nuc),
-                             "rows": len(rows)})
-
-
-def _mapping_metric(output_dir):
-    conseq = Path(output_dir) / "scratch" / "conseq_all.csv"
-    if not conseq.is_file():
-        conseq = Path(output_dir) / "conseq_all.csv"
-    if not conseq.is_file():
-        return _unavailable("conseq_all.csv not retained in output artifacts")
-    with conseq.open(newline="") as stream:
-        rows = list(csv.DictReader(stream))
-    depths, concordances = [], []
-    for row in rows:
-        depth = row.get("avg_depth")
-        concordance = row.get("concordance")
-        if depth not in (None, ""):
-            depths.append(float(depth))
-        if concordance not in (None, ""):
-            concordances.append(float(concordance))
-    if not depths and not concordances:
-        return _unavailable("conseq_all.csv has no depth or concordance values")
-    values = {
-        "rows": len(rows),
-        "mean_avg_depth": sum(depths) / len(depths) if depths else None,
-        "min_avg_depth": min(depths) if depths else None,
-        "mean_concordance": (sum(concordances) / len(concordances)
-                             if concordances else None),
-        "min_concordance": min(concordances) if concordances else None,
-    }
-    return _metric(EXTRACTED, values=values,
-                   evidence={"conseq_all_csv_sha256": sched.sha256_file(conseq)})
+def _canonical_metric(output_dir):
+    """Reuse canonical MiCall diagnostic extraction; never guess columns."""
+    report = extract_canonical(Path(output_dir))
+    values = report.get("values") or {}
+    unavailable = sorted(report.get("unavailable") or [])
+    errors = list(report.get("errors") or [])
+    if errors:
+        return _unavailable("canonical diagnostics extraction error: " + errors[0])
+    present = {k: v for k, v in values.items() if v is not None}
+    if not present:
+        return _unavailable("no canonical MiCall diagnostics available")
+    return _metric(EXTRACTED, values=present, evidence={
+        "unavailable": unavailable,
+        "qualification_effect": report.get("qualification_effect"),
+    })
 
 
 def validate_exact_report(report, output_sha256, fastq_sha256):
@@ -258,8 +223,7 @@ def extract(root, arm, output_dir, *, fastq_sha256, exact_report=None):
         "runner_receipt_sha256": receipt.get("runner_receipt_sha256"),
         "metrics": {
             "final_max": final_metric,
-            "soft_clips": _soft_clip_metric(output_dir),
-            "mapping_depth_concordance": _mapping_metric(output_dir),
+            "canonical_micall": _canonical_metric(output_dir),
             "exact_coverage": _exact_metric(report=exact_report,
                                             output_sha256=receipt["output_sha256"],
                                             fastq_sha256=reads, lengths=lengths),

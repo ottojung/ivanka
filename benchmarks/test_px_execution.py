@@ -544,5 +544,126 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
 
 
+    def test_header_only_conseq_scores_without_rerun(self):
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        case = self.source().case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        header = b"region,q-cutoff,consensus-percent-cutoff,offset,sequence\n"
+        (output / "conseq.csv").write_bytes(header)
+        sched.record_outcome(self.px, arm, output / "conseq.csv", "success",
+                             seconds=1.0, peak_rss=1)
+        from assembler_bench.px_posthoc import PxScorer
+        scorer = PxScorer()
+        result = sched.posthoc_score(self.px, arm, scorer, scorer.source_sha256,
+                                     output_dir=output, case=case)
+        self.assertEqual(result["samples"][0]["score"], 0.0)
+        self.assertEqual(result["samples"][0]["outcome"], "success")
+        self.assertEqual(result["samples"][0]["method"],
+                         "best_final_max_contig_local_alignment_over_reference_panel")
+
+    def test_retry_preserves_immutable_attempt_output(self):
+        registry = self.promoted_registry()
+        for tool in TOOLS:
+            sup.make_handoff(self.px, registry, tool)
+        calls = []
+        source = self.source()
+        first = sched.build_plan(registry, source, self.px)["pending"][0]
+
+        def operate(registry_path, baseline, tool, mode, argv, reserve):
+            mount = next(a for a in argv if str(a).endswith(":/results:rw"))
+            output = Path(str(mount).split(":")[0])
+            calls.append(output.name)
+            if len(calls) == 1:
+                (output / "conseq.csv").write_bytes(b"attempt1\n")
+                return {"status": "killed", "reason": "disk_limit",
+                        "log_sha256": "c" * 64}
+            (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
+            (output / "timing.json").write_text(
+                json.dumps({"exit_code": 0, "seconds": 3.0}))
+            (self.px / sup.STOP_FILE).write_text("stop\n")
+            return {"status": "finished", "peak_rss": 1_000_000,
+                    "log_sha256": "d" * 64}
+
+        with patch("assembler_bench.exploratory_space.admit",
+                   return_value={"incremental_bytes": 0,
+                                 "free_bytes": 100 * 1024**3,
+                                 "admitted_reservation_bytes": 1024**3}):
+            sup.BackgroundSupervisor(
+                registry, self.baseline(), source, self.px,
+                exe.SupervisedRunner(registry, self.baseline(), operate, self.px),
+            ).start(armed=True)
+        preserved = self.px / "outputs" / "attempts" / (
+            "skesa-" + first["alias"] + ".attempt-001")
+        self.assertTrue(preserved.is_dir())
+        self.assertEqual((preserved / "conseq.csv").read_bytes(), b"attempt1\n")
+        self.assertEqual(sched.attempt_path(self.px, first, 1).is_file(), True)
+
+    def test_full_two_arm_pipeline_and_restart_reconciliation(self):
+        registry = self.promoted_registry()
+        for tool in TOOLS:
+            sup.make_handoff(self.px, registry, tool)
+        calls = []
+
+        class Scorer:
+            source_sha256 = "e" * 64
+
+            def score(self, **kwargs):
+                return {"alias": kwargs["alias"], "outcome": "success",
+                        "score": 1.0, "seconds": 3.0}
+
+        scorer = Scorer()
+
+        def operate(registry_path, baseline, tool, mode, argv, reserve):
+            mount = next(a for a in argv if str(a).endswith(":/results:rw"))
+            output = Path(str(mount).split(":")[0])
+            calls.append(output.name)
+            (Path(output) / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
+            (Path(output) / "timing.json").write_text(
+                json.dumps({"exit_code": 0, "seconds": 3.0}))
+            if len(calls) == 2:
+                (self.px / sup.STOP_FILE).write_text("stop\n")
+            return {"status": "finished", "peak_rss": 1_000_000,
+                    "log_sha256": "c" * 64}
+
+        with patch("assembler_bench.exploratory_space.admit",
+                   return_value={"incremental_bytes": 0,
+                                 "free_bytes": 100 * 1024**3,
+                                 "admitted_reservation_bytes": 1024**3}):
+            first_run = sup.BackgroundSupervisor(
+                registry, self.baseline(), self.source(), self.px,
+                exe.SupervisedRunner(registry, self.baseline(), operate, self.px),
+                scorer=scorer, scorer_sha=scorer.source_sha256,
+            ).start(armed=True)
+        self.assertEqual(len(first_run["completed"]), 2)
+        (self.px / sup.STOP_FILE).unlink()
+        resumed_calls = []
+
+        def operate2(registry_path, baseline, tool, mode, argv, reserve):
+            mount = next(a for a in argv if str(a).endswith(":/results:rw"))
+            output = Path(str(mount).split(":")[0])
+            resumed_calls.append(output.name)
+            (self.px / sup.STOP_FILE).write_text("stop\n")
+            (Path(output) / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
+            (Path(output) / "timing.json").write_text(
+                json.dumps({"exit_code": 0, "seconds": 3.0}))
+            return {"status": "finished", "peak_rss": 1_000_000,
+                    "log_sha256": "d" * 64}
+
+        with patch("assembler_bench.exploratory_space.admit",
+                   return_value={"incremental_bytes": 0,
+                                 "free_bytes": 100 * 1024**3,
+                                 "admitted_reservation_bytes": 1024**3}):
+            sup.BackgroundSupervisor(
+                registry, self.baseline(), self.source(), self.px,
+                exe.SupervisedRunner(registry, self.baseline(), operate2, self.px),
+                scorer=scorer, scorer_sha=scorer.source_sha256,
+            ).start(armed=True)
+        self.assertFalse(set(resumed_calls) & set(calls))
+        for arm in sched.build_plan(registry, self.source(), self.px)["pending"][:2]:
+            pass
+        self.assertTrue(len(calls) == 2)
+
+
 if __name__ == "__main__":
     unittest.main()

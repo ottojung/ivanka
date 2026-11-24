@@ -9,6 +9,7 @@ import json
 import math
 import re
 
+from .adapter_branch_refs import adapter_provenance
 from .public_psi import public_matrix
 from .public_view import EVIDENCE_SCHEMA, assert_clean_object
 from .public_vocabulary import assert_clean
@@ -54,6 +55,11 @@ def check_evidence(evidence):
             if provenance.get(key) and not re.fullmatch(
                     "[0-9a-f]{40}", provenance[key]):
                 raise ValueError("unverified source pin in public evidence")
+        adapter = provenance.get("adapter_commit")
+        if adapter:
+            expected = adapter_provenance(item["id"], adapter)
+            if any(provenance.get(k) != v for k, v in expected.items()):
+                raise ValueError("adapter branch or commit URL mismatch")
         image = provenance.get("image_sha256")
         if image is not None and not SHA64.fullmatch(image):
             raise ValueError("unverified image digest in public evidence")
@@ -192,6 +198,7 @@ def check_public_site(site):
     assert_clean_object(report)
     check_evidence(evidence)
     joined = {}
+    declared = {item["id"]: item for item in evidence["assemblers"]}
     for run in report["runs"]:
         if run.get("status") not in ("complete", "incomplete", "archived",
                                      "measured", "failed", "pending",
@@ -202,6 +209,13 @@ def check_public_site(site):
                 or any(set(item) != {"id", "name", "status", "provenance",
                                      "cases"} for item in roster)):
             raise ValueError("incoherent cohort-owned assembler roster")
+        for item in roster:
+            expected = declared.get(item["id"], {})
+            if expected.get("adapter_commit"):
+                actual = item["provenance"]
+                for key in ("adapter_commit", "source_branch", "source_url"):
+                    if actual.get(key) != expected.get(key):
+                        raise ValueError("cohort roster lost adapter branch evidence")
         for sample in run.get("samples", []):
             failed = set(sample.get("failures", []))
             if not failed <= set(run["tools"]):

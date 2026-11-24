@@ -14,8 +14,12 @@ SHA64 = re.compile(r"[a-f0-9]{64}\Z")
 PROVENANCE_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121/receipts")
 
 
-def verified_receipt(item, evidence, kind):
-    """A digest alone is NOT evidence that a built image or pilot exists."""
+def verified_receipt(item, evidence, kind, provenance_root=None):
+    """A digest alone is NOT evidence that a built image or pilot exists.
+
+    ``provenance_root`` lets callers verify an isolated registry copy against
+    that copy's receipts instead of the deployed provenance root.
+    """
     if not isinstance(evidence, dict):
         return False
     name, expected = evidence.get("path"), evidence.get("sha256")
@@ -24,7 +28,8 @@ def verified_receipt(item, evidence, kind):
         return False
     try:
         path = Path(name).resolve(strict=True)
-        root = PROVENANCE_ROOT.resolve(strict=True)
+        root = Path(PROVENANCE_ROOT if provenance_root is None
+                    else provenance_root).resolve(strict=True)
         if not path.is_relative_to(root) or not path.is_file():
             return False
         blob = path.read_bytes()
@@ -53,7 +58,7 @@ def verified_receipt(item, evidence, kind):
     return False
 
 
-def checked(path):
+def checked(path, *, provenance_root=None):
     """Return a registry only if its boundary cannot change qualification."""
     data = json.loads(Path(path).read_text())
     candidates = data["candidates"]
@@ -123,14 +128,15 @@ def checked(path):
             raise ValueError("unproven or qualifying explorer: " + item["id"])
         if (item["status"] in ("image-pinned", "pilot", "benchmarked")
                 and (item["adapter_commit"] is None or not verified_receipt(
-                    item, item.get("image_evidence"), "image"))):
+                    item, item.get("image_evidence"), "image", provenance_root))):
             raise ValueError("no source-bound image proof: " + item["id"])
         if (item["status"] in ("pilot", "benchmarked")
-                and not verified_receipt(item, item.get("pilot_evidence"), "pilot")):
+                and not verified_receipt(item, item.get("pilot_evidence"),
+                                         "pilot", provenance_root)):
             raise ValueError("no genuine paired-FASTQ pilot proof: " + item["id"])
         if (item["status"] == "benchmarked"
                 and not verified_receipt(item, item.get("benchmark_evidence"),
-                                         "benchmark")):
+                                         "benchmark", provenance_root)):
             raise ValueError("no nonqualifying benchmark proof: " + item["id"])
     return data
 

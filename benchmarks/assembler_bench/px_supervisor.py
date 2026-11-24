@@ -52,7 +52,7 @@ def make_handoff(root, registry, tool):
     return path
 
 
-def verify_handoff(root, registry, tool):
+def verify_handoff(root, registry, tool, *, provenance_root=None):
     """Refuse to run unless board, agent, tests and image proof all agree."""
     path = handoff_path(root, tool)
     if not path.is_file():
@@ -64,7 +64,7 @@ def verify_handoff(root, registry, tool):
             or record.get("agent") != IMAGE_AGENT
             or record.get("tests_passed") is not True):
         return False
-    data = exploratory_policy.checked(registry)
+    data = exploratory_policy.checked(registry, provenance_root=provenance_root)
     if not exploratory_policy.eligible(data, tool):
         return False
     item = next(x for x in data["candidates"] if x["id"] == tool)
@@ -77,9 +77,11 @@ def verify_handoff(root, registry, tool):
             or record.get("pilot_receipt_sha256") != pilot.get("sha256")):
         return False
     bound = dict(item, adapter_commit=data["adapter_branch_commits"][tool])
-    if not exploratory_policy.verified_receipt(bound, evidence, "image"):
+    if not exploratory_policy.verified_receipt(
+            bound, evidence, "image", provenance_root):
         return False
-    return exploratory_policy.verified_receipt(bound, pilot, "pilot")
+    return exploratory_policy.verified_receipt(
+        bound, pilot, "pilot", provenance_root)
 
 
 class BackgroundSupervisor:

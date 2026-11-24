@@ -29,6 +29,8 @@ class RetainedArtifactsTests(unittest.TestCase):
                 "read_summary.csv": "reads\n100\n",
                 "combined_contigs.fasta": ">c\nACGT\n",
                 "remap.csv": "giant temporary remapping data",
+                "alignments.csv": "intermediate reads",
+                "unstitched_alignments_unmerged.csv.gz": "intermediate reads",
                 "temp.sam": "giant temporary alignment data",
                 "nuc_read_countsa1b2.csv": "giant intermediate counts",
             }
@@ -43,7 +45,8 @@ class RetainedArtifactsTests(unittest.TestCase):
             for name in ("nuc.csv", "conseq.csv", "genome_coverage.csv",
                          "read_summary.csv", "combined_contigs.fasta"):
                 self.assertEqual((arm / name).read_text(), originals[name])
-            for name in ("remap.csv", "temp.sam", "nuc_read_countsa1b2.csv"):
+            for name in ("remap.csv", "temp.sam", "nuc_read_countsa1b2.csv",
+                         "alignments.csv", "unstitched_alignments_unmerged.csv.gz"):
                 self.assertFalse((arm / name).exists())
             self.assertEqual(retain_arm(arm)["removed"], False)
             self.assertTrue((arm / "micall_internal_timing.json").is_file())

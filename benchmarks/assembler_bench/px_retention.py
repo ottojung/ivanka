@@ -4,12 +4,19 @@ Receipts, final MAX outputs, results, diagnostics and their SHA-256 sidecars are
 protected and never removed. Disposable scratch and known disposable scratch
 archives may be reclaimed only after diagnostics are complete, final MAX is
 preserved outside scratch, and hashes are revalidated immediately before
-deletion. Failed and infrastructure-stopped attempts keep their evidence. The
+deletion. Proven-dead terminal failures retain their final files and logs; infrastructure
+stops and unproven teardown preserve scratch. The
 8 GiB policy is an accounting ceiling, never a licence to discard evidence.
 """
+import fcntl
 import json
+import os
 import shutil
+import subprocess
 from pathlib import Path
+
+from benchmarks.retained_artifacts import (
+    _promotion_plan, promote_finals, remove_visuals, seal_terminal_evidence, terminal_retire)
 
 from . import exploratory_space
 from . import px_cohort_scheduler as sched
@@ -115,6 +122,74 @@ def reclaimable_receipt(root, arm):
     return receipt
 
 
+def _observed_dead(root, cid):
+    """Recheck the exact reaped CID in the dedicated store, never kill anything."""
+    from .exploratory_runtime import pilot
+    if Path(root).resolve() != pilot.ROOT:
+        return False
+    env = {**os.environ, "CONTAINERS_STORAGE_CONF": str(pilot.ROOT / "storage.conf")}
+    try:
+        graph = pilot.command(["podman", "info", "--format", "{{.Store.GraphRoot}}"], env)
+        if graph != pilot.STORE:
+            return False
+        listed = pilot.command(["podman", "ps", "-a", "--no-trunc",
+                                "--format", "{{.ID}}"], env)
+        return cid not in listed.splitlines()
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+        return False
+
+
+def retire_finished_arm(root, arm, receipt, report):
+    """Use common terminal retirement only with current guarded-launcher proof."""
+    root = Path(root).resolve()
+    cid = report.get("retention_container_id")
+    log_hash = report.get("runner_receipt_sha256")
+    if (not sched.SHA256.fullmatch(cid or "")
+            or not sched.SHA256.fullmatch(log_hash or "")
+            or receipt.get("runner_receipt_sha256") != log_hash
+            or is_infrastructure(receipt)):
+        return None
+    output = arm_output_dir(root, arm)
+    if (not output.is_dir() or output.is_symlink()
+            or not output.resolve().is_relative_to(root / "outputs")):
+        return None
+    with (root / ".global-worker.lock").open("a+") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return None
+        if not _observed_dead(root, cid):
+            return None
+        if sched.verify_receipt(root, arm) != receipt:
+            raise ValueError("terminal PX receipt changed before retirement")
+        source = {"receipt": sched.sha256_file(sched.receipt_path(root, arm)),
+                  "launcher_log": log_hash, "launcher_container_id": cid}
+        evidence = {"launcher_container_id": cid}
+        if receipt["outcome"] == "success":
+            if reclaimable_receipt(root, arm) != receipt:
+                raise ValueError("terminal PX results are not reclaimable")
+            ident = sched.receipt_id(arm)
+            for path in (root / "results" / (ident + "-results.json"),
+                         root / "diagnostics" / (ident + ".json")):
+                source[path.name] = sched.sha256_file(path)
+            # Hash the same canonical outputs that the common retention policy
+            # verifies, without executing or changing any scientific measurement.
+            from benchmarks.podman_full_micall import score_outputs
+            evidence["metrics"] = score_outputs(output, None)
+            if evidence["metrics"]["outputs"][sched.MAX_ARTIFACT].get("sha256") != receipt["output_sha256"]:
+                raise ValueError("terminal PX consensus differs from receipt")
+        else:
+            evidence["failure"] = receipt
+        evidence_path = output / "terminal_evidence.json"
+        # Keep the initial seal immutable on retries; the common policy checks
+        # its digest and exact source binding before any further removal.
+        if not evidence_path.exists() and not evidence_path.is_symlink():
+            seal_terminal_evidence(output, evidence, source)
+        return terminal_retire(output, evidence_path=evidence_path,
+                               container_dead=lambda: _observed_dead(root, cid),
+                               source_hashes=source)
+
+
 def _disposable_entries(root, arm):
     output_dir = arm_output_dir(root, arm)
     entries = []
@@ -148,9 +223,12 @@ def _assert_disposable(target, root, arm):
 
 def _remove(target):
     if target.is_dir():
+        if target.name == "scratch":
+            promote_finals(target.parent)
         shutil.rmtree(target)
     else:
         target.unlink()
+    remove_visuals(target.parent)
 
 
 def reclaim_one(root, arm, target=None):
@@ -207,7 +285,13 @@ def plan(root, arms, budget_bytes=BUDGET_BYTES, allocated=None):
             continue
         entry_arm = _arm_from_receipt(receipt)
         for target in _disposable_entries(base, arm):
-            scratch_bytes += measure(target)
+            size = measure(target) if target.is_dir() else target.stat().st_blocks * 512
+            if target.name == "scratch":
+                for source, dest in _promotion_plan(target.parent) or ():
+                    if not dest.exists():
+                        size -= (measure(source) if source.is_dir()
+                                 else source.stat().st_blocks * 512)
+            scratch_bytes += max(0, size)
             reclaim.append({**entry_arm, "target": str(target.resolve()),
                             "kind": "dir" if target.is_dir() else "file"})
     retained = total - scratch_bytes

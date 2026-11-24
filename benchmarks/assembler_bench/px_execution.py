@@ -150,6 +150,10 @@ def run_guarded(registry, baseline, arm, case, output_dir, operate,
                     reserve_bytes)
     outcome = classify(state)
     report["runner_receipt_sha256"] = state.get("log_sha256")
+    cleanup = state.get("pilot_cleanup")
+    if (isinstance(cleanup, dict) and "pilot_cleanup_error" not in state
+            and sched.SHA256.fullmatch(cleanup.get("pilot_container_id") or "")):
+        report["retention_container_id"] = cleanup["pilot_container_id"]
     report["peak_rss"] = state.get("peak_rss")
     if outcome != "success":
         report.update(outcome="failure", failure_reason=outcome)
@@ -239,7 +243,7 @@ def arm_image(receipt):
 
 def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
                                scorer_sha=None):
-    """Score, extract diagnostics, then reclaim only verified disposable."""
+    """Seal posthoc measurements; the supervisor retires with teardown proof."""
     output_dir = Path(root) / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
     if scorer is None:
         from .px_posthoc import build_default_scorer
@@ -256,8 +260,6 @@ def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
     px_metrics.record(root, arm, output_dir,
                       fastq_sha256=[hashes["R1"], hashes["R2"]],
                       exact_report=exact)
-    for target in px_retention._disposable_entries(Path(root), arm):
-        px_retention.reclaim_one(root, arm, target=target)
 
 
 def reconcile_terminal(root, registry, source, *, scorer=None, scorer_sha=None,

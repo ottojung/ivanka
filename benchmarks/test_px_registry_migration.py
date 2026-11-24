@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from assembler_bench import exploratory_policy
 from assembler_bench import px_cohort_scheduler as sched
@@ -148,13 +149,16 @@ class MigrationTests(unittest.TestCase):
                     "R1": "e" * 64, "R2": "f" * 64}
         return hashes
 
+    def _expected_digest(self, staged=None, hashes=None):
+        return migration.expected_plan_digest(
+            self.root, staged or self.staged, hashes or self._case_input_hashes(),
+            provenance_root=self.root / "receipts")
+
     def _plan(self):
         data = exploratory_policy.checked(
             self.staged, provenance_root=self.root / "receipts")
         item = next(x for x in data["candidates"] if x["id"] == TARGET)
         case_hashes = self._case_input_hashes()
-        digest_hashes = {(k.split(",", 1)[0], k.split(",", 1)[1]): v
-                         for k, v in case_hashes.items()}
         return {
             "schema": migration.PLAN_SCHEMA, "window_id": WINDOW,
             "tool_id": TARGET, "active_registry": "active.json",
@@ -165,8 +169,7 @@ class MigrationTests(unittest.TestCase):
             "image_receipt_sha256": item["image_evidence"]["sha256"],
             "pilot_receipt_sha256": item["pilot_evidence"]["sha256"],
             "handoff_sha256": sha(self.handoff),
-            "new_plan_sha256": migration.expected_plan_digest(
-                self.staged, data, case_input_hashes=digest_hashes),
+            "new_plan_sha256": self._expected_digest(),
             "active_checkpoint": "state/checkpoint.json",
             "checkpoints": ["state/checkpoint.json", "state/checkpoint-pre.json"],
             "new_completed": [], "stop_token": self.stop_token,
@@ -234,15 +237,9 @@ class MigrationTests(unittest.TestCase):
     def _refresh_for_staged(self, staged_data):
         write_json(self.staged, staged_data)
         self.staged_bytes = self.staged.read_bytes()
-        data = exploratory_policy.checked(
-            self.staged, provenance_root=self.root / "receipts")
-        case_hashes = self._case_input_hashes()
-        digest_hashes = {(k.split(",", 1)[0], k.split(",", 1)[1]): v
-                         for k, v in case_hashes.items()}
         self.plan["staged_registry_sha256"] = sha(self.staged)
-        self.plan["new_plan_sha256"] = migration.expected_plan_digest(
-            self.staged, data, case_input_hashes=digest_hashes)
-        self.plan["case_input_hashes"] = case_hashes
+        self.plan["new_plan_sha256"] = self._expected_digest()
+        self.plan["case_input_hashes"] = self._case_input_hashes()
         self._refresh_plan()
 
     def test_rejects_change_or_removal_of_existing_arm_identity(self):
@@ -252,11 +249,9 @@ class MigrationTests(unittest.TestCase):
         write_json(self.staged, changed)
         self.plan["staged_registry_sha256"] = sha(self.staged)
         self.plan["case_input_hashes"] = self._case_input_hashes()
-        # Digest recomputed from raw data; checked() will fail before apply.
-        digest_hashes = {(k.split(",", 1)[0], k.split(",", 1)[1]): v
-                         for k, v in self.plan["case_input_hashes"].items()}
-        self.plan["new_plan_sha256"] = migration.expected_plan_digest(
-            self.staged, changed, case_input_hashes=digest_hashes)
+        # The staged registry is deliberately uncheckable; proof verification
+        # must fail before any digest comparison.
+        self.plan["new_plan_sha256"] = "0" * 64
         self._refresh_plan()
         with self.assertRaisesRegex(migration.MigrationError,
                                     "registry policy|previously eligible identity changed"):
@@ -267,11 +262,8 @@ class MigrationTests(unittest.TestCase):
                                  if x["id"] != "skesa"]
         write_json(self.staged, removed)
         self.plan["staged_registry_sha256"] = sha(self.staged)
-        digest_hashes = {(k.split(",", 1)[0], k.split(",", 1)[1]): v
-                         for k, v in self._case_input_hashes().items()}
         self.plan["case_input_hashes"] = self._case_input_hashes()
-        self.plan["new_plan_sha256"] = migration.expected_plan_digest(
-            self.staged, removed, case_input_hashes=digest_hashes)
+        self.plan["new_plan_sha256"] = "0" * 64
         self._refresh_plan()
         with self.assertRaises(migration.MigrationError):
             migration.apply(self.root, self.plan_path)
@@ -367,11 +359,7 @@ class MigrationTests(unittest.TestCase):
             "image_receipt_sha256": skesa["image_evidence"]["sha256"],
             "pilot_receipt_sha256": skesa["pilot_evidence"]["sha256"],
         })
-        data = exploratory_policy.checked(
-            self.staged, provenance_root=self.root / "receipts")
         case_hashes = self._case_input_hashes()
-        digest_hashes = {(k.split(",", 1)[0], k.split(",", 1)[1]): v
-                         for k, v in case_hashes.items()}
         self.plan = {
             "schema": migration.PLAN_SCHEMA, "window_id": WINDOW,
             "tool_id": "skesa", "active_registry": "active.json",
@@ -382,8 +370,7 @@ class MigrationTests(unittest.TestCase):
             "image_receipt_sha256": skesa["image_evidence"]["sha256"],
             "pilot_receipt_sha256": skesa["pilot_evidence"]["sha256"],
             "handoff_sha256": sha(self.handoff),
-            "new_plan_sha256": migration.expected_plan_digest(
-                self.staged, data, case_input_hashes=digest_hashes),
+            "new_plan_sha256": self._expected_digest(),
             "active_checkpoint": "state/checkpoint.json",
             "checkpoints": ["state/checkpoint.json", "state/checkpoint-pre.json"],
             "new_completed": [], "stop_token": self.stop_token,
@@ -398,11 +385,10 @@ class MigrationTests(unittest.TestCase):
         result = migration.apply(self.root, self.plan_path)
         self.assertEqual(result["status"], "applied")
 
-    def test_noneligible_adapter_pin_change_is_allowed(self):
+    def test_nonadmitted_adapter_pin_change_is_allowed(self):
         changed = copy.deepcopy(self.staged_data)
-        target = next(x for x in changed["candidates"] if x["id"] == "ray")
-        target["status"] = "image-pinned"
-        changed["adapter_branch_commits"]["minia"] = "4" * 40
+        # Ray stays the admitted target; a non-admitted tool may move its pin.
+        changed["adapter_branch_commits"]["unicycler"] = "4" * 40
         self._refresh_for_staged(changed)
         result = migration.apply(self.root, self.plan_path)
         self.assertEqual(result["status"], "applied")
@@ -453,18 +439,12 @@ class MigrationTests(unittest.TestCase):
             migration.apply(self.root, self.plan_path)
 
     def test_digest_changes_when_stable_arm_identity_changes(self):
-        data = exploratory_policy.checked(
-            self.staged, provenance_root=self.root / "receipts")
-        case_hashes = {(k.split(",", 1)[0], k.split(",", 1)[1]): v
-                       for k, v in self._case_input_hashes().items()}
-        digest = migration.expected_plan_digest(
-            self.staged, data, case_input_hashes=case_hashes)
+        case_hashes = self._case_input_hashes()
+        digest = self._expected_digest(hashes=case_hashes)
         changed = copy.deepcopy(self.staged_data)
-        next(x for x in changed["candidates"] if x["id"] == TARGET)[
-            "image_sha256"] = "c" * 64
+        changed["policy"]["frozen_seven_manifest_sha256"] = "c" * 64
         changed_path = write_json(self.root / "changed.json", changed)
-        digest2 = migration.expected_plan_digest(
-            changed_path, changed, case_input_hashes=case_hashes)
+        digest2 = self._expected_digest(changed_path, hashes=case_hashes)
         self.assertNotEqual(digest, digest2)
 
     def test_rejects_receipt_alias_and_identity_drift(self):
@@ -475,6 +455,191 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(migration.MigrationError,
                                     "corrupt scheduler receipt|receipt not in staged plan|alias invalid|no scheduler receipt"):
             migration.apply(self.root, self.plan_path)
+
+    # --- planner reuse, sparse coverage and admission rules -----------------
+
+    def _evidence(self, data, tool, kind, image, *, status="success", suffix=""):
+        item = next(x for x in data["candidates"] if x["id"] == tool)
+        record = {
+            "schema": "ivanka.exploratory." + kind + ".receipt.v1",
+            "tool_id": tool, "source_commit": item["source_commit"],
+            "adapter_commit": data["adapter_branch_commits"][tool],
+            "image_sha256": image, "qualifying": False,
+        }
+        if kind == "image":
+            record["native_binary_sha256"] = "a" * 64
+        else:
+            for cohort in ("physical", "synthetic"):
+                record[cohort] = {"source_input_sha256": "c" * 64,
+                                  "status": status}
+        path = write_json(self.root / "receipts" / (
+            kind + "-" + tool + suffix + ".json"), record)
+        return {"path": str(path), "sha256": sha(path)}
+
+    def test_real_planner_digest_with_sparse_accepted_receipts(self):
+        source = migration.PlanCaseSource(self._case_input_hashes())
+        built = sched.build_plan(self.staged, source, self.root,
+                                 provenance_root=self.root / "receipts")
+        self.assertEqual(self.plan["new_plan_sha256"], sched._plan_digest(built))
+        self.assertEqual(built["total_arms"], 3 * 662)
+        self.assertEqual(built["accepted_arms"], 2)
+        # The scheduler is tool-major within each cohort: the second tool starts
+        # again at R001 instead of continuing where the first tool stopped.
+        identities = built["arm_identities"]
+        self.assertEqual(identities[0]["alias"], "PX-R001")
+        self.assertEqual(identities[197]["alias"], "PX-R198")
+        self.assertEqual([a["tool_id"] for a in identities[:198]],
+                         [identities[0]["tool_id"]] * 198)
+        self.assertEqual(identities[198]["alias"], "PX-R001")
+        self.assertNotEqual(identities[198]["tool_id"], identities[0]["tool_id"])
+        result = migration.apply(self.root, self.plan_path)
+        self.assertEqual(result["status"], "applied")
+        self.assertEqual(json.loads(self.checkpoint.read_text())["completed"],
+                         sorted(self.receipt_ids))
+
+    def test_sparse_plan_case_hashes_are_rejected(self):
+        hashes = self._case_input_hashes()
+        del hashes["physical,PX-R198"]
+        with self.assertRaisesRegex(migration.MigrationError, "incomplete"):
+            migration.PlanCaseSource(hashes)
+        hashes = self._case_input_hashes()
+        hashes["physical,PX-R999"] = {"R1": "e" * 64, "R2": "f" * 64}
+        with self.assertRaisesRegex(migration.MigrationError, "unknown case"):
+            migration.PlanCaseSource(hashes)
+
+    def test_receipt_case_hash_must_attest_the_plan_hash(self):
+        hashes = self._case_input_hashes()
+        hashes["physical,PX-R001"] = {"R1": "0" * 64, "R2": "f" * 64}
+        self.plan["case_input_hashes"] = hashes
+        self.plan["new_plan_sha256"] = "0" * 64
+        self._refresh_plan()
+        with self.assertRaisesRegex(migration.MigrationError, "case input hash drift"):
+            migration.apply(self.root, self.plan_path)
+
+    def test_image_pinned_only_target_is_not_admitted(self):
+        staged = copy.deepcopy(self.staged_data)
+        next(x for x in staged["candidates"] if x["id"] == TARGET)[
+            "status"] = "image-pinned"
+        write_json(self.staged, staged)
+        self.plan["staged_registry_sha256"] = sha(self.staged)
+        self.plan["new_plan_sha256"] = self._expected_digest()
+        self._refresh_plan()
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    "staged tool is not eligible"):
+            migration.apply(self.root, self.plan_path)
+
+    def test_admitted_tool_cannot_be_downgraded_or_changed(self):
+        staged = copy.deepcopy(self.staged_data)
+        skesa = next(x for x in staged["candidates"] if x["id"] == "skesa")
+        skesa["status"] = "image-pinned"
+        write_json(self.staged, staged)
+        self.plan["staged_registry_sha256"] = sha(self.staged)
+        self.plan["new_plan_sha256"] = "0" * 64
+        self._refresh_plan()
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    "previously admitted arm downgraded"):
+            migration.apply(self.root, self.plan_path)
+
+        staged = copy.deepcopy(self.staged_data)
+        next(x for x in staged["candidates"] if x["id"] == "skesa")[
+            "source_license"] = "MIT"
+        write_json(self.staged, staged)
+        self.plan["staged_registry_sha256"] = sha(self.staged)
+        self.plan["new_plan_sha256"] = "0" * 64
+        self._refresh_plan()
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    "previously admitted identity changed"):
+            migration.apply(self.root, self.plan_path)
+
+    def test_image_replacement_needs_a_genuine_failed_pilot(self):
+        active = self.promoted(json.loads(TEMPLATE.read_text()),
+                               OLD_TOOLS + (TARGET,))
+        staged = copy.deepcopy(active)
+        old = next(x for x in active["candidates"] if x["id"] == "unicycler")
+        old["status"] = "image-pinned"
+        old["image_sha256"] = "b" * 64
+        old["image_evidence"] = self._evidence(
+            active, "unicycler", "image", "b" * 64, suffix="-unc")
+        old["pilot_evidence"] = self._evidence(
+            active, "unicycler", "pilot", "b" * 64, status="failure",
+            suffix="-unc-failed")
+        new = next(x for x in staged["candidates"] if x["id"] == "unicycler")
+        new["status"] = "image-pinned"
+        new["image_sha256"] = "c" * 64
+        new["image_evidence"] = self._evidence(
+            staged, "unicycler", "image", "c" * 64, suffix="-unc-replaced")
+        new["pilot_evidence"] = copy.deepcopy(old["pilot_evidence"])
+        write_json(self.active, active)
+        write_json(self.staged, staged)
+        staged_data = exploratory_policy.checked(
+            self.staged, provenance_root=self.root / "receipts")
+        # Ray remains the admitted target; replacing an unpiloted image after a
+        # real failed pilot is the one allowed non-admitted identity change.
+        migration.verify_additive(self.root, self.plan, self.staged, staged_data)
+
+        good_pilot = self._evidence(
+            active, "unicycler", "pilot", "b" * 64, suffix="-unc-success")
+        old["pilot_evidence"] = good_pilot
+        new["pilot_evidence"] = copy.deepcopy(good_pilot)
+        write_json(self.active, active)
+        write_json(self.staged, staged)
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    "image replacement requires a failed pilot"):
+            migration.verify_additive(self.root, self.plan, self.staged, staged_data)
+
+    def test_other_nonadmitted_roster_changes_are_rejected(self):
+        staged = copy.deepcopy(self.staged_data)
+        next(x for x in staged["candidates"] if x["id"] == "unicycler")[
+            "source_repo"] = "https://github.com/other/tool"
+        write_json(self.staged, staged)
+        staged_data = exploratory_policy.checked(
+            self.staged, provenance_root=self.root / "receipts")
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    "unvalidated roster change"):
+            migration.verify_additive(self.root, self.plan, self.staged, staged_data)
+
+    # --- recovery journal ---------------------------------------------------
+
+    def test_journal_records_legacy_digest_before_swap(self):
+        captured = []
+        real_clear = migration._clear_journal
+
+        def capture(path):
+            captured.append(json.loads(Path(path).read_text()))
+            real_clear(path)
+
+        with mock.patch.object(migration, "_clear_journal", side_effect=capture):
+            result = migration.apply(self.root, self.plan_path)
+        self.assertEqual(result["status"], "applied")
+        journal = captured[-1]
+        self.assertEqual(journal["previous_checkpoint_plan_sha256"], "old-plan")
+        self.assertEqual(journal["previous_checkpoint_completed"],
+                         [self.receipt_ids[0]])
+        self.assertEqual(journal["new_checkpoint_plan_sha256"],
+                         self.plan["new_plan_sha256"])
+        self.assertEqual(journal["before"]["active_registry_sha256"],
+                         sha(self.root / "preserved" / WINDOW / "active.json"))
+        self.assertFalse(migration._journal_path(self.root, self.plan).exists())
+
+    def test_interrupted_checkpoint_swap_recovers_legacy_completion(self):
+        completed = sorted(self.receipt_ids)
+        write_json(self.checkpoint, {
+            "schema": sched.CHECKPOINT_SCHEMA,
+            "plan_sha256": self.plan["new_plan_sha256"], "completed": completed})
+        result = migration.apply(self.root, self.plan_path)
+        self.assertIn(result["status"], ("applied", "recovered"))
+        after = json.loads(self.checkpoint.read_text())
+        self.assertEqual(after["plan_sha256"], self.plan["new_plan_sha256"])
+        self.assertEqual(after["completed"], completed)
+        self.assertFalse(migration._journal_path(self.root, self.plan).exists())
+
+    def test_stale_journal_is_cleared_on_already_applied(self):
+        migration.apply(self.root, self.plan_path)
+        journal = migration._journal_path(self.root, self.plan)
+        write_json(journal, {"schema": "stale-recovery-journal"})
+        again = migration.apply(self.root, self.plan_path)
+        self.assertEqual(again["status"], "already-applied")
+        self.assertFalse(journal.exists())
 
 
 if __name__ == "__main__":

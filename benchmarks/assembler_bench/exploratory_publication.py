@@ -415,6 +415,8 @@ def main():
                         help="content-hashed per-sample file; repeat per cohort")
     parser.add_argument("--check", action="store_true",
                         help="only validate the committed public snapshot")
+    parser.add_argument("--publish-neutral", action="store_true",
+                        help="publish verified receipts into the neutral evidence and cohort rosters")
     args = parser.parse_args()
     if args.check:
         snapshot = json.loads((args.site / DATA_FILE).read_text())
@@ -426,6 +428,12 @@ def main():
         if not tool or not path:
             raise ValueError("expected TOOL=FILE for --results")
         mapping.setdefault(tool, []).append(path)
+    if args.publish_neutral:
+        evidence, merged, joined = publish_neutral(
+            args.site, args.registry, mapping)
+        print("NEUTRAL_PX_PUBLISHED tools=%d joined=%d" %
+              (len(evidence["assemblers"]), len(joined)))
+        return
     snapshot = publish(args.site, args.registry, mapping)
     verified = sum(item["results_status"].startswith("verified-")
                    for item in snapshot["candidates"])

@@ -1,9 +1,17 @@
 """Retained scientific outputs and metrics must outlive MiCall scratch."""
+import gzip
+import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from retained_artifacts import clean_workspace, retain_arm, remove_visuals
+from retained_artifacts import (
+    RetentionGateError, clean_workspace, content_sha256, logical_name,
+    remove_visuals, retain_arm, seal_terminal_evidence, terminal_retire)
+
+
+def digest(text):
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 class RetainedArtifactsTests(unittest.TestCase):
@@ -109,6 +117,198 @@ class RetainedArtifactsTests(unittest.TestCase):
             self.assertEqual(report["retired"], 1)
             self.assertEqual((arm / "nuc.csv").read_text(), "measured")
             self.assertTrue((source_scratch / "precious").is_file())
+
+
+class TerminalRetentionTests(unittest.TestCase):
+    def test_pdf_and_nested_visuals_removed(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d) / "arm"
+            deep = arm / "diagnostics" / "plots" / "nested"
+            deep.mkdir(parents=True)
+            for folder in (arm, deep):
+                (folder / "figure.pdf").write_text("page")
+                (folder / "coverage.svg").write_text("vector")
+            (arm / "nuc.csv").write_text("evidence")
+            (arm / "failure.log").write_text("failed run")
+            outside = Path(d) / "outside.pdf"
+            outside.write_text("keep")
+            (arm / "linked-dir").symlink_to(Path(d), target_is_directory=True)
+            report = remove_visuals(arm)
+            self.assertEqual(report["removed_images"], 4)
+            self.assertEqual(remove_visuals(arm)["removed_images"], 0)
+            self.assertFalse((arm / "figure.pdf").exists())
+            self.assertFalse((deep / "figure.pdf").exists())
+            self.assertTrue(outside.is_file())
+            self.assertTrue((arm / "linked-dir").is_symlink())
+            self.assertEqual((arm / "nuc.csv").read_text(), "evidence")
+            self.assertEqual((arm / "failure.log").read_text(), "failed run")
+
+    def test_compressed_final_table_is_retained_and_hash_is_logical(self):
+        self.assertEqual(logical_name("nuc.csv.zst"), "nuc.csv")
+        with TemporaryDirectory() as d:
+            arm = Path(d) / "arm"
+            scratch = arm / "scratch"
+            scratch.mkdir(parents=True)
+            plain = "ref,coverage\na,10\n"
+            with gzip.open(scratch / "nuc.csv.gz", "wt") as stream:
+                stream.write(plain)
+            (arm / "podman.stderr.log").write_text("log")
+            evidence, _ = seal_terminal_evidence(
+                arm, {"metrics": {"outputs": {
+                    "nuc.csv": {"sha256": digest(plain)}}}},
+                {"input.fastq.gz": "a" * 64})
+            report = terminal_retire(
+                arm, evidence_path=evidence, container_dead=True,
+                source_hashes={"input.fastq.gz": "a" * 64})
+            self.assertEqual(report["verified_outputs"], 1)
+            self.assertTrue((arm / "nuc.csv.gz").is_file())
+            self.assertEqual(content_sha256(arm / "nuc.csv.gz"), digest(plain))
+            self.assertFalse(scratch.exists())
+            self.assertTrue((arm / "podman.stderr.log").is_file())
+            self.assertFalse((arm / "scratch.tar.gz").exists())
+
+    def test_terminal_retire_is_idempotent(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            scratch = arm / "scratch"
+            scratch.mkdir()
+            (scratch / "nuc.csv").write_text("measured")
+            (arm / "times.json").write_text("{}")
+            hashes = {"input.fastq.gz": "b" * 64}
+            evidence, _ = seal_terminal_evidence(
+                arm, {"metrics": {"outputs": {
+                    "nuc.csv": {"sha256": digest("measured")}}}}, hashes)
+            first = terminal_retire(arm, evidence_path=evidence,
+                                    container_dead=True, source_hashes=hashes)
+            self.assertTrue(first["retired"])
+            self.assertEqual((arm / "nuc.csv").read_text(), "measured")
+            second = terminal_retire(arm, evidence_path=evidence,
+                                     container_dead=True, source_hashes=hashes)
+            self.assertFalse(second["scratch_present"])
+            self.assertFalse(second["retired"])
+            self.assertTrue((arm / "times.json").is_file())
+            self.assertTrue((arm / "terminal_evidence.json.sha256").is_file())
+
+    def test_fails_closed_without_sealed_evidence_or_dead_container(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            scratch = arm / "scratch"
+            scratch.mkdir()
+            (scratch / "nuc.csv").write_text("measured")
+            hashes = {"input.fastq.gz": "c" * 64}
+            with self.assertRaises(RetentionGateError):
+                terminal_retire(arm, evidence_path=arm / "missing.json",
+                                container_dead=True, source_hashes=hashes)
+            evidence, _ = seal_terminal_evidence(
+                arm, {"failure": {"exit_code": 1}}, hashes)
+            with self.assertRaises(RetentionGateError):
+                terminal_retire(arm, evidence_path=evidence,
+                                container_dead=False, source_hashes=hashes)
+            with self.assertRaises(RetentionGateError):
+                terminal_retire(arm, evidence_path=evidence,
+                                container_dead=True,
+                                source_hashes={"input.fastq.gz": "d" * 64})
+            self.assertTrue(scratch.is_dir())
+            self.assertEqual((scratch / "nuc.csv").read_text(), "measured")
+
+    def test_metrics_digest_mismatch_rolls_back_promotion(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            scratch = arm / "scratch"
+            scratch.mkdir()
+            (scratch / "nuc.csv").write_text("original")
+            hashes = {"input.fastq.gz": "f" * 64}
+            evidence, _ = seal_terminal_evidence(
+                arm, {"metrics": {"outputs": {
+                    "nuc.csv": {"sha256": digest("different")}}}}, hashes)
+            with self.assertRaises(RetentionGateError):
+                terminal_retire(arm, evidence_path=evidence,
+                                container_dead=True, source_hashes=hashes)
+            self.assertTrue(scratch.is_dir())
+            self.assertEqual((scratch / "nuc.csv").read_text(), "original")
+            self.assertFalse((arm / "nuc.csv").exists())
+
+    def test_failed_arm_keeps_logs_but_loses_disposable_scratch_and_visuals(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            scratch = arm / "scratch"
+            scratch.mkdir()
+            (scratch / "temp.fastq").write_text("reads")
+            (scratch / "align.sam").write_text("alignment")
+            (scratch / "nuc.csv").write_text("final evidence")
+            (arm / "plot.pdf").write_text("figure")
+            (arm / "podman.stderr.log").write_text("traceback")
+            hashes = {"input.fastq.gz": "e" * 64}
+            evidence, _ = seal_terminal_evidence(
+                arm, {"failure": {"exit_code": 124, "error_tail": "timeout"}},
+                hashes)
+            report = terminal_retire(arm, evidence_path=evidence,
+                                     container_dead=True, source_hashes=hashes)
+            self.assertTrue(report["retired"])
+            self.assertEqual(report["removed_images"], 1)
+            self.assertFalse(scratch.exists())
+            self.assertFalse((arm / "plot.pdf").exists())
+            self.assertEqual((arm / "nuc.csv").read_text(), "final evidence")
+            self.assertEqual((arm / "podman.stderr.log").read_text(), "traceback")
+
+    def test_runner_integration_seals_evidence_then_applies_policy(self):
+        from podman_full_micall import retire_terminal_arm
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            scratch = arm / "scratch"
+            scratch.mkdir()
+            (scratch / "nuc.csv").write_text("final")
+            (scratch / "temp.fastq").write_text("reads")
+            (arm / "plot.svg").write_text("plot")
+            (arm / "podman.stderr.log").write_text("traceback")
+            fastq = arm / "input.fastq.gz"
+            fastq.write_bytes(b"fastq bytes")
+            result = {"image_id": "image-id", "metrics": {
+                "outputs": {"nuc.csv": {"sha256": digest("final")}}}}
+            report = retire_terminal_arm(
+                arm, result, [fastq], "image-id", 0, 1.0,
+                arm / "no_timing.json")
+            self.assertTrue(report["retired"])
+            self.assertEqual(report["verified_outputs"], 1)
+            self.assertEqual(report["removed_images"], 1)
+            self.assertEqual((arm / "nuc.csv").read_text(), "final")
+            self.assertFalse(scratch.exists())
+            self.assertTrue((arm / "terminal_evidence.json").is_file())
+            self.assertTrue((arm / "terminal_evidence.json.sha256").is_file())
+            self.assertEqual((arm / "podman.stderr.log").read_text(),
+                             "traceback")
+
+    def test_runner_integration_failed_arm_keeps_evidence(self):
+        from podman_full_micall import retire_terminal_arm
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            scratch = arm / "scratch"
+            scratch.mkdir()
+            (scratch / "nuc.csv").write_text("final")
+            (arm / "podman.stderr.log").write_text("traceback")
+            fastq = arm / "input.fastq.gz"
+            fastq.write_bytes(b"fastq bytes")
+            report = retire_terminal_arm(
+                arm, {"image_id": "image-id", "error": "timeout"},
+                [fastq], "image-id", 124, 2400.0, arm / "no_timing.json")
+            self.assertTrue(report["retired"])
+            self.assertEqual((arm / "nuc.csv").read_text(), "final")
+            self.assertEqual((arm / "podman.stderr.log").read_text(),
+                             "traceback")
+            self.assertFalse(scratch.exists())
+
+    def test_scratch_symlink_is_not_followed(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d) / "arm"
+            scratch = arm / "scratch"
+            scratch.mkdir(parents=True)
+            outside = Path(d) / "escape.csv"
+            outside.write_text("precious")
+            (scratch / "linked.csv").symlink_to(outside)
+            retain_arm(arm)
+            self.assertTrue(outside.is_file())
+            self.assertEqual(outside.read_text(), "precious")
+            self.assertFalse((arm / "linked.csv").exists())
 
 
 if __name__ == "__main__":

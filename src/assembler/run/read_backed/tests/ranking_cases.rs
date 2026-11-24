@@ -29,5 +29,6 @@ fn narrow_dense_contig_can_beat_long_unsupported_extension() {
 #[test]
 fn repetitive_kmers_cannot_inflate_original_pair_evidence() {
     let hits = index::build(&[vec![b'A'; 1000]]);
-    assert!(!hits.contains_key(&[b'A'; 31]));
+    let key = index::pack(&[b'A'; 31]).expect("canonical key");
+    assert!(!hits.contains_key(&key));
 }

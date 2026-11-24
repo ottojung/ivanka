@@ -1,13 +1,14 @@
-use super::{Hits, Reads, K};
+use super::{byte_index::ByteHits, Reads, K};
 use std::collections::{HashMap, HashSet};
 
 type Depth = Vec<Vec<u32>>;
 type Spans = Vec<Vec<(usize, usize)>>;
 pub(super) type Stats = (Depth, Vec<usize>, Vec<usize>, Vec<u16>, Spans);
 
-// Original pairwise HashMap/HashSet formulation, reproduced verbatim, with
-// the PR458 per-pair span capture added for the integration differential.
-pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Stats {
+// Original pairwise HashMap/HashSet formulation with per-pair span capture.
+// Probe keys stay original 31-byte slices so this reference stays independent
+// of the packed canonical index under test.
+pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &ByteHits) -> Stats {
     let mut depth: Vec<Vec<u32>> = contigs
         .iter()
         .map(|seq| vec![0; seq.len().saturating_sub(K - 1)])

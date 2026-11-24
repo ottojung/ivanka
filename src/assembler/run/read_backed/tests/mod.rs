@@ -1,9 +1,9 @@
-use super::{index, island, output, ranking, scoring, tiling, trimming, Reads};
+use super::{index, island, output, ranking, scoring, tiling, trimming, Reads, K};
 mod independent_cases;
 mod junction_cases;
 mod junction_output_cases;
 mod junction_span_cases;
-mod pair_masks;
+mod packed;
 mod ranking_cases;
 mod tiling_cases;
 mod tiling_offset_cases;

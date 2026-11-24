@@ -1,6 +1,7 @@
 use super::accumulate::Accumulator;
+use super::index::{self, Hits};
 use super::spans;
-use super::{index::Hits, Reads, K};
+use super::{Reads, K};
 
 pub(super) type Scan = (
     Vec<Vec<u32>>,
@@ -9,7 +10,9 @@ pub(super) type Scan = (
     Vec<Vec<(usize, usize)>>,
 );
 
-/// Byte-equivalent accumulator from PR463 plus the exact PR458 span capture.
+/// Byte-equivalent accumulator with per-pair span capture. Sampled start
+/// positions and the both-orientation scan are unchanged; only the probe
+/// identity is a rolling canonical packed key instead of 31 bytes.
 pub(super) fn scan(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Scan {
     let mut depth: Vec<Vec<u32>> = contigs
         .iter()
@@ -23,11 +26,11 @@ pub(super) fn scan(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Scan {
     for oriented in reads.seqs.chunks_exact(4).take(80_000) {
         accum.begin();
         for read in [&oriented[0], &oriented[2]] {
-            if read.len() < K {
-                continue;
-            }
-            for pos in (0..=read.len() - K).step_by(2) {
-                if let Some(locations) = hits.get(&read[pos..pos + K]) {
+            for (start, key) in index::rolling(read) {
+                if start & 1 != 0 {
+                    continue;
+                }
+                if let Some(locations) = hits.get(&key) {
                     for &(candidate, locus) in locations {
                         accum.insert(candidate, locus);
                     }

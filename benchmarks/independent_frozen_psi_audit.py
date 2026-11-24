@@ -86,10 +86,8 @@ def recomputed_floors(score):
     return (
         score.get("original_best_available_rival_score") == best
         and score.get("original_iva_score") == iva["score"]
-        and score.get("score_floor_90pct_best_available") is True
-        and score.get("score_floor_90pct_iva") is True
-        and value >= 0.90 * best
-        and value >= 0.90 * iva["score"]
+        and score.get("score_floor_90pct_best_available") is (value >= 0.90 * best)
+        and score.get("score_floor_90pct_iva") is (value >= 0.90 * iva["score"])
     )
 
 
@@ -160,8 +158,6 @@ def attestation(root, frozen, image, manifest, panel, references=None):
             "wall_cap_exceeded": receipt.get("wall_seconds", math.inf) <= WALL_CAP_SECONDS,
             "rss_cap_exceeded": receipt.get("sampled_rss_peak_bytes", math.inf) <= SAMPLED_RSS_CAP_BYTES,
             "timing_origin_drift": receipt.get("timing_origin") == TIMING_ORIGIN,
-            "score_floor_fail": bool(score.get("score_floor_90pct_best_available")
-                                     and score.get("score_floor_90pct_iva")),
             "nonfinite_metric": (math.isfinite(score.get("candidate_score", math.nan))
                                  and math.isfinite(score.get("candidate_runtime_seconds", math.nan))),
         }
@@ -181,7 +177,7 @@ def attestation(root, frozen, image, manifest, panel, references=None):
                 and original.get("sample") == planned_row.get("sample")
                 and checkpoint_matches(copied, original, panel))
         if all(checks.values()):
-            checks["recomputed_floor_fail"] = recomputed_floors(score)
+            checks["floor_claim_mismatch"] = recomputed_floors(score)
             if references is not None:
                 checks["candidate_alignment_drift"] = alignment_matches(folder, score, receipt, references)
         failed = [name for name, passed in checks.items() if not passed]
@@ -266,6 +262,10 @@ def diagnose(root, frozen, image=IMAGE, manifest=MANIFEST, panel=PANEL, referenc
         "scope": "COMPLETE_COHORT_DIAGNOSTIC" if complete else "EXPLICITLY_PARTIAL",
         "attested_finished_cases": attested,
         "expected_cases": EXPECTED_CASES,
+        "observed_quality_floor_failures": {
+            "best_available": sum(not row["score_floor_90pct_best_available"] for row in rows),
+            "iva": sum(not row["score_floor_90pct_iva"] for row in rows),
+        },
         "attestation": proof,
         "candidate_alignment_recomputed": references is not None,
         "pinned": {"image_sha256": image, "manifest_sha256": manifest, "panel_sha256": panel},

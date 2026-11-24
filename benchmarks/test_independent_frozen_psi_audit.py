@@ -97,6 +97,9 @@ class IndependentAuditTests(unittest.TestCase):
                  "original_rivals": {"iva": {"status": "success", "score": 100}}}
         self.assertFalse(audit.recomputed_floors(score))
         self.assertTrue(audit.recomputed_floors(dict(score, candidate_score=90)))
+        # A real and accurately recorded floor failure is still valid evidence.
+        self.assertTrue(audit.recomputed_floors(dict(
+            score, score_floor_90pct_best_available=False, score_floor_90pct_iva=False)))
 
     def test_alignment_readback_detects_score_and_max_count_tampering(self):
         with (patch("project_references.final_max_sequences", return_value=["ACGT"]),

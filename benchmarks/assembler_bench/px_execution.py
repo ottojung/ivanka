@@ -319,7 +319,7 @@ def _reconcile_arm(root, parsed, case, receipt, *, active, active_sha,
 
 def retention_plan(root, arms, budget_bytes=px_retention.BUDGET_BYTES,
                    allocated=None):
-    """Bound evidence retention by the 8 GiB policy without deleting anything."""
+    """Bound evidence retention by the 20 GiB policy without deleting anything."""
     return px_retention.plan(root, arms, budget_bytes, allocated)
 
 

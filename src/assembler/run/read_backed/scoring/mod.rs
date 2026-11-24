@@ -1,7 +1,11 @@
 mod accumulate;
 mod scan;
 mod statistics;
+#[cfg(test)]
+mod tests;
 use super::{index, Reads, K};
+#[cfg(test)]
+use accumulate::Accumulator;
 pub(super) use index::Hits;
 pub(super) use statistics::Statistics;
 

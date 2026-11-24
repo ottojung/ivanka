@@ -1,4 +1,7 @@
-use super::scoring::Statistics;
+mod independent;
+mod related;
+use super::{scoring::Statistics, K};
+pub(super) use independent::additional;
 use std::cmp::Ordering;
 
 /// Read-covered breadth squared, weighted by supporting original fragments.

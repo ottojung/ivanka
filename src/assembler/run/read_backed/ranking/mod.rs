@@ -1,4 +1,5 @@
 mod independent;
+mod related;
 use super::{scoring::Statistics, K};
 pub(super) use independent::additional;
 use std::cmp::Ordering;

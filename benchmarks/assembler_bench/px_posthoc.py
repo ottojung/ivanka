@@ -8,7 +8,8 @@ import hashlib
 import json
 from pathlib import Path
 
-
+from . import px_cohort_scheduler as sched
+from . import px_source_pins
 
 SCHEMA = "ivanka.px.scorer.v1"
 PHYSICAL_METHOD = "best_final_max_contig_local_alignment_over_reference_panel"
@@ -16,7 +17,10 @@ SYNTHETIC_METHOD = "micall_final_max_abundant_truths_balanced_v2"
 
 
 def source_sha256():
-    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    """Bind scorer identity to the canonical source digests it executes."""
+    sources = px_source_pins.verify()
+    payload = json.dumps(sources, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def build_default_scorer(projects_path=None, hxb2_path=None):
@@ -83,16 +87,38 @@ class PxScorer:
                 "best_reference": best["reference"]}
 
     def _synthetic_inputs(self, case):
+        """Resolve per-case truth only from the hash-pinned v6 cohort."""
         if self.synthetic_manifest and self.synthetic_truth:
-            return self.synthetic_manifest, self.synthetic_truth
+            manifest = Path(self.synthetic_manifest)
+            truth = Path(self.synthetic_truth)
+            if not manifest.is_file() or not truth.is_file():
+                raise ValueError("synthetic truth inputs are missing")
+            return manifest, truth
         if case is None:
             return None, None
+        cohort = Path(sched.SYNTHETIC_COHORT)
+        if sched.sha256_file(cohort) != sched.SYNTHETIC_COHORT_SHA256:
+            raise ValueError("synthetic cohort SHA256 changed")
+        record = next((item for item in json.loads(cohort.read_bytes())["cases"]
+                       if item["id"] == case.source_id), None)
+        if record is None:
+            raise ValueError("synthetic case is absent from the pinned cohort")
         root = Path(case.r1).resolve().parent.parent
         manifest = root / "manifest.json"
         truth = root / "hidden-truth" / "haplotypes.fasta"
-        if manifest.is_file() and truth.is_file():
-            return manifest, truth
-        return None, None
+        if not manifest.is_file() or not truth.is_file():
+            raise ValueError("synthetic truth inputs are missing")
+        # The v6 cohort pins the truth hash; accept neither a rewritten FASTA
+        # nor a truth file borrowed from another case.
+        expected_truth = record["sha256"]["hidden-truth/haplotypes.fasta"]
+        if sched.sha256_file(truth) != expected_truth:
+            raise ValueError("synthetic per-case truth hash mismatch")
+        manifest_data = json.loads(manifest.read_bytes())
+        if (manifest_data.get("sha256") != record["sha256"]
+                or manifest_data.get("hidden_truth_file")
+                != "hidden-truth/haplotypes.fasta"):
+            raise ValueError("synthetic manifest disagrees with pinned cohort")
+        return manifest, truth
 
     def _score_synthetic(self, alias, sequences, case=None):
         if not sequences:

@@ -126,6 +126,9 @@ class BackgroundSupervisor:
             case = self.source.case(arm["cohort"], arm["alias"])
             report = self.runner(arm, case)
             receipt = self._record(arm, report)
+            # Publish observed RAM for EVERY terminal arm, including failures;
+            # a null measurement remains null rather than being fabricated.
+            sched.write_resource(self.root, arm, receipt)
             retryable = (receipt.get("outcome") == "failure"
                          and receipt.get("failure_reason")
                          in sched.INFRASTRUCTURE_FAILURE_REASONS
@@ -163,13 +166,10 @@ class BackgroundSupervisor:
         if self.retain is not None:
             self.retain(self.root, arm, case, receipt)
             return
-        try:
-            from .px_execution import posthoc_extract_and_retain
-            posthoc_extract_and_retain(self.root, arm, case, receipt,
-                                       scorer=self.scorer,
-                                       scorer_sha=self.scorer_sha)
-        except Exception:  # noqa: BLE001
-            return
+        from .px_execution import posthoc_extract_and_retain
+        posthoc_extract_and_retain(self.root, arm, case, receipt,
+                                   scorer=self.scorer,
+                                   scorer_sha=self.scorer_sha)
 
     def _record(self, arm, report):
         if not isinstance(report, dict) or report.get("outcome") not in (

@@ -102,8 +102,12 @@ class SupervisorTests(unittest.TestCase):
             "active_job": None})
 
     def supervisor(self, runner, registry=None):
+        def diagnostics(root, arm, case, receipt):
+            sched.verify_receipt(root, arm)
+            sched.write_resource(root, arm, receipt)
         return sup.BackgroundSupervisor(registry or self.registry(), self.baseline(),
-                                        self.source(), self.px, runner)
+                                        self.source(), self.px, runner,
+                                        diagnostics=diagnostics)
 
     def fake_runner(self, calls, stop_after=None):
         seen = {"n": 0}

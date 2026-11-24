@@ -8,6 +8,7 @@ and is wired in by ``px_supervisor`` only after image-agent handoff.
 import csv
 import hashlib
 import json
+import math
 import os
 import re
 import uuid
@@ -65,6 +66,33 @@ def sha256_file(path):
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def peak_ram_observed_mib(receipt):
+    """Convert an immutable receipt's observed RSS to a public MiB metric."""
+    value = receipt.get("peak_rss_bytes") if isinstance(receipt, dict) else None
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("observed peak RSS is not numeric")
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("observed peak RSS is not finite and non-negative")
+    return round(value / 1048576, 6)
+
+
+def write_resource(root, arm, receipt):
+    """Publish comparable resource evidence for every terminal arm."""
+    path = Path(root) / "results" / (receipt_id(arm) + "-resource.json")
+    record = {
+        "schema": "ivanka.px.arm-resource.v1", "tool_id": arm["tool_id"],
+        "cohort": arm["cohort"], "alias": arm["alias"],
+        "outcome": receipt["outcome"], "attempt": receipt.get("attempt", 1),
+        "peak_rss_bytes": receipt.get("peak_rss_bytes"),
+        "peak_ram_observed_mib": peak_ram_observed_mib(receipt),
+        "measurement_present": receipt.get("peak_rss_bytes") is not None,
+    }
+    _assert_public(record)
+    return path, _atomic_json(path, record)
 
 
 def _json_bytes(obj):
@@ -260,6 +288,22 @@ def index_path(root):
     return Path(root) / "receipts" / "index.json"
 
 
+def arm_from_receipt(root, identifier):
+    """Recover canonical arm identity from an indexed terminal receipt."""
+    entries = _load_index(root)
+    if identifier not in entries:
+        return None
+    path = Path(root) / "receipts" / (identifier + ".json")
+    if not path.is_file() or sha256_file(path) != entries[identifier]:
+        raise ValueError("PX receipt is unindexed or changed")
+    data = json.loads(path.read_bytes())
+    if data.get("schema") != RECEIPT_SCHEMA or data.get("terminal") is not True:
+        raise ValueError("PX receipt is not terminal")
+    return {key: data[key] for key in (
+        "tool_id", "cohort", "alias", "input_sha256", "source_commit",
+        "adapter_commit", "image_sha256")}
+
+
 def _load_index(root):
     path = index_path(root)
     if not path.is_file():
@@ -364,6 +408,12 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
     if outcome == "success" and (not isinstance(seconds, (int, float))
                                  or seconds <= 0):
         raise ValueError("successful arm needs a positive runtime")
+    # An observed peak is retained for failed arms as well; null is honest
+    # when monitoring never produced a measurement.
+    if peak_rss is not None:
+        if (isinstance(peak_rss, bool) or not isinstance(peak_rss, (int, float))
+                or not math.isfinite(peak_rss) or peak_rss < 0):
+            raise ValueError("observed peak RSS is invalid")
     if outcome == "failure" and failure_reason not in FAILURE_REASONS:
         raise ValueError("unclassified failure is never terminal")
     _assert_public(receipt)
@@ -476,6 +526,9 @@ def posthoc_score(root, arm, scorer, expected_source_sha256, *,
     if (not isinstance(row, dict) or row.get("alias") != arm["alias"]
             or row.get("outcome") not in ("success", "failure")):
         raise ValueError("independent scorer returned an invalid row")
+    # The founder's comparable RAM metric comes from the immutable receipt,
+    # never from the scorer; preserve null when the arm was not monitored.
+    row["peak_ram_observed_mib"] = peak_ram_observed_mib(receipt)
     _assert_public(row)
     return {"schema": RESULT_SCHEMA, "tool_id": arm["tool_id"],
             "source_commit": arm["source_commit"],

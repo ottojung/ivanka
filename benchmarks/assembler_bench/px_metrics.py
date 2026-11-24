@@ -147,6 +147,11 @@ def _exact_metric(report, output_sha256, fastq_sha256, lengths):
         return _unavailable("no final MAX consensus sequence in conseq.csv")
     if report is None:
         return _unavailable("exact coverage report not provided")
+    if isinstance(report, dict) and report.get("status") == "unavailable":
+        reason = report.get("unavailable_reason")
+        if not isinstance(reason, str) or not reason:
+            raise ValueError("unavailable exact report lacks an explicit reason")
+        return _unavailable(reason)
     reads = _assert_fastqs(fastq_sha256)
     if not isinstance(report, dict):
         raise TypeError("exact-coverage report is not an object")

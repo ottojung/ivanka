@@ -25,7 +25,7 @@ class CleanWebsiteTests(unittest.TestCase):
         self.assertNotIn("Only fully measured cases are checked", js)
         self.assertNotIn("different original score scales", js)
 
-    def test_js_renders_all_seven_full_image_hashes_once_in_scroll_table(self):
+    def test_js_renders_each_cohort_assembler_and_full_image_hashes_once(self):
         node = shutil.which("node")
         if not node:
             self.skipTest("Node unavailable")
@@ -34,25 +34,36 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const js=fs.readFileSync(process.argv[1],'utf8');
-const run=JSON.parse(fs.readFileSync(process.argv[2],'utf8')).runs[0];
+const runs=JSON.parse(fs.readFileSync(process.argv[2],'utf8')).runs;
 const result={innerHTML:''};
 const context={document:{getElementById:id=>{
   assert.equal(id,'provenanceContent');return result;
 }},BenchRanks:{},BenchSubjects:{},console};
 const sandbox=vm.createContext(context);
 vm.runInContext(js.replace(/\bmain\(\);\s*$/,''),sandbox);
-sandbox.TEST_RUN=run;
-vm.runInContext('state.run=TEST_RUN;drawProvenance();',sandbox);
-const html=result.innerHTML;
-assert(html.includes('class="table-scroll provenance-scroll"'));
-assert(html.includes('<h3>Assembler builds</h3>'));
-const rows=(html.match(/<tr><th>/g)||[]).length;
-assert.equal(rows,8); // One header and seven assembler rows.
-for(const [tool,image] of Object.entries(
-  run.micall_fork_provenance.images)){
- assert.equal((html.split(image.image_sha256)).length-1,1,tool);
- assert(html.includes(image.source_commit));
- assert(!html.includes(tool+' pinned image'));
+for(const run of runs){
+ sandbox.TEST_RUN=run;
+ vm.runInContext('state.run=TEST_RUN;drawProvenance();',sandbox);
+ const html=result.innerHTML;
+ assert(html.includes('class="table-scroll provenance-scroll"'));
+ assert(html.includes('<h3>Assembler builds</h3>'));
+ const rows=(html.match(/<tr><th scope="row">/g)||[]).length;
+ assert.equal(rows,run.tools.length,run.cohort);
+ for(const tool of run.tools){
+  const label=vm.runInContext('toolLabel('+JSON.stringify(tool)+')',sandbox);
+  assert(html.includes('<th scope="row">'+label+'</th>'),tool);
+  const image=run.micall_fork_provenance.images[tool];
+  const provenance=run.roster.find(row=>row.id===tool)?.provenance||{};
+  const digest=image?.image_sha256||provenance.image_sha256||run.images[tool];
+  const commit=image?.source_commit||provenance.adapter_commit;
+  if(digest)assert.equal(html.split(digest).length-1,1,tool);
+  if(commit)assert(html.includes(commit),tool);
+  if(!digest)assert(html.includes('Not recorded'),tool);
+ }
+ // A cohort with a different roster must never show out-of-cohort builds.
+ sandbox.TEST_RUN={...run,tools:[run.tools.at(-1)]};
+ vm.runInContext('state.run=TEST_RUN;drawProvenance();',sandbox);
+ assert.equal((result.innerHTML.match(/<tr><th scope="row">/g)||[]).length,1);
 }
 console.log('COMPLETE_SINGLE_IMAGE_TABLE_OK');
 """

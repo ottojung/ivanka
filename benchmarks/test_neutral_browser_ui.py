@@ -50,6 +50,14 @@ class NeutralBrowserTests(unittest.TestCase):
         self.assertIn('id="rosterNote"', html)
         self.assertIn("run.tools.length", js)
 
+    def test_matrix_uses_section_width_and_wrapping_headers(self):
+        css = (SITE / "style.css").read_text()
+        self.assertIn("#dominanceMatrix{width:100%;max-width:100%", css)
+        self.assertNotIn("#dominanceMatrix{width:100%;max-width:760px", css)
+        self.assertIn("60px * var(--matrix-columns,7)", css)
+        self.assertIn("white-space:normal;overflow-wrap:anywhere", css)
+        self.assertIn(".psi-matrix thead th{height:72px", css)
+
     def test_every_javascript_file_parses(self):
         node = shutil.which("node")
         if not node:
@@ -116,7 +124,8 @@ subjectsNode.querySelectorAll=()=>[{value:'alignment',checked:true,
 subjectsNode.querySelector=()=>null;
 vm.runInContext('drawDominance();',sandbox);
 const html=nodes.dominanceMatrix.innerHTML;
-assert(html.includes('<table class="psi-matrix">'));
+assert(html.includes('<table class="psi-matrix" style="--matrix-columns:3">'));
+assert.equal((html.match(/scope="col"/g)||[]).length,3);
 for(const tool of ['skesa','minia','abyss']){
   assert(html.includes(tool),tool+' absent from matrix');
 }

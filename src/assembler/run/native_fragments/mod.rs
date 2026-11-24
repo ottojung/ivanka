@@ -1,8 +1,15 @@
+mod pair_support;
 mod represent;
 mod select;
 mod support;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_boundary;
+#[cfg(test)]
+mod tests_fixtures;
+#[cfg(test)]
+mod tests_identity;
 #[cfg(test)]
 mod tests_more;
 

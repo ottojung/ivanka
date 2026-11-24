@@ -160,7 +160,12 @@ def blank_mapping(run):
 def write(site,public,attestation):
     site=Path(site)
     data=site/"data"
-    (data/"live-fork-attestation.json").write_bytes(Path(attestation).read_bytes())
+    if isinstance(attestation,dict):
+        # Neutralized by the publication boundary; never copy private framing.
+        payload=(json.dumps(attestation,sort_keys=True,indent=2)+"\n").encode()
+    else:
+        payload=Path(attestation).read_bytes()
+    (data/"live-fork-attestation.json").write_bytes(payload)
     mapping=blank_mapping(public["runs"][0])
     (data/"mapping-diagnostics.json").write_text(json.dumps(mapping,sort_keys=True,indent=2)+"\n")
     (data/"runs.json").write_text(json.dumps(public,sort_keys=True,indent=2)+"\n")

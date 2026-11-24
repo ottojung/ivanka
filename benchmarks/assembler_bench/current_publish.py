@@ -1,6 +1,7 @@
 """Transactional, monotone publication of current MiCall cohorts to ordinary UI."""
 import argparse
 from datetime import datetime,timezone
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -8,7 +9,7 @@ import tempfile
 
 from .current_inputs import PROGRESS_SCHEMA
 from .current_runs import current,write
-from .public_view import merge_evidence
+from .public_view import merge_evidence, sanitize_document
 from .site_build import validate_public_site
 from .workload_activity import snapshot as worker_snapshot
 
@@ -71,6 +72,16 @@ def update(site,synth,physical,data,runner,attestation,images,physical_witness,p
     # project acceptance into /bench/.
     from .current_validation_v2 import check_current as check_canonical_seven
     check_canonical_seven(generated)
+    # The source attestation is private evidence: scrub acceptance framing at
+    # the publication boundary and bind the published digest to those bytes.
+    neutral_attestation=sanitize_document(json.loads(Path(attestation).read_text()))
+    attestation_bytes=(json.dumps(neutral_attestation,sort_keys=True,indent=2)+
+                       "\n").encode()
+    attestation_digest=hashlib.sha256(attestation_bytes).hexdigest()
+    for run in generated["runs"]:
+        proof=run.get("micall_fork_provenance",{})
+        if proof.get("status")=="verified":
+            proof["attestation_sha256"]=attestation_digest
     evidence=json.loads((site/"data/assembler-evidence.json").read_text())
     generated,_=merge_evidence(generated,evidence)
     if include_workload:
@@ -117,7 +128,7 @@ def update(site,synth,physical,data,runner,attestation,images,physical_witness,p
     with tempfile.TemporaryDirectory(prefix="active-bench-") as scratch:
         stage=Path(scratch)/"bench"
         shutil.copytree(site,stage)
-        write(stage,generated,attestation)
+        write(stage,generated,neutral_attestation)
         validate_public_site(stage)
         for name in ("runs.json","mapping-diagnostics.json",
                      "live-fork-attestation.json"):
@@ -141,6 +152,11 @@ def main():
     parser.add_argument("--real-retries",type=Path)
     parser.add_argument("--synthetic-data",type=Path)
     parser.add_argument("--synthetic-runner",type=Path)
+    # Exact coverage is already carried inside verified case diagnostics.
+    # These legacy flags are accepted so the long-running service CLI remains
+    # compatible; they never add or replace a measurement.
+    parser.add_argument("--exact-real",type=Path)
+    parser.add_argument("--exact-synthetic",type=Path)
     args=parser.parse_args()
     images=json.loads(Path(args.images).read_text())
     update(args.site,args.synthetic,args.real,args.real_data,args.runner,

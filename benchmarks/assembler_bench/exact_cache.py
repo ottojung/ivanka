@@ -4,7 +4,7 @@ import json
 import math
 from pathlib import Path
 
-from benchmarks.compressed_tables import logical_digest
+from benchmarks.compressed_tables import find_table, logical_digest
 
 from .metric_catalog_exact import values
 
@@ -33,7 +33,10 @@ def append(metrics, cache, cohort, sample, tool, source_digest, image,
     folder = sidecar(cache, cohort, sample, tool, candidate)
     file = folder / "provenance.json"
     coverage = folder / "exact_coverage.csv"
-    if not file.is_file() or not coverage.is_file():
+    # The coverage table may be stored as plain or compressed; gate on the
+    # logical table so a compressed-only sidecar keeps its verified evidence.
+    coverage_table = find_table(coverage)
+    if not file.is_file() or coverage_table is None:
         return result, None
     report = json.loads(file.read_text())
     if (report.get("source_conseq_sha256") != source_digest

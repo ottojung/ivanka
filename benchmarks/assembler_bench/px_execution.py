@@ -9,10 +9,9 @@ import argparse
 import csv
 import json
 import secrets
-import shutil
 from pathlib import Path
 
-from . import exploratory_policy
+from . import exploratory_policy, px_metrics, px_retention
 from . import px_cohort_scheduler as sched
 from . import px_supervisor as sup
 from .exploratory_runtime import launch
@@ -180,22 +179,165 @@ def posthoc(root, arm, scorer, scorer_sha):
     return path, digest
 
 
-def cleanup_disposable(root, scratch, arm, result_path):
-    """Remove scratch only after receipt and result content hashes verify."""
-    target = Path(scratch).resolve()
-    base = Path(root).resolve()
-    if not target.is_relative_to(base) or target == base:
-        raise ValueError("scratch cleanup escaped the PX root")
-    if target.name not in ("scratch", "tmp"):
-        raise ValueError("only disposable scratch may be removed")
-    if sched.verify_receipt(root, arm) is None:
+def extract_diagnostics(root, arm, output_dir, *, fastq_sha256,
+                        exact_report=None):
+    """Measure final-MAX diagnostics before any scratch can be reclaimed."""
+    return px_metrics.record(root, arm, output_dir,
+                             fastq_sha256=fastq_sha256,
+                             exact_report=exact_report)
+
+
+def _exact_report(output_dir, case, receipt):
+    """Generate an exact-coverage report or fail closed with the reason."""
+    from . import exact_cache, px_metrics
+
+    report_path = Path(output_dir) / "exact_coverage.json"
+    if report_path.is_file():
+        return json.loads(report_path.read_bytes())
+    artifact = px_metrics.final_max(output_dir)
+    if artifact is None:
+        return {"status": "unavailable",
+                "unavailable_reason": "no final MAX consensus sequence"}
+    try:
+        from benchmarks.produce_exact_coverage import generate
+    except ImportError as exc:
+        return {"status": "unavailable",
+                "unavailable_reason": f"exact coverage module unavailable: {exc}"}
+    csv_path = Path(output_dir) / "exact_coverage.csv"
+    temp = Path(output_dir) / ".exact_coverage.csv.partial"
+    try:
+        report = generate(case.r1, case.r2, artifact, temp, overlap_size=70)
+    except ImportError as exc:
+        temp.unlink(missing_ok=True)
+        return {"status": "unavailable",
+                "unavailable_reason": f"exact coverage module unavailable: {exc}"}
+    try:
+        temp.replace(csv_path)
+        report.update({
+            "method": px_metrics.METHOD,
+            "source_conseq_sha256": receipt["output_sha256"],
+            "source_image_sha256": arm_image(receipt),
+            "source_fastq_sha256": [case.input_hashes()["R1"],
+                                    case.input_hashes()["R2"]],
+            "micall_exact_coverage_module_sha256": exact_cache.SOURCE_SHA256,
+            "exact_coverage_sha256": sched.sha256_file(csv_path),
+            "exact_coverage_csv": str(csv_path),
+        })
+        report_path.write_text(json.dumps(report, sort_keys=True) + "\n")
+        return report
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+
+
+def arm_image(receipt):
+    value = receipt.get("image_sha256")
+    if not isinstance(value, str) or not sched.SHA256.fullmatch(value):
+        raise ValueError("receipt missing image sha256")
+    return value
+
+
+def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
+                               scorer_sha=None):
+    """Score, extract diagnostics, then reclaim only verified disposable."""
+    output_dir = Path(root) / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
+    if scorer is None:
+        from .px_posthoc import build_default_scorer
+        scorer = build_default_scorer()
+        scorer_sha = scorer.source_sha256
+    if scorer_sha is None:
+        raise ValueError("posthoc scorer SHA-256 is required")
+    result = sched.posthoc_score(root, arm, scorer, scorer_sha,
+                                 output_dir=output_dir, case=case)
+    path, digest = sched.write_results(root, arm, result)
+    Path(str(path) + ".sha256").write_text(digest + "\n")
+    exact = _exact_report(output_dir, case, receipt)
+    hashes = case.input_hashes()
+    px_metrics.record(root, arm, output_dir,
+                      fastq_sha256=[hashes["R1"], hashes["R2"]],
+                      exact_report=exact)
+    for target in px_retention._disposable_entries(Path(root), arm):
+        px_retention.reclaim_one(root, arm, target=target)
+
+
+def reconcile_terminal(root, registry, source, *, scorer=None, scorer_sha=None,
+                       aliases=None):
+    """Posthoc-reconcile terminal receipts without launching any benchmark.
+
+    Existing successful arms get scoring, diagnostics and resource evidence
+    from their retained output. Failed receipts (including infrastructure
+    stops like R003) are left untouched except for a resource record carrying
+    their observed peak RSS, which may be null.
+    """
+    sched.build_plan(registry, source, root)  # fails closed on drifted registry
+    wanted = set(aliases) if aliases is not None else None
+    reconciled, failures = [], []
+    for identifier in sched._load_index(root):
+        parsed = sched.arm_from_receipt(root, identifier)
+        if parsed is None:
+            continue
+        if wanted is not None and parsed["alias"] not in wanted:
+            continue
+        receipt = sched.verify_receipt(root, parsed)
+        case = source.case(parsed["cohort"], parsed["alias"])
+        if case.input_hashes() != parsed["input_sha256"]:
+            raise ValueError("terminal receipt input hash differs from source")
+        _reconcile_arm(root, parsed, case, receipt, active=None,
+                       active_sha=None, scorer=scorer, scorer_sha=scorer_sha,
+                       reconciled=reconciled, failures=failures)
+    return {"schema": "ivanka.px.reconcile.v1", "reconciled": reconciled,
+            "failures_preserved": failures}
+
+
+def _reconcile_arm(root, parsed, case, receipt, *, active, active_sha,
+                   scorer, scorer_sha, reconciled, failures):
+    from .px_posthoc import build_default_scorer
+
+    sched.write_resource(root, parsed, receipt)
+    if receipt["outcome"] != "success":
+        failures.append({"alias": parsed["alias"], "cohort": parsed["cohort"],
+                         "reason": receipt["failure_reason"]})
+        return
+    output = Path(root) / "outputs" / (
+        parsed["tool_id"] + "-" + parsed["alias"])
+    if active is None:
+        active = scorer or build_default_scorer()
+        active_sha = scorer_sha or active.source_sha256
+    result = sched.posthoc_score(root, parsed, active, active_sha,
+                                 output_dir=output, case=case)
+    path, digest = sched.write_results(root, parsed, result)
+    Path(str(path) + ".sha256").write_text(digest + "\n")
+    hashes = case.input_hashes()
+    px_metrics.record(root, parsed, output,
+                      fastq_sha256=[hashes["R1"], hashes["R2"]],
+                      exact_report=_exact_report(output, case, receipt))
+    reconciled.append({"alias": parsed["alias"], "cohort": parsed["cohort"],
+                       "result_sha256": digest})
+
+
+def retention_plan(root, arms, budget_bytes=px_retention.BUDGET_BYTES,
+                   allocated=None):
+    """Bound evidence retention by the 8 GiB policy without deleting anything."""
+    return px_retention.plan(root, arms, budget_bytes, allocated)
+
+
+def apply_retention(root, decision):
+    """Reclaim only verified scratch from an in-budget retention plan."""
+    return px_retention.apply(root, decision)
+
+
+def cleanup_disposable(root, scratch, arm, result_path=None):
+    """Remove disposable artifacts only after full diagnostics verification."""
+    receipt = sched.verify_receipt(root, arm)
+    if receipt is None:
         raise ValueError("scratch cleanup requires a verified terminal receipt")
-    sidecar = Path(str(result_path) + ".sha256")
-    if (not sidecar.is_file()
-            or sidecar.read_text().strip() != sched.sha256_file(result_path)):
-        raise ValueError("result hash not yet attested before cleanup")
-    shutil.rmtree(target)
-    return {"removed": str(target), "reason": "hashes_verified"}
+    if result_path is not None:
+        sidecar = Path(str(result_path) + ".sha256")
+        if (not sidecar.is_file()
+                or sidecar.read_text().strip() != sched.sha256_file(result_path)):
+            raise ValueError("result hash not yet attested before cleanup")
+    target = Path(scratch)
+    return px_retention.reclaim_one(root, arm, target=target)
 
 
 class SupervisedRunner:
@@ -239,6 +381,10 @@ def main():
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--plan", action="store_true")
     parser.add_argument("--supervise", action="store_true")
+    parser.add_argument("--reconcile", action="store_true",
+                        help="posthoc-reconcile terminal receipts without launching")
+    parser.add_argument("--alias", action="append", dest="aliases",
+                        help="limit reconciliation to these public aliases")
     parser.add_argument("--armed", action="store_true")
     parser.add_argument("--check-ready", action="store_true",
                         help="exit 0 only when certified tools and handoffs exist")
@@ -254,11 +400,17 @@ def main():
             return 1
         print(json.dumps({"ready": tools}, sort_keys=True))
         return 0
-    if args.plan == args.supervise:
-        parser.error("choose exactly one of --plan or --supervise")
+    modes = sum(bool(item) for item in (args.plan, args.supervise, args.reconcile))
+    if modes != 1:
+        parser.error("choose exactly one of --plan, --supervise or --reconcile")
     if args.supervise and not args.armed:
         parser.error("supervise requires --armed after image-agent handoff")
     source = load_cohort()
+    if args.reconcile:
+        result = reconcile_terminal(args.root, args.registry, source,
+                                    aliases=args.aliases)
+        print(json.dumps(result, sort_keys=True))
+        return
     plan = sched.build_plan(args.registry, source, args.root)
     if args.plan:
         print(json.dumps({"tools": plan["tools"], "total": plan["total_arms"],
@@ -273,8 +425,10 @@ def main():
     if baseline is None:
         raise ValueError("missing or changed PX storage baseline")
     runner = SupervisedRunner(args.registry, baseline, launch.operate, args.root)
-    result = sup.BackgroundSupervisor(args.registry, baseline, source,
-                                      args.root, runner).start(armed=True)
+    result = sup.BackgroundSupervisor(args.registry, baseline, source, args.root,
+                                      runner,
+                                      diagnostics=posthoc_extract_and_retain
+                                      ).start(armed=True)
     print(json.dumps(result, sort_keys=True))
 
 

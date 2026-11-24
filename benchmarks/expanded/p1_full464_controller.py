@@ -455,11 +455,13 @@ def terminal_retirement(folder, candidate, success, source_hashes, env):
             "container_wall_seconds": candidate.get("wall_seconds"),
         }}
     evidence_path, _ = seal_terminal_evidence(path, evidence, source_hashes)
-    if not success:
-        return {"applied": False, "reason": "failure scratch preserved",
-                "evidence": evidence_path.name}
     def dead():
         return container_dead(candidate["container_name"], env)
+    # A proven-dead terminal failure is sufficient evidence: the sealed
+    # receipt, logs and final scientific files stay, while disposable scratch
+    # and visuals are reclaimed exactly as for a successful arm. The caller
+    # has already refused to continue while the container may be alive, and
+    # the probe is rechecked here as a second guard.
     return terminal_retire(path, evidence_path=evidence_path,
                            container_dead=dead,
                            source_hashes=source_hashes)

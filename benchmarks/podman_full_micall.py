@@ -24,7 +24,8 @@ from reference_catalog import load_micall_projects
 from diagnostic_metrics import extract as extract_diagnostics
 import milestone198
 from podman_detached_lifecycle import run_detached
-from retained_artifacts import retain_arm, remove_visuals
+from retained_artifacts import (RetentionGateError, seal_terminal_evidence,
+                                terminal_retire)
 from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
                                   authenticated_postrun_cleanup, startup_database_lock,
                                   no_micall_output, podman_attempt_diagnostics)
@@ -518,6 +519,35 @@ def iva_cache_status(rows, image, hxb2_hash, all_projects, require_internal_timi
     return status
 
 
+def retire_terminal_arm(folder, result, fastqs, image, exitcode, wall_seconds,
+                        timing_file):
+    """Apply the common terminal policy after a future arm has finished.
+
+    The caller invokes this only once the container has been observed dead and
+    score extraction has returned. Evidence is sealed to disk first so the
+    policy can verify it before deleting any scratch. Any preconditions failure
+    is recorded and leaves scratch and logs intact for diagnosis.
+    """
+    source_hashes = {path.name: sha(path) for path in fastqs}
+    source_hashes["image_id"] = result.get("image_id") or image
+    if timing_file.is_file():
+        source_hashes["micall_internal_timing.json"] = sha(timing_file)
+    if exitcode == 0 and "metrics" in result:
+        evidence = {"metrics": result["metrics"]}
+    else:
+        stderr = folder / "podman.stderr.log"
+        tail = stderr.read_text()[-1200:] if stderr.is_file() else ""
+        evidence = {"failure": {"exit_code": exitcode,
+                                "container_wall_seconds": wall_seconds,
+                                "error_tail": tail}}
+    try:
+        evidence_path, _ = seal_terminal_evidence(folder, evidence, source_hashes)
+        return terminal_retire(folder, evidence_path=evidence_path,
+                               container_dead=True, source_hashes=source_hashes)
+    except (OSError, ValueError, RetentionGateError) as exc:
+        return {"applied": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False):
     name = row["sample"]
     folder = RESULTS / invocation / name / arm
@@ -666,12 +696,14 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         if exitcode == 0:
             result["metrics"] = score_outputs(folder, reference)
     finally:
-        # MiCall writes final outputs into scratch with --keep_scratch.
-        # Promote final scientific data before removing bulky intermediate
-        # SAM, FASTQ, index and mapping-stage files. Never touch JSONL,
-        # timings, podman logs, or the other assembler's artifacts.
-        result["artifact_retention"] = retain_arm(folder)
-        result["visual_retention"] = remove_visuals(folder)
+        # MiCall writes final outputs into scratch with --keep_scratch. The
+        # common terminal policy verifies sealed metrics/receipt and source
+        # hashes before promoting final scientific data and removing bulky
+        # intermediate SAM, FASTQ, index, mapping-stage and visual files.
+        # It never touches JSONL, timings, podman logs or other arms.
+        result["terminal_retention"] = retire_terminal_arm(
+            folder, result, fq, image, exitcode, container_wall_seconds,
+            timing_file)
     if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
         result["podman_lifecycle"] = "serialized_detached_v1"
     if start_retries:

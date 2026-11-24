@@ -24,7 +24,7 @@ from reference_catalog import load_micall_projects
 from diagnostic_metrics import extract as extract_diagnostics
 import milestone198
 from podman_detached_lifecycle import run_detached
-from retained_artifacts import retain_arm, remove_visuals
+from retained_artifacts import seal_terminal_evidence, terminal_retire
 from container_completion import (TIMING_ORIGIN, verified_internal_seconds,
                                   authenticated_postrun_cleanup, startup_database_lock,
                                   no_micall_output, podman_attempt_diagnostics)
@@ -518,6 +518,57 @@ def iva_cache_status(rows, image, hxb2_hash, all_projects, require_internal_timi
     return status
 
 
+def retire_terminal_arm(folder, result, fastqs, image, exitcode, wall_seconds,
+                        timing_file, *, container_dead, cleanup_error=None):
+    """Apply the common terminal policy after a future arm has finished.
+
+    ``container_dead`` is an observed liveness signal supplied by the caller
+    from the Podman lifecycle (a bool or a zero-argument probe); it is never
+    assumed. Emergency cleanup is part of that observation: when ``podman
+    rm --force`` was skipped or failed, or when liveness cannot be established,
+    retirement is suppressed so scratch is never deleted under a container
+    that may still be alive and writing. Evidence is sealed to disk first so
+    the policy can verify it before deleting any scratch. Any precondition
+    failure is recorded and leaves scratch and logs intact for diagnosis.
+    """
+    if cleanup_error:
+        return {"applied": False, "error": f"cleanup incomplete: {cleanup_error}"}
+    try:
+        dead = container_dead() if callable(container_dead) else container_dead
+    except Exception as exc:
+        return {"applied": False,
+                "error": f"liveness probe failed: {type(exc).__name__}: {exc}"}
+    if dead is not True:
+        return {"applied": False, "error": "container has not terminated"}
+    def _source_hashes():
+        hashes = {path.name: sha(path) for path in fastqs}
+        hashes["image_id"] = result.get("image_id") or image
+        if timing_file.is_file():
+            hashes["micall_internal_timing.json"] = sha(timing_file)
+        return hashes
+
+    try:
+        source_hashes = _source_hashes()
+        if exitcode == 0 and "metrics" in result:
+            evidence = {"metrics": result["metrics"]}
+        else:
+            stderr = folder / "podman.stderr.log"
+            tail = stderr.read_text()[-1200:] if stderr.is_file() else ""
+            evidence = {"failure": {"exit_code": exitcode,
+                                    "container_wall_seconds": wall_seconds,
+                                    "error_tail": tail}}
+        evidence_path, _ = seal_terminal_evidence(folder, evidence, source_hashes)
+        # Re-hash from disk: a post-seal source change must not pass the
+        # sealed-receipt comparison against a stale in-memory dict.
+        return terminal_retire(folder, evidence_path=evidence_path,
+                               container_dead=dead,
+                               source_hashes=_source_hashes())
+    except Exception as exc:
+        # The runner must never crash on a corrupt/truncated compressed final:
+        # a codec decode error is still a fail-closed retention outcome.
+        return {"applied": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False):
     name = row["sample"]
     folder = RESULTS / invocation / name / arm
@@ -563,12 +614,16 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         command.append("--all_projects")
     start = time.monotonic()
     cleanup_error = None
+    # Liveness starts unknown and is only set from an observed Podman outcome.
+    # It gates scratch retirement; an unknown value always preserves scratch.
+    container_dead = False
     with (folder / "podman.stdout.log").open("w") as stdout, \
          (folder / "podman.stderr.log").open("w") as stderr:
         start_retries = 0
         podman_attempts = []
         original_name = container_name
         while True:
+            container_dead = False  # every attempt starts with unknown liveness
             # The original sample wall clock includes *every* failed startup,
             # backoff, and successful container. Never reset its deadline.
             remaining = timeout - (time.monotonic() - start)
@@ -587,6 +642,16 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                      else subprocess.run(command, stdout=stdout, stderr=stderr,
                                         timeout=remaining, check=False))
                 exitcode = p.returncode
+                if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
+                    # Only the complete create/start/wait/logs/rm sequence
+                    # proves the container was actually removed. Any earlier
+                    # stage leaves liveness unknown and scratch preserved.
+                    container_dead = getattr(p, "stage", None) == "complete"
+                else:
+                    # podman run --rm reaps the container on a normal return.
+                    # Podman infrastructure failures (125/126) and a failed
+                    # auto-removal (127) can leave a container behind.
+                    container_dead = exitcode not in (125, 126, 127)
             except subprocess.TimeoutExpired:
                 # The container may outlive its Podman CLI. Never let
                 # emergency cleanup exceed the ORIGINAL whole-container
@@ -603,6 +668,10 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
                             timeout=min(30, cleanup_budget), check=False)
                         if cleanup.returncode:
                             cleanup_error = f"podman rm exited {cleanup.returncode}"
+                        else:
+                            # A successful forced removal is the only proof of
+                            # death on the timeout path.
+                            container_dead = True
                     except (subprocess.TimeoutExpired, OSError) as exc:
                         cleanup_error = f"{type(exc).__name__}: {exc}"
             stderr.flush()
@@ -666,12 +735,15 @@ def run_arm(row, arm, image, reference, timeout, invocation, all_projects=False)
         if exitcode == 0:
             result["metrics"] = score_outputs(folder, reference)
     finally:
-        # MiCall writes final outputs into scratch with --keep_scratch.
-        # Promote final scientific data before removing bulky intermediate
-        # SAM, FASTQ, index and mapping-stage files. Never touch JSONL,
-        # timings, podman logs, or the other assembler's artifacts.
-        result["artifact_retention"] = retain_arm(folder)
-        result["visual_retention"] = remove_visuals(folder)
+        # MiCall writes final outputs into scratch with --keep_scratch. The
+        # common terminal policy verifies sealed metrics/receipt and source
+        # hashes before promoting final scientific data and removing bulky
+        # intermediate SAM, FASTQ, index, mapping-stage and visual files.
+        # It never touches JSONL, timings, podman logs or other arms.
+        result["terminal_retention"] = retire_terminal_arm(
+            folder, result, fq, image, exitcode, container_wall_seconds,
+            timing_file, container_dead=container_dead,
+            cleanup_error=cleanup_error)
     if os.environ.get("IVANKA_PODMAN_LIFECYCLE") == "detached":
         result["podman_lifecycle"] = "serialized_detached_v1"
     if start_retries:

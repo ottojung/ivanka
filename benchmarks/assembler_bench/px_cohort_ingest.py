@@ -140,9 +140,9 @@ def _case(root, name, receipt, assembler, real_data):
             or not math.isfinite(raw) or raw < 0
             or resource.get(RAW_BYTES_KEY) != raw):
         raise ValueError("PX observed peak RAM is not reconciled")
-    # A legacy receipt attests no sampling method. Only a versioned whole-
-    # container attestation may promote the raw reading to a comparable peak.
-    fields, ram_diagnostics = classify(raw, receipt, resource, row)
+    # Only the index-bound receipt can attest comparable scope. Resource and
+    # result side files are post-hoc and never promote a legacy reading.
+    fields, ram_diagnostics = classify(raw, receipt)
     for record in (resource, row):
         if (record.get(COMPARABLE_KEY) is not None
                 and record[COMPARABLE_KEY] != observed_mib(raw)):
@@ -215,7 +215,8 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
 
     All activated tools are treated equally: a handoff is accepted only when
     its image/pilot receipt digests, adapter pin and image identity match the
-    active registry entry and its source-bound receipts.
+    active registry entry and its source-bound receipts. Scored cases without
+    case-level pins inherit the assembler's published binding.
     """
     from . import exploratory_policy
     from .adapter_branch_refs import adapter_provenance
@@ -280,11 +281,17 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
             # A failed or partial pilot cannot promote tool-level provenance.
             continue
         for case in target.get("cases", []):
-            if (case.get("score") is not None
-                    and case.get("adapter_commit")
-                    and case.get("image_sha256")
-                    and (case["adapter_commit"] != adapter
-                         or case["image_sha256"] != handoff["image_sha256"])):
+            if case.get("score") is None:
+                continue
+            # Cases measured before case-level pinning inherit the assembler's
+            # published binding. A handoff must never repoint a published
+            # score to a different adapter or image.
+            bound_adapter = (case.get("adapter_commit")
+                             or target.get("adapter_commit"))
+            bound_image = case.get("image_sha256") or target.get("image_sha256")
+            if ((bound_adapter and bound_adapter != adapter)
+                    or (bound_image
+                        and bound_image != handoff["image_sha256"])):
                 raise ValueError("handoff would rewrite measured case provenance")
         profile = dict(target)
         profile["adapter_commit"] = adapter
@@ -310,13 +317,14 @@ def ingest(report, evidence, root, real_data, registry_path=None,
         raise ValueError("unsupported assembler evidence schema")
     root = Path(root)
     index = _read_index(root)
+    receipts = {name: _load(root / "receipts" / (name + ".json"))
+                for name in sorted(index["entries"])}
     result = scrub(json.loads(json.dumps(evidence)))
     added = []
     assemblers = {item["id"]: item for item in result["assemblers"]}
     if registry_path and handoff_dir:
         incoming = []
-        for name in sorted(index["entries"]):
-            receipt = _load(root / "receipts" / (name + ".json"))
+        for name, receipt in receipts.items():
             if receipt.get("tool_id") not in assemblers:
                 continue
             result_path = root / "results" / (name + "-results.json")
@@ -333,12 +341,22 @@ def ingest(report, evidence, root, real_data, registry_path=None,
                 result, registry_path, handoff_dir):
             added.append(("registry", tool, "activation"))
     # Re-scope older evidence rows whose launcher-group reading was published
-    # as a comparable peak. Raw receipts are never rewritten.
+    # as a comparable peak. Only a hash-bound receipt may re-attest a case;
+    # raw receipts are never rewritten.
+    bound_receipts = {}
+    for receipt in receipts.values():
+        tool = receipt.get("tool_id")
+        if tool not in assemblers:
+            continue
+        bound = _canonical_alias(receipt, real_data)
+        if bound is not None:
+            cohort, alias = bound
+            bound_receipts[(tool, cohort, alias)] = receipt
     for item in assemblers.values():
         for case in item.get("cases", []):
-            normalize_case(case)
-    for name in sorted(index["entries"]):
-        receipt = _load(root / "receipts" / (name + ".json"))
+            key = (item["id"], case.get("cohort"), case.get("canonical_alias"))
+            normalize_case(case, bound_receipts.get(key))
+    for name, receipt in receipts.items():
         tool = receipt.get("tool_id")
         if tool not in assemblers:
             continue

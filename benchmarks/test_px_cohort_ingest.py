@@ -244,6 +244,79 @@ class RegistryActivationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "preexisting sample score"):
             assert_no_stale_scores(report, evidence)
 
+    def _unpinned_activation(self, image):
+        """A verified handoff against measured cases without case-level pins."""
+        tool = "idba-ud"
+        adapter = "ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9"
+        source = "1" * 40
+        image_receipt = {
+            "schema": "ivanka.exploratory.image.receipt.v1",
+            "tool_id": tool, "source_commit": source,
+            "adapter_commit": adapter, "image_sha256": image,
+            "qualifying": False, "native_binary_sha256": "d" * 64,
+        }
+        pilot_receipt = {
+            "schema": "ivanka.exploratory.pilot.receipt.v1",
+            "tool_id": tool, "source_commit": source,
+            "adapter_commit": adapter, "image_sha256": image,
+            "qualifying": False,
+        }
+        for cohort in ("physical", "synthetic"):
+            pilot_receipt[cohort] = {"source_input_sha256": "e" * 64,
+                                     "status": "success"}
+        refs = {}
+        for kind, data in (("image", image_receipt), ("pilot", pilot_receipt)):
+            path = self.root / "receipts" / (kind + "-" + tool + ".json")
+            path.write_text(json.dumps(data))
+            refs[kind] = {"path": str(path), "sha256": _sha(path)}
+        registry = {
+            "schema": "ivanka.exploratory.assemblers.v1",
+            "adapter_branch_commits": {tool: adapter},
+            "candidates": [{
+                "id": tool, "status": "pilot", "source_commit": source,
+                "image_sha256": image, "image_evidence": refs["image"],
+                "pilot_evidence": refs["pilot"],
+            }],
+        }
+        registry_path = self.root / "registry.json"
+        registry_path.write_text(json.dumps(registry))
+        (self.root / "handoff" / (tool + ".json")).write_text(json.dumps({
+            "schema": "ivanka.px.supervisor.handoff.v1", "tool_id": tool,
+            "image_sha256": image,
+            "image_receipt_sha256": refs["image"]["sha256"],
+            "pilot_receipt_sha256": refs["pilot"]["sha256"],
+        }))
+        evidence = {"assemblers": [{
+            "id": tool, "source_commit": source, "adapter_commit": adapter,
+            "image_sha256": "c" * 64,
+            "cases": [
+                {"cohort": "real", "canonical_alias": "R053",
+                 "score": 298.0},
+                {"cohort": "synthetic", "canonical_alias": "H452",
+                 "score": 9937.752878929348},
+            ],
+        }]}
+        return registry_path, evidence
+
+    def test_changed_image_cannot_rewrite_unpinned_measured_cases(self):
+        registry_path, evidence = self._unpinned_activation("f" * 64)
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            with self.assertRaisesRegex(ValueError,
+                                        "measured case provenance"):
+                refresh_registry_provenance(
+                    evidence, registry_path, self.root / "handoff")
+        self.assertEqual(evidence["assemblers"][0]["image_sha256"], "c" * 64)
+
+    def test_same_image_adopts_unpinned_measured_cases(self):
+        registry_path, evidence = self._unpinned_activation("c" * 64)
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            adopted = refresh_registry_provenance(
+                evidence, registry_path, self.root / "handoff")
+        self.assertEqual(adopted, ["idba-ud"])
+        self.assertEqual(evidence["assemblers"][0]["image_sha256"], "c" * 64)
+
 
 if __name__ == "__main__":
     unittest.main()

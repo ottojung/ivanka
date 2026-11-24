@@ -148,6 +148,48 @@ class RamScopeTests(unittest.TestCase):
         self.assertNotIn(LAUNCHER_DIAGNOSTIC, arm)
         validate_publication(merged, self.evidence)
 
+    def test_forged_side_file_attestation_never_promotes_legacy_peak(self):
+        # The receipt stays legacy; only the unbound side files are forged.
+        attestation = {
+            "peak_ram_method": COMPARABLE_METHOD,
+            "peak_ram_method_version": COMPARABLE_METHOD_VERSION,
+            "peak_ram_scope": COMPARABLE_SCOPE,
+        }
+        self.resource.update(attestation)
+        self.result["samples"][0].update(attestation)
+        self._write()
+        _, merged, _, _ = ingest(self.report, self.evidence,
+                                 self.root, self.source)
+        real = next(r for r in merged["runs"] if r["cohort"] == "real")
+        row = next(s for s in real["samples"] if s["alias"] == "R037")
+        arm = row["diagnostics"]["skesa"]
+        proof = row["measurement_evidence"]["skesa"]
+        self.assertIsNone(arm[COMPARABLE_KEY])
+        self.assertIsNone(proof[COMPARABLE_KEY])
+        self.assertEqual(arm[LAUNCHER_DIAGNOSTIC], MIB)
+        self.assertEqual(arm["peak_ram_scope"], LEGACY_SCOPE)
+        self.assertEqual(proof["peak_rss_bytes"], RAW)
+        validate_publication(merged, self.evidence)
+
+    def test_receipt_alone_attests_comparable_peak(self):
+        # Side files carry no attestation; the bound receipt is authoritative.
+        self.receipt.update({
+            "peak_ram_method": COMPARABLE_METHOD,
+            "peak_ram_method_version": COMPARABLE_METHOD_VERSION,
+            "peak_ram_scope": COMPARABLE_SCOPE,
+        })
+        self._write()
+        _, merged, _, _ = ingest(self.report, self.evidence,
+                                 self.root, self.source)
+        real = next(r for r in merged["runs"] if r["cohort"] == "real")
+        row = next(s for s in real["samples"] if s["alias"] == "R037")
+        arm = row["diagnostics"]["skesa"]
+        self.assertEqual(arm[COMPARABLE_KEY], MIB)
+        self.assertEqual(arm["peak_ram_method_version"],
+                         COMPARABLE_METHOD_VERSION)
+        self.assertNotIn(LAUNCHER_DIAGNOSTIC, arm)
+        validate_publication(merged, self.evidence)
+
     def test_unknown_method_never_claims_whole_container(self):
         self.receipt.update({"peak_ram_method": "container_tree",
                              "peak_ram_scope": COMPARABLE_SCOPE})

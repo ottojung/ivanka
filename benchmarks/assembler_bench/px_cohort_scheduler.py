@@ -90,8 +90,9 @@ def peak_ram_observed_mib(receipt):
         raise ValueError("observed peak RSS is not numeric")
     if not math.isfinite(value) or value < 0:
         raise ValueError("observed peak RSS is not finite and non-negative")
-    if receipt.get(METHOD_KEY) and not attested(receipt):
-        # An explicit non-container sampler never yields a comparable peak.
+    if not attested(receipt):
+        # Only method, version and whole-container scope together make the
+        # reading comparable; partial or legacy samplers never do.
         return None
     return round(value / 1048576, 6)
 

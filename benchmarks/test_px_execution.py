@@ -13,6 +13,10 @@ from assembler_bench import exploratory_policy, px_metrics
 from assembler_bench import px_cohort_scheduler as sched
 from assembler_bench import px_execution as exe
 from assembler_bench import px_supervisor as sup
+from assembler_bench.px_ram_semantics import (COMPARABLE_METHOD,
+                                              COMPARABLE_METHOD_VERSION,
+                                              COMPARABLE_SCOPE, METHOD_KEY,
+                                              SCOPE_KEY, VERSION_KEY)
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "benchmarks/assembler_bench/exploratory_candidates.json"
@@ -783,6 +787,9 @@ class IntegrationTests(unittest.TestCase):
     def test_peak_ram_public_metric_preserves_null_and_failed_arms(self):
         plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
         arm = plan["pending"][0]
+        arm.update({METHOD_KEY: COMPARABLE_METHOD,
+                    VERSION_KEY: COMPARABLE_METHOD_VERSION,
+                    SCOPE_KEY: COMPARABLE_SCOPE})
         output = self._arm_output(arm)
         (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
         measured = 3 * 1048576 + 524288
@@ -899,6 +906,19 @@ class IntegrationTests(unittest.TestCase):
                 self.px, arm, self.source().case("physical", arm["alias"]),
                 sched.verify_receipt(self.px, arm),
                 scorer=scorer, scorer_sha="0" * 64)
+
+
+class RamAttestationGuardTests(unittest.TestCase):
+    def test_partial_attestation_never_yields_comparable_peak(self):
+        raw = 3 * 1048576 + 524288
+        partial = {"peak_rss_bytes": raw,
+                   VERSION_KEY: COMPARABLE_METHOD_VERSION,
+                   SCOPE_KEY: COMPARABLE_SCOPE}
+        self.assertIsNone(sched.peak_ram_observed_mib(partial))
+        self.assertIsNone(sched.peak_ram_observed_mib(
+            {"peak_rss_bytes": raw}))
+        full = dict(partial, **{METHOD_KEY: COMPARABLE_METHOD})
+        self.assertEqual(sched.peak_ram_observed_mib(full), 3.5)
 
 
 if __name__ == "__main__":

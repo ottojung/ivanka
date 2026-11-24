@@ -5,8 +5,9 @@ MiCall processes run in a different process group, so those raw byte readings
 are genuine observations but are *not* comparable whole-container peak RAM.
 The public boundary therefore keeps the raw bytes and publishes their MiB
 value only as an explicitly scoped launcher-group diagnostic. A comparable
-peak is published only when the immutable receipt attests the sampling
-method, its version and whole-container scope.
+peak is published only when the immutable, index-bound receipt attests the
+sampling method, its version and whole-container scope. Post-hoc result and
+resource side files cannot supply that attestation.
 """
 import math
 
@@ -69,16 +70,17 @@ def attested(record):
             and record.get(SCOPE_KEY) == COMPARABLE_SCOPE)
 
 
-def classify(raw_bytes, *records):
+def classify(raw_bytes, receipt=None):
     """Return publication fields for one observed RSS reading.
 
     The raw byte reading is never changed. Only an explicit, versioned
-    whole-container attestation promotes it to the comparable public metric.
+    whole-container attestation on the immutable receipt promotes it to the
+    comparable public metric; side files are post-hoc and never attest.
     """
     value = observed_mib(raw_bytes)
     diagnostics = {}
     fields = {RAW_BYTES_KEY: raw_bytes}
-    if value is not None and any(attested(item) for item in records):
+    if value is not None and attested(receipt):
         fields.update({COMPARABLE_KEY: value, METHOD_KEY: COMPARABLE_METHOD,
                        VERSION_KEY: COMPARABLE_METHOD_VERSION,
                        SCOPE_KEY: COMPARABLE_SCOPE})
@@ -95,10 +97,10 @@ def classify(raw_bytes, *records):
     return fields, diagnostics
 
 
-def normalize_case(case):
-    """Re-scope an already published evidence case without touching receipts."""
+def normalize_case(case, receipt=None):
+    """Re-scope published evidence using only a bound receipt's attestation."""
     raw = case.get(RAW_BYTES_KEY)
-    fields, diagnostics = classify(raw, case)
+    fields, diagnostics = classify(raw, receipt)
     previous = case.get("diagnostics") or {}
     merged = dict(previous)
     # A comparable reading from an unattested legacy receipt is withdrawn,

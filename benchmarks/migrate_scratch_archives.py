@@ -555,6 +555,11 @@ def main(argv=None):
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise MigrationError(f"another migration worker holds {lock}")
+        # A killed worker leaves staged members behind. The exclusive lock
+        # proves no other worker can own them, so discard them before staging.
+        for stale in args.temp_dir.glob(".*.part"):
+            if re.fullmatch(r"\.[0-9a-f]{64}\.\d+\.part", stale.name):
+                stale.unlink(missing_ok=True)
         for case in _cases(args.root, args.cases):
             if args.limit and len(results) >= args.limit:
                 break

@@ -307,6 +307,17 @@ class MigrateScratchArchivesTests(unittest.TestCase):
                                 for item in visual_record))
             self.assertFalse((case / "report.pdf").exists())
 
+    def test_main_discards_stale_staged_members(self):
+        with TemporaryDirectory() as d:
+            _make_case(d)
+            stale = Path(d) / f".{CASE}.0.part"
+            stale.write_bytes(b"orphaned staging bytes")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = migration.main(["--root", d, "--temp-dir", d])
+            self.assertEqual(code, 0)
+            self.assertFalse(stale.exists())
+
     def test_main_lock_and_limit(self):
         with TemporaryDirectory() as d:
             root = Path(d) / "cases"

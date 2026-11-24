@@ -7,6 +7,7 @@ from .metric_catalog_exact import explanations as exact_explanations
 from .metric_catalog_micall import explanations as micall_explanations
 from .metric_catalog_micall import stage
 from .metric_catalog_micall_rules import RULES
+from .px_ram_semantics import LAUNCHER_DIAGNOSTIC
 
 # Metric key -> (definition, denominator, MiCall stage, suggested direction).
 INFO = {
@@ -143,3 +144,11 @@ INFO["peak_ram_observed_mib"] = (
     "Maximum sampled process-tree RSS bytes / 1,048,576. "
     "Absent if the container was not monitored through observed exit.",
     "Host process-tree memory observer", "lower")
+
+INFO[LAUNCHER_DIAGNOSTIC] = (
+    "Peak sampled RSS of the launcher's process group only. Legacy PX "
+    "receipts were sampled before container-tree binding, so this excludes "
+    "the containerized MiCall processes and is not comparable peak RAM.",
+    "Maximum sampled launcher-process-group RSS bytes / 1,048,576; "
+    "the whole-container peak stays unavailable for those arms.",
+    "Legacy launcher process-group observer", "lower")

@@ -10,7 +10,7 @@ from assembler_bench.exploratory_space import admit
 
 from .. import job_temp
 from .cleanup import clean_stopped_build
-from .monitor import GuardExceeded, watch
+from .monitor import GuardExceeded, attest, watch
 from .pilot import bind_pilot, stop_pilot
 from .setup import prepare
 from .terminate import group
@@ -41,7 +41,9 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                      "peak_rss": None, "argv_sha256":
                      hashlib.sha256(repr(argv).encode()).hexdigest()}
             try:
-                state["peak_rss"] = watch(proc, cfg)
+                observation = watch(proc, cfg)
+                state.update(attest(observation))
+                state["peak_rss"] = state["peak_rss_bytes"]
                 state["status"] = "finished" if proc.returncode == 0 else "failed"
             except GuardExceeded as exc:
                 state["status"], state["reason"] = "killed", str(exc)

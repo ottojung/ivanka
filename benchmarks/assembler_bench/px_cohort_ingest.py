@@ -18,6 +18,9 @@ from .current_inputs import PANEL, PHYSICAL_MANIFEST
 from .public_metrics import CATALOG
 from .public_view import (EVIDENCE_SCHEMA, assert_clean_object,
                           merge_evidence, scrub)
+from .px_ram_semantics import (COMPARABLE_KEY, RAW_BYTES_KEY, classify,
+                               normalize_case, observed_mib,
+                               validate_publication)
 
 CASE_SCHEMA = "ivanka.px.case.receipt.v1"
 INDEX_SCHEMA = "ivanka.px.case.receipt-index.v1"
@@ -132,18 +135,24 @@ def _case(root, name, receipt, assembler, real_data):
             raise ValueError("PX success has no genuine score")
     else:
         score = None
-    ram = row.get("peak_ram_observed_mib")
-    if (type(ram) not in (int, float) or not math.isfinite(ram)
-            or ram <= 0 or resource.get("peak_ram_observed_mib") != ram
-            or resource.get("peak_rss_bytes") != receipt.get("peak_rss_bytes")):
+    raw = receipt.get(RAW_BYTES_KEY)
+    if (isinstance(raw, bool) or not isinstance(raw, (int, float))
+            or not math.isfinite(raw) or raw < 0
+            or resource.get(RAW_BYTES_KEY) != raw):
         raise ValueError("PX observed peak RAM is not reconciled")
+    # A legacy receipt attests no sampling method. Only a versioned whole-
+    # container attestation may promote the raw reading to a comparable peak.
+    fields, ram_diagnostics = classify(raw, receipt, resource, row)
+    for record in (resource, row):
+        if (record.get(COMPARABLE_KEY) is not None
+                and record[COMPARABLE_KEY] != observed_mib(raw)):
+            raise ValueError("attested peak RAM differs from the raw receipt")
     coverage = diagnostics["metrics"].get("exact_coverage", {})
     metrics = _metrics(diagnostics)
-    # Observed peak RAM is a genuine published diagnostic as well as receipt
-    # evidence; keep both representations in agreement.
-    metrics["peak_ram_observed_mib"] = ram
-    return {
-        "cohort": cohort, "canonical_alias": alias, "outcome": receipt["outcome"],
+    metrics.update(ram_diagnostics)
+    fields.update({
+        "cohort": cohort, "canonical_alias": alias,
+        "outcome": receipt["outcome"],
         "canonical_manifest_sha256": PHYSICAL_MANIFEST,
         "failure_reason": failure, "score": score,
         "score_origin": "micall_final_max_reference_panel_v1",
@@ -151,7 +160,6 @@ def _case(root, name, receipt, assembler, real_data):
         "scorer_source_sha256": result.get("scorer_source_sha256"),
         "launcher_seconds": receipt.get("seconds"),
         "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1",
-        "peak_ram_observed_mib": ram, "peak_rss_bytes": receipt["peak_rss_bytes"],
         "input_sha256": receipt["input_sha256"],
         "output_sha256": receipt["output_sha256"],
         "source_commit": provenance.get("source_commit"),
@@ -163,24 +171,43 @@ def _case(root, name, receipt, assembler, real_data):
             "unavailable_reason": coverage.get("unavailable_reason"),
         },
         "binding_receipts": 5,
-    }
+    })
+    return fields
 
 
-def assert_no_stale_scores(report, evidence):
-    """Never replace provenance under a published score that disagrees."""
+def assert_no_stale_scores(report, evidence, incoming=None):
+    """Never replace provenance under a score that disagrees with a receipt.
+
+    Aliases repeat across tools and cohorts, so the guard is keyed by tool and
+    cohort as well as alias. Incoming receipts are checked before any
+    provenance is adopted, not only the already published evidence rows.
+    """
     published = {}
     for run in report.get("runs", []):
+        cohort = run.get("cohort")
         for sample in run.get("samples", []):
-            alias = sample["alias"].split("-", 1)[-1]
+            alias = sample["alias"]
+            source = cohort
+            if cohort == "combined":
+                source = ("real" if alias.startswith("R-") else
+                          "synthetic" if alias.startswith("S-") else None)
+            alias = alias.split("-", 1)[-1]
+            sources = [source] if source else ["real", "synthetic"]
             for tool, score in sample.get("score", {}).items():
                 if score is not None:
-                    published[(tool, alias)] = score
-    for item in evidence["assemblers"]:
+                    for name in sources:
+                        published[(tool, name, alias)] = score
+    items = list(evidence.get("assemblers", [])) + list(incoming or [])
+    for item in items:
         for case in item.get("cases", []):
-            key = (item["id"], case.get("canonical_alias"))
-            if (key in published and case.get("score") is not None
-                    and published[key] != case["score"]):
-                raise ValueError("preexisting sample score disagrees with evidence")
+            alias = case.get("canonical_alias")
+            cohort = case.get("cohort")
+            keys = [(item["id"], cohort, alias)] if cohort else [
+                (item["id"], name, alias) for name in ("real", "synthetic")]
+            for key in keys:
+                if (key in published and case.get("score") is not None
+                        and published[key] != case["score"]):
+                    raise ValueError("preexisting sample score disagrees with evidence")
 
 
 def refresh_registry_provenance(evidence, registry_path, handoff_dir):
@@ -211,6 +238,12 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
         adapter = branches.get(tool)
         image_evidence = item.get("image_evidence") or {}
         pilot_evidence = item.get("pilot_evidence") or {}
+        # An activated handoff without pilot evidence is not publishable; the
+        # generic reader skips it instead of inventing provenance or crashing.
+        if (not image_evidence.get("path") or not pilot_evidence.get("path")
+                or not Path(image_evidence["path"]).is_file()
+                or not Path(pilot_evidence["path"]).is_file()):
+            continue
         pilot = _load(pilot_evidence["path"])
         # Handoff digests must be the digests carried by the registry itself.
         if (not all(SHA64.fullmatch(handoff.get(key, "")) for key in (
@@ -227,18 +260,32 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
                 or item.get("image_sha256") != pilot.get("image_sha256")
                 or pilot.get("source_commit") != item.get("source_commit")):
             raise ValueError("handoff adapter/image/source pins disagree")
-        item = dict(item, adapter_commit=adapter)
+        # The registry's exact adapter pin is authoritative. Every activated
+        # tool is treated alike: no hardcoded per-tool exception, and no
+        # provenance unless that exact commit has an independently observed
+        # fork branch.
         try:
             neutral_pins = adapter_provenance(tool, adapter)
         except ValueError:
-            # A handoff whose adapter is not in the exact verified branch
-            # registry is not publishable; never invent a provenance URL.
             continue
+        item = dict(item, adapter_commit=adapter)
         if (not exploratory_policy.verified_receipt(
                 item, image_evidence, "image")
                 or not exploratory_policy.verified_receipt(
                     item, pilot_evidence, "pilot")):
             raise ValueError("activated tool lacks source-bound receipts")
+        outcomes = {cohort: pilot.get(cohort, {}).get("status")
+                    for cohort in ("physical", "synthetic")}
+        if any(status != "success" for status in outcomes.values()):
+            # A failed or partial pilot cannot promote tool-level provenance.
+            continue
+        for case in target.get("cases", []):
+            if (case.get("score") is not None
+                    and case.get("adapter_commit")
+                    and case.get("image_sha256")
+                    and (case["adapter_commit"] != adapter
+                         or case["image_sha256"] != handoff["image_sha256"])):
+                raise ValueError("handoff would rewrite measured case provenance")
         profile = dict(target)
         profile["adapter_commit"] = adapter
         profile["image_sha256"] = item["image_sha256"]
@@ -246,8 +293,7 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
         profile["pilot"] = {
             "image_receipt_sha256": handoff["image_receipt_sha256"],
             "pilot_receipt_sha256": handoff["pilot_receipt_sha256"],
-            "outcomes": {cohort: pilot.get(cohort, {}).get("status")
-                         for cohort in ("physical", "synthetic")},
+            "outcomes": outcomes,
         }
         if profile == target:
             continue  # already published: no artificial addition
@@ -266,20 +312,31 @@ def ingest(report, evidence, root, real_data, registry_path=None,
     index = _read_index(root)
     result = scrub(json.loads(json.dumps(evidence)))
     added = []
+    assemblers = {item["id"]: item for item in result["assemblers"]}
     if registry_path and handoff_dir:
-        assert_no_stale_scores(report, evidence)
+        incoming = []
+        for name in sorted(index["entries"]):
+            receipt = _load(root / "receipts" / (name + ".json"))
+            if receipt.get("tool_id") not in assemblers:
+                continue
+            result_path = root / "results" / (name + "-results.json")
+            if not result_path.is_file():
+                continue
+            row = _load(result_path).get("samples", [{}])[0]
+            incoming.append({"id": receipt["tool_id"], "cases": [{
+                "cohort": "real" if receipt.get("cohort") == "physical"
+                else receipt.get("cohort"),
+                "canonical_alias": (receipt.get("alias") or "").replace(
+                    "PX-", "", 1), "score": row.get("score")}]})
+        assert_no_stale_scores(report, evidence, incoming)
         for tool in refresh_registry_provenance(
                 result, registry_path, handoff_dir):
             added.append(("registry", tool, "activation"))
-    assemblers = {item["id"]: item for item in result["assemblers"]}
-    # Older evidence rows carried observed peak RAM only as receipt metadata.
-    # Normalize them into the per-arm diagnostic map before publication so
-    # published diagnostics and their attested case evidence agree.
+    # Re-scope older evidence rows whose launcher-group reading was published
+    # as a comparable peak. Raw receipts are never rewritten.
     for item in assemblers.values():
         for case in item.get("cases", []):
-            ram = case.get("peak_ram_observed_mib")
-            if isinstance(ram, (int, float)):
-                case.setdefault("diagnostics", {})["peak_ram_observed_mib"] = ram
+            normalize_case(case)
     for name in sorted(index["entries"]):
         receipt = _load(root / "receipts" / (name + ".json"))
         tool = receipt.get("tool_id")
@@ -308,9 +365,17 @@ def publish(site, root, real_data, registry_path=None, handoff_dir=None):
     report = _load(site / "data/runs.json")
     updated, merged, added, joined = ingest(
         report, evidence, root, real_data, registry_path, handoff_dir)
+    validate_publication(merged, updated)
     with tempfile.TemporaryDirectory(prefix="px-ingest-") as scratch:
         staged = Path(scratch) / "bench"
         shutil.copytree(site, staged)
+        # The catalog may have gained a scoped RAM diagnostic in the source
+        # while the site still carries the previous generated snapshot.
+        from .current_runs import blank_mapping
+        mapping_path = staged / "data/mapping-diagnostics.json"
+        mapping_path.write_text(
+            json.dumps(blank_mapping(merged["runs"][0]),
+                       sort_keys=True, indent=2) + "\n")
         (staged / "data/assembler-evidence.json").write_text(
             json.dumps(updated, sort_keys=True,
                        separators=(",", ":")) + "\n")

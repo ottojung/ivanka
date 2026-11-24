@@ -18,6 +18,8 @@ from pathlib import Path
 from benchmarks.milestone198 import MANIFEST_SHA256 as PHYSICAL_MANIFEST_SHA256
 
 from . import exploratory_policy, exploratory_space
+from .px_ram_semantics import (METHOD_KEY, SCOPE_KEY, VERSION_KEY, attested,
+                               observed_mib)
 
 SCHEMA = "ivanka.px.cohort.plan.v1"
 RECEIPT_SCHEMA = "ivanka.px.case.receipt.v1"
@@ -68,6 +70,17 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
+def peak_ram_fields(source):
+    """Copy sampler attestation from a monitor record into a receipt."""
+    if not isinstance(source, dict):
+        return {}
+    fields = {key: source[key] for key in (METHOD_KEY, VERSION_KEY, SCOPE_KEY)
+              if key in source}
+    if fields and attested(fields) and source.get("peak_rss_bytes") is not None:
+        fields["peak_ram_observed_mib"] = observed_mib(source["peak_rss_bytes"])
+    return fields
+
+
 def peak_ram_observed_mib(receipt):
     """Convert an immutable receipt's observed RSS to a public MiB metric."""
     value = receipt.get("peak_rss_bytes") if isinstance(receipt, dict) else None
@@ -77,6 +90,9 @@ def peak_ram_observed_mib(receipt):
         raise ValueError("observed peak RSS is not numeric")
     if not math.isfinite(value) or value < 0:
         raise ValueError("observed peak RSS is not finite and non-negative")
+    if receipt.get(METHOD_KEY) and not attested(receipt):
+        # An explicit non-container sampler never yields a comparable peak.
+        return None
     return round(value / 1048576, 6)
 
 
@@ -88,9 +104,12 @@ def write_resource(root, arm, receipt):
         "cohort": arm["cohort"], "alias": arm["alias"],
         "outcome": receipt["outcome"], "attempt": receipt.get("attempt", 1),
         "peak_rss_bytes": receipt.get("peak_rss_bytes"),
+    }
+    record.update(peak_ram_fields(receipt))
+    record.update({
         "peak_ram_observed_mib": peak_ram_observed_mib(receipt),
         "measurement_present": receipt.get("peak_rss_bytes") is not None,
-    }
+    })
     _assert_public(record)
     return path, _atomic_json(path, record)
 
@@ -405,6 +424,7 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
         "runner_receipt_sha256": runner_receipt_sha256, "terminal": True,
         "attempt": attempt,
     }
+    receipt.update(peak_ram_fields(arm))
     if outcome == "success" and (not isinstance(seconds, (int, float))
                                  or seconds <= 0):
         raise ValueError("successful arm needs a positive runtime")
@@ -526,8 +546,10 @@ def posthoc_score(root, arm, scorer, expected_source_sha256, *,
     if (not isinstance(row, dict) or row.get("alias") != arm["alias"]
             or row.get("outcome") not in ("success", "failure")):
         raise ValueError("independent scorer returned an invalid row")
-    # The founder's comparable RAM metric comes from the immutable receipt,
-    # never from the scorer; preserve null when the arm was not monitored.
+    # The comparable RAM metric comes from the immutable receipt, never from
+    # the scorer; preserve null unless its sampler attests whole-container
+    # scope with an explicit method and version.
+    row.update(peak_ram_fields(receipt))
     row["peak_ram_observed_mib"] = peak_ram_observed_mib(receipt)
     _assert_public(row)
     return {"schema": RESULT_SCHEMA, "tool_id": arm["tool_id"],

@@ -2,6 +2,15 @@
   "fork": "https://github.com/ottojung/MiCall",
   "method": "git ls-remote --heads; exact adapter commit equality",
   "observed_utc": "2026-11-24T04:06:07Z",
+  "additional_observations": [
+    {
+      "commit": "3fd7f695c378875fd7b3b80ca263601a66476c2f",
+      "branch": "bench/minimal-8458f9e5-tadpole-headers-20261124",
+      "id": "tadpole",
+      "method": "git ls-remote --heads; exact adapter commit equality",
+      "observed_utc": "2026-11-24T20:17:56Z"
+    }
+  ],
   "pins": {
     "01e9b305eb67118c80b6ce72953c14ed4b7e821e": {
       "branch": "bench/assembler-ray",
@@ -77,6 +86,10 @@
     },
     "baaaa082c1c1eb62b203baf80b14031facde4b40": {
       "branch": "bench/minimal-8458f9e5-tadpole-20261123",
+      "id": "tadpole"
+    },
+    "3fd7f695c378875fd7b3b80ca263601a66476c2f": {
+      "branch": "bench/minimal-8458f9e5-tadpole-headers-20261124",
       "id": "tadpole"
     },
     "dcf57bf112d185fc0c9f2744da6ea79c1c22225b": {

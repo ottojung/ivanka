@@ -427,23 +427,22 @@ def build_plan(registry, source, root):
     data, tools = _tool_rows(registry)
     source.validate()
     arms, accepted_ids, pending = [], [], []
+    case_hashes = {}
     # Founder order applies globally: every assembler finishes the 198 physical
     # cases before any assembler starts a 464-synthetic case.
     for cohort in COHORTS:
+        for case in source.cases(cohort):
+            case_hashes[(cohort, case.alias)] = case.input_hashes()
         for tool in tools:
             for case in source.cases(cohort):
                 arm = {"tool_id": tool["id"], "cohort": cohort,
-                       "alias": case.alias, "input_sha256": case.input_hashes(),
+                       "alias": case.alias,
+                       "input_sha256": case_hashes[(cohort, case.alias)],
                        **{key: tool[key] for key in (
                            "source_commit", "adapter_commit", "image_sha256")}}
                 arms.append(arm)
                 receipt = verify_receipt(root, arm)
-                retryable = (
-                    isinstance(receipt, dict)
-                    and receipt.get("outcome") == "failure"
-                    and receipt.get("failure_reason") in INFRASTRUCTURE_FAILURE_REASONS
-                    and receipt.get("attempt", 1) < MAX_INFRA_ATTEMPTS)
-                if receipt is not None and not retryable:
+                if _receipt_accepted(receipt):
                     accepted_ids.append(receipt_id(arm))
                 else:
                     pending.append(arm)
@@ -455,6 +454,7 @@ def build_plan(registry, source, root):
         "expected_counts": EXPECTED_COUNTS,
         "total_arms": len(arms), "accepted_arms": len(accepted_ids),
         "accepted_ids": accepted_ids,
+        "arm_identities": [_arm_identity(arm) for arm in arms],
         "pending_arms": len(pending), "pending": pending,
     }
     _assert_public(plan)
@@ -473,27 +473,47 @@ def write_checkpoint(root, plan, completed):
     return _atomic_json(checkpoint_path(root), state)
 
 
+def _receipt_accepted(receipt):
+    return isinstance(receipt, dict) and not (
+        receipt.get("outcome") == "failure"
+        and receipt.get("failure_reason") in INFRASTRUCTURE_FAILURE_REASONS
+        and receipt.get("attempt", 1) < MAX_INFRA_ATTEMPTS)
+
+
 def resume(plan, root):
-    """Reconcile a checkpoint with receipts; drift stops instead of guessing."""
+    """Reconcile a checkpoint with receipts; receipts remain authoritative."""
     path = checkpoint_path(root)
-    if not path.is_file():
-        return plan["pending"]
-    state = json.loads(path.read_bytes())
-    if (state.get("schema") != CHECKPOINT_SCHEMA
-            or state.get("plan_sha256") != _plan_digest(plan)):
-        raise ValueError("PX checkpoint does not match its plan")
-    completed = set(state.get("completed", []))
-    known = set(plan["accepted_ids"]) | {receipt_id(arm) for arm in plan["pending"]}
-    if not completed <= known:
-        raise ValueError("PX checkpoint claims an unknown arm")
-    return [arm for arm in plan["pending"] if receipt_id(arm) not in completed]
+    if path.is_file():
+        state = json.loads(path.read_bytes())
+        if (state.get("schema") != CHECKPOINT_SCHEMA
+                or state.get("plan_sha256") != _plan_digest(plan)):
+            raise ValueError("PX checkpoint does not match its plan")
+        completed = set(state.get("completed", []))
+        known = set(plan.get("accepted_ids", [])) | {
+            receipt_id(arm) for arm in plan["pending"]}
+        if not completed <= known:
+            raise ValueError("PX checkpoint claims an unknown arm")
+    pending = []
+    for arm in plan["pending"]:
+        receipt = verify_receipt(root, arm)
+        if not _receipt_accepted(receipt):
+            pending.append(arm)
+    return pending
+
+
+def _arm_identity(arm):
+    return {key: arm[key] for key in (
+        "tool_id", "cohort", "alias", "source_commit", "adapter_commit",
+        "image_sha256", "input_sha256")}
 
 
 def _plan_digest(plan):
-    """Hash only stable queue identity; pending shrinks as receipts accumulate."""
+    """Hash exact stable arm identities so queue drift invalidates checkpoints."""
     stable = {key: plan[key] for key in (
         "schema", "qualifying", "registry_sha256",
         "frozen_seven_manifest_sha256", "tools", "expected_counts", "total_arms")}
+    if "arm_identities" in plan:
+        stable["arm_identities"] = plan["arm_identities"]
     return hashlib.sha256(_json_bytes(stable)).hexdigest()
 
 

@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 
 MANIFEST_SCHEMA = "ivanka.p0.completion-handoff-manifest.v1"
 JOURNAL_SCHEMA = "ivanka.p0.completion-handoff-journal.v1"
+DEFERRED_SCHEMA = "ivanka.p0.completion-handoff-deferred.v1"
+BOARD_PROOF_SCHEMA = "ivanka.p0.completion-handoff-board-proof.v1"
 HEALTH_SCHEMA = "ivanka.p0.frozen-rust-only-continuation-health.v1"
 AUDIT_SCHEMA = "ivanka.p0.independent-frozen-original-partial-psi-audit.v1"
 DECISION_SCHEMA = "ivanka.p0.final-physical-decision.v1"
@@ -382,24 +384,60 @@ def build_body(phase, context):
 
 
 def record_board(context, manifest_path, body, board):
-    """Post once per issue; persist proof so a restart never double-posts."""
-    manifest = None
-    if manifest_path is not None and manifest_path.is_file():
-        manifest, _ = read_json(manifest_path)
-    already = set()
-    if isinstance(manifest, dict):
-        already = {entry.get("issue") for entry in (manifest.get("board_notification") or [])}
-    posted = []
+    """Post once per issue, persisting proof after each successful post.
+
+    Proof is committed per issue so an infrastructure failure on a later issue
+    cannot cause an already-succeeded issue to be posted again on retry. The
+    completion manifest is the proof store on that path; other terminal paths
+    use a standalone proof file inside the watcher's own artifacts directory.
+    """
+    proof_path = (Path(manifest_path) if manifest_path is not None
+                  else Path(context["artifacts_dir"]) / "board-proof.json")
+    document, _ = read_json(proof_path) if proof_path.is_file() else (None, None)
+    if isinstance(document, dict) and "board_notification" in document:
+        key = "board_notification"
+    elif isinstance(document, dict) and isinstance(document.get("proofs"), list):
+        key = "proofs"
+    else:
+        document, key = None, "proofs"
+
+    body_sha256 = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    entries = document.get(key) or [] if isinstance(document, dict) else []
+    already = {(entry.get("issue"), entry.get("body_sha256"))
+               for entry in entries if isinstance(entry, dict)}
     for issue in board.issues:
-        if issue in already:
+        if (issue, body_sha256) in already:
             log(f"board issue {issue} already notified; skipping")
             continue
         board.post(issue, body)
-        posted.append({"issue": issue, "utc": utcnow(), "body_sha256":
-                       hashlib.sha256(body.encode("utf-8")).hexdigest()})
-    if isinstance(manifest, dict):
-        manifest["board_notification"] = (manifest.get("board_notification") or []) + posted
-        atomic_write_json(manifest_path, manifest)
+        proof = {"issue": issue, "utc": utcnow(), "body_sha256": body_sha256}
+        # Commit this issue's proof before contacting the next one: a partial
+        # board failure must never re-post an already-succeeded issue.
+        if document is None:
+            document, key = {"schema": BOARD_PROOF_SCHEMA, "proofs": []}, "proofs"
+        document[key] = (document.get(key) or []) + [proof]
+        atomic_write_json(proof_path, document)
+        already.add((issue, body_sha256))
+
+
+def record_tool_infra_deferred(config, key, phase, health, attempts, exc):
+    """Persist a retry-pending notice when an exact tool is temporarily unavailable.
+
+    An uncaught InfraError exits the process, after which the s6 wrapper holds
+    with sleep and leaves no board notice, journal entry, or reason for the
+    stop. Recording the deferral here makes the outage explicit and retryable.
+    """
+    notice = {
+        "schema": DEFERRED_SCHEMA,
+        "utc": utcnow(),
+        "transition_key": key,
+        "phase": phase,
+        "controller_state": health.get("state"),
+        "attempts": attempts,
+        "reason": "tool_infra_exhausted",
+        "error": str(exc),
+    }
+    atomic_write_json(Path(config["artifacts_dir"]) / "tool-infra-deferred.json", notice)
 
 
 def handle_terminal(config, phase, health, journal, runner, board):
@@ -425,7 +463,18 @@ def handle_terminal(config, phase, health, journal, runner, board):
 
     manifest_path = Path(config["artifacts_dir"]) / "manifest.json"
     if phase == "COMPLETE":
-        manifest, reasons = ensure_artifacts(config, runner)
+        try:
+            manifest, reasons = ensure_artifacts(config, runner)
+        except InfraError as exc:
+            # Tool infra is retryable, not a scientific verdict. Defer durably
+            # rather than letting the exception kill the process and silently
+            # stop the s6 service with no notice and an empty handled journal.
+            record_tool_infra_deferred(config, key, phase, health, attempts, exc)
+            journal["handled"][key] = {"phase": phase, "done": False, "attempts": attempts,
+                                       "outcome": "tool_infra_deferred", "error": str(exc),
+                                       "utc": utcnow()}
+            log(f"tool infrastructure failure deferred to next poll ({attempts} attempts): {exc}")
+            return False
         context["manifest"] = manifest
         context["reasons"] = reasons
         # Integrity failure is a verdict, not an infra error: notify once, no retry loop.
@@ -437,8 +486,10 @@ def handle_terminal(config, phase, health, journal, runner, board):
                                        "utc": utcnow()}
             return True
         manifest, _ = read_json(manifest_path)
-        if manifest.get("board_notification"):
-            log("board notification already recorded in manifest")
+        notified = {entry.get("issue") for entry in (manifest.get("board_notification") or [])
+                    if isinstance(entry, dict)}
+        if notified.issuperset(board.issues):
+            log("all board issues already notified; skipping")
             journal["handled"][key] = {"phase": phase, "done": True, "attempts": attempts,
                                        "outcome": "notified", "utc": utcnow()}
             return True

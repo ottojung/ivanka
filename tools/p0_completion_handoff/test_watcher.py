@@ -24,6 +24,13 @@ args = sys.argv[1:]
 out = Path(args[args.index('--out') + 1])
 root = Path(__file__).resolve().parent
 with (root / 'invocations.log').open('a') as fh: fh.write('audit\\n')
+fail_file = os.environ.get('FAIL_AUDIT_FILE')
+if fail_file and Path(fail_file).exists():
+    n = int(Path(fail_file).read_text())
+    if n > 0:
+        Path(fail_file).write_text(str(n - 1))
+        sys.stderr.write('simulated audit tool outage\\n')
+        sys.exit(9)
 doc = json.loads(os.environ['STUB_AUDIT_JSON'])
 out.write_text(json.dumps(doc))
 print('AUDIT_SCOPE COMPLETE_COHORT_DIAGNOSTIC_NOT_QUALIFICATION attested 198 198')
@@ -55,6 +62,15 @@ if fail_file and Path(fail_file).exists():
         Path(fail_file).write_text(str(n - 1))
         sys.stderr.write('simulated board outage\\n')
         sys.exit(7)
+fail_dir = os.environ.get('FAIL_ISSUE_DIR')
+if fail_dir:
+    issue_fail = Path(fail_dir) / (issue + '.count')
+    if issue_fail.exists():
+        n = int(issue_fail.read_text())
+        if n > 0:
+            issue_fail.write_text(str(n - 1))
+            sys.stderr.write('simulated per-issue board outage\\n')
+            sys.exit(7)
 log = Path(os.environ['BOARD_LOG'])
 with log.open('a') as fh:
     fh.write('=== ' + issue + ' ===\\n' + body + '\\n')
@@ -110,6 +126,9 @@ class Harness(unittest.TestCase):
         self.board_log = self.root / "board.log"
         self.board_log.write_text("")
         self.fail_file = self.root / "fail.count"
+        self.fail_audit_file = self.root / "fail.audit.count"
+        self.fail_issue_dir = self.root / "issue-fails"
+        self.fail_issue_dir.mkdir()
         self.artifacts = self.root / "artifacts"
         self.health_path = self.root / "health.json"
         self.write_health(HEALTH)
@@ -119,6 +138,8 @@ class Harness(unittest.TestCase):
             "STUB_DECISION_JSON": json.dumps(decision_doc()),
             "BOARD_LOG": str(self.board_log),
             "FAIL_FILE": str(self.fail_file),
+            "FAIL_AUDIT_FILE": str(self.fail_audit_file),
+            "FAIL_ISSUE_DIR": str(self.fail_issue_dir),
         })
         env_patch.start()
         self.addCleanup(env_patch.stop)
@@ -301,6 +322,52 @@ class HandoffTests(Harness):
         doc = audit_doc()
         doc["pinned"]["image_sha256"] = "deadbeef"
         self.assertIn("audit_image_hash_mismatch", W.validate_audit(doc))
+
+    def test_tool_infra_exhaustion_defers_without_crash_or_premature_post(self):
+        """C1: PR433/PR435 infra exhaustion must never escape run() silently."""
+        self.finish_board_script()
+        # Force every readback subprocess to fail; with_retry exhausts and re-raises.
+        self.fail_audit_file.write_text("99")
+        self.write_health(dict(HEALTH, state="P0_FULL_SEVEN_QUALIFIED", completed=198,
+                               final_all_r_sha256="abc123"))
+        cfg = self.config()
+        cfg["exit_when_done"] = True
+        # On the base commit InfraError escapes here (uncaught) and the test fails.
+        self.assertEqual(W.run(cfg, max_polls=1), 0)
+        # Non-vacuity: the real tool boundary was exercised through bounded retry.
+        self.assertEqual(self.invocations(), ["audit", "audit", "audit"])
+        # No premature scientific decision or board notice was emitted.
+        self.assertEqual(self.board_log.read_text(), "")
+        self.assertFalse((self.artifacts / "manifest.json").exists())
+        # A durable deferred state/notice was recorded instead of a silent stop.
+        deferred = json.loads((self.artifacts / "tool-infra-deferred.json").read_text())
+        self.assertEqual(deferred["schema"], W.DEFERRED_SCHEMA)
+        self.assertEqual(deferred["phase"], "COMPLETE")
+        self.assertEqual(deferred["reason"], "tool_infra_exhausted")
+        self.assertIn("simulated audit tool outage", deferred["error"])
+        journal = json.loads((self.artifacts / "journal.json").read_text())
+        entry = next(iter(journal["handled"].values()))
+        self.assertFalse(entry["done"])
+        self.assertEqual(entry["outcome"], "tool_infra_deferred")
+
+    def test_partial_board_failure_does_not_repost_earlier_issue(self):
+        """C2: a later board issue failing once must not re-post an earlier one."""
+        self.finish_board_script()
+        first, second = "issue-A", "issue-B"
+        (self.fail_issue_dir / (second + ".count")).write_text("1")
+        self.write_health(dict(HEALTH, state="P0_FULL_SEVEN_QUALIFIED", completed=198,
+                               final_all_r_sha256="abc123"))
+        cfg = self.config()
+        cfg["board_issues"] = [first, second]
+        cfg["exit_when_done"] = False
+        W.run(cfg, max_polls=1)
+        log = self.board_log.read_text()
+        # Non-vacuity: the injected failure on issue 2 actually fired once.
+        self.assertEqual((self.fail_issue_dir / (second + ".count")).read_text(), "0")
+        # Both issues were posted, and the already-succeeded first issue was
+        # never re-posted after the second issue's transient failure.
+        self.assertEqual(log.count("=== " + first + " ==="), 1)
+        self.assertEqual(log.count("=== " + second + " ==="), 1)
 
 
 if __name__ == "__main__":

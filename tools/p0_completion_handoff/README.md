@@ -40,9 +40,10 @@ seven-way gate (Intent 006) is explicitly called out as still required.
    over-claiming reports as `INTEGRITY_FAILURE`, posts that verdict once, and
    never converts it into a pass.
 6. **Bounded infrastructure retry.** Tool exits/timeouts and board-post errors
-   are retried with exponential backoff (3 attempts per event, at most
-   `max_attempts` total per transition), then recorded as exhausted rather
-   than looping forever.
+   are retried with exponential backoff (3 attempts per event). Board-post
+   exhaustion is recorded at `max_attempts` per transition. An exact-tool
+   outage is written to `tool-infra-deferred.json` and retried on the next
+   poll, so a transient tool failure can never stop the s6 service silently.
 7. **Anonymized output.** PR433/PR435 emit only counts, category names and the
    three public pinned digests; the watcher checks `contains_sample_identifiers`
    is false and `qualification_claim`/`expanded_claim` are `NONE`.
@@ -78,8 +79,10 @@ tail -f "$STATE/service.log"
 Synthetic coverage: phase classification, complete handoff, hash-attested
 artifacts, restart idempotency, journal loss, tamper-triggered re-preservation,
 FATAL notice, PAUSED not treated as finished, integrity failure fail-closed,
-board outage retry/success, board outage exhaustion, and anonymization checks.
-All external boundaries are stubbed; no live controller or board is touched.
+board outage retry/success, board outage exhaustion, tool-infra exhaustion
+deferral and recovery, per-issue partial board failure idempotency, and
+anonymization checks. All external boundaries are stubbed; no live controller
+or board is touched.
 
 ## Handoff contract
 

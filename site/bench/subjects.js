@@ -87,7 +87,7 @@ const BenchSubjects = (() => {
     // A cell answers ONLY "does row A dominate column B on the entire
     // selected set of subjects?" Descriptive gains are never the answer.
     const states = {
-      "dominates": {label:"YES", explanation:"Certified strict all-r Ψ dominance"},
+      "dominates": {label:"YES", explanation:"Strict all-r Ψ dominance across the full cohort"},
       "does-not-dominate": {label:"NO",
         explanation:"At least one selected subject disproves strict Ψ dominance"},
       "incomplete": {label:"?", explanation:"Insufficient complete paired data"},
@@ -100,10 +100,10 @@ const BenchSubjects = (() => {
   function observedVerdict(result) {
     // The top label answers the dominance question for the observations
     // available NOW, rather than suppressing a computed result with '?'.
-    // Strict whole-cohort certification remains a separate, stronger claim.
+    // A full-cohort proof remains a separate, stronger claim.
     if (["dominates","does-not-dominate","self"].includes(result.status)) {
       const full=verdict(result.status);
-      return {...full, kind:"certified", scope:"Entire qualified cohort"};
+      return {...full, kind:"full-yes", scope:"Entire measured cohort"};
     }
     const statuses=result.entries.map(item=>{
       if (["dominates","does-not-dominate","unresolved"].includes(item.status))

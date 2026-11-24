@@ -33,10 +33,12 @@ def check(site, run):
                      or any(not x.get("source_branch","").startswith("bench/minimal-")
                             for x in att.get("images",{}).values()))):
         raise ValueError("minimal source baseline/branch differs")
+    # The attestation covers the source-pinned tools of its own cohort; a
+    # neutral roster may also contain tools attested by separate evidence.
     if ((not minimal and att.get("base_image_sha256") != proof.get("base_image_sha256"))
-            or set(att.get("images", {})) != set(run["tools"])
+            or not set(att.get("images", {})) <= set(run["tools"])
             or set(run["images"]) != set(run["tools"])
-            or set(proof.get("images", {})) != set(run["tools"])):
+            or not set(proof.get("images", {})) <= set(run["tools"])):
         raise ValueError("public fork image attestation tool/base mismatch")
     for tool, image in att["images"].items():
         shown = proof["images"][tool]

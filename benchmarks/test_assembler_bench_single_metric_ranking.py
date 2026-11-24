@@ -22,8 +22,8 @@ assert(Object.keys(diag.metric_catalog).length>=20);
 for(const run of runs) {
   const order=ranks.summary(run,diag,'score','higher');
   const times=ranks.summary(run,diag,'seconds','lower');
-  assert.equal(order.length,7);
-  assert.equal(times.length,7);
+  assert.equal(order.length,run.tools.length);
+  assert.equal(times.length,run.tools.length);
   assert(order.every(x=>x.observed<=run.sample_count &&
     x.expected===run.expected_sample_count));
   assert(times.every(x=>x.observed<=run.sample_count));
@@ -31,8 +31,8 @@ for(const run of runs) {
   assert.equal(pairs.length,run.sample_count);
   assert(pairs.filter(x=>!x.unavailable).length<=run.sample_count);
   for(const key of Object.keys(diag.metric_catalog)){
-    assert.equal(ranks.summary(run,diag,key,'higher').length,7);
-    assert.equal(ranks.summary(run,diag,key,'lower').length,7);
+    assert.equal(ranks.summary(run,diag,key,'higher').length,run.tools.length);
+    assert.equal(ranks.summary(run,diag,key,'lower').length,run.tools.length);
     assert.equal(ranks.definition(key,diag.metric_catalog).label,
       diag.metric_catalog[key].label);
   }
@@ -45,7 +45,7 @@ assert.equal(combined.sample_count,
   runs[0].sample_count+real.sample_count);
 assert(combined.samples.every(s=>Object.values(s.score)
   .filter(Number.isFinite).every(v=>v>=0)));
-console.log('ALL_METRIC_SEVEN_WAY_RANKINGS_PASS');
+console.log('ALL_METRIC_COHORT_ROSTER_RANKINGS_PASS');
 """
         result=subprocess.run(
             [node,"-e",code,str(SITE/"rankings.js"),
@@ -53,7 +53,7 @@ console.log('ALL_METRIC_SEVEN_WAY_RANKINGS_PASS');
              str(SITE/"data/mapping-diagnostics.json")],
             text=True,capture_output=True,check=False,timeout=20)
         self.assertEqual(result.returncode,0,result.stderr)
-        self.assertIn("ALL_METRIC_SEVEN_WAY_RANKINGS_PASS",result.stdout)
+        self.assertIn("ALL_METRIC_COHORT_ROSTER_RANKINGS_PASS",result.stdout)
 
     def test_total_order_precedes_multimetric_partial_observations(self):
         html=(SITE/"index.html").read_text()

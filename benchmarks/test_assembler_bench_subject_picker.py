@@ -29,7 +29,7 @@ const subjects=[
 const clip={key:'clipped_read_fraction',label:'Clip',direction:'lower'};
 for(const run of runs){
  const matrix=run.dominance_matrix;
- assert.equal(matrix.tools.length,7);
+ assert.equal(matrix.tools.length,run.tools.length);
  for(const a of matrix.tools) for(const b of matrix.tools){
   const v=calc.evaluate(matrix,a,b,subjects);
   assert.equal(v.status,a===b?'self':'incomplete');
@@ -209,14 +209,14 @@ for(const a of hxb2.tools)for(const b of hxb2.tools){
  assert(['YES','NO','—'].includes(verdict.label));
  ++count;
 }
-assert.equal(count,42);
+assert.equal(count,hxb2.tools.length*(hxb2.tools.length-1));
 for(const run of runs.filter(r=>r.cohort!=='synthetic')){
  const result=calc.evaluate(run.dominance_matrix,'ivanka','iva',[align]);
  assert(result.entries[0].paired<=run.sample_count);
  if(run.sample_count===0)assert.equal(result.entries[0].paired,0);
  assert.equal(result.status,'incomplete');
 }
-console.log('ALL_42_HXB2_PAIRWISE_COMPARISONS_PARTIAL');
+console.log('ALL_HXB2_PAIRWISE_COMPARISONS_PARTIAL');
 """)
 
     def test_every_catalog_measurement_can_be_a_checkbox_subject(self):

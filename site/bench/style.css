@@ -2,7 +2,7 @@
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse 85% 420px at 76% -4%,#14334a75,transparent),var(--bg);color:var(--text);line-height:1.5}a{color:inherit}button,select,input{font:inherit}.site-shell{max-width:1260px;margin:auto;padding:0 36px}
 .topbar{height:92px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #30404d75}.brand{display:flex;align-items:center;gap:13px;text-decoration:none}.brandmark{display:flex;gap:4px;align-items:center;height:33px}.brandmark span{display:block;width:6px;height:21px;transform:skew(-18deg);background:var(--cyan);border-radius:4px}.brandmark span:nth-child(2){height:29px;opacity:.82}.brandmark span:nth-child(3){height:16px;opacity:.65}.brand b{letter-spacing:.21em;font-size:13px}.brand small{display:block;color:var(--muted);font-size:10px;letter-spacing:.16em}.topbar nav{display:flex;gap:26px;font-size:13px;color:var(--muted)}.topbar nav a{text-decoration:none}.topbar nav a:hover,.topbar nav a:focus-visible{color:var(--cyan)}
 .intro{padding:64px 0 43px}.eyebrow,.overline,.meta-label,label{font-size:11px;letter-spacing:.14em;font-weight:700;color:var(--cyan)}.live-dot{display:inline-block;background:var(--cyan);width:8px;height:8px;border-radius:50%;box-shadow:0 0 0 4px #7cebd622;margin-right:10px}h1{margin:16px 0 12px;font-size:clamp(47px,7vw,76px);font-weight:750;letter-spacing:-.07em;line-height:1.08}h1 em{font-style:normal;color:var(--cyan)}.lede{font-size:17px;max-width:760px;color:var(--muted);line-height:1.75;margin:0 0 22px}.global-notice{font-size:13px;color:var(--amber);padding:13px 16px;background:#d6a75913;border-left:3px solid var(--amber);max-width:860px}
-.run-controls{display:grid;grid-template-columns:minmax(300px,2fr) 1fr 1fr;gap:18px;align-items:end;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px}.run-controls label,.filters label{display:block;margin-bottom:9px}.run-controls select,.filters select,.filters input{width:100%;color:var(--text);background:var(--bg);border:1px solid #3a4a5c;border-radius:8px;padding:12px 13px;min-height:46px;outline:none}.run-controls select:focus,.filters select:focus,.filters input:focus{border-color:var(--cyan)}.run-stamp{border-left:1px solid var(--border);padding-left:18px;min-height:52px}.meta-label{display:block;color:var(--muted);margin-bottom:8px}.run-stamp strong{font-size:15px}.status-pass{color:var(--green)}.status-no{color:var(--amber)}
+.run-controls{display:grid;grid-template-columns:minmax(300px,2fr) 1fr 1fr;gap:18px;align-items:end;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px}.run-controls label,.filters label{display:block;margin-bottom:9px}.run-controls select,.filters select,.filters input{width:100%;color:var(--text);background:var(--bg);border:1px solid #3a4a5c;border-radius:8px;padding:12px 13px;min-height:46px;outline:none}.run-controls select:focus,.filters select:focus,.filters input:focus{border-color:var(--cyan)}.run-stamp{border-left:1px solid var(--border);padding-left:18px;min-height:52px}.meta-label{display:block;color:var(--muted);margin-bottom:8px}.run-stamp strong{font-size:15px}.status-complete{color:var(--green)}.status-partial{color:var(--amber)}.status-neutral{color:var(--muted)}
 section.overview,section.compare,section.evidence,section.samples,section.provenance{margin-top:61px}.section-heading{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:23px}.section-heading h2{font-size:28px;margin:7px 0 0;letter-spacing:-.04em}.overline{color:var(--muted)}.date,.subtle,.run-description{color:var(--muted);font-size:14px}.run-description{max-width:800px;margin:-6px 0 20px}.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px}.metric-card .meta-label{color:var(--muted)}.metric-value{font-size:31px;font-weight:680;letter-spacing:-.055em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric-note{margin-top:9px;color:var(--muted);font-size:12px}.metric-card.highlight{border-top:3px solid var(--cyan)}
 .segmented{border:1px solid var(--border);border-radius:10px;padding:4px;display:flex;background:var(--surface);gap:3px}.segmented button{cursor:pointer;color:var(--muted);background:transparent;border:0;border-radius:7px;padding:9px 16px;font-size:13px}.segmented button.active{background:#284a5c;color:var(--cyan)}.plot{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:24px}.bar-line{display:grid;grid-template-columns:125px minmax(150px,1fr) 95px;gap:17px;align-items:center;margin:16px 0}.bar-line .bar-name{font-weight:620;font-size:14px}.bar-track{height:17px;border-radius:6px;background:#2a3743;overflow:hidden}.bar-fill{height:100%;width:0;background:linear-gradient(90deg,#3478a5,var(--cyan));border-radius:6px}.bar-fill.other{background:linear-gradient(90deg,#41638e,var(--blue))}.bar-value{text-align:right;color:var(--text);font-variant-numeric:tabular-nums;font-size:14px}.bar-note{font-size:12px;color:var(--muted);margin:5px 0 0 142px}.plot-caption{margin:22px 0 0;color:var(--muted);font-size:12px}
 .evidence-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.evidence-card{background:var(--surface);border:1px solid var(--border);padding:24px;border-radius:12px}.evidence-card h3{font-size:16px;margin:0 0 15px}.verdict{font-size:21px;font-weight:740;color:var(--green);margin-bottom:8px}.verdict.no{color:var(--amber)}.psi-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0 0}.psi-values div{border-top:1px solid var(--border);padding-top:9px}.psi-values b{display:block;font-size:17px;font-variant-numeric:tabular-nums}.psi-values span{font-size:11px;color:var(--muted)}.hint{font-size:13px;color:var(--muted);line-height:1.7}
@@ -162,7 +162,7 @@ section.dominance,section.diagnostics{margin-top:61px}
   .psi-matrix td button{height:42px}
   .psi-matrix .dom-verdict{font-size:12px}
 }
-/* Do not stretch the small 7x7 decision matrix across a wide dashboard. */
+/* Keep the pairwise decision matrix compact regardless of roster size. */
 #dominanceMatrix{width:100%;max-width:760px;margin-inline:auto}
 
 
@@ -281,28 +281,7 @@ section.dominance,section.diagnostics{margin-top:61px}
 }
 
 
-/* The top notice is the only execution-status region; overviews remain scientific. */
+/* The top notice is the only execution-status region; overviews remain observational. */
 .global-notice[hidden]{display:none}
 .global-notice{font-size:12px;line-height:1.6}
 .compare .bar-count:empty{visibility:hidden}
-
-/* PX explorers are a separate, nonqualifying roster with no ranking bars. */
-section.exploratory{margin-top:61px}
-.exploratory-table{width:100%;border-collapse:collapse;min-width:820px}
-.exploratory-table th,.exploratory-table td{font-size:12px;padding:11px 13px;text-align:left}
-.exploratory-table td:nth-child(2),.exploratory-table td:nth-child(4){
-  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
-  color:var(--muted);font-size:11px;overflow-wrap:anywhere}
-.exploratory-table td:last-child{color:var(--amber)}
-.px-case-row td{background:#0f1a24}
-.px-cases summary{cursor:pointer;color:var(--cyan);font-size:12px}
-.exploratory-cases{width:100%;border-collapse:collapse;margin-top:10px}
-.exploratory-cases th,.exploratory-cases td{font-size:11px;padding:7px 10px}
-.px-compare{margin-top:22px;padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
-.px-compare-controls{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
-.px-compare-controls label{display:flex;flex-direction:column;gap:7px;min-width:220px;font-size:11px;letter-spacing:.09em;color:var(--muted)}
-.px-compare-controls select{min-height:40px;padding:8px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:13px}
-.px-compare-hint{margin:8px 0 12px}
-.px-compare-table caption{text-align:left;color:var(--muted);font-size:12px;padding:0 0 10px;caption-side:top}
-.px-compare-table th,.px-compare-table td{white-space:nowrap}
-@media(max-width:850px){.exploratory-table{min-width:680px}.px-compare-controls label{min-width:160px}}

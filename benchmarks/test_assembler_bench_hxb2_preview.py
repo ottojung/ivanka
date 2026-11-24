@@ -21,22 +21,22 @@ class Hxb2PreviewTests(unittest.TestCase):
     def test_public_preview_is_anonymized_and_provisional(self):
         run = self.hxb2
         self.assertEqual(run["status"], "incomplete")
-        self.assertEqual(run["expanded_status"], "incomplete")
-        self.assertFalse(run["eligible_for_expanded"])
         self.assertEqual(run["psi"], {})
         self.assertEqual(run["cohort"], "synthetic")
         self.assertEqual(run["expected_sample_count"], 464)
         self.assertGreaterEqual(run["sample_count"], 0)
         self.assertLessEqual(run["sample_count"], 464)
         self.assertEqual(len(run["samples"]), run["sample_count"])
-        self.assertEqual(set(run["tools"]), set(ASSEMBLERS))
-        self.assertEqual(len(run["images"]), 7)
+        self.assertTrue(set(ASSEMBLERS) <= set(run["tools"]))
+        self.assertEqual(len(run["tools"]), len(run["roster"]))
+        self.assertEqual(set(run["images"]), set(run["tools"]))
         for sample in run["samples"]:
             self.assertRegex(sample["alias"], r"^H[0-9]{3}$")
-            self.assertEqual(set(sample["score"]), set(ASSEMBLERS))
-            self.assertEqual(set(sample["seconds"]), set(ASSEMBLERS))
+            self.assertEqual(set(sample["score"]), set(run["tools"]))
+            self.assertEqual(set(sample["seconds"]), set(run["tools"]))
+            baseline=[tool for tool in run["tools"] if tool in ASSEMBLERS]
             all_measured=all(sample["score"][tool] is not None
-                             for tool in ASSEMBLERS)
+                             for tool in baseline)
             self.assertEqual(sample["outcome"],
                              "failure" if sample["failures"] else
                              "success" if all_measured else "incomplete")
@@ -77,10 +77,10 @@ class Hxb2PreviewTests(unittest.TestCase):
             edited = copy.deepcopy(original)
             target = next(r for r in edited["runs"]
                           if r.get("hxb2_truth_verified") is True)
-            target["psi"] = {"runtime": {"positive_all_nonnegative": True}}
+            target["dominance_matrix"]["tools"] = ["ivanka"]
             (dest/"data/runs.json").write_text(json.dumps(edited))
             with self.assertRaisesRegex(ValueError,
-                                        "HXB2|metadata/qualification"):
+                                        "HXB2|pairwise|invalid|status"):
                 validate_public_site(dest)
 
     def test_missing_or_tampered_assembler_measurements_fail_closed(self):

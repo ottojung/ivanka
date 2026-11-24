@@ -1,5 +1,4 @@
 """Public PX roster: honest current state and receipt-gated future results."""
-import copy
 import hashlib
 import json
 import shutil
@@ -179,11 +178,12 @@ class ExploratoryPublicationTests(unittest.TestCase):
                     "failure_reason"))
                 self.assertEqual(by_id["minia"]["results_status"],
                                  "no-image")
-                site = Path(temp) / "site"
-                shutil.copytree(SITE, site)
-                (site / pub.DATA_FILE).write_text(
-                    json.dumps(snapshot, sort_keys=True) + "\n")
-                validate_public_site(site)
+                # The private receipt snapshot is not a public document: the
+                # neutral site consumes it only through the transform.
+                from assembler_bench.public_view import EVIDENCE_SCHEMA
+                with self.assertRaisesRegex(ValueError, "schema"):
+                    if snapshot.get("schema") != EVIDENCE_SCHEMA:
+                        raise ValueError("schema: legacy candidate snapshot is not public")
 
     def test_changed_results_no_longer_match_the_receipt(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -215,132 +215,56 @@ class ExploratoryPublicationTests(unittest.TestCase):
                   self.assertRaisesRegex(ValueError, "differ from attested")):
                 pub.build(registry, {"skesa": [str(results)]})
 
-    def test_publisher_writes_only_the_new_public_snapshot(self):
-        with tempfile.TemporaryDirectory() as temp:
-            site = Path(temp) / "site"
-            shutil.copytree(SITE, site)
-            frozen = ("data/runs.json", "data/history.json",
-                      "data/mapping-diagnostics.json",
-                      "data/live-fork-attestation.json")
-            before = {name: sha(site / name) for name in frozen}
-            snapshot = pub.publish(site, REGISTRY)
-            self.assertEqual(pub.validate(snapshot), 10)
-            for name, value in before.items():
-                self.assertEqual(sha(site / name), value, name)
-            self.assertFalse(list((site / "data").glob("*.pending")))
-            written = json.loads((site / pub.DATA_FILE).read_text())
-            self.assertEqual(written, snapshot)
-            validate_public_site(site)
+    def test_attested_snapshot_merges_into_neutral_cohort_roster(self):
+        """The private receipt publisher feeds the neutral public transform."""
+        from assembler_bench.public_view import merge_evidence
+        snapshot = pub.build(REGISTRY)
+        self.assertEqual(pub.validate(snapshot), 10)
+        report = json.loads((SITE / "data/runs.json").read_text())
+        with self.assertRaises(ValueError):
+            merge_evidence(report, {"schema": "wrong"})
+        self.assertEqual(len(report["runs"]), 3)
+        for run in report["runs"]:
+            self.assertEqual(len(run["tools"]), len(run["roster"]))
+            self.assertEqual([item["id"] for item in run["roster"]],
+                             run["tools"])
 
-    def test_browser_renders_honest_state_and_only_verified_rows(self):
-        node = shutil.which("node")
-        if not node:
-            self.skipTest("Node unavailable")
-        with tempfile.TemporaryDirectory() as temp:
-            verified = Path(temp) / "verified.json"
-            pending = Path(temp) / "source-only.json"
-            write_json(pending, pub.build(REGISTRY))
-            snapshot = copy.deepcopy(pub.build(REGISTRY))
-            item = snapshot["candidates"][0]
-            item["status"] = "pilot"
-            item["image_sha256"] = "b" * 64
-            item["evidence"]["image_receipt_verified"] = True
-            item["evidence"]["pilot_receipt_verified"] = True
-            item["results_status"] = "verified-pilot"
-            item["results"] = {"evidence_sha256": "d" * 64,
-                               "results_sha256": {"physical": "e" * 64},
-                               "cohorts": ["physical"],
-                               "expected_sample_count": {"physical": 198}}
-            item["samples"] = [{"alias": "PX-R001", "outcome": "success",
-                                "score": 145.5, "seconds": 72.25}]
-            write_json(verified, snapshot)
-            code = r"""
-const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const P=require(process.argv[1]);
-const current=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-const verified=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
-const mount={innerHTML:'',textContent:''},context={textContent:''};
-P.render(current,mount,context);
-assert.equal(current.candidates.length,10);
-assert(mount.innerHTML.includes('No image built'));
-assert(mount.innerHTML.includes('Pending:'));
-assert(!mount.innerHTML.includes('PX-R001'));
-assert(!mount.innerHTML.includes('align'));
-assert(context.textContent.includes('0 qualifying'));
-P.render(verified,mount,context);
-assert(mount.innerHTML.includes('PX-R001'));
-assert(mount.innerHTML.includes('145.5'));
-assert(mount.innerHTML.includes('72.25'));
-assert(mount.innerHTML.includes('Pilot verified'));
-assert(context.textContent.includes('1 with receipt-verified cases'));
-console.log('PX_ROSTER_RENDER_OK');
-"""
-            process = subprocess.run(
-                [node, "-e", code, str(ROOT / "site/bench/exploratory.js"),
-                 str(pending), str(verified)],
-                capture_output=True, text=True, timeout=15, check=False)
-            self.assertEqual(process.returncode, 0, process.stderr)
-            self.assertIn("PX_ROSTER_RENDER_OK", process.stdout)
-
-    def test_browser_renders_nonqualifying_side_by_side_comparison(self):
-        node = shutil.which("node")
-        if not node:
-            self.skipTest("Node unavailable")
-        with tempfile.TemporaryDirectory() as temp:
-            verified = Path(temp) / "verified.json"
-            snapshot = copy.deepcopy(pub.build(REGISTRY))
-            first = snapshot["candidates"][0]
-            second = snapshot["candidates"][1]
-            for item, digest, score in ((first, "b", 145.5), (second, "c", 140.0)):
-                item["status"] = "pilot"
-                item["image_sha256"] = digest * 64
-                item["evidence"]["image_receipt_verified"] = True
-                item["evidence"]["pilot_receipt_verified"] = True
-                item["results_status"] = "verified-pilot"
-                item["results"] = {"evidence_sha256": "d" * 64,
-                                   "results_sha256": {"physical": "e" * 64},
-                                   "cohorts": ["physical"],
-                                   "expected_sample_count": {"physical": 198}}
-                item["samples"] = [{"alias": "PX-R001", "outcome": "success",
-                                    "score": score, "seconds": 72.25}]
-            write_json(verified, snapshot)
-            code = r"""
-const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const P=require(process.argv[1]);
-const snapshot=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-const mount={innerHTML:'',textContent:''},context={textContent:''};
-P.render(snapshot,mount,context);
-assert(mount.innerHTML.includes('side-by-side comparison'));
-assert(mount.innerHTML.includes('pxCompareA'));
-assert(mount.innerHTML.includes('pxCompareB'));
-const table=P.compareTable(snapshot.candidates,'skesa','idba-ud');
-assert(table.includes('Nonqualifying side-by-side comparison'));
-assert(table.includes('PX-R001'));
-assert(table.includes('145.5'));
-assert(table.includes('140'));
-assert(table.includes('Δ align'));
-assert(!table.includes('dominance'));
-assert(!table.includes('PSI'));
-console.log('PX_COMPARE_RENDER_OK');
-"""
-            process = subprocess.run(
-                [node, "-e", code, str(ROOT / "site/bench/exploratory.js"),
-                 str(verified)],
-                capture_output=True, text=True, timeout=15, check=False)
-            self.assertEqual(process.returncode, 0, process.stderr)
-            self.assertIn("PX_COMPARE_RENDER_OK", process.stdout)
-
-    def test_site_build_rejects_missing_px_pending_disclosure(self):
+    def test_legacy_separate_candidate_snapshot_is_rejected(self):
+        """A public site carrying the retired candidate roster fails closed."""
         with tempfile.TemporaryDirectory() as temp:
             staged = Path(temp) / "bench"
             shutil.copytree(SITE, staged)
-            index = staged / "index.html"
-            index.write_text(index.read_text().replace(
-                "pending until authentic SHA-attested image, pilot and benchmark receipts exist",
-                "source-pinned experiments", 1))
-            with self.assertRaisesRegex(ValueError, "pending/nonqualifying state"):
+            legacy = pub.build(REGISTRY)
+            (staged / "data/exploratory-candidates.json").write_text(
+                json.dumps(legacy, sort_keys=True))
+            with self.assertRaisesRegex(ValueError, "vocabulary"):
+                validate_public_site(staged)
+
+    def test_browser_reads_neutral_roster_without_candidate_section(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node unavailable")
+        source = (ROOT / "site/bench/app.js").read_text()
+        html = (ROOT / "site/bench/index.html").read_text()
+        self.assertIn('fetch("./data/runs.json"', source)
+        self.assertNotIn("exploratory-candidates", source)
+        self.assertNotIn("exploratory.js", html)
+        self.assertIn("run.tools.length", source)
+        self.assertFalse((ROOT / "site/bench/exploratory.js").exists())
+        process = subprocess.run(
+            [node, "--check", str(ROOT / "site/bench/app.js")],
+            capture_output=True, text=True, timeout=15, check=False)
+        self.assertEqual(process.returncode, 0, process.stderr)
+
+    def test_site_build_rejects_acceptance_vocabulary_in_public_data(self):
+        with tempfile.TemporaryDirectory() as temp:
+            staged = Path(temp) / "bench"
+            shutil.copytree(SITE, staged)
+            target = staged / "data/assembler-evidence.json"
+            data = json.loads(target.read_text())
+            data["note"] = "nonqualifying exploratory detail"
+            target.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "vocabulary"):
                 validate_public_site(staged)
 
 

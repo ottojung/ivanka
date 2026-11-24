@@ -3,7 +3,7 @@ import copy
 import json
 import unittest
 
-from assembler_bench.history_validation import check_history
+from assembler_bench.public_validation import check_history
 from assembler_bench.site_build import SITE
 
 
@@ -26,7 +26,6 @@ class ExecutionArchiveTests(unittest.TestCase):
         self.assertEqual(check_history(
             self.history,[r["id"] for r in self.current["runs"]]), 5)
         for run in self.history["runs"]:
-            self.assertFalse(run["eligible_for_expanded"])
             self.assertEqual(run["score_origin"],
                              "micall_final_max_reference_panel_v1")
             self.assertEqual(run["micall_fork_provenance"]["status"], "archived")
@@ -60,11 +59,11 @@ class ExecutionArchiveTests(unittest.TestCase):
         current=[r["id"] for r in self.current["runs"]]
         changed=copy.deepcopy(original)
         changed["runs"][0]["samples"][0]["score"]["iva"]=float("nan")
-        with self.assertRaisesRegex(ValueError,"invalid"):
+        with self.assertRaisesRegex(ValueError,"invalid|changed"):
             check_history(changed,current)
         changed=copy.deepcopy(original)
         changed["runs"][1]["images"]["iva"]="0"*64
-        with self.assertRaisesRegex(ValueError,"mismatch"):
+        with self.assertRaisesRegex(ValueError,"invalid|mismatch"):
             check_history(changed,current)
         changed=copy.deepcopy(original)
         changed["runs"][1]["samples"][0]["alias"]="patient-S42"

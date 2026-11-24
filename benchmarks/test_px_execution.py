@@ -787,14 +787,16 @@ class IntegrationTests(unittest.TestCase):
     def test_peak_ram_public_metric_preserves_null_and_failed_arms(self):
         plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
         arm = plan["pending"][0]
-        arm.update({METHOD_KEY: COMPARABLE_METHOD,
-                    VERSION_KEY: COMPARABLE_METHOD_VERSION,
-                    SCOPE_KEY: COMPARABLE_SCOPE})
+        attestation = {METHOD_KEY: COMPARABLE_METHOD,
+                       VERSION_KEY: COMPARABLE_METHOD_VERSION,
+                       SCOPE_KEY: COMPARABLE_SCOPE}
+        arm.update(attestation)
         output = self._arm_output(arm)
         (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
         measured = 3 * 1048576 + 524288
         sched.record_outcome(self.px, arm, output / "conseq.csv", "success",
-                             seconds=1.0, peak_rss=measured)
+                             seconds=1.0, peak_rss=measured,
+                             runner_attestation=attestation)
         receipt = sched.verify_receipt(self.px, arm)
         self.assertEqual(receipt["peak_rss_bytes"], measured)
         self.assertEqual(sched.peak_ram_observed_mib(receipt), 3.5)

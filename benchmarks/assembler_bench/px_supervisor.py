@@ -191,4 +191,5 @@ class BackgroundSupervisor:
             self.root, arm, report.get("output_path"), report["outcome"],
             seconds=report.get("seconds"), peak_rss=report.get("peak_rss"),
             failure_reason=failure,
-            runner_receipt_sha256=report.get("runner_receipt_sha256"))
+            runner_receipt_sha256=report.get("runner_receipt_sha256"),
+            runner_attestation=report)

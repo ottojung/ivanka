@@ -16,9 +16,14 @@ def audit_event(path, event):
         os.close(fd)
 
 
-def _result(binding, peak, teardown, teardown_error=None):
+def _result(binding, peak, teardown, teardown_error=None, attestation=None):
     result = {"peak_rss": peak, "cid": binding.get("cid"), "teardown": teardown,
-              "enforcement": "userspace_observed", "kernel_enforcement": False}
+               "enforcement": "userspace_observed", "kernel_enforcement": False}
+    # Only a caller that actually ran the bound whole-container sampler may
+    # supply method/version/scope. Carry them on every exit so a killed arm
+    # keeps the same real sampling evidence as a finished one.
+    if attestation:
+        result.update(attestation)
     if teardown_error is not None:
         result["teardown_error"] = teardown_error
     return result
@@ -26,7 +31,7 @@ def _result(binding, peak, teardown, teardown_error=None):
 
 def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                 stop, clock=time.monotonic, sleep=time.sleep, audit=None,
-                interval=0.5, rss_fn=None):
+                interval=0.5, rss_fn=None, attestation=None, start=None):
     """Sample a bound container tree; fail closed on any unknown state.
 
     `stop(cid)` must be CID-only with teardown proof. The watcher never
@@ -34,11 +39,16 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
     failures and tool exceptions, proves teardown of the exact CID before the
     caller may release its lease. Peak and proof travel with a fail-closed
     exception so a killed arm still carries its real measurement.
+
+    A caller that already spent time binding the exact CID passes its original
+    `start`, so one deadline covers startup and sampling together instead of
+    granting the sampling loop a second full budget.
     """
     if limit <= 0 or wall_seconds <= 0 or interval <= 0:
         raise GuardExceeded("invalid_config")
-    start = clock()
-    peak = 0
+    start = clock() if start is None else start
+    # No sample is a null observation, never an invented zero-byte reading.
+    peak = None
     teardown = None
     stopped = False
     cid = binding.get("cid")
@@ -47,7 +57,8 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
         """Attach evidence to a fail-closed exception before it escapes."""
         exc.peak_rss = peak
         exc.guard_result = _result(binding, peak, teardown,
-                                   teardown_error=exc.teardown_error)
+                                   teardown_error=exc.teardown_error,
+                                   attestation=attestation)
         if teardown is not None:
             exc.teardown = teardown
         return exc
@@ -71,7 +82,7 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                 if exc.reason == "identity_lost" and not running():
                     break
                 raise
-            peak = max(peak, used)
+            peak = used if peak is None else max(peak, used)
             if used > limit:
                 event = {"schema": "ivanka.fail-closed-guard.v1",
                          "reason": "observed_rss_limit", "cid": cid,
@@ -118,4 +129,4 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
         teardown = stop(cid)
     except Exception as exc:
         raise GuardExceeded("teardown_unverified") from exc
-    return _result(binding, peak, teardown)
+    return _result(binding, peak, teardown, attestation=attestation)

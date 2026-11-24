@@ -8,7 +8,9 @@ import subprocess
 import time
 
 from assembler_bench.exploratory_space import admit
-from assembler_bench.px_ram_semantics import sampler_fields
+from assembler_bench.px_ram_semantics import (
+    COMPARABLE_METHOD, COMPARABLE_METHOD_VERSION, COMPARABLE_SCOPE,
+    METHOD_KEY, SCOPE_KEY, VERSION_KEY, sampler_fields)
 
 from fail_closed_guard import binding, build, proc, teardown
 from fail_closed_guard.errors import GuardExceeded
@@ -17,6 +19,14 @@ from fail_closed_guard.watch import watch_bound
 # Re-exported for legacy callers; one exception type makes the launcher's
 # fail-closed handler catch guard reasons from both the legacy sampler and the
 # bound watcher.
+
+# The pilot guard samples the exact bound container's process tree, so this is
+# the only path allowed to claim the comparable whole-container method.
+BOUND_ATTESTATION = {
+    METHOD_KEY: COMPARABLE_METHOD,
+    VERSION_KEY: COMPARABLE_METHOD_VERSION,
+    SCOPE_KEY: COMPARABLE_SCOPE,
+}
 
 
 def attest(observation, *, method=None, version=None, scope=None):
@@ -134,7 +144,8 @@ def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
     return watch_bound(
         bound, limit=config["rss_bytes"], wall_seconds=config["wall_seconds"],
         running=(lambda: proc_handle.poll() is None), snapshot=take,
-        measure=disk, stop=terminate, clock=clock, sleep=sleep, interval=interval)
+        measure=disk, stop=terminate, clock=clock, sleep=sleep, interval=interval,
+        attestation=BOUND_ATTESTATION, start=start)
 
 
 def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
@@ -150,7 +161,7 @@ def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
         # failing closed on an identity that no longer exists.
         proof = build.stop_group(
             {"pid": proc_handle.pid, "pgid": proc_handle.pid}, proc_handle)
-        return {"peak_rss": 0, "cid": None, "teardown": proof,
+        return {"peak_rss": None, "cid": None, "teardown": proof,
                 "enforcement": "userspace_observed", "kernel_enforcement": False}
     bound = build.bind_launcher(proc_handle.pid, snapshot=table)
 

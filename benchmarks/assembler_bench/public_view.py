@@ -10,13 +10,15 @@ the case hashes and score units are independently validated.
 """
 import copy
 import json
-import math
 import re
 
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
 from .current_validation_v2 import V6_COHORT_SHA
 from .public_psi import public_matrix
 from .public_vocabulary import find_tokens
+from .px_ram_semantics import (COMPARABLE_KEY, LAUNCHER_DIAGNOSTIC, METHOD_KEY,
+                               RAW_BYTES_KEY, SCOPE_KEY, UNAVAILABLE_KEY,
+                               VERSION_KEY)
 
 EVIDENCE_SCHEMA = "ivanka.assembler-bench.assembler-evidence.v1"
 
@@ -234,14 +236,14 @@ def _join_scores(run, assemblers, joined):
             arm = sample.setdefault("diagnostics", {}).setdefault(tool, {})
             if isinstance(case.get("diagnostics"), dict) and case["diagnostics"]:
                 arm.update(case["diagnostics"])
-            # Peak RAM is a published diagnostic as well as receipt evidence;
-            # the browser renders per-arm diagnostics from this map.
-            ram = case.get("peak_ram_observed_mib")
-            if type(ram) in (int, float) and math.isfinite(ram) and ram >= 0:
-                arm["peak_ram_observed_mib"] = ram
-            for key in ("peak_ram_observed_mib", "input_sha256",
-                        "output_sha256", "exact_coverage", "method",
-                        "scorer_source_sha256", "source_commit",
+            # Withdraw any comparable peak published before the launcher-group
+            # scope was known; only attested whole-container readings remain.
+            if COMPARABLE_KEY in case:
+                arm[COMPARABLE_KEY] = case[COMPARABLE_KEY]
+            for key in (COMPARABLE_KEY, RAW_BYTES_KEY, METHOD_KEY, VERSION_KEY,
+                        SCOPE_KEY, UNAVAILABLE_KEY, LAUNCHER_DIAGNOSTIC,
+                        "input_sha256", "output_sha256", "exact_coverage",
+                        "method", "scorer_source_sha256", "source_commit",
                         "adapter_commit", "image_sha256"):
                 if key in case:
                     evidence_row[key] = case[key]

@@ -7,6 +7,7 @@ from .sam_metrics import public_diagnostics
 from .metric_explanations import INFO
 from .metric_catalog_exact import catalog as exact_catalog
 from .metric_catalog_micall import catalog as micall_catalog
+from .px_ram_semantics import LAUNCHER_DIAGNOSTIC
 
 SCHEMA = "assembler-bench.public-mapping-diagnostics.v1"
 CATALOG = {
@@ -41,6 +42,9 @@ CATALOG = {
 
 CATALOG["peak_ram_observed_mib"] = (
     "Peak observed MiCall process-tree RSS", "MiB")
+
+CATALOG[LAUNCHER_DIAGNOSTIC] = (
+    "Observed launcher-group RSS (not comparable)", "MiB")
 
 CATALOG.update({key: value for key, value in micall_catalog().items()
                 if key not in CATALOG})

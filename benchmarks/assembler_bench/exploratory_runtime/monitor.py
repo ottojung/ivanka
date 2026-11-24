@@ -3,10 +3,28 @@ import subprocess
 import time
 
 from assembler_bench.exploratory_space import admit
+from assembler_bench.px_ram_semantics import sampler_fields
 
 
 class GuardExceeded(Exception):
     pass
+
+
+def attest(observation, *, method=None, version=None, scope=None):
+    """Return monitor receipt fields for the sampler that ran.
+
+    The default launcher-process-group sampler observes only the launcher;
+    a corrected whole-container sampler must state that scope and version
+    explicitly at the call site.
+    """
+    kwargs = {}
+    if method is not None:
+        kwargs["method"] = method
+    if version is not None:
+        kwargs["version"] = version
+    if scope is not None:
+        kwargs["scope"] = scope
+    return sampler_fields(observation, **kwargs)
 
 
 def rss_group_bytes(pgid):

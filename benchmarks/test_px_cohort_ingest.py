@@ -52,14 +52,14 @@ class PxCohortIngestTests(unittest.TestCase):
             "schema": "ivanka.exploratory.per-sample.v1", "tool_id": "skesa",
             "cohort": "physical", "scorer_source_sha256": "d" * 64,
             "samples": [{"alias": "PX-R004", "outcome": "success",
-                         "score": 188.0, "peak_ram_observed_mib": 77.5,
+                         "score": 188.0, "peak_ram_observed_mib": 77.433594,
                          "method": "best_final_max_contig_local_alignment_over_reference_panel",
                          "reference_panel_sha256":
                              "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8"}],
         }
         self.resource = {"schema": "ivanka.px.arm-resource.v1",
                          "tool_id": "skesa", "alias": "PX-R004",
-                         "peak_ram_observed_mib": 77.5,
+                         "peak_ram_observed_mib": 77.433594,
                          "peak_rss_bytes": 81195008, "outcome": "success"}
         self.diagnostics = {
             "schema": "ivanka.px.diagnostics.v3", "tool_id": "skesa",
@@ -119,10 +119,17 @@ class PxCohortIngestTests(unittest.TestCase):
         self.assertIsNone(sample["seconds"]["skesa"])
         self.assertEqual(sample["diagnostics"]["skesa"][
             "nuc_soft_clips_count"], 3)
-        self.assertEqual(sample["diagnostics"]["skesa"][
-            "peak_ram_observed_mib"], 77.5)
+        diag = sample["diagnostics"]["skesa"]
         proof = sample["measurement_evidence"]["skesa"]
-        self.assertEqual(proof["peak_ram_observed_mib"], 77.5)
+        # Legacy launcher-group RSS is real evidence but never comparable RAM.
+        self.assertIsNone(diag.get("peak_ram_observed_mib"))
+        self.assertIsNone(proof["peak_ram_observed_mib"])
+        self.assertEqual(diag["observed_launcher_group_peak_rss_mib"],
+                         77.433594)
+        self.assertEqual(diag["peak_ram_scope"], "launcher_process_group")
+        self.assertIn("excludes container MiCall",
+                      diag["peak_ram_unavailable_reason"])
+        self.assertEqual(proof["peak_rss_bytes"], 81195008)
         self.assertEqual(proof["input_sha256"], self.mates)
         self.assertEqual(real["tool_progress"]["skesa"]["finished"], 1)
         _, _, repeated, _ = ingest(merged, evidence, self.root, self.real)
@@ -236,6 +243,79 @@ class RegistryActivationTests(unittest.TestCase):
             {"canonical_alias": "R004", "score": 188.0}]}]}
         with self.assertRaisesRegex(ValueError, "preexisting sample score"):
             assert_no_stale_scores(report, evidence)
+
+    def _unpinned_activation(self, image):
+        """A verified handoff against measured cases without case-level pins."""
+        tool = "idba-ud"
+        adapter = "ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9"
+        source = "1" * 40
+        image_receipt = {
+            "schema": "ivanka.exploratory.image.receipt.v1",
+            "tool_id": tool, "source_commit": source,
+            "adapter_commit": adapter, "image_sha256": image,
+            "qualifying": False, "native_binary_sha256": "d" * 64,
+        }
+        pilot_receipt = {
+            "schema": "ivanka.exploratory.pilot.receipt.v1",
+            "tool_id": tool, "source_commit": source,
+            "adapter_commit": adapter, "image_sha256": image,
+            "qualifying": False,
+        }
+        for cohort in ("physical", "synthetic"):
+            pilot_receipt[cohort] = {"source_input_sha256": "e" * 64,
+                                     "status": "success"}
+        refs = {}
+        for kind, data in (("image", image_receipt), ("pilot", pilot_receipt)):
+            path = self.root / "receipts" / (kind + "-" + tool + ".json")
+            path.write_text(json.dumps(data))
+            refs[kind] = {"path": str(path), "sha256": _sha(path)}
+        registry = {
+            "schema": "ivanka.exploratory.assemblers.v1",
+            "adapter_branch_commits": {tool: adapter},
+            "candidates": [{
+                "id": tool, "status": "pilot", "source_commit": source,
+                "image_sha256": image, "image_evidence": refs["image"],
+                "pilot_evidence": refs["pilot"],
+            }],
+        }
+        registry_path = self.root / "registry.json"
+        registry_path.write_text(json.dumps(registry))
+        (self.root / "handoff" / (tool + ".json")).write_text(json.dumps({
+            "schema": "ivanka.px.supervisor.handoff.v1", "tool_id": tool,
+            "image_sha256": image,
+            "image_receipt_sha256": refs["image"]["sha256"],
+            "pilot_receipt_sha256": refs["pilot"]["sha256"],
+        }))
+        evidence = {"assemblers": [{
+            "id": tool, "source_commit": source, "adapter_commit": adapter,
+            "image_sha256": "c" * 64,
+            "cases": [
+                {"cohort": "real", "canonical_alias": "R053",
+                 "score": 298.0},
+                {"cohort": "synthetic", "canonical_alias": "H452",
+                 "score": 9937.752878929348},
+            ],
+        }]}
+        return registry_path, evidence
+
+    def test_changed_image_cannot_rewrite_unpinned_measured_cases(self):
+        registry_path, evidence = self._unpinned_activation("f" * 64)
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            with self.assertRaisesRegex(ValueError,
+                                        "measured case provenance"):
+                refresh_registry_provenance(
+                    evidence, registry_path, self.root / "handoff")
+        self.assertEqual(evidence["assemblers"][0]["image_sha256"], "c" * 64)
+
+    def test_same_image_adopts_unpinned_measured_cases(self):
+        registry_path, evidence = self._unpinned_activation("c" * 64)
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            adopted = refresh_registry_provenance(
+                evidence, registry_path, self.root / "handoff")
+        self.assertEqual(adopted, ["idba-ud"])
+        self.assertEqual(evidence["assemblers"][0]["image_sha256"], "c" * 64)
 
 
 if __name__ == "__main__":

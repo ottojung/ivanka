@@ -20,7 +20,8 @@ HXB2   = /workspace/denovo-example-io-1/hxb2.fasta
 `PROJECTS` is the catalog named in the final-audit board issue. The equivalent
 frozen-image catalog
 `/workspace/micall-frozen-seven-20261117/iva/micall/projects.json` yields the
-same 33-reference panel hash and was used for the partial validation below.
+same 33-reference panel hash and was used for the partial read-only validation
+reported on board issue `xTFlRO3qXDogbKz2KJJ0VV-care`.
 Pinned digests checked by both tools: image `73f29f…81b`, frozen manifest
 `9db6e1b…84f`, 33-reference panel `018f6a…c4a8`. A drift in any of them
 fails closed.

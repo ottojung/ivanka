@@ -1,10 +1,12 @@
 """Retained scientific outputs and metrics must outlive MiCall scratch."""
 import gzip
 import hashlib
+import lzma
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
+import retained_artifacts
 from retained_artifacts import (
     RetentionGateError, clean_workspace, content_sha256, logical_name,
     remove_visuals, retain_arm, seal_terminal_evidence, terminal_retire)
@@ -267,7 +269,7 @@ class TerminalRetentionTests(unittest.TestCase):
                 "outputs": {"nuc.csv": {"sha256": digest("final")}}}}
             report = retire_terminal_arm(
                 arm, result, [fastq], "image-id", 0, 1.0,
-                arm / "no_timing.json")
+                arm / "no_timing.json", container_dead=True)
             self.assertTrue(report["retired"])
             self.assertEqual(report["verified_outputs"], 1)
             self.assertEqual(report["removed_images"], 1)
@@ -290,7 +292,8 @@ class TerminalRetentionTests(unittest.TestCase):
             fastq.write_bytes(b"fastq bytes")
             report = retire_terminal_arm(
                 arm, {"image_id": "image-id", "error": "timeout"},
-                [fastq], "image-id", 124, 2400.0, arm / "no_timing.json")
+                [fastq], "image-id", 124, 2400.0, arm / "no_timing.json",
+                container_dead=True)
             self.assertTrue(report["retired"])
             self.assertEqual((arm / "nuc.csv").read_text(), "final")
             self.assertEqual((arm / "podman.stderr.log").read_text(),
@@ -309,6 +312,128 @@ class TerminalRetentionTests(unittest.TestCase):
             self.assertTrue(outside.is_file())
             self.assertEqual(outside.read_text(), "precious")
             self.assertFalse((arm / "linked.csv").exists())
+
+
+class CompressionInterfaceTests(unittest.TestCase):
+    def test_plain_finals_never_reach_a_compressed_content_reader(self):
+        prior_hasher = retained_artifacts.CONTENT_HASHER
+        prior_suffixes = set(retained_artifacts.COMPRESSED_SUFFIXES)
+
+        def restore():
+            retained_artifacts.set_content_hasher(prior_hasher)
+            retained_artifacts.COMPRESSED_SUFFIXES.clear()
+            retained_artifacts.COMPRESSED_SUFFIXES.update(prior_suffixes)
+
+        self.addCleanup(restore)
+        seen = []
+
+        def codec_only_reader(path):
+            seen.append(Path(path).name)
+            raise AssertionError("codec-only reader must not receive a plain final")
+
+        retained_artifacts.register_compressed_suffix(".zz")
+        retained_artifacts.set_content_hasher(codec_only_reader)
+        with TemporaryDirectory() as d:
+            plain = Path(d) / "nuc.csv"
+            plain.write_text("ref,coverage\na,10\n")
+            self.assertEqual(content_sha256(plain), digest(plain.read_text()))
+            self.assertEqual(seen, [])
+
+            compressed = Path(d) / "nuc.csv.zz"
+            compressed.write_bytes(b"codec-specific bytes")
+            with self.assertRaises(AssertionError):
+                content_sha256(compressed)
+            self.assertEqual(seen, ["nuc.csv.zz"])
+
+    def test_corrupt_compressed_final_rolls_back_every_codec_error(self):
+        plain = "ref,coverage\na,10\n"
+        with TemporaryDirectory() as d:
+            working = Path(d) / "valid.xz"
+            with lzma.open(working, "wb") as stream:
+                stream.write(plain.encode())
+            valid = working.read_bytes()
+            corrupt = bytearray(valid)
+            corrupt[10] ^= 0xFF  # flips an LZMA payload byte
+            variants = {
+                "lzma": (bytes(corrupt), lzma.LZMAError),
+                "truncated": (valid[:len(valid) // 2], EOFError),
+            }
+
+            for label, (payload, expected_error) in variants.items():
+                with self.subTest(codec_error=label):
+                    arm = Path(d) / f"arm-{label}"
+                    scratch = arm / "scratch"
+                    scratch.mkdir(parents=True)
+                    final = scratch / "nuc.csv.xz"
+                    final.write_bytes(payload)
+                    (arm / "podman.stderr.log").write_text("traceback")
+                    hashes = {"input.fastq.gz": "a" * 64}
+                    evidence, _ = seal_terminal_evidence(
+                        arm, {"metrics": {"outputs": {
+                            "nuc.csv": {"sha256": digest(plain)}}}}, hashes)
+                    with self.assertRaises(expected_error):
+                        terminal_retire(arm, evidence_path=evidence,
+                                        container_dead=True,
+                                        source_hashes=hashes)
+                    self.assertTrue(scratch.is_dir())
+                    self.assertEqual(final.read_bytes(), payload)
+                    self.assertFalse((arm / "nuc.csv.xz").exists())
+                    self.assertTrue((arm / "podman.stderr.log").is_file())
+
+
+class RunnerLivenessGateTests(unittest.TestCase):
+    def make_arm(self, root):
+        arm = Path(root)
+        scratch = arm / "scratch"
+        scratch.mkdir()
+        (scratch / "nuc.csv").write_text("final")
+        (scratch / "temp.fastq").write_text("reads")
+        (arm / "plot.svg").write_text("plot")
+        fastq = arm / "input.fastq.gz"
+        fastq.write_bytes(b"fastq bytes")
+        return arm, fastq
+
+    def test_cleanup_failure_suppresses_retirement_without_touching_scratch(self):
+        from podman_full_micall import retire_terminal_arm
+        with TemporaryDirectory() as d:
+            arm, fastq = self.make_arm(d)
+            report = retire_terminal_arm(
+                arm, {"image_id": "image-id"}, [fastq], "image-id", 124,
+                2400.0, arm / "no_timing.json", container_dead=False,
+                cleanup_error="podman rm exited 9")
+            self.assertFalse(report["applied"])
+            self.assertIn("cleanup incomplete", report["error"])
+            self.assertTrue((arm / "scratch" / "nuc.csv").is_file())
+            self.assertTrue((arm / "plot.svg").is_file())
+            self.assertFalse((arm / "terminal_evidence.json").exists())
+
+    def test_unknown_liveness_suppresses_retirement(self):
+        from podman_full_micall import retire_terminal_arm
+        with TemporaryDirectory() as d:
+            arm, fastq = self.make_arm(d)
+            report = retire_terminal_arm(
+                arm, {"image_id": "image-id"}, [fastq], "image-id", 0,
+                1.0, arm / "no_timing.json", container_dead=lambda: False)
+            self.assertFalse(report["applied"])
+            self.assertIn("not terminated", report["error"])
+            self.assertTrue((arm / "scratch" / "nuc.csv").is_file())
+            self.assertFalse((arm / "terminal_evidence.json").exists())
+
+    def test_probe_exception_suppresses_retirement(self):
+        from podman_full_micall import retire_terminal_arm
+        with TemporaryDirectory() as d:
+            arm, fastq = self.make_arm(d)
+
+            def broken_probe():
+                raise OSError("podman unavailable")
+
+            report = retire_terminal_arm(
+                arm, {"image_id": "image-id"}, [fastq], "image-id", 0,
+                1.0, arm / "no_timing.json", container_dead=broken_probe)
+            self.assertFalse(report["applied"])
+            self.assertIn("liveness probe failed", report["error"])
+            self.assertTrue((arm / "scratch" / "nuc.csv").is_file())
+            self.assertFalse((arm / "terminal_evidence.json").exists())
 
 
 if __name__ == "__main__":

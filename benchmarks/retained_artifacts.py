@@ -68,6 +68,9 @@ def set_content_hasher(hasher):
 
     The compression workfront owns its reader. Retention only needs its digest
     of the uncompressed bytes so recorded SHA-256 values stay comparable.
+    The reader is consulted only for files whose suffix is in
+    COMPRESSED_SUFFIXES; plain finals are hashed directly. A codec-specific
+    reader therefore cannot break arms that write uncompressed CSV/FASTA.
     """
     global CONTENT_HASHER
     if hasher is not None and not callable(hasher):
@@ -111,8 +114,14 @@ def _logical_stream(path):
 
 
 def content_sha256(path):
-    """SHA-256 of the logical (uncompressed) content of a retained table."""
-    if CONTENT_HASHER is not None:
+    """SHA-256 of the logical (uncompressed) content of a retained table.
+
+    A registered reader is only used for recognised compressed suffixes. Plain
+    finals must never be handed to a codec-only reader: doing so would fail
+    every promotion and roll all scratch back, even when no codec is involved.
+    """
+    if (Path(path.name).suffix.lower() in COMPRESSED_SUFFIXES
+            and CONTENT_HASHER is not None):
         return CONTENT_HASHER(path)
     hasher = hashlib.sha256()
     with _logical_stream(path) as stream:
@@ -356,8 +365,13 @@ def terminal_retire(arm, *, evidence_path, container_dead, source_hashes=None,
             shutil.make_archive(str(archive)[:-7], "gzip", arm / "scratch")
             report["archived"] = True
         report["retired"] = _discard_scratch(arm)
-    except (OSError, ValueError, RetentionGateError):
+    except Exception:
         # Never leave a half-promoted arm: put final files back in scratch.
+        # Digest verification decompresses finals, so a corrupt or truncated
+        # compressed table can raise a codec error (LZMAError, zlib.error,
+        # EOFError) that is not an OSError/ValueError. Rollback must cover any
+        # failure after promotion; the original exception is re-raised so the
+        # caller still sees the exact diagnostic.
         for source, target in reversed(promoted):
             if target.exists() and not source.exists() and not target.is_symlink():
                 os.replace(target, source)

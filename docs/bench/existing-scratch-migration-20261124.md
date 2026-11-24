@@ -11,7 +11,7 @@ was changed. The host is `marceline-dev`; the repository is
 
 | Root | Attested scratch archives | Compressed bytes | Notes |
 | --- | ---: | ---: | --- |
-| `ivanka-p0-novelty-canary-20261123/physical-cases` | 188 completed, 185 archives left after this batch | 7,383,138,076 B (6.876 GiB) now; about 6.66 GiB at the 183-case founder measurement | current frozen-Rust-only candidate |
+| `ivanka-p0-novelty-canary-20261123/physical-cases` | 198 completed, 0 archives left after the full batch | 8,516,941,251 B (7.932 GiB) of archives retired across 198 cases; about 6.66 GiB at the 183-case founder measurement | current frozen-Rust-only candidate |
 | `ivanka-p0-prospective-allprojects-20261122/p0-physical-selective-cases` | 125 | 3,990,346,994 B | disallowed modified-MiCall trial, diagnosis only |
 | `.../p0-physical-unique-timing-cases` | 69 | 3,195,990,304 B | same trial |
 | `.../p0-physical-updated-micall-iva-cases` | 45 | 354,105,393 B | same trial |
@@ -112,6 +112,29 @@ case during the batch, so the global delta includes its scratch). The controller
 continued from 184/198 to 188/198 with state `RUNNING_SOURCE_FROZEN_P0` and no
 integrity rejection.
 
+## Completed candidate batch
+
+After the controller reached genuine 198/198 and the watcher posted its final
+`ORIGINAL_IVA_GATE_PASS` decision, the remaining 195 completed candidate
+archives were retired in bounded 30-case foreground batches under the same
+merged tool. Final aggregate over 198 retention receipts:
+
+- 8,516,941,251 B (7.932 GiB) of archived scratch removed; 42,328,906,543 B of
+  discarded uncompressed members itemised with SHA256; 510,453,562 B of
+  retained scientific members promoted; 136,675,991 B of plot visuals removed.
+- 0 archives and 198 finalised receipts remain; every receipt carries the old
+  archive SHA256, the unchanged attestation SHA256 and terminal receipt hashes.
+- Independent separate-code verification of a 10-case sample: old SHA preserved,
+  every member covered by a receipt, every promoted file byte-exact.
+- All 198 attestation hashes and all 594 terminal file hashes
+  (`prospective-execution.json`, `posthoc_score.json`, `conseq.csv`) still match
+  their receipts.
+- Watcher readback at 198/198: `COMPLETE_COHORT_DIAGNOSTIC_NOT_QUALIFICATION`,
+  attested 198 of 198 with zero rejection reasons.
+- `df -B1 /workspace` available bytes during the resumed batches went from
+  33,139,779,584 to 40,932,728,832 (**+7,792,949,248 B**), consistent with
+  retired archive bytes minus promoted bytes plus removed visuals.
+
 ## Restart after an interrupted batch
 
 A later batch worker was externally killed mid-run. Every case it touched had
@@ -123,10 +146,10 @@ resumed safely from the remaining unattested archives.
 
 ## Deferred work
 
-- Remaining candidate archives: only after each case is complete and the
-  controller/watch gates described above are rechecked. The tool is safe to
-  rerun with `--limit` under the single-worker lock; this batch deliberately
-  stopped at three cases.
+- Remaining candidate archives: none. All 198 completed cases were retired only
+  after the controller reached 198/198 and the watcher's 198-case readback was
+  available. The tool remains safe to rerun with `--limit` under the
+  single-worker lock; already-migrated cases are skipped.
 - Legacy disallowed modified-MiCall trial and failed-arm scratch (~7.0 GiB in
   the four legacy roots above) is **inventory only**. Its receipts are
   diagnostic, not qualification, but they are unique scientific evidence and

@@ -94,6 +94,62 @@ def _hash(path):
     return hasher.hexdigest()
 
 
+class _BackportsZstdStream:
+    """Minimal readable stream for backports.zstd without stream_reader."""
+
+    def __init__(self, path, decompressor_cls):
+        self._source = Path(path).open("rb")
+        self._decoder = decompressor_cls()
+        self._buffer = bytearray()
+        self._eof = False
+
+    def read(self, size=-1):
+        if size == 0:
+            return b""
+        while not self._eof and (size < 0 or len(self._buffer) < size):
+            block = self._source.read(1048576)
+            if not block:
+                if not self._decoder.eof:
+                    raise RetentionGateError(
+                        "incomplete zstd frame: " + self._source.name)
+                self._eof = True
+                break
+            if self._decoder.eof:
+                raise RetentionGateError(
+                    "bytes follow zstd frame: " + self._source.name)
+            output = self._decoder.decompress(block, 1048576)
+            if output:
+                self._buffer.extend(output)
+            while (not self._decoder.needs_input
+                   and not self._decoder.eof):
+                output = self._decoder.decompress(b"", 1048576)
+                if output:
+                    self._buffer.extend(output)
+            if self._decoder.eof:
+                self._eof = True
+                break
+        if size < 0:
+            data = bytes(self._buffer)
+            self._buffer.clear()
+            return data
+        data = bytes(self._buffer[:size])
+        del self._buffer[:size]
+        return data
+
+    def close(self):
+        self._source.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
+
+    def readable(self):
+        return True
+
+
 def _logical_stream(path):
     """Open a final table as a stream of its uncompressed bytes."""
     suffix = Path(path.name).suffix.lower()
@@ -106,10 +162,16 @@ def _logical_stream(path):
     if suffix == ".zst":
         try:
             import zstandard as zstd
+        except ImportError:
+            zstd = None
+        if zstd is not None:
+            return zstd.ZstdDecompressor().stream_reader(path.open("rb"))
+        try:
+            from backports.zstd import ZstdDecompressor
         except ImportError as exc:
             raise RetentionGateError(
                 "zstd final table needs a registered content hasher") from exc
-        return zstd.ZstdDecompressor().stream_reader(path.open("rb"))
+        return _BackportsZstdStream(path, ZstdDecompressor)
     return path.open("rb")
 
 

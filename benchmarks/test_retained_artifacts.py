@@ -300,6 +300,36 @@ class TerminalRetentionTests(unittest.TestCase):
                              "traceback")
             self.assertFalse(scratch.exists())
 
+    def test_runner_integration_post_seal_source_change_fails_closed(self):
+        import podman_full_micall
+        from podman_full_micall import retire_terminal_arm
+        real_seal = podman_full_micall.seal_terminal_evidence
+
+        def seal_then_mutate(*args, **kwargs):
+            result = real_seal(*args, **kwargs)
+            fastq.write_bytes(b"mutated after seal")
+            return result
+
+        with TemporaryDirectory() as d:
+            arm = Path(d)
+            scratch = arm / "scratch"
+            scratch.mkdir()
+            (scratch / "nuc.csv").write_text("final")
+            fastq = arm / "input.fastq.gz"
+            fastq.write_bytes(b"fastq bytes")
+            original = podman_full_micall.seal_terminal_evidence
+            podman_full_micall.seal_terminal_evidence = seal_then_mutate
+            try:
+                report = retire_terminal_arm(
+                    arm, {"image_id": "image-id"}, [fastq], "image-id", 0,
+                    1.0, arm / "no_timing.json", container_dead=True)
+            finally:
+                podman_full_micall.seal_terminal_evidence = original
+            self.assertFalse(report["applied"])
+            self.assertIn("source hashes differ", report["error"])
+            self.assertTrue(scratch.is_dir())
+            self.assertTrue((scratch / "nuc.csv").is_file())
+
     def test_scratch_symlink_is_not_followed(self):
         with TemporaryDirectory() as d:
             arm = Path(d) / "arm"
@@ -344,6 +374,18 @@ class CompressionInterfaceTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 content_sha256(compressed)
             self.assertEqual(seen, ["nuc.csv.zz"])
+
+    def test_zst_logical_hash_uses_backports_zstd_without_registered_hasher(self):
+        from backports.zstd import ZstdCompressor
+        prior_hasher = retained_artifacts.CONTENT_HASHER
+        self.addCleanup(lambda: retained_artifacts.set_content_hasher(prior_hasher))
+        retained_artifacts.set_content_hasher(None)
+        plain = b"ref,coverage\na,10\n"
+        with TemporaryDirectory() as d:
+            path = Path(d) / "nuc.csv.zst"
+            compressor = ZstdCompressor()
+            path.write_bytes(compressor.compress(plain, compressor.FLUSH_FRAME))
+            self.assertEqual(content_sha256(path), hashlib.sha256(plain).hexdigest())
 
     def test_corrupt_compressed_final_rolls_back_every_codec_error(self):
         plain = "ref,coverage\na,10\n"

@@ -540,10 +540,14 @@ def retire_terminal_arm(folder, result, fastqs, image, exitcode, wall_seconds,
                 "error": f"liveness probe failed: {type(exc).__name__}: {exc}"}
     if dead is not True:
         return {"applied": False, "error": "container has not terminated"}
-    source_hashes = {path.name: sha(path) for path in fastqs}
-    source_hashes["image_id"] = result.get("image_id") or image
-    if timing_file.is_file():
-        source_hashes["micall_internal_timing.json"] = sha(timing_file)
+    def _source_hashes():
+        hashes = {path.name: sha(path) for path in fastqs}
+        hashes["image_id"] = result.get("image_id") or image
+        if timing_file.is_file():
+            hashes["micall_internal_timing.json"] = sha(timing_file)
+        return hashes
+
+    source_hashes = _source_hashes()
     if exitcode == 0 and "metrics" in result:
         evidence = {"metrics": result["metrics"]}
     else:
@@ -554,8 +558,11 @@ def retire_terminal_arm(folder, result, fastqs, image, exitcode, wall_seconds,
                                 "error_tail": tail}}
     try:
         evidence_path, _ = seal_terminal_evidence(folder, evidence, source_hashes)
+        # Re-hash from disk: a post-seal source change must not pass the
+        # sealed-receipt comparison against a stale in-memory dict.
         return terminal_retire(folder, evidence_path=evidence_path,
-                               container_dead=dead, source_hashes=source_hashes)
+                               container_dead=dead,
+                               source_hashes=_source_hashes())
     except Exception as exc:
         # The runner must never crash on a corrupt/truncated compressed final:
         # a codec decode error is still a fail-closed retention outcome.

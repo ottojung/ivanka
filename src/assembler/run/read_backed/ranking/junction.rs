@@ -1,16 +1,18 @@
-use super::K;
+use super::{spans, K};
 
 const MIN_FLANK: usize = 800;
 const MAX_VALLEY: usize = 200;
 const MIN_DEPTH: u32 = 20;
 
 /// A narrow, deep read-support valley between two long dense regions is an
-/// assembler join that no original fragment substantiates: each side has
-/// independent evidence, but the molecule connecting them does not. Report
-/// the valley's k-mer span so both flanks can be presented separately rather
-/// than as one false bridge or as a single clipped island. Depth is derived
-/// only from the original pairs; no reference or truth enters this decision.
-pub(in super::super) fn junction(depth: &[u32]) -> Option<(usize, usize)> {
+/// assembler join only when original fragments also stop spanning it. Depth
+/// and pair loci both come from the original reads; no reference or truth
+/// enters this decision. Report the valley span so both flanks can be
+/// presented separately rather than as a false bridge or one clipped island.
+pub(in super::super) fn junction(
+    depth: &[u32],
+    pair_spans: &[(usize, usize)],
+) -> Option<(usize, usize)> {
     if depth.len() < 2 * MIN_FLANK + MAX_VALLEY + K {
         return None;
     }
@@ -37,25 +39,13 @@ pub(in super::super) fn junction(depth: &[u32]) -> Option<(usize, usize)> {
             && start >= MIN_FLANK
             && depth.len() - i >= MIN_FLANK
             && core <= low
-            && dense(&depth[..start], high)
-            && dense(&depth[i..], high)
+            && spans::dense(&depth[..start], high)
+            && spans::dense(&depth[i..], high)
+            && spans::unsupported(pair_spans, start, i)
             && best.is_none_or(|(_, _, seen)| core < seen)
         {
             best = Some((start, i, core));
         }
     }
     best.map(|(a, b, _)| (a, b))
-}
-
-/// Render intervals in contig coordinates; without a deep valley this is the
-/// single whole contig and the established presentation path is unchanged.
-pub(in super::super) fn pieces(depth: &[u32], length: usize) -> Vec<(usize, usize)> {
-    junction(depth).map_or_else(
-        || vec![(0, length)],
-        |(a, b)| vec![(0, (a + K).min(length)), (b, length)],
-    )
-}
-
-fn dense(depth: &[u32], high: u32) -> bool {
-    depth.iter().filter(|&&v| v >= high).count() * 100 >= depth.len() * 90
 }

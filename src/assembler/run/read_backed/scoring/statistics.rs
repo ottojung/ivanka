@@ -4,4 +4,5 @@ pub(in super::super) struct Statistics {
     pub(in super::super) pairs: Vec<usize>,
     pub(in super::super) coverage: Vec<usize>,
     pub(in super::super) pair_masks: Vec<u16>,
+    pub(in super::super) spans: Vec<Vec<(usize, usize)>>,
 }

@@ -23,22 +23,22 @@ pub(super) fn component(
     statistics: &Statistics,
     chosen: usize,
 ) -> Vec<Entry> {
-    let repaired = circle::repair(&contigs[chosen], &statistics.depth[chosen], reads);
+    let joined = ranking::junction(&statistics.depth[chosen], &statistics.spans[chosen]);
+    let native = &contigs[chosen];
+    let repaired = if joined.is_some() {
+        None
+    } else {
+        circle::repair(native, &statistics.depth[chosen], reads)
+    };
     let (sequence, depth): (&[u8], &[u32]) = match &repaired {
         Some((seq, depths)) => (seq, depths),
-        None => (&contigs[chosen], &statistics.depth[chosen]),
+        None => (native, &statistics.depth[chosen]),
     };
     let header = format!(">ivanka_{}", chosen + 1);
     if repaired.is_some() {
         eprintln!("IVANKA_READ_BACKED_REOPENED_CYCLE len={}", sequence.len());
     }
-    super::selection(
-        contigs.len(),
-        chosen,
-        statistics.coverage[chosen],
-        statistics.pairs[chosen],
-    );
-    ranking::pieces(depth, sequence.len())
+    ranking::pieces(joined, sequence.len())
         .into_iter()
         .enumerate()
         .flat_map(|(index, (from, to))| {

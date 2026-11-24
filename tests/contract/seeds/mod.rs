@@ -3,3 +3,4 @@ mod duplicates;
 mod errors;
 mod golden;
 mod protection;
+mod standalone;

@@ -4,3 +4,4 @@ use super::{ranking, reads::K};
 mod alternatives;
 mod cap;
 mod coverage;
+mod minority_retention;

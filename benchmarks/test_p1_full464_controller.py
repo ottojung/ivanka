@@ -6,7 +6,6 @@ import tempfile
 import unittest
 
 from expanded.p1_full464_controller import (
-    FLOOR,
     MEMORY_BYTES,
     PODMAN_TIMEOUT_SECONDS,
     assert_reference_blind,
@@ -104,12 +103,18 @@ class ControllerTests(unittest.TestCase):
     def test_resume_receipt_is_atomic_and_tamper_evident(self):
         folder = self.base / "case"
         folder.mkdir()
-        row = {"results": {"ivanka": {"status": "success", "sha256": "d" * 64}}}
+        (folder / "conseq.csv").write_text("retained consensus")
+        digest = sha256(folder / "conseq.csv")
+        row = {"results": {"ivanka": {"status": "success", "sha256": "d" * 64,
+                                     "final_dominant": {"source_output": "conseq.csv",
+                                                        "conseq_csv_sha256": digest}}}}
         case_path = folder / "case.json"
         atomic_json(case_path, row)
         evidence = folder / "terminal_evidence.json"
         atomic_json(evidence, {
-            "schema": "ivanka.retention.terminal.v1", "sealed": True})
+            "schema": "ivanka.retention.terminal.v1", "sealed": True,
+            "source_hashes": {"image_id": "d" * 64, "reads/R1.fastq.gz": "1" * 64},
+            "metrics": {"outputs": {"conseq.csv": {"sha256": digest}}}})
         (folder / "terminal_evidence.json.sha256").write_text(
             sha256(evidence) + "\n")
         atomic_json(folder / "receipt.json", {
@@ -119,6 +124,10 @@ class ControllerTests(unittest.TestCase):
         })
         hashes = {"reads/R1.fastq.gz": "1" * 64}
         self.assertEqual(load_committed(folder, hashes, "d" * 64), row)
+        (folder / "conseq.csv").write_text("tampered")
+        with self.assertRaises(ValueError):
+            load_committed(folder, hashes, "d" * 64)
+        (folder / "conseq.csv").write_text("retained consensus")
         (folder / "receipt.json").write_text(json.dumps({
             "image": "d" * 64, "case_hashes": hashes,
             "receipt_sha256": "0" * 64,

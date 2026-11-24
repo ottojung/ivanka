@@ -11,11 +11,11 @@ import contextlib
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import time
 
 from benchmarks.assembler_bench.sam_metrics import public_diagnostics
@@ -41,6 +41,7 @@ MEMORY_BYTES = 4_000_000_000
 RESERVE_GIB = 32
 ADMISSION_GIB = 2
 DEFAULT_LOCK = "/workspace/ivanka-p1-component-image-20261124/pilot.lock"
+PILOT_ROOT = Path("/workspace/ivanka-p1-component-image-20261124/pilots")
 DEFAULT_DATA = "/workspace/ivanka-synthetic-abundance15-464-20261117"
 DEFAULT_FROZEN = (
     "/workspace/micall-frozen-seven-20261117/phase-synthetic464/results.jsonl"
@@ -156,6 +157,14 @@ def verify_candidate_image(image, commit, env):
         "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f"
     ):
         raise ValueError("candidate image does not inherit the frozen manifest")
+    if (image, commit) != (DEFAULT_IMAGE, DEFAULT_COMMIT):
+        raise ValueError("unreviewed candidate image or source")
+    parent = podman_inspect(ORIGINAL_IVANKA_IMAGE, env, "{{json .RootFS.Layers}}")
+    child = podman_inspect(image, env, "{{json .RootFS.Layers}}")
+    if parent.returncode or child.returncode:
+        raise ValueError("cannot verify image layers")
+    if json.loads(child.stdout)[:-1] != json.loads(parent.stdout):
+        raise ValueError("not a one-layer binary-only overlay")
     return labels
 
 
@@ -260,6 +269,10 @@ def load_frozen(frozen_path, expected_hash, cohort_hashes):
         if not line.strip():
             continue
         row = json.loads(line)
+        if row["id"] in rows:
+            raise ValueError("duplicate frozen case")
+        if row["id"] not in cohort_hashes or row["input_sha256"] != input_fingerprint(cohort_hashes[row["id"]]):
+            raise ValueError("frozen case input identity differs")
         rows[row["id"]] = row
     if set(rows) != set(cohort_hashes):
         raise ValueError("frozen results do not match the pinned 464 cohort")
@@ -317,6 +330,8 @@ def load_committed(folder, case_hashes, image):
     receipt_path = Path(folder) / "receipt.json"
     case_path = Path(folder) / "case.json"
     if not receipt_path.is_file() or not case_path.is_file():
+        if receipt_path.exists() or case_path.exists():
+            raise ValueError("incomplete committed receipt; recover explicitly")
         return None
     receipt = json.loads(receipt_path.read_text())
     row = json.loads(case_path.read_text())
@@ -340,7 +355,84 @@ def load_committed(folder, case_hashes, image):
         if sealed.get("schema") != "ivanka.retention.terminal.v1" or not (
                 sealed.get("sealed") is True):
             raise ValueError("terminal evidence is not sealed")
+        if sealed.get("source_hashes", {}).get("image_id") != image or any(
+                sealed.get("source_hashes", {}).get(key) != value
+                for key, value in case_hashes.items()):
+            raise ValueError("sealed source binding differs")
+        final = candidate["final_dominant"]
+        if final["source_output"] != "conseq.csv" or sha256(
+                Path(folder) / "conseq.csv") != final["conseq_csv_sha256"]:
+            raise ValueError("retained consensus differs")
+        from benchmarks.retained_artifacts import _verify_metrics
+        _verify_metrics(sealed["metrics"], Path(folder).resolve())
     return row
+
+
+def adopt_pilot(case_id, destination, case_dir, hashes, image, timer, env):
+    pilot = PILOT_ROOT / case_id / "portable-candidate"
+    if not pilot.is_dir():
+        return None
+    receipt_path = pilot / "pilot-result.json"
+    report = json.loads(receipt_path.read_text())
+    evidence_path = pilot / "terminal_evidence.json"
+    evidence = json.loads(evidence_path.read_text())
+    if (report["case"] != case_id or report["image"] != image
+            or report["returncode"] != 0 or report["input_sha256"] != hashes
+            or not 0 < report["wall_seconds"] <= WALL_CAP_SECONDS
+            or not 0 < report["peak_sampled_rss_bytes"] <= MEMORY_BYTES
+            or evidence["schema"] != "ivanka.retention.terminal.v1"
+            or evidence["sealed"] is not True
+            or (pilot / "terminal_evidence.json.sha256").read_text().strip() != sha256(evidence_path)):
+        raise ValueError("pilot identity, resource or terminal evidence differs")
+    source = evidence["source_hashes"]
+    if (source != {**hashes, "image_id": image,
+                   "pilot-result.json": sha256(receipt_path),
+                   "timing.json": sha256(pilot / "timing.json")}):
+        raise ValueError("pilot source binding differs")
+    clock = json.loads((pilot / "timing.json").read_text())
+    if (clock != report["timing"] or clock["exit_code"] != 0
+            or clock["timing_origin"] != TIMING_ORIGIN
+            or not 0 < clock["seconds"] <= min(WALL_CAP_SECONDS, report["wall_seconds"]+1)):
+        raise ValueError("pilot timing differs")
+    name = "ivanka-p1-component-" + case_id + "-portable-candidate"
+    argv = json.loads((pilot / "argv.json").read_text())
+    if argv != build_command(case_dir, pilot, image, timer, name) or not container_dead(name, env):
+        raise ValueError("pilot command or container liveness differs")
+    assert_reference_blind(argv)
+    from benchmarks.retained_artifacts import _verify_metrics
+    _verify_metrics(evidence["metrics"], pilot.resolve())
+    result = evaluate_final_alignment(
+        json.loads((case_dir / "manifest.json").read_text()),
+        case_dir / "hidden-truth/haplotypes.fasta", pilot)
+    if result != report["score"]:
+        raise ValueError("independent pilot alignment differs")
+    if (pilot / "scratch").exists():
+        raise ValueError("pilot scratch not retired")
+    shutil.copytree(pilot, destination)
+    _verify_metrics(evidence["metrics"], destination.resolve())
+    return {"status": "success", "score": result["score"],
+            "score_origin": MULTITRUTH_SCORE_ORIGIN, "timing_origin": TIMING_ORIGIN,
+            "sha256": image, "container_name": name, "argv": argv, "exit_code": 0,
+            "returncode": 0, "seconds": clock["seconds"], "timing": clock,
+            "wall_seconds": report["wall_seconds"],
+            "peak_sampled_rss_bytes": report["peak_sampled_rss_bytes"],
+            "container_dead": True, "dominant_exact": result["dominant_exact"],
+            "final_dominant": result["source"], "per_truth": result["source"]["per_truth"],
+            "diagnostics": evidence["public_diagnostics"],
+            "terminal_retention": json.loads((pilot / "pilot-retention.json").read_text()),
+            "reused_pilot": {"receipt_sha256": sha256(receipt_path),
+                             "terminal_evidence_sha256": sha256(evidence_path)}}
+
+
+def commit_case(destination, row, hashes, image, results_path):
+    atomic_json(destination / "case.json", row)
+    atomic_json(destination / "receipt.json", {
+        "schema": "ivanka.p1.case-receipt.v1",
+        "image": image, "case_hashes": hashes,
+        "receipt_sha256": sha256(destination / "case.json"),
+        "terminal_retention": row["results"]["ivanka"]["terminal_retention"],
+    })
+    atomic_append(results_path, row)
 
 
 def terminal_retirement(folder, candidate, success, source_hashes, env):
@@ -377,6 +469,7 @@ def evaluate(records):
     """Pinned 0.90 floors and strict all-r Psi on complete valid pairs only."""
     rows = list(records)
     errors = []
+    expected_rivals = {"iva", "abyss", "haploflow", "megahit", "spades", "velvet"}
     if len(rows) != 464 or len({row["id"] for row in rows}) != 464:
         errors.append("expected exactly 464 unique synthetic cases")
     per_case = []
@@ -391,6 +484,8 @@ def evaluate(records):
         failed = [name for name, arm in rivals.items()
                   if arm.get("status") != "success"]
         case_errors = []
+        if set(rivals) != expected_rivals:
+            case_errors.append("wrong_rival_roster")
         if ivanka.get("status") != "success":
             case_errors.append("candidate_not_success")
         if available:
@@ -398,10 +493,11 @@ def evaluate(records):
                 best = max(rivals[name]["score"] for name in available)
                 if ivanka["score"] + 1e-7 < FLOOR * best:
                     case_errors.append("below_90pct_best_available_rival")
-            checked = {"ivanka": ivanka,
-                       **{name: rivals[name] for name in available}}
-            case_errors.extend(check_sample(
-                row["id"], checked, available, FLOOR))
+            if ivanka.get("status") == "success":
+                checked = {"ivanka": ivanka,
+                           **{name: rivals[name] for name in available}}
+                case_errors.extend(check_sample(
+                    row["id"], checked, available, FLOOR))
         else:
             case_errors.append("no_complete_rival_for_comparison")
         per_case.append({
@@ -416,8 +512,7 @@ def evaluate(records):
         })
         errors.extend(f"{row['id']}:{error}" for error in case_errors)
     psi = {}
-    for rival in sorted({name for row in rows for name in row.get("results", {})
-                         if name != "ivanka"}):
+    for rival in sorted(expected_rivals):
         scores = []
         runtimes = []
         for row in rows:
@@ -487,8 +582,14 @@ def run(args):
         raise ValueError("full 464-case mixed-viral cohort required")
     frozen, frozen_hash = load_frozen(
         frozen_path, PINS["phase-synthetic464/results.jsonl"], case_hashes)
-    truth_validation = frozen[next(iter(case_hashes))]["truth_validation"]
-    selected = args.cases.split(",") if args.cases else list(case_hashes)
+    priorities = ("hcv_v3_30pct", "hcv_v3_15pct", "coverage_hole", "pcr_jackpot",
+                  "hcv_hiv_30pct", "equal_strains", "complex_mixture", "minority_30pct")
+    def order(case):
+        if (PILOT_ROOT / case / "portable-candidate/pilot-result.json").is_file():
+            return (-1, case)
+        family = frozen[case]["family"]
+        return (priorities.index(family) if family in priorities else len(priorities), case)
+    selected = args.cases.split(",") if args.cases else sorted(case_hashes, key=order)
     if args.limit is not None:
         selected = selected[:args.limit]
     if any(case not in case_hashes for case in selected):
@@ -519,6 +620,17 @@ def run(args):
     results_path = output / "results.jsonl"
     completed = []
     with single_worker(args.lock):
+        if args.resume:
+            recovered_path = output / ".results.recovered"
+            with recovered_path.open("w") as stream:
+                for case_id in selected:
+                    directory = output / case_id
+                    row = load_committed(directory, case_hashes[case_id], args.image)
+                    if row is not None:
+                        stream.write(json.dumps(row, sort_keys=True) + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            recovered_path.replace(results_path)
         for case_id in selected:
             case_dir = data / case_id
             destination = output / case_id
@@ -530,6 +642,12 @@ def run(args):
                 print("P1_CASE_RECOVERED", case_id, flush=True)
                 continue
             if destination.exists():
+                previous_name = "ivanka-p1-full464-" + hashlib.sha256(
+                    (case_id + ":" + args.image).encode()).hexdigest()[:18]
+                if not container_dead(previous_name, env):
+                    raise RuntimeError("interrupted case container still exists")
+                if (destination / "terminal_evidence.json").exists():
+                    raise RuntimeError("sealed interrupted arm needs receipt recovery, not a rerun")
                 interrupted = output / "_interrupted"
                 interrupted.mkdir(exist_ok=True)
                 target = interrupted / case_id
@@ -540,6 +658,21 @@ def run(args):
                 destination.rename(target)
             disk_admission(output.parent, args.reserve_gib, args.allocation_gib)
             verify_case_hashes(case_dir, hashes)
+            manifest_data = json.loads((case_dir / "manifest.json").read_text())
+            if (manifest_data["sha256"] != hashes
+                    or manifest_data["hidden_truth_file"] != "hidden-truth/haplotypes.fasta"
+                    or manifest_data["family"] != frozen[case_id]["family"]
+                    or manifest_data["score_model_revision"] != 2):
+                raise ValueError("case manifest differs from frozen provenance")
+            adopted = adopt_pilot(case_id, destination, case_dir, hashes, args.image, timer, env)
+            if adopted is not None:
+                row = assemble_row(case_id, adopted, frozen[case_id], frozen_hash,
+                                   hashes, frozen[case_id]["truth_validation"],
+                                   manifest_data["family"], args.commit, args.image)
+                commit_case(destination, row, hashes, args.image, results_path)
+                completed.append(row)
+                print("P1_CASE_PILOT_REUSED", case_id, flush=True)
+                continue
             destination.mkdir(parents=True, exist_ok=False)
             (destination / "bad_cycles.csv").write_text("tile,cycle\n")
             name = "ivanka-p1-full464-" + hashlib.sha256(
@@ -587,7 +720,7 @@ def run(args):
                         break
                     time.sleep(0.5)
             wall = round(time.monotonic() - started, 6)
-            record.update(returncode=process.returncode,
+            record.update(returncode=process.returncode, exit_code=process.returncode,
                           wall_seconds=wall,
                           peak_sampled_rss_bytes=peak,
                           container_dead=container_dead(name, env))
@@ -600,12 +733,15 @@ def run(args):
                             or clock.get("exit_code") != 0
                             or not isinstance(clock.get("seconds"), (int, float))
                             or clock["seconds"] <= 0
-                            or clock["seconds"] > WALL_CAP_SECONDS
+                            or not math.isfinite(clock["seconds"])
+                            or wall > WALL_CAP_SECONDS
+                            or clock["seconds"] > min(WALL_CAP_SECONDS, wall + 1)
                             or peak <= 0 or peak > MEMORY_BYTES):
                         raise ValueError("invalid in-container timing or RSS cap")
+                    verify_case_hashes(case_dir, hashes)
                     metrics = evaluate_final_alignment(
                         json.loads((case_dir / "manifest.json").read_text()),
-                        case_dir / hashes["hidden-truth/haplotypes.fasta"],
+                        case_dir / "hidden-truth/haplotypes.fasta",
                         destination)
                     if metrics["score_origin"] != MULTITRUTH_SCORE_ORIGIN:
                         raise ValueError("wrong final MiCall score origin")
@@ -627,21 +763,15 @@ def run(args):
             source_hashes = candidate_source_hashes(
                 destination, hashes, args.image, {"podman.log": sha256(log_path)})
             success = record["status"] == "success"
+            if not record["container_dead"]:
+                raise RuntimeError("refusing to continue while container may be alive")
             record["terminal_retention"] = terminal_retirement(
                 destination, record, success, source_hashes, env)
             row = assemble_row(case_id, record, frozen[case_id], frozen_hash,
-                               hashes, truth_validation,
+                               hashes, frozen[case_id]["truth_validation"],
                                json.loads((case_dir / "manifest.json").read_text())[
                                    "family"], args.commit, args.image)
-            atomic_json(destination / "case.json", row)
-            atomic_json(destination / "receipt.json", {
-                "schema": "ivanka.p1.case-receipt.v1",
-                "image": args.image,
-                "case_hashes": hashes,
-                "receipt_sha256": sha256(destination / "case.json"),
-                "terminal_retention": record["terminal_retention"],
-            })
-            atomic_append(results_path, row)
+            commit_case(destination, row, hashes, args.image, results_path)
             completed.append(row)
             print("P1_CASE", case_id, record["status"],
                   record.get("error", ""), flush=True)
@@ -677,6 +807,10 @@ def main(argv=None):
     parser.add_argument("--reserve-gib", type=int, default=RESERVE_GIB)
     parser.add_argument("--allocation-gib", type=int, default=ADMISSION_GIB)
     args = parser.parse_args(argv)
+    if (args.reserve_gib, args.allocation_gib, args.lock) != (RESERVE_GIB, ADMISSION_GIB, DEFAULT_LOCK):
+        parser.error("production disk and single-worker policy is fixed")
+    if args.limit is not None and not 1 <= args.limit <= 464:
+        parser.error("invalid limit")
     result = run(args)
     print("P1_FULL464_CONTROLLER", STATUS, "cases", result["cases"],
           "pass", result["pass"], flush=True)

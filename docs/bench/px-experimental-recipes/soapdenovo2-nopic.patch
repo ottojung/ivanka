@@ -1,0 +1,36 @@
+--- soapdenovo2-Makefile.orig	2026-11-23 22:49:06.020436049 +0000
++++ soapdenovo2-Makefile.patched	2026-11-23 22:49:06.045436446 +0000
+@@ -13,6 +13,8 @@
+ LIBPATH=    -L./sparsePregraph/inc -L./standardPregraph/inc -L/lib64 -L/usr/lib64
+ LIBS=       -pthread -lz -lm
+ EXTRA_FLAGS= 
++# The bundled libbam.a is non-PIC; Debian PIE linking fails with R_X86_64_32.
++LINK_FLAGS = -no-pie
+ 
+ BIT_ERR = 0
+ ifeq (,$(findstring $(shell uname -m), x86_64 ppc64 ia64))
+@@ -46,20 +48,20 @@
+ SOAPdenovo-63mer:
+ 	@cd sparsePregraph;make 63mer=1 debug=1 clean all;cd ..;
+ 	@cd standardPregraph;make 63mer=1 debug=1 clean all;cd ..;
+-	@$(CC) sparsePregraph/*.o standardPregraph/*.o $(LIBPATH) $(LIBS) $(EXTRA_FLAGS) -o SOAPdenovo-63mer
++	@$(CC) $(LINK_FLAGS) sparsePregraph/*.o standardPregraph/*.o $(LIBPATH) $(LIBS) $(EXTRA_FLAGS) -o SOAPdenovo-63mer
+ SOAPdenovo-127mer:
+ 	@cd sparsePregraph;make 127mer=1 debug=1 clean all;cd ..;
+ 	@cd standardPregraph;make 127mer=1 debug=1 clean all;cd ..;
+-	@$(CC) sparsePregraph/*.o standardPregraph/*.o $(LIBPATH) $(LIBS) $(EXTRA_FLAGS) -o SOAPdenovo-127mer
++	@$(CC) $(LINK_FLAGS) sparsePregraph/*.o standardPregraph/*.o $(LIBPATH) $(LIBS) $(EXTRA_FLAGS) -o SOAPdenovo-127mer
+ else
+ SOAPdenovo-63mer:
+ 	@cd sparsePregraph;make 63mer=1 clean all;cd ..;
+ 	@cd standardPregraph;make 63mer=1 clean all;cd ..;
+-	@$(CC) sparsePregraph/*.o standardPregraph/*.o $(LIBPATH) $(LIBS) $(EXTRA_FLAGS) -o SOAPdenovo-63mer
++	@$(CC) $(LINK_FLAGS) sparsePregraph/*.o standardPregraph/*.o $(LIBPATH) $(LIBS) $(EXTRA_FLAGS) -o SOAPdenovo-63mer
+ SOAPdenovo-127mer:
+ 	@cd sparsePregraph;make 127mer=1 clean all;cd ..;
+ 	@cd standardPregraph;make 127mer=1 clean all;cd ..;
+-	@$(CC) sparsePregraph/*.o standardPregraph/*.o $(LIBPATH) $(LIBS) $(EXTRA_FLAGS) -o SOAPdenovo-127mer
++	@$(CC) $(LINK_FLAGS) sparsePregraph/*.o standardPregraph/*.o $(LIBPATH) $(LIBS) $(EXTRA_FLAGS) -o SOAPdenovo-127mer
+ endif
+ 
+ clean:

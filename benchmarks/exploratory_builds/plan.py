@@ -156,7 +156,9 @@ def generate(registry_path=REGISTRY):
                 tool, adapter, data["adapter_baseline_commit"],
                 item["source_repo"], item["source_commit"], image_tag, recipe),
             "required_placeholders": sorted(placeholders),
-            "status": item["status"],
+            # A build plan is a template for a future admitted build; its
+            # status is independent of the registry row's current state.
+            "status": "source-pinned",
             "qualifying": False,
             "nonqualifying": True,
             "reference_blind": True,
@@ -244,8 +246,7 @@ def _validate_build(row, candidate, data, recipe):
             or row.get("blockers") != recipe["blockers"]
             or row.get("build_ready") is not False):
         raise ValueError("pinned recipe args or blockers drifted: " + tool)
-    if (row.get("status") != candidate["status"]
-            or row.get("status") != "source-pinned"
+    if (row.get("status") != "source-pinned"
             or row.get("qualifying") is not False
             or row.get("nonqualifying") is not True
             or row.get("reference_blind") is not True):

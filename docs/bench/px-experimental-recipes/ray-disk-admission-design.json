@@ -1,0 +1,35 @@
+{
+  "schema": "ivanka.exploratory.recipe.v1",
+  "tool": "ray-disk-admission-design",
+  "claim": "measured-data-only",
+  "frozen_parent": "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad",
+  "frozen_upstream_master": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+  "measured_budget": {
+    "isolated_store_bytes": 5789712384,
+    "metered_project_root_bytes": 1504743424,
+    "reservation_bytes": 1073741824,
+    "cap_bytes": 8589934592,
+    "headroom_bytes": 220610560,
+    "shared_free_bytes_at_attempt": 37546975232,
+    "shared_free_floor_bytes": 34359738368
+  },
+  "attempts": [
+    {"result": "git exit 128", "cause": "empty RayPlatform placeholder in pinned ray tree", "receipt": "run-ray-1795488752444669804.json"},
+    {"result": "guard disk_limit", "cause": "MPI toolchain plus compile from 5.79 GB parent exceeds cap", "receipt": "run-ray-1795488842*.json"},
+    {"result": "guard disk_limit", "cause": "compact --no-install-recommends donor on pinned 78 MB Debian base still exceeds remaining headroom", "receipt": "run-ray-1795495833*.json"}
+  ],
+  "source_findings": {
+    "ray_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2",
+    "sibling_repo": "https://github.com/sebhtml/RayPlatform",
+    "sibling_commit": "c8d9fe2e1347be299f2e74dd8a0fc278b5a02e16",
+    "header_layout": "sibling repo stores headers under its inner RayPlatform/ directory; copy that inner directory to donor/RayPlatform"
+  },
+  "design_options": [
+    "obtain a pinned, licensed prebuilt MPI+R Ray runtime artifact so the donor performs no apt install; attest its SHA-256 in-image",
+    "archive existing attested pilot outputs to an operator-approved location and re-meet the 8 GiB cap before a retry; never delete evidence or frozen comparator data",
+    "wait for an explicit, approved cap change; do not relax the guard unilaterally"
+  ],
+  "rejected": ["bypassing TMPDIR metering", "forcing a build past disk_limit", "deleting receipts or attested outputs"],
+  "resource_contract": {"one_worker": true, "max_incremental_bytes": 8589934592, "min_free_bytes": 34359738368, "container_memory_bytes": 4000000000, "wall_seconds": 2400},
+  "status": "source-only-plan-not-built"
+}

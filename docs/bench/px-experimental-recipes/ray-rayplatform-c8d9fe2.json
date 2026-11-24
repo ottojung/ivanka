@@ -1,0 +1,35 @@
+{
+  "adapter_commit": "9e02a9205fc338e1be4f0cd4a8dd4a13b406ae88",
+  "claim": "measured-data-only",
+  "donor_steps": [
+    "clone ray at source_commit into a PX-rooted donor directory",
+    "clone RayPlatform at sibling_source_commit into donor/RayPlatform",
+    "verify both git HEADs before compiling",
+    "make -j2 with the pinned Debian bookworm g++/make toolchain; capture build log and ELF SHA-256",
+    "write only the understood ELF and log into the metered PX project root"
+  ],
+  "frozen_parent": "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad",
+  "frozen_upstream_master": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+  "image_steps": [
+    "single-layer FROM the frozen parent image",
+    "install the pinned Debian MPI runtime (mpiexec, libopenmpi) in the same guarded build job",
+    "COPY the attested Ray ELF and the two adapter files; verify SHA-256 in-image",
+    "no reference, truth, panel or evaluator input in argv or environment"
+  ],
+  "resource_contract": {
+    "container_memory_bytes": 4000000000,
+    "max_incremental_bytes": 8589934592,
+    "min_free_bytes": 34359738368,
+    "one_worker": true,
+    "wall_seconds": 2400
+  },
+  "root_cause": "The pinned ray revision treats RayPlatform as a sibling source tree; without it the compile fails on missing RayPlatform/store/CarriageableItem.h and CMake reports no sources.",
+  "schema": "ivanka.exploratory.recipe.v1",
+  "sibling_path": "RayPlatform",
+  "sibling_source_commit": "c8d9fe2e1347be299f2e74dd8a0fc278b5a02e16",
+  "sibling_source_repo": "https://github.com/sebhtml/RayPlatform",
+  "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2",
+  "source_repo": "https://github.com/sebhtml/ray",
+  "status": "source-only-plan-not-built",
+  "tool": "ray"
+}

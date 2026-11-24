@@ -1,0 +1,69 @@
+{
+  "claim": "measured-data-only",
+  "frozen_parent": "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad",
+  "frozen_upstream_master": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+  "resource_contract": {
+    "container_memory_bytes": 4000000000,
+    "max_incremental_bytes": 8589934592,
+    "min_free_bytes": 34359738368,
+    "one_worker": true,
+    "wall_seconds": 2400
+  },
+  "schema": "ivanka.exploratory.recipe.v1",
+  "status": "source-only-plan-not-built",
+  "tool": "native-requirements",
+  "tools": {
+    "penguin": {
+      "adapter_commit": "8e7c55a3ebcaa4584cb09b1ac743bb5320bd1257",
+      "compact_plan": [
+        "CMake build of pinned plass with g++ and cmake in a guarded donor job on the pinned Debian base",
+        "attest nuclassemble ELF; resolve the license file path at the pinned revision before distribution",
+        "single-layer image from frozen parent with ELF and adapter hash guards"
+      ],
+      "license": "license file path at pin still to be resolved; no distribution until confirmed",
+      "native": "CMake >= pinned minimum, g++ >= 4.9, cmake/make build of nuclassemble; adapt from pinned README cmake -DCMAKE_BUILD_TYPE=RELEASE and make -j2",
+      "source_commit": "ac83d8fa2fd315738afe675609a3dea05837cfea",
+      "source_repo": "https://github.com/soedinglab/plass",
+      "status": "source-only-requirements"
+    },
+    "savage-denovo": {
+      "adapter_commit": "0919ffa97f609b6f0b650ce834f0fc79822f18e5",
+      "compact_plan": [
+        "build haploconduct from pinned HaploConduct source with g++, boost and OpenMP in a guarded donor job",
+        "attest the native executable and record the exact compiler path; adapter uses -p1/-p2 only",
+        "single-layer image from frozen parent with ELF and adapter hash guards"
+      ],
+      "license": "GPL-3.0 (LICENSE present at pin)",
+      "native": "haploconduct native executable built with g++, boost and OpenMP; adapter passes -p1/-p2 only with no --ref or --count_strains",
+      "source_commit": "24e4d9fc35ef6a93e336949a9a8f98ed4ceef362",
+      "source_repo": "https://github.com/HaploConduct/HaploConduct",
+      "status": "source-only-requirements"
+    },
+    "soapdenovo2": {
+      "adapter_commit": "02aff63992d68ba4a9c98e6917ad27bb402a58f1",
+      "fix": "apply soapdenovo2-nopic.patch, which adds LINK_FLAGS=-no-pie only to the top-level link recipes so subdir C objects keep C linkage",
+      "license": "GPL-3.0 (LICENSE present at pin)",
+      "native": "SOAPdenovo-63mer from pinned Makefile with bundled libbam.a",
+      "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11",
+      "source_repo": "https://github.com/aquaskyline/SOAPdenovo2",
+      "tests": [
+        "patch applies to the pinned Makefile",
+        "all three link recipes contain $(LINK_FLAGS)",
+        "no -no-pie in subdir CFLAGS"
+      ]
+    },
+    "unicycler": {
+      "adapter_commit": "5ad7874fe193043fa378063efc123018bff546da",
+      "compact_plan": [
+        "build cpp_functions.so from pinned Unicycler source in a single guarded donor job on the pinned Debian base",
+        "attest SPAdes spades-core separately; both digests are build arguments and in-image hash guards",
+        "single-layer image from frozen parent copies the two native artifacts and two adapter files"
+      ],
+      "license": "GPL-3.0 (LICENSE present at pin)",
+      "native": "unicycler/cpp_functions.so plus an independently attested SPAdes spades-core; both digests required before an image build",
+      "source_commit": "1429301eb24df9162f3c9386e8522f942594ae42",
+      "source_repo": "https://github.com/rrwick/Unicycler",
+      "status": "source-only-requirements"
+    }
+  }
+}

@@ -64,9 +64,15 @@ class TestRunner(unittest.TestCase):
                  "(p / 'px-tmp-probe').write_text(str(p))")]
         result = self.run_job(argv=argv)
         self.assertEqual(result["status"], "finished")
-        probe = self.root / "tmp" / "px-tmp-probe"
+        metered = (self.root / "tmp").resolve()
+        probes = list((self.root / "tmp").glob("job-*/px-tmp-probe"))
+        self.assertEqual(len(probes), 1)
+        probe = probes[0]
         self.assertTrue(probe.is_file())
-        self.assertEqual(probe.read_text(), str(self.root.resolve() / "tmp"))
+        # The per-job TMPDIR stays inside the metered tree so disk accounting
+        # sees every byte; scoped teardown may remove it after this assertion.
+        self.assertTrue(probe.parent.resolve().is_relative_to(metered))
+        self.assertEqual(probe.read_text(), str(probe.parent.resolve()))
 
     def test_unbuilt_source_cannot_pilot(self):
         with self.assertRaises(ValueError):

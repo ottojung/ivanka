@@ -11,7 +11,7 @@ import json
 import secrets
 from pathlib import Path
 
-from . import exploratory_policy, px_metrics, px_retention
+from . import exploratory_policy, job_temp, px_metrics, px_retention
 from . import px_cohort_scheduler as sched
 from . import px_supervisor as sup
 from .exploratory_runtime import launch
@@ -390,7 +390,18 @@ def main():
     parser.add_argument("--armed", action="store_true")
     parser.add_argument("--check-ready", action="store_true",
                         help="exit 0 only when certified tools and handoffs exist")
+    parser.add_argument("--audit-temp", action="store_true",
+                        help="audit stale job temporaries at cohort end; no deletion")
+    parser.add_argument("--apply-temp", action="store_true",
+                        help="reclaim verified stale job temporaries (requires --armed)")
     args = parser.parse_args()
+    if args.audit_temp:
+        if args.apply_temp and not args.armed:
+            parser.error("--apply-temp requires --armed after the single-worker boundary")
+        print(json.dumps(job_temp.audit_terminal_temp(args.root,
+                                                      apply=args.apply_temp),
+                         sort_keys=True))
+        return 0
     if args.check_ready:
         data = exploratory_policy.checked(args.registry)
         if checked_baseline(args.root, data) is None:

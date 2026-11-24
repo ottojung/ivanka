@@ -210,6 +210,62 @@ class FinalDecisionTests(unittest.TestCase):
         result = decision.decide(make_report(deltas))
         self.assertEqual(len(result["signed_power_failures"]), 1)
 
+    def test_finite_negative_high_r_limit_is_tail_state(self):
+        finite = [1, -1, -1, 0.5, 0.5, 0.5, 0.5]
+        proof = audit.signed_power(finite)["proof"]
+        self.assertLess(proof["psi_at_positive_infinity"], 0)
+        self.assertGreater(proof["psi0"], 0)
+        deltas = make_deltas()
+        deltas["abyss"] = {"score": finite, "runtime": [1] * len(finite)}
+        result = decision.decide(make_report(deltas))
+        self.assertEqual(result["decision"], decision.SIGNED_POWER_FAILURE_HIGH_R_TAIL)
+        self.assertEqual(result["integrity_reasons"], [])
+        failure = next(item for item in result["signed_power_failures"]
+                       if item["rival"] == "abyss" and item["axis"] == "score")
+        self.assertEqual(failure["state"], decision.SIGNED_POWER_FAILURE_HIGH_R_TAIL)
+
+    def test_unresolved_proof_is_integrity_not_measured_failure(self):
+        interior = [10, -5, -5, -5, 1, 1, 1]
+        deltas = make_deltas()
+        deltas["spades"] = {"score": interior, "runtime": [1] * len(interior)}
+        report = make_report(deltas)
+        report["comparators"]["spades"]["score"]["proof"]["proof_incomplete"] = True
+        result = decision.decide(report)
+        self.assertEqual(result["decision"], decision.INTEGRITY_FAILURE)
+        self.assertIn("signed_power_proof_unresolved", result["integrity_reasons"])
+        self.assertEqual(result["signed_power_failures"], [])
+
+    def test_malformed_or_missing_report_cli_fails_closed(self):
+        tool = Path(decision.__file__)
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.json"
+            bad.write_text("{not json")
+            run = subprocess.run([sys.executable, str(tool), "--report", str(bad)],
+                                 capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0)
+            self.assertIn(decision.INTEGRITY_FAILURE, run.stdout)
+            self.assertIn("report_unreadable_or_malformed", run.stdout)
+            missing = subprocess.run(
+                [sys.executable, str(tool), "--report", str(Path(tmp) / "missing.json")],
+                capture_output=True, text=True)
+            self.assertEqual(missing.returncode, 0)
+            self.assertIn("report_unreadable_or_malformed", missing.stdout)
+
+    def test_unreadable_root_evidence_cli_fails_closed(self):
+        tool = Path(decision.__file__)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = subprocess.run([
+                sys.executable, str(tool),
+                "--root", str(root / "cases"),
+                "--frozen-root", str(root / "frozen"),
+                "--projects-json", str(root / "projects.json"),
+                "--hxb2-fasta", str(root / "hxb2.fasta"),
+            ], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0)
+            self.assertIn(decision.INTEGRITY_FAILURE, run.stdout)
+            self.assertIn("root_evidence_unreadable_or_malformed", run.stdout)
+
     def test_integrity_precedes_measured_failure(self):
         report = make_report(readback=False)
         report["comparators"]["iva"] = {

@@ -90,6 +90,23 @@ def verdict_from_proof(proof, paired):
     return "fails_interior_zero_or_negative"
 
 
+def _failure_state(verdict, proof):
+    """Map a verified axis verdict onto the most specific measured failure.
+
+    A finite negative coefficient on the largest |p| sends Psi(r) negative as
+    r grows without bound. PR433's coarse verdict labels that an interior
+    failure; the reported scientific state must still identify the tail.
+    """
+    if verdict == "fails_nonpositive_at_r_zero":
+        return SIGNED_POWER_FAILURE_AT_R_ZERO
+    if verdict == "fails_negative_high_r_tail":
+        return SIGNED_POWER_FAILURE_HIGH_R_TAIL
+    limit = proof.get("psi_at_positive_infinity")
+    if limit == "-inf" or (_is_number(limit) and limit < 0):
+        return SIGNED_POWER_FAILURE_HIGH_R_TAIL
+    return SIGNED_POWER_FAILURE_INTERIOR
+
+
 def validate_report(report):
     """Return anonymized integrity reasons; an empty list means usable evidence."""
     reasons = []
@@ -182,6 +199,10 @@ def validate_report(report):
             if not isinstance(proof, dict):
                 _reject(reasons, "axis_proof_missing")
                 continue
+            # An unresolved signed-power search is inadmissible evidence, not a
+            # measured scientific failure; never report it as one.
+            if proof.get("proof_incomplete") is True:
+                _reject(reasons, "signed_power_proof_unresolved")
             if verdict not in _KNOWN_VERDICTS:
                 _reject(reasons, "verdict_unknown")
             elif verdict != verdict_from_proof(proof, paired):
@@ -290,7 +311,7 @@ def decide(report):
                     "rival": tool,
                     "axis": axis,
                     "verdict": evidence["verdict"],
-                    "state": _FAILURE_STATE[evidence["verdict"]],
+                    "state": _failure_state(evidence["verdict"], evidence["proof"]),
                     "psi0": evidence["proof"]["psi0"],
                     "high_r_limit": evidence["proof"]["psi_at_positive_infinity"],
                 })
@@ -382,6 +403,11 @@ def self_test():
     tied = copy.deepcopy(full)
     tied["iva"] = {"score": [0, 0], "runtime": [1, 1]}
     check(decide(report_for(tied))["decision"] == SIGNED_POWER_FAILURE_AT_R_ZERO, "exact ties")
+    finite_tail = copy.deepcopy(full)
+    finite_tail["abyss"] = {"score": [1, -1, -1, 0.5, 0.5, 0.5, 0.5],
+                            "runtime": [1] * 7}
+    check(decide(report_for(finite_tail))["decision"] == SIGNED_POWER_FAILURE_HIGH_R_TAIL,
+          "finite negative high-r limit")
     return True
 
 
@@ -402,11 +428,21 @@ def main(argv=None):
     if args.report:
         if any((args.root, args.frozen_root, args.projects_json, args.hxb2_fasta)):
             parser.error("--report is mutually exclusive with live-root options")
-        result = decide(json.loads(args.report.read_text()))
+        try:
+            report = json.loads(args.report.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            result = _result(INTEGRITY_FAILURE, None,
+                             reasons=["report_unreadable_or_malformed"])
+        else:
+            result = decide(report)
     else:
         if not all((args.root, args.frozen_root, args.projects_json, args.hxb2_fasta)):
             parser.error("--report or all four readback/root options are required")
-        result = from_root(args.root, args.frozen_root, args.projects_json, args.hxb2_fasta)
+        try:
+            result = from_root(args.root, args.frozen_root, args.projects_json, args.hxb2_fasta)
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError, KeyError):
+            result = _result(INTEGRITY_FAILURE, None,
+                             reasons=["root_evidence_unreadable_or_malformed"])
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.out:
         resolved = args.out.resolve()

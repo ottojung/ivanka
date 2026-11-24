@@ -106,13 +106,15 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             self.assertEqual(run["micall_fork_provenance"]["status"],
                              "verified")
 
-    def test_seven_tool_soft_clip_counts_and_densities_are_reviewable(self):
+    def test_soft_clip_counts_and_densities_cover_the_cohort_roster(self):
         source = SITE / "data/mapping-diagnostics.json"
         report = json.loads(source.read_text())
         self.assertEqual(report["status"], "INCOMPLETE")
         self.assertEqual(report["expected_cases"], 464)
         self.assertIn(report["cases_measured"], (0, 1))
-        self.assertEqual(len(report["tools"]), 7)
+        roster = {item["id"] for item in self.root["runs"][0]["roster"]}
+        self.assertEqual(set(report["tools"]), roster)
+        self.assertEqual(len(report["tools"]), len(self.root["runs"][0]["tools"]))
         for name,tool in report["tools"].items():
             with self.subTest(tool=name):
                 v,den = tool["values"],tool["denominators"]

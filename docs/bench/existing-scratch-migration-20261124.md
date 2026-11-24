@@ -112,6 +112,15 @@ case during the batch, so the global delta includes its scratch). The controller
 continued from 184/198 to 188/198 with state `RUNNING_SOURCE_FROZEN_P0` and no
 integrity rejection.
 
+## Restart after an interrupted batch
+
+A later batch worker was externally killed mid-run. Every case it touched had
+already written a finalised receipt and removed its archive; no case was left
+with `archive_removed: false`. The only residue was orphaned staging files,
+which are now discarded under the exclusive lock at startup so a retry needs no
+manual cleanup. Batches therefore run in bounded `--limit` chunks and can be
+resumed safely from the remaining unattested archives.
+
 ## Deferred work
 
 - Remaining candidate archives: only after each case is complete and the

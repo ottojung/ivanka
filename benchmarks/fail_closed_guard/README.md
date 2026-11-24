@@ -18,7 +18,15 @@ This package replaces bare-PID sampling/signalling with:
 - `build` — separate launcher-tree identity for builds (no CID); terminates via
   the exact launcher process group with proof.
 - `p1_helper` — prospective P1 wrapper; not imported by the live controller.
+- `lease` — durable append-only worker-lease/CID journal. Ownership is recorded
+  before spawn and closed only after teardown proof; startup reconciliation is
+  read-only with respect to containers and refuses admission while any prior
+  owned container, process group or ambiguous identity is still alive. Actual
+  teardown stays with the owning worker or operator, never with the guard.
 
+Success is reported only after the bound monitor has stopped and proven removal
+of the exact resource. The advisory `.global-worker.lock` protects a live
+launcher; the durable lease covers the crash window between spawn and teardown.
 Every record states `enforcement: userspace_observed`,
 `kernel_enforcement: false`. Nothing here permits a hard-cap claim or changes
 frozen MiCall, images, original evidence, acceptance thresholds or live jobs.

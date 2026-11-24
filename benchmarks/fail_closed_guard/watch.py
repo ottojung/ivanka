@@ -59,5 +59,11 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
         if measure() is None:
             raise GuardExceeded("measurement_unavailable")
         sleep(interval)
-    return {"peak_rss": peak, "cid": binding.get("cid"),
+    # A monitor that merely observes the launcher exit has not torn anything
+    # down. Stop and prove the exact bound resource before reporting success.
+    try:
+        teardown = stop(binding.get("cid"))
+    except Exception as exc:
+        raise GuardExceeded("teardown_unverified") from exc
+    return {"peak_rss": peak, "cid": binding.get("cid"), "teardown": teardown,
             "enforcement": "userspace_observed", "kernel_enforcement": False}

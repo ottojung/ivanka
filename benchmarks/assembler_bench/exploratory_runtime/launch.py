@@ -8,6 +8,9 @@ import time
 
 from assembler_bench.exploratory_space import admit
 
+from fail_closed_guard import binding, identity, lease
+from fail_closed_guard import proc as process_snapshot
+
 from .. import job_temp
 from .cleanup import clean_stopped_build
 from .monitor import GuardExceeded, watch
@@ -21,9 +24,18 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                                    mode, argv, reserve_bytes)
     with (root / ".global-worker.lock").open("a+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # The advisory lock dies with a crashed launcher; the durable lease
+        # journal does not. Never admit a new job while a prior owned resource
+        # is alive or its liveness cannot be proven.
+        guard_env = {**os.environ,
+                     "CONTAINERS_STORAGE_CONF": str(root / "storage.conf")}
+        lease.require_clear(root, guard_env)
         admit(reg, base, root, base["image_store"], base["workspace"], reserve_bytes)
         ident = tool + "-" + str(time.time_ns())
         argv, cidfile = bind_pilot(root, mode, argv, ident)
+        # Ownership is durably recorded before a process/container exists, so
+        # a crash between spawn and teardown still blocks the next admission.
+        lease.acquire(root, ident, mode, cidfile=cidfile)
         record = root / ("run-" + ident + ".json")
         log = root / ("run-" + ident + ".log")
         # Podman/import/build temporaries must stay inside the metered project
@@ -40,6 +52,22 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
             state = {"tool": tool, "mode": mode, "status": "unknown",
                      "peak_rss": None, "argv_sha256":
                      hashlib.sha256(repr(argv).encode()).hexdigest()}
+            if mode == "build":
+                # Bind the launcher after spawn; a very short build may exit
+                # before its snapshot is readable, in which case bare-PID
+                # liveness is recorded and still fails closed on ambiguity.
+                try:
+                    observed = process_snapshot.snapshot().get(proc.pid)
+                    fingerprint = None
+                    if observed is not None:
+                        try:
+                            fingerprint = identity.bind(observed)
+                        except GuardExceeded:
+                            pass
+                    lease.bind(root, ident, proc.pid, fingerprint)
+                except Exception:
+                    group(proc)
+                    raise
             # Identity-bound guard path: pilots bind the exact issued CID and
             # stop by CID only; builds bind the launcher tree and stop by its
             # exact process group. Legacy positional watch() call preserved.
@@ -47,9 +75,22 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
             if cidfile is not None:
                 cfg["cidfile"] = cidfile
                 cfg["env"] = env
+            teardown_proof = None
             try:
-                state["peak_rss"] = watch(proc, cfg)
+                result = watch(proc, cfg)
+                if isinstance(result, dict):
+                    state["guard_result"] = result
+                    state["peak_rss"] = result.get("peak_rss")
+                    state["bound_cid"] = result.get("cid")
+                    teardown_proof = result.get("teardown")
+                else:
+                    state["peak_rss"] = result
                 state["status"] = "finished" if proc.returncode == 0 else "failed"
+                # A bound monitor may only report success after it proved
+                # teardown of the exact resource it watched.
+                if teardown_proof is None and (cidfile is not None or mode == "build"):
+                    state["status"] = "failed"
+                    state["reason"] = "teardown_unverified"
             except GuardExceeded as exc:
                 state["status"], state["reason"] = "killed", str(exc)
                 cause = exc.__cause__
@@ -98,6 +139,22 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                 else:
                     state["job_temp_cleanup"] = {
                         "removed": False, "reason": "teardown_unverified"}
+                # Close the durable lease only after teardown is proven. An
+                # unverified teardown leaves it active so startup reconciliation
+                # refuses the next admission until an owner reconciles it.
+                if teardown_ok:
+                    cid = state.get("bound_cid")
+                    if cid is None and cidfile is not None:
+                        try:
+                            cid = binding.read_cid(cidfile)
+                        except GuardExceeded:
+                            cid = None
+                    lease.release(root, ident, cid=cid,
+                                  proof=(state.get("pilot_cleanup")
+                                         or state.get("orphan_cleanup")
+                                         or state.get("guard_result")))
+                else:
+                    state["lease_state"] = "active_unreleased"
                 state["recorded_utc"] = time.time()
                 output.flush()
                 os.fsync(output.fileno())

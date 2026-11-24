@@ -10,11 +10,12 @@ import time
 from assembler_bench.exploratory_space import admit
 
 from fail_closed_guard import binding, build, proc, teardown
+from fail_closed_guard.errors import GuardExceeded
 from fail_closed_guard.watch import watch_bound
 
-
-class GuardExceeded(Exception):
-    pass
+# Re-exported for legacy callers; one exception type makes the launcher's
+# fail-closed handler catch guard reasons from both the legacy sampler and the
+# bound watcher.
 
 
 def rss_group_bytes(pgid):
@@ -55,9 +56,8 @@ def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
 
     def terminate(cid):
         if stop is not None:
-            stop(cid)
-        else:
-            teardown.stop_cid(env, cid)
+            return stop(cid)
+        return teardown.stop_cid(env, cid)
 
     return watch_bound(
         bound, limit=config["rss_bytes"], wall_seconds=config["wall_seconds"],
@@ -73,6 +73,14 @@ def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
     if interval <= 0 or interval > 1 or margin < 1024**3:
         raise ValueError("unsafe polling interval or disk safety margin")
     table = proc.snapshot() if snapshot is None else snapshot()
+    if proc_handle.pid not in table:
+        # A short build can finish before the monitor attaches. There is no
+        # container to reap; prove the exact process group is gone instead of
+        # failing closed on an identity that no longer exists.
+        proof = build.stop_group(
+            {"pid": proc_handle.pid, "pgid": proc_handle.pid}, proc_handle)
+        return {"peak_rss": 0, "cid": None, "teardown": proof,
+                "enforcement": "userspace_observed", "kernel_enforcement": False}
     bound = build.bind_launcher(proc_handle.pid, snapshot=table)
 
     def take():
@@ -80,9 +88,8 @@ def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
 
     def terminate(_cid):
         if stop is not None:
-            stop(bound, proc_handle)
-        else:
-            build.stop_group(bound, proc_handle)
+            return stop(bound, proc_handle)
+        return build.stop_group(bound, proc_handle)
 
     return watch_bound(
         bound, limit=config["rss_bytes"], wall_seconds=config["wall_seconds"],
@@ -96,6 +103,8 @@ def watch(proc_handle, config, *, interval=1, margin=1024**3,
           rss=rss_group_bytes, cidfile=None, env=None, stop=None,
           snapshot=None, mode=None):
     """Legacy sampler for existing callers; bound path for guarded callers."""
+    if stop is None:
+        stop = config.get("stop")
     bound_cid = config.get("cidfile", cidfile)
     if bound_cid is not None:
         return watch_pilot(proc_handle, config, cidfile=bound_cid,

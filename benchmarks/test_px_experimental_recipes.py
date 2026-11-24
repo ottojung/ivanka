@@ -45,7 +45,7 @@ class TestSourceOnlyRecipes(unittest.TestCase):
         document = json.loads((RECIPES / "tadpole-minimal-jre.json").read_text())
         document["resource_contract"] = dict(
             document["resource_contract"],
-            max_incremental_bytes=16 * 1024**3)
+            max_incremental_bytes=32 * 1024**3)
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "tadpole-minimal-jre.json"
             target.write_text(json.dumps(document))

@@ -76,6 +76,20 @@ class PxCohortIngestTests(unittest.TestCase):
         item["source_commit"] = "1" * 40
         item["adapter_commit"] = "2" * 40
         item["image_sha256"] = "c" * 64
+        # This is an independent fabricated SKESA receipt, not a second
+        # measurement of any already-published SKESA case.
+        item["cases"] = []
+
+    def _report(self):
+        report = json.loads((SITE / "data/runs.json").read_text())
+        for run in report["runs"]:
+            for sample in run["samples"]:
+                for key in ("score", "seconds", "diagnostics",
+                            "measurement_evidence", "exact_profiles"):
+                    sample.get(key, {}).pop("skesa", None)
+                if "skesa" in sample.get("failures", []):
+                    sample["failures"].remove("skesa")
+        return report
 
     def _write_all(self):
         path = self.root / "receipts" / (self.name + ".json")
@@ -91,7 +105,7 @@ class PxCohortIngestTests(unittest.TestCase):
             json.dumps(self.diagnostics))
 
     def test_genuine_receipt_joins_score_diagnostics_and_progress(self):
-        report = json.loads((SITE / "data/runs.json").read_text())
+        report = self._report()
         evidence, merged, added, joined = ingest(
             report, self.evidence, self.root, self.real)
         self.assertEqual(added, [("skesa", "real", "R004")])
@@ -104,10 +118,12 @@ class PxCohortIngestTests(unittest.TestCase):
         proof = sample["measurement_evidence"]["skesa"]
         self.assertEqual(proof["peak_ram_observed_mib"], 77.5)
         self.assertEqual(proof["input_sha256"], self.mates)
-        self.assertGreaterEqual(real["tool_progress"]["skesa"]["finished"], 2)
+        self.assertEqual(real["tool_progress"]["skesa"]["finished"], 1)
+        _, _, repeated, _ = ingest(merged, evidence, self.root, self.real)
+        self.assertEqual(repeated, [])
 
     def test_tampered_indexed_receipt_or_source_pair_is_rejected(self):
-        report = json.loads((SITE / "data/runs.json").read_text())
+        report = self._report()
         # The index binds the receipt bytes; editing a receipt breaks the digest.
         self.receipt["input_sha256"]["R1"] = "e" * 64
         (self.root / "receipts" / (self.name + ".json")).write_text(
@@ -124,7 +140,7 @@ class PxCohortIngestTests(unittest.TestCase):
             ingest(report, self.evidence, self.root, self.real)
 
     def test_exact_coverage_unavailable_is_never_fabricated(self):
-        report = json.loads((SITE / "data/runs.json").read_text())
+        report = self._report()
         _, merged, _, _ = ingest(report, self.evidence, self.root, self.real)
         real = next(run for run in merged["runs"] if run["cohort"] == "real")
         sample = next(row for row in real["samples"] if row["alias"] == "R004")

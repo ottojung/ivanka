@@ -21,7 +21,7 @@ class FailureRetirementTests(unittest.TestCase):
                 mock.patch.object(controller, "seal_terminal_evidence",
                                   return_value=(fake_evidence, None)) as seal,
                 mock.patch.object(controller, "container_dead",
-                                  return_value=True) as dead,
+                                  return_value=True),
                 mock.patch.object(controller, "terminal_retire",
                                   return_value={"retired": True, "applied": True}) as retire,
             ):

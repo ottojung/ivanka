@@ -228,6 +228,12 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
                 or pilot.get("source_commit") != item.get("source_commit")):
             raise ValueError("handoff adapter/image/source pins disagree")
         item = dict(item, adapter_commit=adapter)
+        try:
+            neutral_pins = adapter_provenance(tool, adapter)
+        except ValueError:
+            # A handoff whose adapter is not in the exact verified branch
+            # registry is not publishable; never invent a provenance URL.
+            continue
         if (not exploratory_policy.verified_receipt(
                 item, image_evidence, "image")
                 or not exploratory_policy.verified_receipt(
@@ -236,7 +242,7 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
         profile = dict(target)
         profile["adapter_commit"] = adapter
         profile["image_sha256"] = item["image_sha256"]
-        profile.update(adapter_provenance(tool, adapter))
+        profile.update(neutral_pins)
         profile["pilot"] = {
             "image_receipt_sha256": handoff["image_receipt_sha256"],
             "pilot_receipt_sha256": handoff["pilot_receipt_sha256"],

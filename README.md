@@ -10,15 +10,29 @@ This is early experimental code. It is **not** validated for clinical use.
 Ivanka is licensed under the [GNU Affero General Public License, version 3](LICENSE)
 (`AGPL-3.0-only`).
 
-## Benchmarked milestone: [v0.1.0-alpha.4](https://github.com/ottojung/ivanka/releases/tag/v0.1.0-alpha.4)
+## Current status (November 24, 2026)
+
+The [current workplan status](docs/bench/current-workplan-20261124.md)
+reconciles the latest alpha.7 source tag, the independently verified physical
+P0 gate, the still-running 464-case P1 candidate and the founder-authorized
+20 GiB PX policy. It is a status layer over the
+[founder-ordered workplan](docs/bench/ordered-work-20261121.md), not a change
+to any frozen evidence or acceptance rule. The newest tag is
+`v0.1.0-alpha.7` (`7dbdbaef…`, a source marker); the only published release
+remains v0.1.0-alpha.4. The physical 198-case **original-IVA gate passed**
+(`ORIGINAL_IVA_GATE_PASS`), but expanded seven-way qualification and clinical
+validation remain **NOT PASSED**, and the live 464-case run is **not complete**
+— no final result or qualification claim is made here.
+
+## Benchmarked milestone: [v0.1.0-alpha.4](https://github.com/ottojung/ivanka/releases/tag/v0.1.0-alpha.4) (published release)
 
 The frozen November 2026 integrated-MiCall run achieved **198/198 successful physical Ivanka cases** and passed the original IVA comparison: every final alignment met the ≥90%-of-IVA floor, and **alignment and runtime Ψ(r)>0 for every real r≥0** (mean **+3.59 alignment points** and **80.90 seconds saved/sample**). All 198 Ivanka arms stayed within 40 minutes and 4 GB of **observed** memory; kernel hard-limit enforcement was not established.
 
 The complete **198 physical + 464 synthetic × seven-assembler** benchmark is terminal, but **expanded seven-way qualification is NOT PASSED** because genuine failures and abundant-truth accuracy regressions remain. See the [source- and hash-bound release evidence](docs/releases/v0.1.0-alpha.4.md) and the [public Assembler Bench](https://ottojung.github.io/ivanka/bench/). This is an experimental milestone, **not** clinical validation.
 
-## Current development order (November 21, 2026)
+## Current development order (November 21, 2026; status updated November 24)
 
-Follow the [founder-ordered benchmark workplan](docs/bench/ordered-work-20261121.md): **P0 physical checks**, then **P1 synthetic checks**, with **ten additional nonqualifying assemblers in parallel** under strict disk admission; then **P2 physical diagnostic improvement**, and **P3 existing-comparator repairs last**. The ten experimental tools cannot change the frozen seven-way release gate. Physical Ivanka/IVA already passes, but the seven-way gate remains failing until all authentic original-arm failure dependencies are resolved.
+Follow the [founder-ordered benchmark workplan](docs/bench/ordered-work-20261121.md): **P0 physical checks**, then **P1 synthetic checks**, with **ten additional nonqualifying assemblers in parallel** under strict disk admission; then **P2 physical diagnostic improvement**, and **P3 existing-comparator repairs last**. The ten experimental tools cannot change the frozen seven-way release gate. Physical Ivanka/IVA already passes, but the seven-way gate remains failing until all authentic original-arm failure dependencies are resolved. As of November 24 the P0 original-IVA gate has passed independently; P1 execution is in progress under a founder-set gate (sealed 464-case run and readback before any targeted integrated validation or new cohort), and the PX incremental ceiling is now 20 GiB with the 32 GiB free floor and single-worker limits unchanged. See [current workplan status](docs/bench/current-workplan-20261124.md) for exact pins, PR heads and ownership.
 
 ## MiCall base is frozen — no clinical MiCall fixes
 

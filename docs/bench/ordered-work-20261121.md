@@ -2,6 +2,15 @@
 
 **Effective November 21, 2026. Founder-ordered execution policy.**
 
+> **Live status (November 24, 2026):** see
+> [current workplan status](current-workplan-20261124.md) for the alpha.7 tag,
+> the independently verified P0 `ORIGINAL_IVA_GATE_PASS`, the still-running
+> 464-case P1 candidate, the founder-authorized **20 GiB** PX incremental
+> ceiling (32 GiB free floor, one worker, 2400 s and 4 GB unchanged), and the
+> exact-in-main verification behind the stale-PR cleanup. The 8 GiB figures
+> in the historical sections below remain accurate for that policy version;
+> no frozen evidence, result or acceptance threshold was rewritten.
+
 **Binding founder freeze correction — November 23, 2026:** MiCall shared source, remapping/stitching/preprocessing, and all seven original assembler images and historical results were explicitly **frozen before benchmarking**, reaffirmed November 18. It was a violation to implement the common native/G2P deduplication in draft [ottojung/MiCall PR #22](https://github.com/ottojung/MiCall/pull/22) and then use it to rerun Ivanka and IVA. **All 198 modified-source prospective Ivanka results, 198-case historical-cross-version Ψ diagnostics, and partial modified-source IVA results are NONQUALIFYING FOR THE FROZEN BENCHMARK.** Preserve their evidence but never use them as a frozen P0/P1 pass, or finish/restart those modified-source services. The prospective IVA service was explicitly stopped and unenrolled at 03:39 UTC; its operator-stopped final attempt is **not** a scientific failure. **Do not merge PR #22**, alter the seven frozen images, or recompute completed original comparator runs. Continue P0 by developing **Rust Ivanka only**, using the original frozen common MiCall pipeline and untouched frozen competitor evidence; investigate the original R042 102-versus-179 deficit within Ivanka. The prior future-source P0 milestones on this page are retained solely as **historical diagnostics of an unauthorized experimental source branch**, not valid progress toward acceptance. [Source freeze and correction audit](frozen-micall-qualification-restoration-20261123.md). The frozen seven-image manifest SHA256 remains `9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f`.
 
 

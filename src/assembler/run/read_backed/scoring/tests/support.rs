@@ -1,4 +1,4 @@
-use super::{Hits, Reads, K};
+use super::{index, Hits, Reads, K};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
@@ -17,7 +17,8 @@ pub(super) fn reads(seqs: Vec<Vec<u8>>) -> Reads {
 pub(super) fn hits(entries: &[(u8, Vec<(usize, usize)>)]) -> Hits {
     let mut map = Hits::new();
     for &(base, ref locations) in entries {
-        map.insert([base; K], locations.clone());
+        let key = index::pack(&[base; K]).expect("canonical key");
+        map.insert(key, locations.clone());
     }
     map
 }

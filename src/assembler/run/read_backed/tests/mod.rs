@@ -1,6 +1,10 @@
-use super::{index, island, ranking, scoring, tiling, trimming, Reads};
+use super::{index, island, ranking, scoring, tiling, trimming, Reads, K};
+mod byte_index;
+mod byte_reference;
 mod independent_cases;
+mod packed_equivalence;
 mod pair_masks;
 mod ranking_cases;
+mod rolling_properties;
 mod tiling_cases;
 mod trimming_cases;

@@ -65,7 +65,7 @@ def verify_handoff(root, registry, tool, *, provenance_root=None):
             or record.get("tests_passed") is not True):
         return False
     data = exploratory_policy.checked(registry, provenance_root=provenance_root)
-    if not exploratory_policy.eligible(data, tool):
+    if not exploratory_policy.cohort_eligible(data, tool):
         return False
     item = next(x for x in data["candidates"] if x["id"] == tool)
     evidence = item.get("image_evidence")

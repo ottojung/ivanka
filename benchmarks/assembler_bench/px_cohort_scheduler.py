@@ -261,7 +261,7 @@ def _tool_rows(registry, *, provenance_root=None):
     data = exploratory_policy.checked(registry, provenance_root=provenance_root)
     tools = []
     for item in data["candidates"]:
-        if not exploratory_policy.eligible(data, item["id"]):
+        if not exploratory_policy.cohort_eligible(data, item["id"]):
             continue
         tools.append({"id": item["id"], "source_commit": item["source_commit"],
                       "adapter_commit": data["adapter_branch_commits"][item["id"]],

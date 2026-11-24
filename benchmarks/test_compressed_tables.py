@@ -9,7 +9,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-import compressed_tables as ct
+try:
+    import compressed_tables as ct
+except ModuleNotFoundError:
+    from benchmarks import compressed_tables as ct
 
 BACKENDS = ("module", "cli")
 HEADER = ["contig", "coverage", "concordance"]
@@ -197,7 +200,10 @@ class CompressedTableTests(unittest.TestCase):
         self.assertEqual(b"".join(chunks), original)
 
     def test_diagnostic_metrics_read_compressed_tables(self):
-        from diagnostic_metrics import extract
+        try:
+            from diagnostic_metrics import extract
+        except ModuleNotFoundError:
+            from benchmarks.diagnostic_metrics import extract
         write_table(self.folder, "nuc.csv", ["seed", "refseq.nuc.pos", "clip"],
                     [["a", "10", "2"], ["a", "11", "0"]])
         plain = extract(self.folder)
@@ -207,7 +213,10 @@ class CompressedTableTests(unittest.TestCase):
         self.assertEqual(extract(self.folder), plain)
 
     def test_project_references_read_compressed_consensus(self):
-        from project_references import final_max_sequences
+        try:
+            from project_references import final_max_sequences
+        except ModuleNotFoundError:
+            from benchmarks.project_references import final_max_sequences
         consensus = self.folder / "conseq.csv"
         with consensus.open("w", newline="") as handle:
             writer = csv.writer(handle)
@@ -219,6 +228,49 @@ class CompressedTableTests(unittest.TestCase):
                           ct.COMPRESSIBLE_TABLES | {"conseq.csv"}):
             ct.compress_table(consensus)
         self.assertEqual(final_max_sequences(self.folder), ["ACGT"])
+
+    def test_rejects_symlinked_logical_path(self):
+        link = self.folder / "linked_genome_coverage.csv"
+        try:
+            os.symlink(self.path, link)
+        except OSError as exc:
+            self.skipTest("symlink not supported: %s" % exc)
+        with self.assertRaises(ct.InvalidProof):
+            ct.logical_digest(link)
+
+    def test_rejects_trailing_bytes_after_frame(self):
+        ct.compress_table(self.path)
+        compressed = self.folder / ("genome_coverage.csv" + ct.ZST_SUFFIX)
+        with compressed.open("ab") as handle:
+            handle.write(b"TRAIL")
+        with self.assertRaises(ct.InvalidProof):
+            ct.logical_digest(self.path)
+
+    def _large_table(self):
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder, True)
+        rows = ROWS + [["sample-%05d" % i, "1%05d" % i, "0.5"] * 1
+                       for i in range(3000)]
+        return write_table(folder, "genome_coverage.csv", HEADER, rows)
+
+    def test_valid_early_close_succeeds(self):
+        big = self._large_table()
+        self.assertGreater(big.stat().st_size, ct.CHUNK)
+        ct.compress_table(big)
+        with ct.open_table(big, newline="") as handle:
+            self.assertEqual(handle.readline().strip(), ",".join(HEADER))
+
+    def test_bad_uncompressed_digest_fails_on_header_only_read(self):
+        big = self._large_table()
+        ct.compress_table(big)
+        meta = meta_for(big)
+        proof = json.loads(meta.read_text())
+        proof["original_sha256"] = "0" * 64
+        meta.write_text(json.dumps(proof))
+        handle = ct.open_table(big, newline="")
+        handle.readline()  # only the header; compressed digest still valid
+        with self.assertRaises(ct.InvalidProof):
+            handle.close()
 
 
 if __name__ == "__main__":

@@ -9,7 +9,10 @@ import math
 import re
 from pathlib import Path
 
-from compressed_tables import find_table, open_table
+try:
+    from benchmarks.compressed_tables import find_table, open_table
+except ModuleNotFoundError:
+    from compressed_tables import find_table, open_table
 
 # +1: larger values are preferred; -1: smaller values are preferred.
 # In particular, depth sums depend on contig/reference span; interpret

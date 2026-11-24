@@ -178,6 +178,8 @@ def _decompress_module(path):
                     yield bytes(output)
     if not decoder.eof:
         raise TruncatedTable("incomplete zstd frame: " + path.name)
+    if getattr(decoder, "unused_data", b""):
+        raise InvalidProof("bytes follow the zstd frame: " + path.name)
 
 
 def _decompress_cli(path):
@@ -199,11 +201,47 @@ def _decompress_chunks(path):
                 else _decompress_cli(path))
 
 
+def _containment_ok(logical):
+    # Ensure the logical path resolves under its logical parent directory.
+    # Reject if any parent component is a symlink by requiring the resolved
+    # parent to be the same as the logical parent's resolved form.
+    logical = Path(logical)
+    parent = logical.parent
+    try:
+        if parent.exists():
+            # Any symlink in parent chain makes resolution ambiguous/redirecting.
+            for part in [parent, *parent.parents]:
+                if part.is_symlink():
+                    raise InvalidProof("refusing symlinked parent path: " + logical.name)
+        resolved_parent = parent.resolve()
+        resolved_logical = (resolved_parent / logical.name)
+        # If the logical file exists, its realpath must be that resolved path
+        # (no symlink was involved). We already rejected symlinks above; also
+        # confirm the resolved target is inside resolved_parent.
+        if logical.exists():
+            real = logical.resolve()
+            try:
+                real.relative_to(resolved_parent)
+            except ValueError:
+                raise InvalidProof("table path escapes parent directory: " + logical.name)
+        return resolved_logical
+    except InvalidProof:
+        raise
+    except OSError as exc:
+        raise InvalidProof("cannot resolve table path: " + logical.name) from exc
+
+
 def _paths(path):
     logical = Path(path)
-    return (logical,
-            logical.with_name(logical.name + ZST_SUFFIX),
-            logical.with_name(logical.name + META_SUFFIX))
+    # Reject symlinked parents/files early and pin to resolved containment.
+    _containment_ok(logical)
+    plain = logical
+    compressed = logical.with_name(logical.name + ZST_SUFFIX)
+    meta_path = logical.with_name(logical.name + META_SUFFIX)
+    for p in (plain, compressed, meta_path):
+        if p.exists() and p.is_symlink():
+            raise InvalidProof("refusing symlinked table path: " + p.name)
+    return (plain, compressed, meta_path)
 
 
 def find_table(*candidates):
@@ -319,6 +357,8 @@ class _ProofRaw(io.RawIOBase):
         self._size = 0
         self._buffer = b""
         self._proof = proof
+        self._proof_checked = False
+        self._had_error = False
 
     def readable(self):
         return True
@@ -326,31 +366,51 @@ class _ProofRaw(io.RawIOBase):
     def readinto(self, target):
         view = memoryview(target)
         filled = 0
-        while filled < len(view):
-            if not self._buffer:
-                try:
-                    self._buffer = next(self._blocks)
-                except StopIteration:
-                    self._check_proof()
-                    break
-            take = min(len(view) - filled, len(self._buffer))
-            view[filled:filled + take] = self._buffer[:take]
-            self._buffer = self._buffer[take:]
-            filled += take
-            self._digest.update(view[:take].tobytes())
-            self._size += take
+        try:
+            while filled < len(view):
+                if not self._buffer:
+                    try:
+                        self._buffer = next(self._blocks)
+                    except StopIteration:
+                        self._check_proof()
+                        break
+                take = min(len(view) - filled, len(self._buffer))
+                view[filled:filled + take] = self._buffer[:take]
+                self._buffer = self._buffer[take:]
+                filled += take
+                self._digest.update(view[:take].tobytes())
+                self._size += take
+        except Exception:
+            self._had_error = True
+            raise
         return filled
 
     def _check_proof(self):
         if (self._digest.hexdigest() != self._proof["original_sha256"]
                 or self._size != self._proof["original_size"]):
             raise InvalidProof("decompressed content differs from proof")
+        self._proof_checked = True
 
     def close(self):
+        if self.closed:
+            return
         try:
-            self._blocks.close()
+            if not self._proof_checked and not self._had_error:
+                # Callers such as header-only consumers may close early. Drain
+                # the remaining decompressed stream in bounded chunks so the
+                # proof still covers every byte and trailing/corrupt data fails.
+                self._digest.update(self._buffer)
+                self._size += len(self._buffer)
+                self._buffer = b""
+                for block in self._blocks:
+                    self._digest.update(block)
+                    self._size += len(block)
+                self._check_proof()
         finally:
-            super().close()
+            try:
+                self._blocks.close()
+            finally:
+                super().close()
 
 
 def _fsync_dir(directory):

@@ -23,7 +23,7 @@ EXPECTED = {
     "benchmarks/reference_panel.py":
         "b8307caf141eb92eabcee92da22bac994904a8220194a91839387a555aef5c5e",
     "benchmarks/project_references.py":
-        "6aa0b61a4e051219e82b4bdec7cea564f08d934a19894f65320a90513b2df39a",
+        "1b01adada226de1ed7b506094625535fa9c775688922cef3aa68fb8b89fec7a2",
     "benchmarks/assembler_bench/exact_cache.py":
         "fccad0640a6309cb868196078dcb5ecc6c5d870075a08416f37d536afa68018c",
 }

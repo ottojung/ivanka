@@ -8,7 +8,10 @@ import argparse
 import json
 from pathlib import Path
 
-from compressed_tables import logical_digest
+try:
+    from benchmarks.compressed_tables import logical_digest
+except ModuleNotFoundError:
+    from compressed_tables import logical_digest
 from produce_exact_coverage import generate
 from micall.utils import exact_coverage
 

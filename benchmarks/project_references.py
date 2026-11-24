@@ -3,7 +3,12 @@ import csv
 import hashlib
 from pathlib import Path
 
-from compressed_tables import find_table, open_table
+# Imported both as benchmarks.project_references (python -m project paths) and as
+# top-level project_references by scripts whose sys.path only holds benchmarks/.
+try:
+    from benchmarks.compressed_tables import find_table, open_table
+except ModuleNotFoundError:
+    from compressed_tables import find_table, open_table
 
 
 

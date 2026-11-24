@@ -10,7 +10,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from compressed_tables import logical_digest
+try:
+    from benchmarks.compressed_tables import logical_digest
+except ModuleNotFoundError:
+    from compressed_tables import logical_digest
 
 
 class EvidenceContractError(ValueError):

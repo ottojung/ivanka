@@ -168,6 +168,12 @@ mean or a positive Ψ(0) alone is not a strict all-r certificate.
    checkout path into `sys.path`. It is byte-identical today (SHA above), but
    the dependency is not SHA-pinned at import time. Vendoring or pinning it
    would remove a provenance gap.
+6. Every hash/provenance obligation in `rows_with_proofs()` is implemented as
+   a bare `assert`. The controller currently invokes the pinned interpreter
+   without `-O`, so they are active, but under `python -O` all of them would be
+   stripped and a corrupted cohort could reach the qualification computation.
+   Explicit exception-based checks would make the proof obligation
+   interpreter-mode independent.
 
 These are reporting/provenance hardening suggestions only. No threshold,
 clinical code, candidate, controller or frozen original was modified, and no

@@ -166,53 +166,93 @@ def _case(root, name, receipt, assembler, real_data):
     }
 
 
-def refresh_registry_provenance(evidence, registry_path, handoff_path):
-    """Adopt a verified registry activation without inventing measurements."""
+def assert_no_stale_scores(report, evidence):
+    """Never replace provenance under a published score that disagrees."""
+    published = {}
+    for run in report.get("runs", []):
+        for sample in run.get("samples", []):
+            alias = sample["alias"].split("-", 1)[-1]
+            for tool, score in sample.get("score", {}).items():
+                if score is not None:
+                    published[(tool, alias)] = score
+    for item in evidence["assemblers"]:
+        for case in item.get("cases", []):
+            key = (item["id"], case.get("canonical_alias"))
+            if (key in published and case.get("score") is not None
+                    and published[key] != case["score"]):
+                raise ValueError("preexisting sample score disagrees with evidence")
+
+
+def refresh_registry_provenance(evidence, registry_path, handoff_dir):
+    """Adopt every verified supervisor handoff in a registry activation.
+
+    All activated tools are treated equally: a handoff is accepted only when
+    its image/pilot receipt digests, adapter pin and image identity match the
+    active registry entry and its source-bound receipts.
+    """
     from . import exploratory_policy
+    from .adapter_branch_refs import adapter_provenance
     registry = _load(registry_path)
-    handoff = _load(handoff_path)
-    if (registry.get("schema") != "ivanka.exploratory.assemblers.v1"
-            or handoff.get("schema") != "ivanka.px.supervisor.handoff.v1"
-            or not SHA64.fullmatch(handoff.get("image_receipt_sha256", ""))
-            or not SHA64.fullmatch(handoff.get("pilot_receipt_sha256", ""))):
-        raise ValueError("registry activation or supervisor handoff unverified")
+    if registry.get("schema") != "ivanka.exploratory.assemblers.v1":
+        raise ValueError("unsupported PX registry activation schema")
     branches = registry.get("adapter_branch_commits", {})
+    candidates = {item["id"]: item for item in registry["candidates"]}
     assemblers = {item["id"]: item for item in evidence["assemblers"]}
     adopted = []
-    for raw in registry["candidates"]:
-        item = dict(raw, adapter_commit=branches.get(raw["id"]))
-        target = assemblers.get(item["id"])
-        if target is None or item["id"] != handoff["tool_id"]:
+    for path in sorted(Path(handoff_dir).glob("*.json")):
+        handoff = _load(path)
+        if handoff.get("schema") != "ivanka.px.supervisor.handoff.v1":
             continue
-        pilot = _load(item["pilot_evidence"]["path"])
-        adapter = branches.get(item["id"])
+        tool = handoff.get("tool_id")
+        item = candidates.get(tool)
+        target = assemblers.get(tool)
+        if item is None or target is None:
+            continue
+        adapter = branches.get(tool)
+        image_evidence = item.get("image_evidence") or {}
+        pilot_evidence = item.get("pilot_evidence") or {}
+        pilot = _load(pilot_evidence["path"])
+        # Handoff digests must be the digests carried by the registry itself.
+        if (not all(SHA64.fullmatch(handoff.get(key, "")) for key in (
+                "image_receipt_sha256", "pilot_receipt_sha256"))
+                or image_evidence.get("sha256") != handoff["image_receipt_sha256"]
+                or pilot_evidence.get("sha256") != handoff["pilot_receipt_sha256"]
+                or _digest(image_evidence["path"]) != handoff[
+                    "image_receipt_sha256"]
+                or _digest(pilot_evidence["path"]) != handoff[
+                    "pilot_receipt_sha256"]):
+            raise ValueError("handoff receipt digests do not bind registry evidence")
         if (not adapter or adapter != pilot.get("adapter_commit")
-                or item.get("image_sha256") != handoff["image_sha256"]
-                or item.get("pilot_evidence", {}).get("sha256")
-                != handoff["pilot_receipt_sha256"]):
-            raise ValueError("handoff does not bind this assembler activation")
-        if not exploratory_policy.verified_receipt(
-                item, item.get("image_evidence"), "image"):
-            raise ValueError("activated image lacks a source-bound receipt")
-        if not exploratory_policy.verified_receipt(
-                item, item.get("pilot_evidence"), "pilot"):
-            raise ValueError("activated pilot lacks a paired-FASTQ receipt")
-        from .adapter_branch_refs import adapter_provenance
-        target["adapter_commit"] = adapter
-        target["image_sha256"] = item["image_sha256"]
-        target.update(adapter_provenance(item["id"], adapter))
-        target["pilot"] = {
+                or item.get("image_sha256") != handoff.get("image_sha256")
+                or item.get("image_sha256") != pilot.get("image_sha256")
+                or pilot.get("source_commit") != item.get("source_commit")):
+            raise ValueError("handoff adapter/image/source pins disagree")
+        item = dict(item, adapter_commit=adapter)
+        if (not exploratory_policy.verified_receipt(
+                item, image_evidence, "image")
+                or not exploratory_policy.verified_receipt(
+                    item, pilot_evidence, "pilot")):
+            raise ValueError("activated tool lacks source-bound receipts")
+        profile = dict(target)
+        profile["adapter_commit"] = adapter
+        profile["image_sha256"] = item["image_sha256"]
+        profile.update(adapter_provenance(tool, adapter))
+        profile["pilot"] = {
             "image_receipt_sha256": handoff["image_receipt_sha256"],
             "pilot_receipt_sha256": handoff["pilot_receipt_sha256"],
             "outcomes": {cohort: pilot.get(cohort, {}).get("status")
                          for cohort in ("physical", "synthetic")},
         }
-        adopted.append(item["id"])
+        if profile == target:
+            continue  # already published: no artificial addition
+        target.clear()
+        target.update(profile)
+        adopted.append(tool)
     return adopted
 
 
 def ingest(report, evidence, root, real_data, registry_path=None,
-           handoff_path=None):
+           handoff_dir=None):
     """Return updated evidence and report with genuine cohort receipts joined."""
     if evidence.get("schema") != EVIDENCE_SCHEMA:
         raise ValueError("unsupported assembler evidence schema")
@@ -220,9 +260,10 @@ def ingest(report, evidence, root, real_data, registry_path=None,
     index = _read_index(root)
     result = scrub(json.loads(json.dumps(evidence)))
     added = []
-    if registry_path and handoff_path:
+    if registry_path and handoff_dir:
+        assert_no_stale_scores(report, evidence)
         for tool in refresh_registry_provenance(
-                result, registry_path, handoff_path):
+                result, registry_path, handoff_dir):
             added.append(("registry", tool, "activation"))
     assemblers = {item["id"]: item for item in result["assemblers"]}
     # Older evidence rows carried observed peak RAM only as receipt metadata.
@@ -253,14 +294,14 @@ def ingest(report, evidence, root, real_data, registry_path=None,
     return result, merged, added, joined
 
 
-def publish(site, root, real_data, registry_path=None, handoff_path=None):
+def publish(site, root, real_data, registry_path=None, handoff_dir=None):
     """Atomically update evidence and runs.json after full-site validation."""
     from .site_build import validate_public_site
     site = Path(site)
     evidence = _load(site / "data/assembler-evidence.json")
     report = _load(site / "data/runs.json")
     updated, merged, added, joined = ingest(
-        report, evidence, root, real_data, registry_path, handoff_path)
+        report, evidence, root, real_data, registry_path, handoff_dir)
     with tempfile.TemporaryDirectory(prefix="px-ingest-") as scratch:
         staged = Path(scratch) / "bench"
         shutil.copytree(site, staged)
@@ -283,10 +324,10 @@ def main():
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--real-data", type=Path, required=True)
     parser.add_argument("--registry", type=Path)
-    parser.add_argument("--handoff", type=Path)
+    parser.add_argument("--handoff-dir", type=Path)
     args = parser.parse_args()
     _, _, added = publish(args.site, args.root, args.real_data,
-                          args.registry, args.handoff)
+                          args.registry, args.handoff_dir)
     print("PX_COHORT_INGESTED", len(added), added)
 
 

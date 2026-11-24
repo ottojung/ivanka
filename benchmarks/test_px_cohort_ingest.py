@@ -4,6 +4,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from assembler_bench.px_cohort_ingest import (assert_no_stale_scores,
+                                               refresh_registry_provenance)
 
 from assembler_bench.px_cohort_ingest import ingest
 from assembler_bench.site_build import SITE
@@ -149,6 +153,89 @@ class PxCohortIngestTests(unittest.TestCase):
         self.assertNotIn("skesa", sample.get("exact_profiles", {}))
         proof = sample["measurement_evidence"]["skesa"]["exact_coverage"]
         self.assertEqual(proof["status"], "unavailable")
+
+class RegistryActivationTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        (self.root / "handoff").mkdir()
+        (self.root / "receipts").mkdir()
+        self.registry = {
+            "schema": "ivanka.exploratory.assemblers.v1",
+            "adapter_branch_commits": {},
+            "candidates": [],
+        }
+        self.evidence = {"assemblers": [
+            {"id": tool, "source_commit": "1" * 40,
+             "adapter_commit": "2" * 40, "image_sha256": "c" * 64,
+             "cases": []} for tool in ("skesa", "soapdenovo2")]}
+
+    def _receipt(self, tool, kind, adapter):
+        data = {"schema": "ivanka.exploratory." + kind + ".receipt.v1",
+                "tool_id": tool, "source_commit": "1" * 40,
+                "adapter_commit": adapter, "image_sha256": "c" * 64,
+                "qualifying": False}
+        if kind == "image":
+            data["native_binary_sha256"] = "d" * 64
+        else:
+            data["physical"] = {"source_input_sha256": "e" * 64,
+                                "status": "success"}
+            data["synthetic"] = {"source_input_sha256": "f" * 64,
+                                 "status": "success"}
+        path = self.root / "receipts" / (kind + "-" + tool + ".json")
+        path.write_text(json.dumps(data))
+        return {"path": str(path), "sha256": _sha(path)}
+
+    def _activate(self, tools, spoof=None):
+        for tool in tools:
+            adapter = ("2fb3cd5af8769f834635b21187738cf90565c349" if tool == "skesa"
+                       else "39cfa22fad92157680382d1ea124b70b2e8515b3")
+            image = self._receipt(tool, "image", adapter)
+            pilot = self._receipt(tool, "pilot", adapter)
+            if spoof == tool:
+                pilot["sha256"] = "0" * 64
+            self.registry["adapter_branch_commits"][tool] = adapter
+            self.registry["candidates"].append({
+                "id": tool, "status": "pilot", "source_commit": "1" * 40,
+                "image_sha256": "c" * 64,
+                "image_evidence": image, "pilot_evidence": pilot})
+            handoff = {"schema": "ivanka.px.supervisor.handoff.v1",
+                       "tool_id": tool, "image_sha256": "c" * 64,
+                       "image_receipt_sha256": image["sha256"],
+                       "pilot_receipt_sha256": pilot["sha256"]}
+            (self.root / "handoff" / (tool + ".json")).write_text(
+                json.dumps(handoff))
+        registry_path = self.root / "registry.json"
+        registry_path.write_text(json.dumps(self.registry))
+        return registry_path
+
+    def test_multiple_verified_activations_adopted(self):
+        registry = self._activate(("skesa", "soapdenovo2"))
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            adopted = refresh_registry_provenance(
+                self.evidence, registry, self.root / "handoff")
+        self.assertEqual(set(adopted), {"skesa", "soapdenovo2"})
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            again = refresh_registry_provenance(
+                self.evidence, registry, self.root / "handoff")
+        self.assertEqual(again, [], "idempotent activation adds nothing")
+
+    def test_spoofed_handoff_is_rejected(self):
+        registry = self._activate(("skesa",), spoof="skesa")
+        with self.assertRaisesRegex(ValueError, "handoff receipt digests"):
+            refresh_registry_provenance(
+                self.evidence, registry, self.root / "handoff")
+
+    def test_stale_sample_score_blocks_provenance_change(self):
+        report = {"runs": [{"samples": [{"alias": "R004", "score": {
+            "skesa": 999.0}}]}]}
+        evidence = {"assemblers": [{"id": "skesa", "cases": [
+            {"canonical_alias": "R004", "score": 188.0}]}]}
+        with self.assertRaisesRegex(ValueError, "preexisting sample score"):
+            assert_no_stale_scores(report, evidence)
 
 
 if __name__ == "__main__":

@@ -21,8 +21,9 @@ entered an assembler.
 ## Artifacts (source-only, reproducible)
 
 Branch: `audit/frozen-original-psi-198-rGJSTSnt-20261124` (from `origin/main`
-`b6924ea0454e65cba218a1f87b5bf4d378027998`). Commit: see board comment for the
-final attested commit SHA; this document is committed with the tool and tests.
+`b6924ea0454e65cba218a1f87b5bf4d378027998`). Attested commit:
+`a63f32bb02820865e62e473b78aa9c26fdd5820c`; this document is committed with
+the tool and tests.
 
 - `benchmarks/independent_frozen_psi_audit.py` — read-only re-implementation of
   the hash attestation and of the six-rival signed-power diagnostics. It never

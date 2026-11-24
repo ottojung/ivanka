@@ -141,7 +141,18 @@ def checked(path, *, provenance_root=None):
     return data
 
 
-def eligible(data, name):
-    """No unpinned source/image may be scheduled as a result-bearing arm."""
+def build_eligible(data, name):
+    """A certified OCI image exists; this says nothing about a pilot."""
     return next(x for x in data["candidates"] if x["id"] == name)["status"] in (
         "image-pinned", "pilot", "benchmarked")
+
+
+def cohort_eligible(data, name):
+    """Only a genuine two-cohort pilot may enter a result-bearing arm."""
+    return next(x for x in data["candidates"] if x["id"] == name)["status"] in (
+        "pilot", "benchmarked")
+
+
+def eligible(data, name):
+    """Backward-compatible build-stage check; cohort gates use cohort_eligible."""
+    return build_eligible(data, name)

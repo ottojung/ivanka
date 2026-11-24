@@ -18,6 +18,7 @@ from . import px_execution, px_supervisor
 
 PLAN_SCHEMA = "ivanka.px.registry.migration-plan.v1"
 RECEIPT_SCHEMA = "ivanka.px.registry.migration.receipt.v1"
+JOURNAL_SCHEMA = "ivanka.px.registry.migration.journal.v1"
 LOCK_NAME = ".global-worker.lock"
 STOP_NAME = "STOP"
 # A cohort arm is only schedulable after a genuine two-cohort pilot. An
@@ -163,12 +164,12 @@ def verify_proofs(root, plan):
 def eligible_tools(data):
     """Eligible arms are the only identities a plan may carry forward."""
     return [item["id"] for item in data["candidates"]
-            if exploratory_policy.eligible(data, item["id"])]
+            if exploratory_policy.cohort_eligible(data, item["id"])]
 
 
 @dataclass(frozen=True)
-class _PlanCase:
-    """One frozen read-pair digest pair exposed to the scheduler planner."""
+class _InjectedCase:
+    """One read-pair digest pair supplied by an explicitly injected source."""
 
     alias: str
     cohort: str
@@ -182,17 +183,17 @@ class _PlanCase:
         return dict(self.hashes)
 
 
-class PlanCaseSource:
-    """Read-only source view over the plan's complete case input hashes.
+class InjectedCaseSource:
+    """Test-only source view over explicit case hashes.
 
-    The scheduler planner is the only authority for queue order and arm
-    identity. This view supplies the frozen read-pair digests it expects and
-    refuses sparse or unknown coverage; it never invents an alias or a hash.
+    Production ``apply`` never uses this class: it hashes the real frozen
+    cohort through ``px_execution.load_cohort()``. Injection exists so tests
+    can exercise the planner without the multi-gigabyte read corpus.
     """
 
     def __init__(self, case_hashes):
         if not isinstance(case_hashes, dict):
-            raise MigrationError("case_input_hashes must be an object")
+            raise MigrationError("case hashes must be an object")
         expected = set()
         for cohort, count, prefix in (
                 ("physical", sched.PHYSICAL_COUNT, "R"),
@@ -202,31 +203,28 @@ class PlanCaseSource:
         self.hashes = {}
         for key, value in case_hashes.items():
             if not isinstance(key, str) or key.count(",") != 1:
-                raise MigrationError("invalid case_input_hashes key: " + repr(key))
+                raise MigrationError("invalid case hash key: " + repr(key))
             cohort, alias = key.split(",", 1)
             pair = (cohort, alias)
             if pair not in expected:
-                raise MigrationError("case_input_hashes has an unknown case: " + key)
-            if (not isinstance(value, dict)
-                    or set(value) < {"R1", "R2"}
-                    or any(not isinstance(value.get(field), str)
+                raise MigrationError("case hashes have an unknown case: " + key)
+            if (not isinstance(value, dict) or set(value) != {"R1", "R2"}
+                    or any(not isinstance(value[field], str)
                            or not SHA64.fullmatch(value[field])
                            for field in ("R1", "R2"))):
-                raise MigrationError("invalid case input hashes: " + key)
+                raise MigrationError("case hashes must be exactly R1 and R2: " + key)
             self.hashes[pair] = dict(value)
         if set(self.hashes) != expected:
             raise MigrationError(
-                "case_input_hashes is incomplete: "
+                "case hashes are incomplete: "
                 + str(len(expected) - len(self.hashes)) + " cases missing")
         self._cases = {cohort: [] for cohort in sched.COHORTS}
         for cohort, alias in sorted(self.hashes):
             self._cases[cohort].append(
-                _PlanCase(alias, cohort, self.hashes[(cohort, alias)]))
+                _InjectedCase(alias, cohort, self.hashes[(cohort, alias)]))
         self.validate()
 
     def validate(self):
-        # The planner calls this hook; construction already proved full, valid
-        # coverage, so an externally mutated view cannot become a sparse plan.
         coverage = sum(len(cases) for cases in self._cases.values())
         if coverage != sched.PHYSICAL_COUNT + sched.SYNTHETIC_COUNT:
             raise MigrationError("case source coverage changed")
@@ -244,18 +242,42 @@ def _receipt_case_hashes(root):
     for identifier in sched._load_index(root):
         receipt = _load_verified_receipt(root, identifier)
         key = (receipt["cohort"], receipt["alias"])
-        hashes.setdefault(key, receipt["input_sha256"])
+        value = receipt["input_sha256"]
+        if key in hashes and hashes[key] != value:
+            raise MigrationError("conflicting receipt case hashes: " + str(key))
+        hashes.setdefault(key, value)
     return hashes
 
 
-def expected_plan_digest(root, staged, case_hashes, *, provenance_root=None):
+def _source_case_hashes(source):
+    """Hash every planned case from the real source; never trust plan input."""
+    source.validate()
+    hashes = {}
+    for cohort in sched.COHORTS:
+        for case in source.cases(cohort):
+            key = cohort + "," + case.alias
+            value = case.input_hashes()
+            if key in hashes and hashes[key] != value:
+                raise MigrationError("conflicting source case hashes: " + key)
+            hashes[key] = value
+    expected = {
+        cohort + ",PX-" + prefix + f"{position:03d}"
+        for cohort, count, prefix in (
+            ("physical", sched.PHYSICAL_COUNT, "R"),
+            ("synthetic", sched.SYNTHETIC_COUNT, "H"))
+        for position in range(1, count + 1)}
+    if set(hashes) != expected:
+        raise MigrationError("case source does not cover the canonical cohort")
+    return hashes
+
+
+def expected_plan_digest(root, staged, source, *, provenance_root=None):
     """Recompute the scheduler's stable digest through its own planner.
 
     Queue ordering, arm identity and the stable digest belong to
-    ``px_cohort_scheduler``; this module restates none of them. Sparse receipts
-    are harmless because the digest covers stable arm identities only.
+    ``px_cohort_scheduler``; this module restates none of them. ``source`` must
+    be the real frozen cohort in production, not the plan's own hash claims.
     """
-    source = PlanCaseSource(case_hashes)
     plan = sched.build_plan(staged, source, root, provenance_root=provenance_root)
     return sched._plan_digest(plan)
 
@@ -530,6 +552,58 @@ def _clear_journal(journal_path):
         pass
 
 
+def _load_recovery(root, plan, plan_sha):
+    """Read a partial swap's journal and prove its immutable before-state.
+
+    An interrupted registry or checkpoint write may only be finished against
+    the exact plan that started it and the snapshots that journal preserved.
+    A stale or forged journal must never authorize a recovery.
+    """
+    path = _journal_path(root, plan)
+    if not path.is_file():
+        raise MigrationError("partial migration state has no recovery journal")
+    journal = _load(path)
+    if (journal.get("schema") != JOURNAL_SCHEMA
+            or journal.get("window_id") != plan["window_id"]
+            or journal.get("tool_id") != plan["tool_id"]
+            or journal.get("plan_sha256") != plan_sha
+            or journal.get("staged_registry_sha256")
+            != plan["staged_registry_sha256"]
+            or journal.get("new_checkpoint_plan_sha256")
+            != plan["new_plan_sha256"]):
+        raise MigrationError("recovery journal does not match the plan")
+    before = journal.get("before")
+    if not isinstance(before, dict):
+        raise MigrationError("recovery journal lost its before snapshots")
+    preserved = (Path(root) / "preserved" / plan["window_id"]).resolve()
+    for name in [plan["active_registry"], *plan["checkpoints"]]:
+        snapshot = (preserved / name).resolve()
+        if (not snapshot.is_relative_to(preserved) or not snapshot.is_file()
+                or _digest(snapshot) != before.get(name)):
+            raise MigrationError("preserved snapshot drift during recovery: " + name)
+    if before.get("active_registry_sha256") != _digest(
+            preserved / plan["active_registry"]):
+        raise MigrationError("preserved active registry drift during recovery")
+    return journal
+
+
+def _later_advancement(root, plan, staged_sha, receipt):
+    """Prove a later additive migration superseded an applied receipt."""
+    own = "registry-migration-" + plan["tool_id"] + "-" + plan["window_id"] + ".json"
+    for path in (Path(root) / "receipts").glob("registry-migration-*.json"):
+        if path.name == own:
+            continue
+        record = _load(path)
+        before = record.get("before")
+        if (record.get("schema") == RECEIPT_SCHEMA
+                and record.get("tool_id") == plan["tool_id"]
+                and record.get("plan_sha256") != receipt.get("plan_sha256")
+                and isinstance(before, dict)
+                and before.get("active_registry_sha256") == staged_sha):
+            return True
+    return False
+
+
 def _plan_sha(root, plan_path):
     location = Path(plan_path)
     if not location.is_absolute():
@@ -565,12 +639,13 @@ def _restore_from_preserved(root, plan, name):
     sched._atomic_write(_relative(root, name), preserved.read_bytes())
 
 
-def apply(root, plan_path):
+def apply(root, plan_path, *, source=None):
     """Apply an additive migration atomically with crash-safe recovery.
 
     The exclusive global-worker lock is held for the whole swap. A journal is
     written before mutating active state so recovery can complete after a swap
     or checkpoint write that happened before the migration receipt was written.
+    Production hashes the real frozen cohort; only tests may inject a source.
     """
     root = Path(root).resolve()
     plan = load_plan(root, plan_path)
@@ -589,17 +664,28 @@ def apply(root, plan_path):
         active_sha = _digest(active)
         if active_sha != staged_sha:
             verify_additive(root, plan, staged, staged_data)
+        if source is None:
+            source = px_execution.load_cohort()
+        # The plan's hashes are claims, not evidence: hash every real case and
+        # require an exact match before the digest can be trusted.
+        actual_hashes = _source_case_hashes(source)
         supplied = plan["case_input_hashes"]
-        source = PlanCaseSource(supplied)
-        # Receipts attest a sparse subset; they must agree with the complete
-        # source-attested hashes the plan supplies for all 662 cases.
+        if not isinstance(supplied, dict) or set(supplied) != set(actual_hashes):
+            raise MigrationError("plan case hashes do not cover the source cohort")
+        for key, value in supplied.items():
+            if not isinstance(value, dict) or set(value) != {"R1", "R2"}:
+                raise MigrationError("case hashes must be exactly R1 and R2: " + key)
+            if value != actual_hashes[key]:
+                raise MigrationError("case hash is not source-attested: " + key)
+        # Receipts attest a sparse subset; they must agree with the source too.
         for key, value in _receipt_case_hashes(root).items():
-            if key not in source.hashes:
-                raise MigrationError("receipt case is not in the plan: " + str(key))
-            if source.hashes[key] != value:
-                raise MigrationError("case input hash drift: " + str(key))
+            name = key[0] + "," + key[1]
+            if name not in actual_hashes:
+                raise MigrationError("receipt case is not in the source cohort: " + name)
+            if actual_hashes[name] != value:
+                raise MigrationError("case input hash drift: " + name)
         new_digest = expected_plan_digest(
-            root, staged, supplied, provenance_root=_provenance(root))
+            root, staged, source, provenance_root=_provenance(root))
         if new_digest != plan["new_plan_sha256"]:
             raise MigrationError("new checkpoint plan digest drift")
         receipt_path = root / "receipts" / (
@@ -607,23 +693,26 @@ def apply(root, plan_path):
             + plan["window_id"] + ".json")
         journal_path = _journal_path(root, plan)
         cp_data = _load(active_checkpoint)
-        if (active_sha == staged_sha
-                and cp_data.get("plan_sha256") == new_digest):
-            if receipt_path.is_file():
-                receipt = _load(receipt_path)
-                if (receipt.get("plan_sha256") != plan_sha
-                        or receipt.get("schema") != RECEIPT_SCHEMA):
-                    raise MigrationError("applied receipt does not match plan")
-                _clear_journal(journal_path)
-                return {"status": "already-applied", "receipt": str(receipt_path)}
-            # State swapped before receipt; finish recovery below.
-        elif receipt_path.is_file():
+        partial = (active_sha == staged_sha
+                   or cp_data.get("plan_sha256") == new_digest)
+        if receipt_path.is_file():
             receipt = _load(receipt_path)
             if (receipt.get("plan_sha256") != plan_sha
                     or receipt.get("schema") != RECEIPT_SCHEMA):
                 raise MigrationError("receipt exists but does not match plan")
-            _clear_journal(journal_path)
-            return {"status": "already-applied", "receipt": str(receipt_path)}
+            state_matches = (
+                active_sha == staged_sha
+                and cp_data.get("plan_sha256") == new_digest
+                and receipt.get("staged_registry_sha256") == staged_sha
+                and receipt.get("new_checkpoint_plan_sha256") == new_digest)
+            if state_matches or _later_advancement(root, plan, staged_sha, receipt):
+                _clear_journal(journal_path)
+                return {"status": "already-applied", "receipt": str(receipt_path)}
+            # A receipt alone cannot prove the current state came from it.
+            _load_recovery(root, plan, plan_sha)
+        elif partial:
+            # Any registry/checkpoint swap without a receipt needs its journal.
+            _load_recovery(root, plan, plan_sha)
 
         verify_boundary(root, plan, staged_data)
         snapshots = _checkpoint_snapshots(root, plan)
@@ -641,7 +730,7 @@ def apply(root, plan_path):
         before["active_registry_sha256"] = _digest(
             Path(root) / "preserved" / plan["window_id"] / plan["active_registry"])
         journal = {
-            "schema": "ivanka.px.registry.migration.journal.v1",
+            "schema": JOURNAL_SCHEMA,
             "window_id": plan["window_id"], "tool_id": plan["tool_id"],
             "plan_sha256": plan_sha, "staged_registry_sha256": staged_sha,
             "new_checkpoint_plan_sha256": new_digest,

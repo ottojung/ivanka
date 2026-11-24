@@ -29,7 +29,8 @@ EXPECTED = {
 NATIVE_TOOLS = ("soapdenovo2", "unicycler", "penguin", "savage-denovo")
 FILES = {"ray": "ray-rayplatform-c8d9fe2.json",
          "tadpole": "tadpole-minimal-jre.json",
-         "native-requirements": "native-requirements.json"}
+         "native-requirements": "native-requirements.json",
+         "ray-disk-admission-design": "ray-disk-admission-design.json"}
 
 
 def _document(name):
@@ -66,6 +67,14 @@ def checked(name):
                 raise ValueError("invalid adapter pin: " + tool)
             if not item.get("source_repo", "").startswith("https://github.com/"):
                 raise ValueError("invalid source pin: " + tool)
+        return data
+    if name == "ray-disk-admission-design":
+        budget = data.get("measured_budget", {})
+        if (budget.get("cap_bytes") != CONTRACT["max_incremental_bytes"]
+                or budget.get("reservation_bytes") < 1 << 30
+                or budget.get("headroom_bytes", 0) >= 1 << 30
+                or len(data.get("attempts", [])) != 3):
+            raise ValueError("Ray budget evidence drift")
         return data
     if name not in EXPECTED:
         raise ValueError("unknown recipe: " + name)

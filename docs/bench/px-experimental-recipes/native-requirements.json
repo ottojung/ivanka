@@ -15,6 +15,11 @@
   "tools": {
     "penguin": {
       "adapter_commit": "8e7c55a3ebcaa4584cb09b1ac743bb5320bd1257",
+      "compact_plan": [
+        "CMake build of pinned plass with g++ and cmake in a guarded donor job on the pinned Debian base",
+        "attest nuclassemble ELF; resolve the license file path at the pinned revision before distribution",
+        "single-layer image from frozen parent with ELF and adapter hash guards"
+      ],
       "license": "license file path at pin still to be resolved; no distribution until confirmed",
       "native": "CMake >= pinned minimum, g++ >= 4.9, cmake/make build of nuclassemble; adapt from pinned README cmake -DCMAKE_BUILD_TYPE=RELEASE and make -j2",
       "source_commit": "ac83d8fa2fd315738afe675609a3dea05837cfea",
@@ -23,6 +28,11 @@
     },
     "savage-denovo": {
       "adapter_commit": "0919ffa97f609b6f0b650ce834f0fc79822f18e5",
+      "compact_plan": [
+        "build haploconduct from pinned HaploConduct source with g++, boost and OpenMP in a guarded donor job",
+        "attest the native executable and record the exact compiler path; adapter uses -p1/-p2 only",
+        "single-layer image from frozen parent with ELF and adapter hash guards"
+      ],
       "license": "GPL-3.0 (LICENSE present at pin)",
       "native": "haploconduct native executable built with g++, boost and OpenMP; adapter passes -p1/-p2 only with no --ref or --count_strains",
       "source_commit": "24e4d9fc35ef6a93e336949a9a8f98ed4ceef362",
@@ -44,6 +54,11 @@
     },
     "unicycler": {
       "adapter_commit": "5ad7874fe193043fa378063efc123018bff546da",
+      "compact_plan": [
+        "build cpp_functions.so from pinned Unicycler source in a single guarded donor job on the pinned Debian base",
+        "attest SPAdes spades-core separately; both digests are build arguments and in-image hash guards",
+        "single-layer image from frozen parent copies the two native artifacts and two adapter files"
+      ],
       "license": "GPL-3.0 (LICENSE present at pin)",
       "native": "unicycler/cpp_functions.so plus an independently attested SPAdes spades-core; both digests required before an image build",
       "source_commit": "1429301eb24df9162f3c9386e8522f942594ae42",

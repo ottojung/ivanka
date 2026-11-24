@@ -9,7 +9,7 @@ import reference_isolation
 
 from px_experimental_recipes import RECIPES, checked, checked_patch
 
-NAMES = ("ray", "tadpole", "native-requirements")
+NAMES = ("ray", "tadpole", "native-requirements", "ray-disk-admission-design")
 
 
 class TestSourceOnlyRecipes(unittest.TestCase):
@@ -53,6 +53,11 @@ class TestSourceOnlyRecipes(unittest.TestCase):
                             side_effect=lambda n: (document, target)):
                 with self.assertRaises(ValueError):
                     checked("tadpole")
+
+    def test_compact_plans_for_remaining_tools(self):
+        tools = checked("native-requirements")["tools"]
+        for name in ("unicycler", "penguin", "savage-denovo"):
+            self.assertTrue(tools[name]["compact_plan"])
 
     def test_reference_isolation_guard(self):
         self.assertEqual(reference_isolation.check_repository(), [])

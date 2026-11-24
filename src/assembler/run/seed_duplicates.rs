@@ -34,3 +34,5 @@ pub(super) fn keep_indices(contigs: &[Vec<u8>], path: &str) -> io::Result<Vec<us
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_tails;

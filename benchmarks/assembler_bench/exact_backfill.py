@@ -5,6 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from benchmarks.compressed_tables import find_table
 from benchmarks.generate_exact_sidecars import sha256
 from benchmarks.produce_exact_coverage import generate
 from micall.utils import exact_coverage
@@ -26,14 +27,15 @@ def generate_one(cache, cohort, sample, tool, candidate, fastqs,
     folder = sidecar(cache, cohort, sample, tool, candidate)
     report_file = folder / "provenance.json"
     csv_file = folder / "exact_coverage.csv"
-    if report_file.exists() and csv_file.exists():
+    coverage_table = find_table(csv_file)
+    if report_file.exists() and coverage_table is not None:
         item = json.loads(report_file.read_text())
         if (item["source_conseq_sha256"] == expected
                 and item["source_image_sha256"] == image
                 and item["exact_coverage_sha256"] == sha256(csv_file)):
             return False
         raise ValueError("immutable exact-coverage report changed")
-    if report_file.exists() != csv_file.exists():
+    if report_file.exists() != (coverage_table is not None):
         raise ValueError("partial exact-coverage sidecar")
     fastq_sha = source_proof(fastqs, conseq, expected, image)
     folder.mkdir(parents=True, exist_ok=True)

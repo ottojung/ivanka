@@ -4,4 +4,14 @@ pub(in super::super) struct Statistics {
     pub(in super::super) pairs: Vec<usize>,
     pub(in super::super) coverage: Vec<usize>,
     pub(in super::super) pair_masks: Vec<u16>,
+    pub(in super::super) spans: Vec<Vec<(usize, usize)>>,
+}
+
+impl Statistics {
+    pub(in super::super) fn coverage(depth: &[Vec<u32>]) -> Vec<usize> {
+        depth
+            .iter()
+            .map(|d| d.iter().filter(|&&v| v >= 3).count())
+            .collect()
+    }
 }

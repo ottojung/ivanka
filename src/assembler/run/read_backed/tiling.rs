@@ -1,5 +1,17 @@
+use super::island;
 use super::Entry;
 use super::K;
+
+/// Present one native interval through the established island and tiling rule.
+/// The interval is a subsequence of a native contig, never a fabricated join.
+pub(super) fn present(seq: &[u8], dep: &[u32], ab: (usize, usize), name: &str) -> Vec<Entry> {
+    let (a, b) = ab;
+    let end = (a + b.saturating_sub(K - 1)).min(dep.len()).max(a);
+    let obs = &dep[a..end];
+    let (s, t) = island::bounds(&seq[a..b], obs);
+    let o = t.saturating_sub(K - 1).max(s);
+    partition(name, &seq[a + s..a + t], &obs[s..o])
+}
 
 /// Keep every core base in order and extend each tile by 512 downstream bases.
 pub(super) fn partition(header: &str, sequence: &[u8], depth: &[u32]) -> Vec<Entry> {

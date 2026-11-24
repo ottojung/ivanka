@@ -7,6 +7,7 @@ fn stats(masks: Vec<u16>, coverage: Vec<usize>) -> Statistics {
     Statistics {
         depth: vec![],
         pairs,
+        spans: vec![vec![]; coverage.len()],
         coverage,
         pair_masks: masks,
     }

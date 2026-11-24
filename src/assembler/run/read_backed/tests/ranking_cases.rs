@@ -8,6 +8,7 @@ fn breadth_pair_support_beats_short_count_bias() {
         pair_masks: vec![],
         pairs: vec![410, 578],
         coverage: vec![1116, 420],
+        spans: vec![vec![], vec![]],
     };
     assert_eq!(ranking::best(&contigs, &stats), 0);
 }
@@ -20,6 +21,7 @@ fn narrow_dense_contig_can_beat_long_unsupported_extension() {
         pair_masks: vec![],
         pairs: vec![8416, 3191],
         coverage: vec![466, 1220],
+        spans: vec![vec![], vec![]],
     };
     assert_eq!(ranking::best(&contigs, &stats), 1);
 }
@@ -27,5 +29,6 @@ fn narrow_dense_contig_can_beat_long_unsupported_extension() {
 #[test]
 fn repetitive_kmers_cannot_inflate_original_pair_evidence() {
     let hits = index::build(&[vec![b'A'; 1000]]);
-    assert!(!hits.contains_key(&[b'A'; 31]));
+    let key = index::pack(&[b'A'; 31]).expect("canonical key");
+    assert!(!hits.contains_key(&key));
 }

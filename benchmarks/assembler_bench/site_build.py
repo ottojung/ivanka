@@ -1,14 +1,12 @@
 """Fail-closed, privacy-checked, static GitHub Pages publisher for /bench/."""
 import argparse
 import json
-import math
 import re
 import shutil
 from pathlib import Path
 
 from .public_fork_provenance import check as check_fork_provenance
 from .public_validation import check_public_site
-from .public_vocabulary import assert_clean
 from .publication import SCHEMA
 from .site_validation import check_mapping_snapshot
 

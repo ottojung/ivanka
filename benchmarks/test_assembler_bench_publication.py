@@ -14,31 +14,39 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         cls.root = json.loads((SITE / "data/runs.json").read_text())
 
     def test_public_data_is_independently_grounded_and_complete(self):
-        from assembler_bench.current_validation import check_current
-        check_current(self.root)
+        from assembler_bench.public_validation import check_public_site
+        self.assertEqual(check_public_site(SITE),
+                         len(self.root["runs"]) +
+                         len(json.loads((SITE / "data/history.json").read_text())["runs"]))
         self.assertEqual({r["cohort"] for r in self.root["runs"]},
                          {"synthetic", "real", "combined"})
+        evidence = json.loads((SITE / "data/assembler-evidence.json").read_text())
         for run in self.root["runs"]:
-            self.assertEqual(len(run["tools"]), 7)
+            roster = evidence["cohorts"][run["cohort"]]
+            expected = (roster["assemblers"] if "assemblers" in roster else
+                        list(dict.fromkeys(
+                            tool for part in roster["union_of"]
+                            for tool in evidence["cohorts"][part]["assemblers"])))
+            self.assertEqual(run["tools"], expected)
+            self.assertEqual(len(run["tools"]), len(run["roster"]))
             self.assertEqual(run["status"], "incomplete")
             self.assertEqual(run["sample_count"], len(run["samples"]))
-            self.assertFalse(run["eligible_for_expanded"])
             self.assertEqual(run["micall_fork_provenance"]["status"],
                              "verified")
         real = next(r for r in self.root["runs"] if r["cohort"]=="real")
-        self.assertLessEqual(real["sample_count"],198)
-        self.assertEqual(real["expected_sample_count"],198)
+        self.assertEqual(real["sample_count"], 198)
+        self.assertEqual(real["expected_sample_count"], 198)
         self.assertTrue(all(s["alias"].startswith("R") for s in
                             real["samples"]))
-        self.assertGreaterEqual(real["sample_count"],0)
 
     def test_historical_data_is_not_published(self):
-        self.assertTrue(all(r.get("status") != "ineligible"
+        self.assertTrue(all(r.get("status") == "incomplete"
                             and r.get("micall_fork_provenance",{}).get(
                             "status") == "verified"
                             for r in self.root["runs"]))
         self.assertNotIn("legacy-synthetic-v1-20261112",
                          json.dumps(self.root))
+        self.assertNotIn("qualif", json.dumps(self.root).lower())
 
     def test_public_site_works_without_scientific_scoring_packages(self):
         import os
@@ -73,7 +81,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
             data = copy.deepcopy(self.root)
             data["runs"][1]["status"] = "passed-expanded"
             (copy_site / "data/runs.json").write_text(json.dumps(data))
-            with self.assertRaisesRegex(ValueError, "unattested|metadata|qualification|invalid"):
+            with self.assertRaisesRegex(ValueError, "unattested|invalid|vocabulary|status"):
                 validate_public_site(copy_site)
             data = copy.deepcopy(self.root)
             if data["runs"][0]["samples"]:

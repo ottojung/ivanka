@@ -6,6 +6,7 @@ checks provenance, measured evidence, per-cohort rosters and independently
 recomputed all-pairs Ψ, without any external project acceptance criteria.
 """
 import json
+import math
 import re
 
 from .public_psi import public_matrix
@@ -141,6 +142,10 @@ def check_history(history, current_ids):
                 or any(not is_hash(value) for value in run["images"].values())
                 or run.get("psi") != {}):
             raise ValueError("archived public metadata invalid")
+        provenance = run.get("micall_fork_provenance", {}).get("images", {})
+        for tool, image in run["images"].items():
+            if provenance.get(tool, {}).get("image_sha256") != image:
+                raise ValueError("archived image provenance mismatch")
         samples = run.get("samples", [])
         if (not isinstance(samples, list) or not samples
                 or run.get("sample_count") != len(samples)
@@ -155,14 +160,16 @@ def check_history(history, current_ids):
             if (not ALIAS.fullmatch(row.get("alias", ""))
                     or set(row.get("score", {})) != set(tools)
                     or set(row.get("seconds", {})) != set(tools)):
-                raise ValueError("archived case tool matrix incomplete")
+                raise ValueError("archived case alias or tool matrix incomplete")
             for tool in tools:
                 score, seconds = row["score"][tool], row["seconds"][tool]
                 if score is not None and (
-                        type(score) not in (int, float) or score < 0):
+                        type(score) not in (int, float)
+                        or not math.isfinite(score) or score < 0):
                     raise ValueError("archived score changed")
                 if seconds is not None and (
                         type(seconds) not in (int, float)
+                        or not math.isfinite(seconds)
                         or not 0 < seconds <= 1800):
                     raise ValueError("archived runtime changed")
     if SECRET.search(json.dumps(history)):
@@ -176,7 +183,7 @@ def is_hash(value):
 
 def check_public_site(site):
     """Validate an entire neutral public site snapshot."""
-    assert_clean(site, include_browser=False)
+    assert_clean(site, include_browser=True)
     report = json.loads((site / "data/runs.json").read_text())
     evidence = json.loads((site / "data/assembler-evidence.json").read_text())
     history = json.loads((site / "data/history.json").read_text())
@@ -186,11 +193,25 @@ def check_public_site(site):
     check_evidence(evidence)
     joined = {}
     for run in report["runs"]:
+        if run.get("status") not in ("complete", "incomplete", "archived",
+                                     "measured", "failed", "pending",
+                                     "unavailable"):
+            raise ValueError("invalid public run status")
         roster = run.get("roster", [])
         if ([item["id"] for item in roster] != run["tools"]
                 or any(set(item) != {"id", "name", "status", "provenance",
                                      "cases"} for item in roster)):
             raise ValueError("incoherent cohort-owned assembler roster")
+        for sample in run.get("samples", []):
+            failed = set(sample.get("failures", []))
+            if not failed <= set(run["tools"]):
+                raise ValueError("unknown failed assembler in public case")
+            for tool in failed:
+                if (sample.get("score", {}).get(tool) is not None
+                        or sample.get("seconds", {}).get(tool) is not None):
+                    raise ValueError("failed arm shows a measurement")
+            if failed and sample.get("outcome") != "failure":
+                raise ValueError("failed case concealed in public data")
         joined[run["cohort"]] = check_joined_measurements(run, evidence)
         check_matrix(run)
     archived = check_history(history, {run["id"] for run in report["runs"]})

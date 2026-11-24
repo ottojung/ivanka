@@ -1,0 +1,15 @@
+#!/bin/sh
+# One read-only P0 completion watcher. It only reads the controller health
+# snapshot; it never launches a MiCall/benchmark worker or edits any root.
+# After a terminal handoff it holds instead of restarting (s6 convention).
+export PATH=/var/guix/profiles/per-user/puser/guix-profile/bin:/run/current-system/profile/bin:/home/lubko/.local/bin:/command:/usr/bin:/bin
+SRC=${P0_WATCH_SOURCE:-/workspace/ivanka-completion-watch-W828YF4l6XKNvnCtjHdrZy-sparkled-20261124}
+CONFIG=${P0_WATCH_CONFIG:-/home/lubko/.local/state/ivanka-p0-completion-handoff/config.json}
+LOG=${P0_WATCH_LOG:-/home/lubko/.local/state/ivanka-p0-completion-handoff/service.log}
+exec >>"$LOG" 2>&1
+echo P0_COMPLETION_WATCH_START $(date -u +%FT%TZ)
+cd "$SRC" || exit 1
+python3 -m tools.p0_completion_handoff.watcher --config "$CONFIG"
+code=$?
+echo P0_COMPLETION_WATCH_EXIT $(date -u +%FT%TZ) rc=$code
+exec sleep 86400

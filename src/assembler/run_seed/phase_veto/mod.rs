@@ -1,6 +1,7 @@
 mod evidence;
 mod detect;
 #[cfg(test)] mod test_vet_rescue;
+#[cfg(test)] mod test_adversarial;
 pub(crate) fn reject_unsupported_recombinants(seqs:Vec<Vec<u8>>,counts:Vec<usize>,reads:&[Vec<u8>],quals:&[Vec<u8>],protected:usize)->(Vec<Vec<u8>>,Vec<usize>){
     let preps=evidence::make_preps(reads,quals); let mut kept_s=Vec::new(); let mut kept_c=Vec::new(); let mut dropped=0usize;
     for (index,(seq,count)) in seqs.into_iter().zip(counts).enumerate(){

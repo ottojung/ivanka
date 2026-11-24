@@ -1,6 +1,7 @@
 use super::vet_rescue;
 fn rc(s:&[u8])->Vec<u8>{ s.iter().rev().map(|c|match c{b'A'=>b'T',b'T'=>b'A',b'C'=>b'G',b'G'=>b'C',_=>b'N'}).collect() }
-fn setup()->(Vec<u8>,Vec<u8>,Vec<Vec<u8>>,Vec<Vec<u8>>){
+type Case=(Vec<u8>,Vec<u8>,Vec<Vec<u8>>,Vec<Vec<u8>>);
+fn setup()->Case{
     let mut seed=13u64; let mut c=(0..800).map(|_|{seed^=seed<<13;seed^=seed>>7;seed^=seed<<17;b"ACGT"[(seed&3) as usize]}).collect::<Vec<u8>>();
     c[200]=b'A'; c[420]=b'T'; let mut one=c.clone(); one[420]=b'C'; let mut two=c.clone(); two[200]=b'G';
     let mut reads=Vec::new();

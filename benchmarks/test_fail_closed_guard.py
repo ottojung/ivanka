@@ -52,11 +52,19 @@ class GuardTests(unittest.TestCase):
         stopped = []
         snaps = [{100: rec(100, 0, 1000)},
                  {100: rec(100, 0, 9_000_000_000, start=999)}]
+
+        def stop(cid):
+            # Same-CID removal is always safe; no PID is ever signalled, so a
+            # reused PID belonging to an unrelated process survives.
+            stopped.append(cid)
+            return {"cid": cid, "container_removed": True}
+
         with self.assertRaises(GuardExceeded) as caught:
-            self.watch(fingerprint(rec(100, 0, 1000)), snaps,
-                       stopped.append, keep_running=True)
+            self.watch(fingerprint(rec(100, 0, 1000)), snaps, stop,
+                       keep_running=True)
         self.assertEqual(caught.exception.reason, "identity_lost")
-        self.assertEqual(stopped, [])
+        self.assertEqual(stopped, [CID])
+        self.assertEqual(caught.exception.teardown["cid"], CID)
 
     def test_reparented_descendant_in_same_namespace_is_counted(self):
         snaps = [{100: rec(100, 0, 1_000_000_000),

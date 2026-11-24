@@ -105,7 +105,7 @@ class TestRunner(unittest.TestCase):
     def test_measurement_failure_preserves_root_cause_but_never_passes(self):
         from assembler_bench.exploratory_runtime.monitor import GuardExceeded
 
-        def failing_monitor(*args):
+        def failing_monitor(*args, **kwargs):
             try:
                 raise OSError("rootless overlay accounting unavailable")
             except OSError as exc:

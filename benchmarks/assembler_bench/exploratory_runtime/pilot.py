@@ -52,3 +52,27 @@ def stop_pilot(root, env, cidfile):
     if cid in after:
         raise RuntimeError("pilot container survived guarded cleanup")
     return {"pilot_container_id": cid, "container_removed": cid in before}
+
+
+def prove_pilot_absent(root, env, cid, proof=None):
+    """Reuse the watcher's exact-CID teardown proof with a fresh absence check.
+
+    The bound guard has already removed the exact container; Podman's --rm may
+    have deleted its cidfile. Once bound, cleanup must not read that file
+    again. Confirm the one authorized graphroot and re-list the store so a
+    recreated container cannot be mistaken for a successful teardown.
+    """
+    if (Path(root).resolve() != ROOT or
+            env.get("CONTAINERS_STORAGE_CONF") != str(ROOT / "storage.conf")):
+        raise ValueError("wrong PX container cleanup provenance")
+    if not isinstance(cid, str) or not CID.fullmatch(cid):
+        raise RuntimeError("invalid or missing bound PX pilot CID")
+    if command(["podman", "info", "--format", "{{.Store.GraphRoot}}"], env) != STORE:
+        raise ValueError("wrong PX graphroot")
+    listed = command(["podman", "ps", "-a", "--no-trunc",
+                      "--format", "{{.ID}}"], env).splitlines()
+    if cid in listed:
+        raise RuntimeError("pilot container survived guarded cleanup")
+    return {"pilot_container_id": cid,
+            "container_removed": bool((proof or {}).get("container_removed")),
+            "fresh_absence_check": True, "kernel_enforcement": False}

@@ -24,6 +24,25 @@ def read_cid(cidfile):
     return cid
 
 
+def cidfile_absent(cidfile):
+    """Distinguish a transiently absent issued CID file from a bad one.
+
+    Podman creates --cidfile asynchronously. Only genuine absence of a safe
+    path may be retried during startup; a symlink, a directory or any other
+    error is a provenance fault and must fail closed without a wait.
+    """
+    path = Path(cidfile)
+    if path.is_symlink():
+        return False
+    try:
+        path.stat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
 def inspect_pid(cid, env):
     out = command(["podman", "inspect", "--format",
                    "{{.Id}} {{.State.Pid}}", cid], env)

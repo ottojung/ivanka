@@ -80,6 +80,25 @@ def bind(root, ident, pid, fingerprint=None):
     return event
 
 
+def bind_cid(root, ident, cid, *, cidfile=None, pid=None, fingerprint=None):
+    """Durably record the exact pilot CID at the moment it is bound.
+
+    The cidfile is transient (--rm deletes it on natural completion), but the
+    journal is append-only evidence of ownership. Reconciliation and cleanup
+    therefore use this CID and never need the file again.
+    """
+    if not isinstance(cid, str) or not binding.CID.fullmatch(cid):
+        raise GuardExceeded("invalid_lease")
+    event = {"schema": SCHEMA, "lease": str(ident), "state": "active",
+             "mode": "pilot", "cid": cid,
+             "cidfile": str(cidfile) if cidfile is not None else None,
+             "pid": int(pid) if pid is not None else None,
+             "fingerprint": list(fingerprint) if fingerprint else None,
+             "at_utc": time.time()}
+    append(root, event)
+    return event
+
+
 def release(root, ident, *, cid=None, proof=None):
     """Close a lease only after verified teardown (or a proven-absent startup)."""
     event = {"schema": SCHEMA, "lease": str(ident), "state": "released",

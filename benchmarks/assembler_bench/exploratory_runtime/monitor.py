@@ -43,34 +43,88 @@ def rss_group_bytes(pgid):
                if len(fields := line.split()) == 2 and int(fields[0]) == pgid)
 
 
-def _disk(config, margin, measure):
-    try:
-        space = measure(config["registry"], config["baseline"], config["root"],
-                        config["image_store"], config["workspace"], margin)
-        if space["incremental_bytes"] + margin > config["budget_bytes"]:
-            raise GuardExceeded("disk_limit")
-        return space
-    except GuardExceeded:
-        raise
-    except ValueError as exc:
-        if str(exc) == "exploration would breach disk budget or workspace reserve":
-            raise GuardExceeded("disk_limit") from exc
-        raise GuardExceeded("measurement_unavailable") from exc
-    except Exception as exc:
-        raise GuardExceeded("measurement_unavailable") from exc
+def _disk(config, margin, measure, retries=2):
+    """Meter disk conservatively; a transiently missing path is not zero bytes.
+
+    Overlay accounting can briefly lose a path while Podman rebuilds a layer.
+    Retry a bounded number of times, then fail closed. No missing observation
+    is ever replaced with an invented or zero-byte reading.
+    """
+    for attempt in range(retries + 1):
+        try:
+            space = measure(config["registry"], config["baseline"], config["root"],
+                            config["image_store"], config["workspace"], margin)
+            break
+        except FileNotFoundError as exc:
+            if attempt == retries:
+                raise GuardExceeded("measurement_unavailable") from exc
+        except GuardExceeded:
+            raise
+        except ValueError as exc:
+            if str(exc) == "exploration would breach disk budget or workspace reserve":
+                raise GuardExceeded("disk_limit") from exc
+            raise GuardExceeded("measurement_unavailable") from exc
+        except Exception as exc:
+            raise GuardExceeded("measurement_unavailable") from exc
+    if space["incremental_bytes"] + margin > config["budget_bytes"]:
+        raise GuardExceeded("disk_limit")
+    return space
+
+
+def _bind_started(proc_handle, cidfile, env, *, start, wall_seconds, interval,
+                  clock, sleep, disk, snapshot):
+    """Bind the issued CID inside the arm's total wall budget.
+
+    Podman writes --cidfile asynchronously after spawn. Only a transient
+    absence of that safe file is retried: launcher exit, a present but bad
+    CID, lost init identity or an exhausted deadline are terminal. Every wait
+    pass still checks disk accounting and launcher liveness, so the startup
+    wait cannot hide a dead job or an admission breach.
+    """
+    while True:
+        remaining = wall_seconds - (clock() - start)
+        if remaining <= 0:
+            raise GuardExceeded("binding_unavailable")
+        disk()
+        try:
+            cid = binding.read_cid(cidfile)
+        except (GuardExceeded, OSError) as exc:
+            # A launcher that exited without issuing an identity cannot be
+            # waited out. If the file exists but is unsafe or invalid, that is
+            # a provenance fault, not a cold-start delay.
+            if (proc_handle.poll() is not None
+                    or not binding.cidfile_absent(cidfile)):
+                raise GuardExceeded("binding_unavailable") from exc
+            # Use the configured sampler interval, never an arbitrary fixed
+            # sleep, and never wait beyond the arm's own deadline.
+            sleep(min(interval, remaining))
+            continue
+        # A visible CID binds immediately: identity loss is terminal here and
+        # is never mistaken for a not-yet-written file.
+        return binding.bind_container(cid, env, snapshot=snapshot())
 
 
 def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
                 margin=1024**3, clock=time.monotonic, sleep=time.sleep,
-                measure=admit, stop=None, snapshot=None):
+                measure=admit, stop=None, snapshot=None, on_bind=None):
     """Identity-bound PX pilot guard, stopped only by exact CID."""
     if interval <= 0 or interval > 1 or margin < 1024**3:
         raise ValueError("unsafe polling interval or disk safety margin")
-    table = proc.snapshot() if snapshot is None else snapshot()
-    bound = binding.bind_container(binding.read_cid(cidfile), env, snapshot=table)
+    start = clock()
 
     def take():
         return proc.snapshot() if snapshot is None else snapshot()
+
+    def disk():
+        return _disk(config, margin, measure)
+
+    bound = _bind_started(proc_handle, cidfile, env, start=start,
+                          wall_seconds=config["wall_seconds"], interval=interval,
+                          clock=clock, sleep=sleep, disk=disk, snapshot=take)
+    if on_bind is not None:
+        # The caller durably records the exact CID at this point, before the
+        # launcher can be killed with an unowned container still alive.
+        on_bind(bound)
 
     def terminate(cid):
         if stop is not None:
@@ -80,8 +134,7 @@ def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
     return watch_bound(
         bound, limit=config["rss_bytes"], wall_seconds=config["wall_seconds"],
         running=(lambda: proc_handle.poll() is None), snapshot=take,
-        measure=(lambda: _disk(config, margin, measure)), stop=terminate,
-        clock=clock, sleep=sleep, interval=interval)
+        measure=disk, stop=terminate, clock=clock, sleep=sleep, interval=interval)
 
 
 def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
@@ -119,7 +172,7 @@ def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
 def watch(proc_handle, config, *, interval=1, margin=1024**3,
           clock=time.monotonic, sleep=time.sleep, measure=admit,
           rss=rss_group_bytes, cidfile=None, env=None, stop=None,
-          snapshot=None, mode=None):
+          snapshot=None, mode=None, on_bind=None):
     """Legacy sampler for existing callers; bound path for guarded callers."""
     if stop is None:
         stop = config.get("stop")
@@ -128,7 +181,8 @@ def watch(proc_handle, config, *, interval=1, margin=1024**3,
         return watch_pilot(proc_handle, config, cidfile=bound_cid,
                            env=config.get("env", env), interval=interval,
                            margin=margin, clock=clock, sleep=sleep,
-                           measure=measure, stop=stop, snapshot=snapshot)
+                           measure=measure, stop=stop, snapshot=snapshot,
+                           on_bind=on_bind)
     if mode == "build" or config.get("guard_mode") == "build":
         return watch_build(proc_handle, config, interval=interval, margin=margin,
                            clock=clock, sleep=sleep, measure=measure,

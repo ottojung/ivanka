@@ -8,13 +8,14 @@ import time
 
 from assembler_bench.exploratory_space import admit
 
-from fail_closed_guard import binding, identity, lease
+from fail_closed_guard import identity, lease, teardown
 from fail_closed_guard import proc as process_snapshot
+from fail_closed_guard.errors import GuardExceeded
 
 from .. import job_temp
 from .cleanup import clean_stopped_build
-from .monitor import GuardExceeded, attest, watch
-from .pilot import bind_pilot, stop_pilot
+from .monitor import attest, watch
+from .pilot import bind_pilot, prove_pilot_absent, stop_pilot
 from .setup import prepare
 from .terminate import group
 
@@ -76,14 +77,35 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                 cfg["cidfile"] = cidfile
                 cfg["env"] = env
             teardown_proof = None
+
+            def on_bind(bound):
+                # Keep the exact CID in both the receipt and the durable lease
+                # before the monitor can be killed. Cleanup never reads the
+                # transient cidfile again once this binding exists.
+                state["bound_cid"] = bound["cid"]
+                try:
+                    lease.bind_cid(root, ident, bound["cid"], cidfile=cidfile,
+                                   pid=bound.get("pid"),
+                                   fingerprint=bound.get("fingerprint"))
+                except Exception as exc:
+                    # An unowned container must not outlive a failed journal
+                    # append; remove it by the exact CID just bound.
+                    try:
+                        teardown.stop_cid(env, bound["cid"])
+                    except Exception:
+                        pass
+                    raise GuardExceeded("lease_unavailable") from exc
+
             try:
-                observation = watch(proc, cfg)
+                observation = watch(
+                    proc, cfg, on_bind=on_bind if cidfile is not None else None)
                 # Publisher RAM scope stays authoritative in PR475/476: attest
                 # the observed sampler without changing its public semantics.
                 state.update(attest(observation))
                 if isinstance(observation, dict):
                     state["guard_result"] = observation
-                    state["bound_cid"] = observation.get("cid")
+                    state["bound_cid"] = (observation.get("cid")
+                                          or state.get("bound_cid"))
                     teardown_proof = observation.get("teardown")
                     state["peak_rss"] = observation.get("peak_rss")
                 else:
@@ -97,6 +119,17 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                     state["reason"] = "teardown_unverified"
             except GuardExceeded as exc:
                 state["status"], state["reason"] = "killed", str(exc)
+                # A killed arm keeps its genuine peak and teardown record;
+                # failure reason and observed attestation are never replaced
+                # by a generic upward error.
+                if getattr(exc, "peak_rss", None) is not None:
+                    state["peak_rss"] = exc.peak_rss
+                if getattr(exc, "guard_result", None) is not None:
+                    state["guard_result"] = exc.guard_result
+                if getattr(exc, "teardown", None) is not None:
+                    state["bound_cid"] = state.get("bound_cid") or exc.teardown.get("cid")
+                if getattr(exc, "teardown_error", None):
+                    state["teardown_error"] = exc.teardown_error
                 cause = exc.__cause__
                 if cause is not None:
                     # Preserve actual measurement failure; never invent an
@@ -108,14 +141,28 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
             finally:
                 state["exit_code"] = group(proc)
                 if cidfile is not None:
-                    try:
-                        state["pilot_cleanup"] = stop_pilot(root, env, cidfile)
-                    except (OSError, ValueError, RuntimeError,
-                            subprocess.SubprocessError) as exc:
-                        state["pilot_cleanup_error"] = str(exc)[:320]
-                        if state["status"] == "finished":
-                            state["status"] = "failed"
-                            state["reason"] = "pilot_cleanup_unverified"
+                    cid = state.get("bound_cid")
+                    if cid is not None:
+                        # The guard proved teardown of this exact CID. Reuse
+                        # that proof with a fresh scoped absence check instead
+                        # of re-reading a cidfile --rm may already have deleted.
+                        try:
+                            state["pilot_cleanup"] = prove_pilot_absent(
+                                root, env, cid, teardown_proof)
+                        except (OSError, ValueError, RuntimeError,
+                                subprocess.SubprocessError) as exc:
+                            state["pilot_cleanup_error"] = str(exc)[:320]
+                    else:
+                        # No binding ever happened: the only available exact
+                        # identity is still the issued cidfile.
+                        try:
+                            state["pilot_cleanup"] = stop_pilot(root, env, cidfile)
+                        except (OSError, ValueError, RuntimeError,
+                                subprocess.SubprocessError) as exc:
+                            state["pilot_cleanup_error"] = str(exc)[:320]
+                    if "pilot_cleanup_error" in state and state["status"] == "finished":
+                        state["status"] = "failed"
+                        state["reason"] = "pilot_cleanup_unverified"
                 if mode == "build" and state["status"] != "finished":
                     # External Buildah "Storage" work containers survive
                     # SIGTERM and are invisible to ordinary podman ps/prune.
@@ -147,12 +194,8 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                 # unverified teardown leaves it active so startup reconciliation
                 # refuses the next admission until an owner reconciles it.
                 if teardown_ok:
-                    cid = state.get("bound_cid")
-                    if cid is None and cidfile is not None:
-                        try:
-                            cid = binding.read_cid(cidfile)
-                        except GuardExceeded:
-                            cid = None
+                    cid = (state.get("bound_cid")
+                           or (state.get("pilot_cleanup") or {}).get("pilot_container_id"))
                     lease.release(root, ident, cid=cid,
                                   proof=(state.get("pilot_cleanup")
                                          or state.get("orphan_cleanup")

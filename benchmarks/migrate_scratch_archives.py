@@ -120,7 +120,7 @@ def _read_json(path, label):
 def _verify_terminal(case, image, panel):
     receipt = _read_json(case / "prospective-execution.json", "execution receipt")
     score = _read_json(case / "posthoc_score.json", "posthoc score")
-    conseq = sha_file(case / "conseq.csv")
+    conseq = sha_file(_regular(case / "conseq.csv", "final conseq.csv"))
     expected = {
         "status": "success",
         "sample_sha256": case.name,
@@ -190,6 +190,13 @@ def _attestation_members(case, image):
     return att, members
 
 
+def _cleanup_staged(staged):
+    for item in staged:
+        temp = item.get("temp_path")
+        if temp:
+            Path(temp).unlink(missing_ok=True)
+
+
 def _stream_archive(case, attestation, listed, temp_dir, max_temp_bytes, stage):
     archive = _regular(case / ARCHIVE_NAME, "scratch archive")
     observed_archive_sha = sha_file(archive)
@@ -199,68 +206,71 @@ def _stream_archive(case, attestation, listed, temp_dir, max_temp_bytes, stage):
     staged = []
     temp_total = 0
     hasher = hashlib.sha256()
-    with tarfile.open(archive, "r:gz") as tar:
-        for info in tar:
-            name = info.name
-            _safe_relative(name)
-            if not info.isfile() or info.islnk() or info.issym():
-                raise MigrationError(f"non-regular archive member in {case.name}: {name}")
-            if name not in listed:
-                raise MigrationError(f"unattested archive member in {case.name}: {name}")
-            if name in seen:
-                raise MigrationError(f"duplicate archive member in {case.name}: {name}")
-            seen.add(name)
-            expected = listed[name]
-            if info.size != expected["bytes"]:
-                raise MigrationError(f"archive member size mismatch in {case.name}: {name}")
-            member = tar.extractfile(info)
-            if member is None:
-                raise MigrationError(f"unreadable archive member in {case.name}: {name}")
-            reason = _discard_reason(name)
-            temp_path = None
-            if reason is None:
-                temp_total += info.size
-                if temp_total > max_temp_bytes:
-                    raise MigrationError(f"bounded temp budget exceeded in {case.name}")
-                if stage:
-                    temp_path = temp_dir / f".{case.name}.{len(staged)}.part"
-                    if temp_path.exists():
-                        raise MigrationError(f"stale temp file: {temp_path}")
-            with member:
-                if temp_path is None:
-                    for chunk in iter(lambda m=member: m.read(1024 * 1024), b""):
-                        hasher.update(chunk)
-                else:
-                    with temp_path.open("xb") as sink:
+    complete = False
+    try:
+        with tarfile.open(archive, "r:gz") as tar:
+            for info in tar:
+                name = info.name
+                _safe_relative(name)
+                if not info.isfile() or info.islnk() or info.issym():
+                    raise MigrationError(f"non-regular archive member in {case.name}: {name}")
+                if name not in listed:
+                    raise MigrationError(f"unattested archive member in {case.name}: {name}")
+                if name in seen:
+                    raise MigrationError(f"duplicate archive member in {case.name}: {name}")
+                seen.add(name)
+                expected = listed[name]
+                if info.size != expected["bytes"]:
+                    raise MigrationError(f"archive member size mismatch in {case.name}: {name}")
+                member = tar.extractfile(info)
+                if member is None:
+                    raise MigrationError(f"unreadable archive member in {case.name}: {name}")
+                reason = _discard_reason(name)
+                temp_path = None
+                if reason is None:
+                    temp_total += info.size
+                    if temp_total > max_temp_bytes:
+                        raise MigrationError(f"bounded temp budget exceeded in {case.name}")
+                    if stage:
+                        temp_path = temp_dir / f".{case.name}.{len(staged)}.part"
+                        if temp_path.exists():
+                            raise MigrationError(f"stale temp file: {temp_path}")
+                with member:
+                    if temp_path is None:
                         for chunk in iter(lambda m=member: m.read(1024 * 1024), b""):
                             hasher.update(chunk)
-                            sink.write(chunk)
-                        sink.flush()
-                        os.fsync(sink.fileno())
-            if hasher.hexdigest() != expected["sha256"]:
-                if temp_path is not None:
-                    temp_path.unlink()
-                raise MigrationError(f"archive member hash mismatch in {case.name}: {name}")
-            hasher = hashlib.sha256()
-            staged.append({
-                "relative_path": name,
-                "bytes": info.size,
-                "sha256": expected["sha256"],
-                "disposition": "discard" if reason else "retain",
-                "reason": reason,
-                "temp_path": str(temp_path) if temp_path else None,
-            })
-    missing = set(listed) - seen
-    if missing:
-        for item in staged:
-            if item["temp_path"]:
-                Path(item["temp_path"]).unlink(missing_ok=True)
-        raise MigrationError(f"archive missing attested members in {case.name}: {sorted(missing)[:3]}")
-    return staged, observed_archive_sha, temp_total
+                    else:
+                        with temp_path.open("xb") as sink:
+                            for chunk in iter(lambda m=member: m.read(1024 * 1024), b""):
+                                hasher.update(chunk)
+                                sink.write(chunk)
+                            sink.flush()
+                            os.fsync(sink.fileno())
+                if hasher.hexdigest() != expected["sha256"]:
+                    raise MigrationError(f"archive member hash mismatch in {case.name}: {name}")
+                hasher = hashlib.sha256()
+                staged.append({
+                    "relative_path": name,
+                    "bytes": info.size,
+                    "sha256": expected["sha256"],
+                    "disposition": "discard" if reason else "retain",
+                    "reason": reason,
+                    "temp_path": str(temp_path) if temp_path else None,
+                })
+        missing = set(listed) - seen
+        if missing:
+            raise MigrationError(
+                f"archive missing attested members in {case.name}: {sorted(missing)[:3]}")
+        complete = True
+        return staged, observed_archive_sha, temp_total
+    finally:
+        if not complete:
+            _cleanup_staged(staged)
 
 
 def _resume_plan(case, args, receipt):
     """Recover after a crash between the pre-delete receipt and finalisation."""
+    _verify_terminal(case, args.image, args.panel)
     if sha_file(case / ATTESTATION_NAME) != receipt.get("attestation_sha256"):
         raise MigrationError(f"attestation drift while resuming {case.name}")
     for item in receipt.get("retained_members", []):
@@ -368,7 +378,11 @@ def _promote(case, plan):
 
 
 def _write_receipt(path, doc):
-    tmp = path.with_name("." + path.name + ".tmp")
+    # A killed writer can leave a partial temp file; stale copies must never
+    # prevent a later worker from finalising an already-retired case.
+    for stale in path.parent.glob(f".{path.name}.tmp*"):
+        stale.unlink(missing_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}")
     with tmp.open("x") as stream:
         json.dump(doc, stream, indent=2, sort_keys=True)
         stream.write("\n")
@@ -380,6 +394,14 @@ def _write_receipt(path, doc):
         os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
+
+
+def _visual_record(removed, existing):
+    if removed:
+        return removed
+    if existing and isinstance(existing.get("visuals_removed"), list):
+        return existing["visuals_removed"]
+    return []
 
 
 def _remove_visuals(case):
@@ -412,7 +434,7 @@ def apply_case(case, plan, args):
     if plan.get("status") == "finalize_pending":
         if archive.exists():
             raise MigrationError(f"finalization expected absent archive in {case.name}")
-        visuals = _remove_visuals(case)
+        visuals = _visual_record(_remove_visuals(case), existing)
         stat = os.statvfs(args.root)
         existing.update({
             "archive_removed": True,
@@ -466,7 +488,7 @@ def apply_case(case, plan, args):
         os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
-    visuals = _remove_visuals(case)
+    visuals = _visual_record(_remove_visuals(case), existing)
     stat = os.statvfs(args.root)
     receipt.update({
         "archive_removed": True,
@@ -509,7 +531,8 @@ def main(argv=None):
     parser.add_argument("--case", action="append", default=[], dest="cases")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--temp-dir", type=Path, default=Path("/tmp/opencode"))
+    parser.add_argument("--temp-dir", type=Path,
+                        help="staging directory on the same filesystem as --root")
     parser.add_argument("--lock", type=Path)
     parser.add_argument("--max-temp-bytes", type=int, default=256 * 1024 ** 2)
     parser.add_argument("--free-floor-bytes", type=int, default=24 * 1024 ** 3)
@@ -522,6 +545,8 @@ def main(argv=None):
         parser.error("--limit must be nonnegative")
     if not args.root.is_dir() or args.root.is_symlink():
         raise MigrationError(f"unsafe case root: {args.root}")
+    if args.temp_dir is None:
+        args.temp_dir = args.root / ".scratch-migration-tmp"
     args.temp_dir.mkdir(parents=True, exist_ok=True)
     lock = args.lock or args.root / ".existing-scratch-migration.lock"
     results = []
@@ -555,7 +580,8 @@ def main(argv=None):
                 else:
                     summary["status"] = "planned"
                 results.append(summary)
-            except (MigrationError, OSError, ValueError, tarfile.TarError) as exc:
+            except (MigrationError, OSError, ValueError, TypeError,
+                    tarfile.TarError) as exc:
                 results.append({"case": case.name, "status": "error",
                                 "error": f"{type(exc).__name__}: {exc}"})
     report = {"mode": "apply" if args.apply else "dry_run",

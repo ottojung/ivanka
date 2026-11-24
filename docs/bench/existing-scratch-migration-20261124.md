@@ -48,10 +48,13 @@ A representative archive has 136 members: 77 CSV, 24 PNG, 17 FASTQ, 7 FASTA,
 ## Migration contract (`benchmarks/migrate_scratch_archives.py`)
 
 1. Single worker: an exclusive `flock` on `<root>/.existing-scratch-migration.lock`,
-   independent of the controller lock. Default bounded temporary budget is
-   256 MiB; retained members are streamed one at a time to a temp file, hashed,
-   then atomically promoted under `<case>/retained-scratch/`. No whole archive
-   is extracted and no discarded member is written to disk.
+   independent of the controller lock. The staging directory defaults to
+   `<root>/.scratch-migration-tmp` so the atomic promotion never crosses a
+   filesystem boundary; a 256 MiB bounded temporary budget is enforced.
+   Retained members are streamed one at a time to a temp file, hashed, then
+   atomically promoted under `<case>/retained-scratch/`. No whole archive is
+   extracted and no discarded member is written to disk. Temp files are cleaned
+   on every abort path and stale receipt temp files are removed on retry.
 2. Fail-closed preflight: 64-hex case, regular files only, attestation schema
    and status, pinned image/qualification flag, terminal receipt fields and
    score floors, attestation-to-receipt hash equality, no active `/proc` FDs in
@@ -95,7 +98,9 @@ by separate code (`independent_verify.py`; no shared imports with the tool):
   36,381,635 B; 72 retained (1,887,641 B) and 44 discarded (213,748,297 B);
   458,170 B of visuals removed.
 
-Validation evidence: all 10 migration unit tests pass; `ruff check` is clean;
+Validation evidence: all 14 migration unit tests pass (including stale-temp,
+mid-stream abort, malformed receipt and visual-record recovery cases found by
+independent review); `ruff check` is clean;
 independent post-migration verification reports all three archives absent,
 old SHA preserved in both attestation and receipt, every member hash covered
 by the receipt, and every promoted member byte-exact; the SHA256 of every

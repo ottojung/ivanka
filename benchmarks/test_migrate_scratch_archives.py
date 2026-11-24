@@ -238,6 +238,75 @@ class MigrateScratchArchivesTests(unittest.TestCase):
             self.assertTrue((case / "linked.png").is_symlink())
             self.assertEqual(outside.read_bytes(), b"keep")
 
+    def test_stale_receipt_temp_does_not_wedge_recovery(self):
+        with TemporaryDirectory() as d:
+            case = _make_case(d)
+            stale = case / (".scratch-retention-receipt.json.tmp.999")
+            stale.write_text("partial")
+            args = _args(d, d, apply=True)
+            result = migration.apply_case(case, migration.inspect_case(case, args), args)
+            self.assertEqual(result["status"], "migrated")
+            self.assertFalse(stale.exists())
+            self.assertFalse(list(case.glob(".scratch-retention-receipt.json.tmp*")))
+
+    def test_temp_files_cleaned_on_mid_stream_abort(self):
+        with TemporaryDirectory() as d:
+            case = _make_case(d)
+            archive = case / migration.ARCHIVE_NAME
+            with tarfile.open(archive, "w:gz") as tar:
+                payloads = {"combined_contigs.fasta": b">c\nACGT\n",
+                            "unattested.csv": b"unexpected\n"}
+                for name, data in payloads.items():
+                    info = tarfile.TarInfo(name)
+                    info.size = len(data)
+                    tar.addfile(info, io.BytesIO(data))
+            att = json.loads((case / migration.ATTESTATION_NAME).read_text())
+            att["sha256_archive"] = _digest(archive.read_bytes())
+            _write_json(case / migration.ATTESTATION_NAME, att)
+            with self.assertRaises(migration.MigrationError):
+                migration.inspect_case(case, _args(d, d, apply=True))
+            self.assertEqual(list(Path(d).glob("*.part")), [])
+            self.assertTrue(archive.exists())
+
+    def test_malformed_receipt_is_reported_per_case(self):
+        with TemporaryDirectory() as d:
+            case = _make_case(d)
+            receipt = json.loads((case / "prospective-execution.json").read_text())
+            receipt["wall_seconds"] = "not-a-number"
+            _write_json(case / "prospective-execution.json", receipt)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = migration.main(["--root", d, "--temp-dir", d])
+            self.assertEqual(code, 1)
+            report = json.loads(out.getvalue())
+            self.assertEqual(report["cases"][0]["status"], "error")
+            self.assertIn("TypeError", report["cases"][0]["error"])
+
+    def test_finalization_preserves_visual_record(self):
+        with TemporaryDirectory() as d:
+            case = _make_case(d)
+            args = _args(d, d, apply=True)
+            plan = migration.inspect_case(case, args)
+            promoted = migration._promote(case, plan)
+            visual_record = [{"path": "coverage_maps/plot.png", "bytes": 4,
+                              "sha256": _digest(b"plot")}]
+            _write_json(case / migration.RECEIPT_NAME, {
+                "schema": migration.SCHEMA,
+                "case_sha256": case.name,
+                "attestation_sha256": plan["attestation_sha256"],
+                "archive_sha256": plan["archive_sha256"],
+                "archive_removed": False,
+                "retained_members": promoted,
+                "visuals_removed": visual_record,
+            })
+            (case / migration.ARCHIVE_NAME).unlink()
+            final = migration.apply_case(case, migration.inspect_case(case, args), args)
+            self.assertEqual(final["status"], "finalized")
+            receipt = json.loads((case / migration.RECEIPT_NAME).read_text())
+            self.assertTrue(all(item in receipt["visuals_removed"]
+                                for item in visual_record))
+            self.assertFalse((case / "report.pdf").exists())
+
     def test_main_lock_and_limit(self):
         with TemporaryDirectory() as d:
             root = Path(d) / "cases"

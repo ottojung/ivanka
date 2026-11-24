@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from assembler_bench import exploratory_policy
+from assembler_bench import exploratory_policy, px_metrics
 from assembler_bench import px_cohort_scheduler as sched
 from assembler_bench import px_execution as exe
 from assembler_bench import px_supervisor as sup
@@ -286,8 +286,9 @@ class IntegrationTests(unittest.TestCase):
     def test_posthoc_scoring_and_cleanup_after_hashes(self):
         plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
         arm = plan["pending"][0]
-        output = self.px / "out"
-        output.mkdir()
+        case = self.source().case(arm["cohort"], arm["alias"])
+        output = self.px / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
+        output.mkdir(parents=True)
         (output / "conseq.csv").write_bytes(b"MAX\n")
         sched.record_outcome(self.px, arm, output / "conseq.csv", "success",
                              seconds=3.0)
@@ -301,12 +302,15 @@ class IntegrationTests(unittest.TestCase):
 
         path, digest = exe.posthoc(self.px, arm, Scorer(), "e" * 64)
         self.assertEqual(sched.sha256_file(path), digest)
-        scratch = self.px / "outputs" / "scratch"
+        exe.extract_diagnostics(self.px, arm, output,
+                                fastq_sha256=[case.input_hashes()["R1"],
+                                              case.input_hashes()["R2"]])
+        scratch = output / "scratch"
         scratch.mkdir(parents=True)
         (scratch / "tmp.csv").write_text("disposable")
         cleaned = exe.cleanup_disposable(self.px, scratch, arm, path)
         self.assertFalse(scratch.exists())
-        self.assertEqual(cleaned["reason"], "hashes_verified")
+        self.assertEqual(cleaned["reason"], "diagnostics_measured_hashes_verified")
         with self.assertRaisesRegex(ValueError, "verified terminal receipt"):
             exe.cleanup_disposable(self.px, scratch, plan["pending"][1], path)
 
@@ -397,6 +401,147 @@ class IntegrationTests(unittest.TestCase):
         text = sched.receipt_path(self.px, arm).read_text()
         self.assertNotIn("sample-", text)
         self.assertNotIn(".fastq", text)
+
+
+    def _arm_output(self, arm):
+        output = self.px / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
+        output.mkdir(parents=True, exist_ok=True)
+        return output
+
+    def _record_success(self, arm, output, content=b"region,MAX\nHIV1,ACGT\n"):
+        (output / "conseq.csv").write_bytes(content)
+        sched.record_outcome(self.px, arm, output / "conseq.csv", "success",
+                             seconds=3.0, peak_rss=1_000_000)
+        return sched.verify_receipt(self.px, arm)
+
+    def test_diagnostics_require_explicit_metric_status(self):
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        case = self.source().case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        self._record_success(arm, output, b"consensus-percent-cutoff,sequence\nMAX,\n")
+        path, digest = exe.extract_diagnostics(
+            self.px, arm, output,
+            fastq_sha256=[case.input_hashes()["R1"], case.input_hashes()["R2"]])
+        record = json.loads(path.read_bytes())
+        self.assertEqual(record["schema"], px_metrics.SCHEMA)
+        for name in px_metrics.METRICS:
+            metric = record["metrics"][name]
+            self.assertIn(metric["status"], {"extracted", "unavailable"})
+            if metric["status"] == "unavailable":
+                self.assertIsInstance(metric["unavailable_reason"], str)
+            else:
+                self.assertIsNone(metric["unavailable_reason"])
+        self.assertEqual(record["metrics"]["exact_coverage"]["status"], "unavailable")
+        self.assertIn("no final MAX", record["metrics"]["exact_coverage"]["unavailable_reason"])
+        self.assertEqual(digest, sched.sha256_file(path))
+        self.assertTrue((Path(str(path) + ".sha256")).is_file())
+
+    def test_retention_refuses_without_complete_diagnostics(self):
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        case = self.source().case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        self._record_success(arm, output)
+        path, _ = exe.posthoc(self.px, arm, type("S", (), {
+            "source_sha256": "e" * 64,
+            "score": lambda self, **k: {"alias": k["alias"], "outcome": "success",
+                                        "score": 1.0, "seconds": 3.0}})(), "e" * 64)
+        scratch = output / "scratch"
+        scratch.mkdir()
+        (scratch / "tmp.csv").write_text("x")
+        with self.assertRaisesRegex(ValueError, "diagnostics and results must be attested"):
+            exe.cleanup_disposable(self.px, scratch, arm, path)
+        exe.extract_diagnostics(self.px, arm, output,
+                                fastq_sha256=[case.input_hashes()["R1"],
+                                              case.input_hashes()["R2"]])
+        removed = exe.cleanup_disposable(self.px, scratch, arm, path)
+        self.assertFalse(scratch.exists())
+        self.assertEqual(removed["reason"], "diagnostics_measured_hashes_verified")
+
+    def test_retention_revalidates_stale_plan(self):
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        case = self.source().case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        self._record_success(arm, output)
+        exe.posthoc(self.px, arm, type("S", (), {
+            "source_sha256": "e" * 64,
+            "score": lambda self, **k: {"alias": k["alias"], "outcome": "success",
+                                        "score": 1.0, "seconds": 3.0}})(), "e" * 64)
+        exe.extract_diagnostics(self.px, arm, output,
+                                fastq_sha256=[case.input_hashes()["R1"],
+                                              case.input_hashes()["R2"]])
+        scratch = output / "scratch"
+        scratch.mkdir()
+        (scratch / "tmp.csv").write_text("x")
+        decision = exe.retention_plan(self.px, [arm], allocated=lambda p: 10)
+        (output / "conseq.csv").write_bytes(b"tampered\n")
+        with self.assertRaisesRegex(ValueError, "stale retention plan|no longer reclaimable|changed"):
+            exe.apply_retention(self.px, decision)
+
+    def test_retention_handles_outside_scratch_archive(self):
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        case = self.source().case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        self._record_success(arm, output)
+        exe.posthoc(self.px, arm, type("S", (), {
+            "source_sha256": "e" * 64,
+            "score": lambda self, **k: {"alias": k["alias"], "outcome": "success",
+                                        "score": 1.0, "seconds": 3.0}})(), "e" * 64)
+        exe.extract_diagnostics(self.px, arm, output,
+                                fastq_sha256=[case.input_hashes()["R1"],
+                                              case.input_hashes()["R2"]])
+        archive = output / "scratch.tar.gz"
+        archive.write_bytes(b"big")
+        decision = exe.retention_plan(self.px, [arm], allocated=lambda p: 10)
+        self.assertTrue(any(e["target"].endswith("scratch.tar.gz")
+                            for e in decision["reclaim"]))
+        removed = exe.apply_retention(self.px, decision)
+        self.assertFalse(archive.exists())
+        self.assertTrue((output / "conseq.csv").is_file())
+        self.assertTrue(removed)
+
+    def test_infrastructure_failure_preserved_and_retried(self):
+        registry = self.promoted_registry()
+        for tool in TOOLS:
+            sup.make_handoff(self.px, registry, tool)
+        calls = []
+        source = self.source()
+        first = sched.build_plan(registry, source, self.px)["pending"][0]
+
+        def operate(registry_path, baseline, tool, mode, argv, reserve):
+            mount = next(a for a in argv if str(a).endswith(":/results:rw"))
+            output = Path(str(mount).split(":")[0])
+            calls.append(output.name)
+            if len(calls) == 1:
+                return {"status": "killed", "reason": "disk_limit",
+                        "log_sha256": "c" * 64}
+            (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
+            (output / "timing.json").write_text(
+                json.dumps({"exit_code": 0, "seconds": 3.0}))
+            (self.px / sup.STOP_FILE).write_text("stop\n")
+            return {"status": "finished", "peak_rss": 1_000_000,
+                    "log_sha256": "d" * 64}
+
+        with patch("assembler_bench.exploratory_space.admit",
+                   return_value={"incremental_bytes": 0,
+                                 "free_bytes": 100 * 1024**3,
+                                 "admitted_reservation_bytes": 1024**3}):
+            sup.BackgroundSupervisor(
+                registry, self.baseline(), source, self.px,
+                exe.SupervisedRunner(registry, self.baseline(), operate, self.px),
+            ).start(armed=True)
+        receipt = sched.verify_receipt(self.px, first)
+        self.assertEqual(receipt["outcome"], "success")
+        self.assertEqual(receipt["attempt"], 2)
+        original = sched.attempt_path(self.px, first, 1)
+        self.assertTrue(original.is_file())
+        original_data = json.loads(original.read_bytes())
+        self.assertEqual(original_data["failure_reason"], "disk_stop")
+        self.assertEqual(original_data["attempt"], 1)
+        self.assertEqual(len(calls), 2)
 
 
 if __name__ == "__main__":

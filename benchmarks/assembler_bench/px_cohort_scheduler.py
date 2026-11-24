@@ -41,6 +41,9 @@ FAILURE_REASONS = frozenset((
     "error", "timeout", "no_contigs", "no_final_max", "disk_stop",
     "wall_limit", "observed_rss_limit", "measurement_unavailable",
 ))
+# Infrastructure failures preserve attempts and may be retried boundedly.
+INFRASTRUCTURE_FAILURE_REASONS = frozenset(("disk_stop", "measurement_unavailable"))
+MAX_INFRA_ATTEMPTS = 2
 MAX_RESERVE = 4 * 1024**3
 MIN_RESERVE = 1024**3
 # MiCall's frozen final MAX consensus artifact, never a raw assembler contig.
@@ -248,6 +251,11 @@ def receipt_path(root, arm):
     return Path(root) / "receipts" / (receipt_id(arm) + ".json")
 
 
+def attempt_path(root, arm, attempt):
+    return Path(root) / "receipts" / "attempts" / (
+        receipt_id(arm) + f".attempt-{attempt:03d}.json")
+
+
 def index_path(root):
     return Path(root) / "receipts" / "index.json"
 
@@ -266,16 +274,7 @@ def _write_index(root, entries):
     return _atomic_json(index_path(root), {"schema": INDEX_SCHEMA, "entries": entries})
 
 
-def verify_receipt(root, arm):
-    """Only a content-hashed, terminal, pin-bound receipt can end an arm."""
-    path = receipt_path(root, arm)
-    if not path.is_file():
-        return None
-    recorded = _load_index(root).get(receipt_id(arm))
-    blob = path.read_bytes()
-    if not isinstance(recorded, str) or sha256_file(path) != recorded:
-        raise ValueError("PX case receipt is unindexed or changed")
-    data = json.loads(blob)
+def _verify_receipt_data(data, arm):
     for key, expected in (("schema", RECEIPT_SCHEMA), ("tool_id", arm["tool_id"]),
                           ("cohort", arm["cohort"]), ("alias", arm["alias"]),
                           ("source_commit", arm["source_commit"]),
@@ -287,6 +286,10 @@ def verify_receipt(root, arm):
             or data.get("outcome") not in TERMINAL_OUTCOMES
             or data.get("input_sha256") != arm["input_sha256"]):
         raise ValueError("PX receipt is incomplete or not terminal")
+    attempt = data.get("attempt", 1)
+    if (not isinstance(attempt, int) or attempt < 1
+            or attempt > MAX_INFRA_ATTEMPTS):
+        raise ValueError("PX receipt attempt is invalid")
     if data["outcome"] == "success":
         if not SHA256.fullmatch(data.get("output_sha256") or ""):
             raise ValueError("successful PX receipt lacks hashed final MAX output")
@@ -296,11 +299,51 @@ def verify_receipt(root, arm):
     return data
 
 
+def verify_receipt(root, arm):
+    """Only a content-hashed, terminal, pin-bound receipt can end an arm."""
+    path = receipt_path(root, arm)
+    if not path.is_file():
+        return None
+    recorded = _load_index(root).get(receipt_id(arm))
+    blob = path.read_bytes()
+    if not isinstance(recorded, str) or sha256_file(path) != recorded:
+        raise ValueError("PX case receipt is unindexed or changed")
+    data = _verify_receipt_data(json.loads(blob), arm)
+    attempt = data.get("attempt", 1)
+    if attempt > 1:
+        original = attempt_path(root, arm, 1)
+        if not original.is_file():
+            raise ValueError("versioned retry missing preserved original failure")
+        prior = _verify_receipt_data(json.loads(original.read_bytes()), arm)
+        if (prior.get("outcome") != "failure"
+                or prior.get("failure_reason") not in INFRASTRUCTURE_FAILURE_REASONS):
+            raise ValueError("only infrastructure failures may be retried")
+    return data
+
+
+def _write_canonical_receipt(root, arm, receipt):
+    digest = _atomic_json(receipt_path(root, arm), receipt)
+    entries = _load_index(root)
+    entries[receipt_id(arm)] = digest
+    _write_index(root, entries)
+    return receipt
+
+
 def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
                    failure_reason=None, runner_receipt_sha256=None):
-    """Write an immutable terminal receipt; refuse to overwrite a prior one."""
-    if verify_receipt(root, arm) is not None:
-        raise ValueError("terminal PX arm may not be recomputed or overwritten")
+    """Write an immutable terminal receipt; preserve original infra failures."""
+    existing = verify_receipt(root, arm)
+    attempt = 1
+    if existing is not None:
+        if (existing.get("outcome") == "failure"
+                and existing.get("failure_reason") in INFRASTRUCTURE_FAILURE_REASONS
+                and existing.get("attempt", 1) < MAX_INFRA_ATTEMPTS):
+            original = attempt_path(root, arm, 1)
+            if not original.is_file():
+                _atomic_write(original, _json_bytes(existing))
+            attempt = existing.get("attempt", 1) + 1
+        else:
+            raise ValueError("terminal PX arm may not be recomputed or overwritten")
     if outcome not in TERMINAL_OUTCOMES:
         raise ValueError("outcome must be terminal")
     if outcome == "success" and Path(output_path).name != MAX_ARTIFACT:
@@ -316,6 +359,7 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
         "seconds": seconds, "peak_rss_bytes": peak_rss,
         "failure_reason": failure_reason,
         "runner_receipt_sha256": runner_receipt_sha256, "terminal": True,
+        "attempt": attempt,
     }
     if outcome == "success" and (not isinstance(seconds, (int, float))
                                  or seconds <= 0):
@@ -323,11 +367,9 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
     if outcome == "failure" and failure_reason not in FAILURE_REASONS:
         raise ValueError("unclassified failure is never terminal")
     _assert_public(receipt)
-    digest = _atomic_json(receipt_path(root, arm), receipt)
-    entries = _load_index(root)
-    entries[receipt_id(arm)] = digest
-    _write_index(root, entries)
-    return receipt
+    if attempt > 1:
+        _atomic_json(attempt_path(root, arm, attempt), receipt)
+    return _write_canonical_receipt(root, arm, receipt)
 
 
 def build_plan(registry, source, root):
@@ -345,7 +387,13 @@ def build_plan(registry, source, root):
                        **{key: tool[key] for key in (
                            "source_commit", "adapter_commit", "image_sha256")}}
                 arms.append(arm)
-                if verify_receipt(root, arm) is not None:
+                receipt = verify_receipt(root, arm)
+                retryable = (
+                    isinstance(receipt, dict)
+                    and receipt.get("outcome") == "failure"
+                    and receipt.get("failure_reason") in INFRASTRUCTURE_FAILURE_REASONS
+                    and receipt.get("attempt", 1) < MAX_INFRA_ATTEMPTS)
+                if receipt is not None and not retryable:
                     accepted_ids.append(receipt_id(arm))
                 else:
                     pending.append(arm)

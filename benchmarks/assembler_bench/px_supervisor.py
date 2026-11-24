@@ -86,13 +86,16 @@ class BackgroundSupervisor:
     """Sequential, resumable driver. ``runner`` is the guarded launcher adapter."""
 
     def __init__(self, registry, baseline, source, root, runner,
-                 reserve_bytes=1024**3, clock=time.monotonic, sleep=time.sleep):
+                 reserve_bytes=1024**3, clock=time.monotonic, sleep=time.sleep,
+                 diagnostics=None, retain=None):
         self.registry = Path(registry)
         self.baseline = json.loads(Path(baseline).read_text())
         self.source, self.root = source, Path(root)
         self.runner = runner
         self.reserve_bytes = reserve_bytes
         self.clock, self.sleep = clock, sleep
+        self.diagnostics = diagnostics
+        self.retain = retain
         if not sched.MIN_RESERVE <= reserve_bytes <= sched.MAX_RESERVE:
             raise ValueError("PX supervisor reservation must be 1-4 GiB")
 
@@ -109,18 +112,47 @@ class BackgroundSupervisor:
         for arm in pending:
             if (self.root / STOP_FILE).is_file():
                 break
-            # Admission failure (quota, unreadable measurement) stops the loop;
-            # no arm is ever dispatched without a passing guard decision.
+            self._run_arm(arm, plan, completed)
+        return {"status": "stopped" if (self.root / STOP_FILE).is_file()
+                else "idle" if not pending else "advanced",
+                "completed": completed, "remaining": len(pending) - len(completed)}
+
+    def _run_arm(self, arm, plan, completed):
+        for _ in range(sched.MAX_INFRA_ATTEMPTS):
             sched.admit_arm(self.registry, self.baseline, self.root,
                             self.reserve_bytes)
             case = self.source.case(arm["cohort"], arm["alias"])
             report = self.runner(arm, case)
-            self._record(arm, report)
+            receipt = self._record(arm, report)
+            retryable = (receipt.get("outcome") == "failure"
+                         and receipt.get("failure_reason")
+                         in sched.INFRASTRUCTURE_FAILURE_REASONS
+                         and receipt.get("attempt", 1) < sched.MAX_INFRA_ATTEMPTS)
+            if retryable and not (self.root / STOP_FILE).is_file():
+                continue
+            self._posthoc(arm, case, receipt)
             completed.append(sched.receipt_id(arm))
             sched.write_checkpoint(self.root, plan, completed)
-        return {"status": "stopped" if (self.root / STOP_FILE).is_file()
-                else "idle" if not pending else "advanced",
-                "completed": completed, "remaining": len(pending) - len(completed)}
+            return
+        completed.append(sched.receipt_id(arm))
+        sched.write_checkpoint(self.root, plan, completed)
+
+    def _posthoc(self, arm, case, receipt):
+        if receipt.get("outcome") != "success":
+            return
+        if self.diagnostics is not None:
+            self.diagnostics(self.root, arm, case, receipt)
+            if self.retain is not None:
+                self.retain(self.root, arm, case, receipt)
+            return
+        if self.retain is not None:
+            self.retain(self.root, arm, case, receipt)
+            return
+        try:
+            from .px_execution import posthoc_extract_and_retain
+            posthoc_extract_and_retain(self.root, arm, case, receipt)
+        except Exception:  # noqa: BLE001
+            return
 
     def _record(self, arm, report):
         if not isinstance(report, dict) or report.get("outcome") not in (
@@ -135,7 +167,7 @@ class BackgroundSupervisor:
         failure = report.get("failure_reason")
         if report["outcome"] == "failure" and failure not in sched.FAILURE_REASONS:
             raise ValueError("runner failure reason is not classified")
-        sched.record_outcome(
+        return sched.record_outcome(
             self.root, arm, report.get("output_path"), report["outcome"],
             seconds=report.get("seconds"), peak_rss=report.get("peak_rss"),
             failure_reason=failure,

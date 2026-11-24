@@ -9,10 +9,9 @@ import argparse
 import csv
 import json
 import secrets
-import shutil
 from pathlib import Path
 
-from . import exploratory_policy
+from . import exploratory_policy, px_metrics, px_retention
 from . import px_cohort_scheduler as sched
 from . import px_supervisor as sup
 from .exploratory_runtime import launch
@@ -180,22 +179,53 @@ def posthoc(root, arm, scorer, scorer_sha):
     return path, digest
 
 
-def cleanup_disposable(root, scratch, arm, result_path):
-    """Remove scratch only after receipt and result content hashes verify."""
-    target = Path(scratch).resolve()
-    base = Path(root).resolve()
-    if not target.is_relative_to(base) or target == base:
-        raise ValueError("scratch cleanup escaped the PX root")
-    if target.name not in ("scratch", "tmp"):
-        raise ValueError("only disposable scratch may be removed")
-    if sched.verify_receipt(root, arm) is None:
+def extract_diagnostics(root, arm, output_dir, *, fastq_sha256,
+                        exact_report=None):
+    """Measure final-MAX diagnostics before any scratch can be reclaimed."""
+    return px_metrics.record(root, arm, output_dir,
+                             fastq_sha256=fastq_sha256,
+                             exact_report=exact_report)
+
+
+def posthoc_extract_and_retain(root, arm, case, receipt):
+    """Default post-arm hook: extract diagnostics, then reclaim disposable."""
+    del receipt
+    output_dir = Path(root) / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
+    exact_report = None
+    report_path = output_dir / "exact_coverage.json"
+    if report_path.is_file():
+        exact_report = json.loads(report_path.read_bytes())
+    hashes = case.input_hashes()
+    px_metrics.record(root, arm, output_dir,
+                      fastq_sha256=[hashes["R1"], hashes["R2"]],
+                      exact_report=exact_report)
+    for target in px_retention._disposable_entries(Path(root), arm):
+        px_retention.reclaim_one(root, arm, target=target)
+
+
+def retention_plan(root, arms, budget_bytes=px_retention.BUDGET_BYTES,
+                   allocated=None):
+    """Bound evidence retention by the 8 GiB policy without deleting anything."""
+    return px_retention.plan(root, arms, budget_bytes, allocated)
+
+
+def apply_retention(root, decision):
+    """Reclaim only verified scratch from an in-budget retention plan."""
+    return px_retention.apply(root, decision)
+
+
+def cleanup_disposable(root, scratch, arm, result_path=None):
+    """Remove disposable artifacts only after full diagnostics verification."""
+    receipt = sched.verify_receipt(root, arm)
+    if receipt is None:
         raise ValueError("scratch cleanup requires a verified terminal receipt")
-    sidecar = Path(str(result_path) + ".sha256")
-    if (not sidecar.is_file()
-            or sidecar.read_text().strip() != sched.sha256_file(result_path)):
-        raise ValueError("result hash not yet attested before cleanup")
-    shutil.rmtree(target)
-    return {"removed": str(target), "reason": "hashes_verified"}
+    if result_path is not None:
+        sidecar = Path(str(result_path) + ".sha256")
+        if (not sidecar.is_file()
+                or sidecar.read_text().strip() != sched.sha256_file(result_path)):
+            raise ValueError("result hash not yet attested before cleanup")
+    target = Path(scratch)
+    return px_retention.reclaim_one(root, arm, target=target)
 
 
 class SupervisedRunner:
@@ -273,8 +303,10 @@ def main():
     if baseline is None:
         raise ValueError("missing or changed PX storage baseline")
     runner = SupervisedRunner(args.registry, baseline, launch.operate, args.root)
-    result = sup.BackgroundSupervisor(args.registry, baseline, source,
-                                      args.root, runner).start(armed=True)
+    result = sup.BackgroundSupervisor(args.registry, baseline, source, args.root,
+                                      runner,
+                                      diagnostics=posthoc_extract_and_retain
+                                      ).start(armed=True)
     print(json.dumps(result, sort_keys=True))
 
 

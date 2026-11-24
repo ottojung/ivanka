@@ -19,6 +19,8 @@ SYN_SOURCE=/workspace/ivanka-synthetic-v4-20261117
 Q=/workspace/ivanka-caps-qualification-20261119
 # Read-only PX receipt root: ingestion never launches or interrupts workers.
 PX_ROOT=/workspace/ivanka-exploratory-ten-20261121
+PX_REGISTRY="$PX_ROOT/private-frozen-ten-pilot-registry-20gib-20261124.json"
+PX_HANDOFF="$PX_ROOT/handoff/soapdenovo2.json"
 REAL_DATA=/workspace/denovo-example-io-1
 
 mkdir -p "$R/comparator-services"
@@ -61,7 +63,8 @@ while :; do
       PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
         benchmarks.assembler_bench.px_cohort_ingest \
         --site "$WEB/site/bench" --root "$PX_ROOT" \
-        --real-data "$REAL_DATA"
+        --real-data "$REAL_DATA" --registry "$PX_REGISTRY" \
+        --handoff "$PX_HANDOFF"
     fi
 
     PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \

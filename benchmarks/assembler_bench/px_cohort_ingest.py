@@ -138,6 +138,10 @@ def _case(root, name, receipt, assembler, real_data):
             or resource.get("peak_rss_bytes") != receipt.get("peak_rss_bytes")):
         raise ValueError("PX observed peak RAM is not reconciled")
     coverage = diagnostics["metrics"].get("exact_coverage", {})
+    metrics = _metrics(diagnostics)
+    # Observed peak RAM is a genuine published diagnostic as well as receipt
+    # evidence; keep both representations in agreement.
+    metrics["peak_ram_observed_mib"] = ram
     return {
         "cohort": cohort, "canonical_alias": alias, "outcome": receipt["outcome"],
         "canonical_manifest_sha256": PHYSICAL_MANIFEST,
@@ -153,7 +157,7 @@ def _case(root, name, receipt, assembler, real_data):
         "source_commit": provenance.get("source_commit"),
         "adapter_commit": provenance.get("adapter_commit"),
         "image_sha256": provenance.get("image_sha256"),
-        "diagnostics": _metrics(diagnostics),
+        "diagnostics": metrics,
         "exact_coverage": {
             "status": coverage.get("status", "unavailable"),
             "unavailable_reason": coverage.get("unavailable_reason"),
@@ -162,15 +166,73 @@ def _case(root, name, receipt, assembler, real_data):
     }
 
 
-def ingest(report, evidence, root, real_data):
+def refresh_registry_provenance(evidence, registry_path, handoff_path):
+    """Adopt a verified registry activation without inventing measurements."""
+    from . import exploratory_policy
+    registry = _load(registry_path)
+    handoff = _load(handoff_path)
+    if (registry.get("schema") != "ivanka.exploratory.assemblers.v1"
+            or handoff.get("schema") != "ivanka.px.supervisor.handoff.v1"
+            or not SHA64.fullmatch(handoff.get("image_receipt_sha256", ""))
+            or not SHA64.fullmatch(handoff.get("pilot_receipt_sha256", ""))):
+        raise ValueError("registry activation or supervisor handoff unverified")
+    branches = registry.get("adapter_branch_commits", {})
+    assemblers = {item["id"]: item for item in evidence["assemblers"]}
+    adopted = []
+    for raw in registry["candidates"]:
+        item = dict(raw, adapter_commit=branches.get(raw["id"]))
+        target = assemblers.get(item["id"])
+        if target is None or item["id"] != handoff["tool_id"]:
+            continue
+        pilot = _load(item["pilot_evidence"]["path"])
+        adapter = branches.get(item["id"])
+        if (not adapter or adapter != pilot.get("adapter_commit")
+                or item.get("image_sha256") != handoff["image_sha256"]
+                or item.get("pilot_evidence", {}).get("sha256")
+                != handoff["pilot_receipt_sha256"]):
+            raise ValueError("handoff does not bind this assembler activation")
+        if not exploratory_policy.verified_receipt(
+                item, item.get("image_evidence"), "image"):
+            raise ValueError("activated image lacks a source-bound receipt")
+        if not exploratory_policy.verified_receipt(
+                item, item.get("pilot_evidence"), "pilot"):
+            raise ValueError("activated pilot lacks a paired-FASTQ receipt")
+        from .adapter_branch_refs import adapter_provenance
+        target["adapter_commit"] = adapter
+        target["image_sha256"] = item["image_sha256"]
+        target.update(adapter_provenance(item["id"], adapter))
+        target["pilot"] = {
+            "image_receipt_sha256": handoff["image_receipt_sha256"],
+            "pilot_receipt_sha256": handoff["pilot_receipt_sha256"],
+            "outcomes": {cohort: pilot.get(cohort, {}).get("status")
+                         for cohort in ("physical", "synthetic")},
+        }
+        adopted.append(item["id"])
+    return adopted
+
+
+def ingest(report, evidence, root, real_data, registry_path=None,
+           handoff_path=None):
     """Return updated evidence and report with genuine cohort receipts joined."""
     if evidence.get("schema") != EVIDENCE_SCHEMA:
         raise ValueError("unsupported assembler evidence schema")
     root = Path(root)
     index = _read_index(root)
     result = scrub(json.loads(json.dumps(evidence)))
-    assemblers = {item["id"]: item for item in result["assemblers"]}
     added = []
+    if registry_path and handoff_path:
+        for tool in refresh_registry_provenance(
+                result, registry_path, handoff_path):
+            added.append(("registry", tool, "activation"))
+    assemblers = {item["id"]: item for item in result["assemblers"]}
+    # Older evidence rows carried observed peak RAM only as receipt metadata.
+    # Normalize them into the per-arm diagnostic map before publication so
+    # published diagnostics and their attested case evidence agree.
+    for item in assemblers.values():
+        for case in item.get("cases", []):
+            ram = case.get("peak_ram_observed_mib")
+            if isinstance(ram, (int, float)):
+                case.setdefault("diagnostics", {})["peak_ram_observed_mib"] = ram
     for name in sorted(index["entries"]):
         receipt = _load(root / "receipts" / (name + ".json"))
         tool = receipt.get("tool_id")
@@ -191,13 +253,14 @@ def ingest(report, evidence, root, real_data):
     return result, merged, added, joined
 
 
-def publish(site, root, real_data):
+def publish(site, root, real_data, registry_path=None, handoff_path=None):
     """Atomically update evidence and runs.json after full-site validation."""
     from .site_build import validate_public_site
     site = Path(site)
     evidence = _load(site / "data/assembler-evidence.json")
     report = _load(site / "data/runs.json")
-    updated, merged, added, joined = ingest(report, evidence, root, real_data)
+    updated, merged, added, joined = ingest(
+        report, evidence, root, real_data, registry_path, handoff_path)
     with tempfile.TemporaryDirectory(prefix="px-ingest-") as scratch:
         staged = Path(scratch) / "bench"
         shutil.copytree(site, staged)
@@ -219,8 +282,11 @@ def main():
     parser.add_argument("--site", type=Path, required=True)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--real-data", type=Path, required=True)
+    parser.add_argument("--registry", type=Path)
+    parser.add_argument("--handoff", type=Path)
     args = parser.parse_args()
-    _, _, added = publish(args.site, args.root, args.real_data)
+    _, _, added = publish(args.site, args.root, args.real_data,
+                          args.registry, args.handoff)
     print("PX_COHORT_INGESTED", len(added), added)
 
 

@@ -10,6 +10,7 @@ the case hashes and score units are independently validated.
 """
 import copy
 import json
+import math
 import re
 
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
@@ -212,9 +213,14 @@ def _join_scores(run, assemblers, joined):
                 PHYSICAL_SCORE if case_cohort == "real" else SYNTHETIC_SCORE)
             alias = _case_target(case, cohort, run)
             sample = index.get(alias)
-            if sample is None or sample.get("score", {}).get(tool) is not None:
+            if sample is None:
                 continue
-            sample.setdefault("score", {})[tool] = float(case["score"])
+            # Re-running the publisher must refresh verified evidence fields
+            # even when a genuine score is already present. The score itself
+            # is only written when this case supplies the original reading.
+            if sample.get("score", {}).get(tool) is None:
+                sample.setdefault("score", {})[tool] = float(case["score"])
+                joined.append((run["id"], tool, alias))
             evidence_row = sample.setdefault("measurement_evidence", {}).setdefault(tool, {
                 key: case[key] for key in (
                     "canonical_alias", "canonical_manifest_sha256",
@@ -225,16 +231,20 @@ def _join_scores(run, assemblers, joined):
                     sample["failures"].append(tool)
                 sample["score"][tool] = None
                 sample["outcome"] = "failure"
+            arm = sample.setdefault("diagnostics", {}).setdefault(tool, {})
             if isinstance(case.get("diagnostics"), dict) and case["diagnostics"]:
-                sample.setdefault("diagnostics", {}).setdefault(tool, {}).update(
-                    case["diagnostics"])
+                arm.update(case["diagnostics"])
+            # Peak RAM is a published diagnostic as well as receipt evidence;
+            # the browser renders per-arm diagnostics from this map.
+            ram = case.get("peak_ram_observed_mib")
+            if type(ram) in (int, float) and math.isfinite(ram) and ram >= 0:
+                arm["peak_ram_observed_mib"] = ram
             for key in ("peak_ram_observed_mib", "input_sha256",
                         "output_sha256", "exact_coverage", "method",
                         "scorer_source_sha256", "source_commit",
                         "adapter_commit", "image_sha256"):
                 if key in case:
                     evidence_row[key] = case[key]
-            joined.append((run["id"], tool, alias))
 
 
 def merge_evidence(report, evidence):

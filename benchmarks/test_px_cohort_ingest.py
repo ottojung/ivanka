@@ -115,6 +115,8 @@ class PxCohortIngestTests(unittest.TestCase):
         self.assertIsNone(sample["seconds"]["skesa"])
         self.assertEqual(sample["diagnostics"]["skesa"][
             "nuc_soft_clips_count"], 3)
+        self.assertEqual(sample["diagnostics"]["skesa"][
+            "peak_ram_observed_mib"], 77.5)
         proof = sample["measurement_evidence"]["skesa"]
         self.assertEqual(proof["peak_ram_observed_mib"], 77.5)
         self.assertEqual(proof["input_sha256"], self.mates)

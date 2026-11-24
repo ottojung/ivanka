@@ -257,8 +257,8 @@ class CohortSource:
         return view
 
 
-def _tool_rows(registry):
-    data = exploratory_policy.checked(registry)
+def _tool_rows(registry, *, provenance_root=None):
+    data = exploratory_policy.checked(registry, provenance_root=provenance_root)
     tools = []
     for item in data["candidates"]:
         if not exploratory_policy.eligible(data, item["id"]):
@@ -422,9 +422,13 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
     return _write_canonical_receipt(root, arm, receipt)
 
 
-def build_plan(registry, source, root):
-    """Order physical before synthetic for every eligible assembler."""
-    data, tools = _tool_rows(registry)
+def build_plan(registry, source, root, *, provenance_root=None):
+    """Order physical before synthetic for every eligible assembler.
+
+    ``provenance_root`` lets an isolated registry copy verify its own receipts
+    instead of the deployed evidence root; it never changes queue ordering.
+    """
+    data, tools = _tool_rows(registry, provenance_root=provenance_root)
     source.validate()
     arms, accepted_ids, pending = [], [], []
     case_hashes = {}

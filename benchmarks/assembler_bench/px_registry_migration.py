@@ -10,6 +10,7 @@ import fcntl
 import json
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import exploratory_policy, px_cohort_scheduler as sched
@@ -19,7 +20,9 @@ PLAN_SCHEMA = "ivanka.px.registry.migration-plan.v1"
 RECEIPT_SCHEMA = "ivanka.px.registry.migration.receipt.v1"
 LOCK_NAME = ".global-worker.lock"
 STOP_NAME = "STOP"
-ELIGIBLE = frozenset(("image-pinned", "pilot", "benchmarked"))
+# A cohort arm is only schedulable after a genuine two-cohort pilot. An
+# image-pinned tool has build evidence but no pilot, so it is not admitted.
+ELIGIBLE = frozenset(("pilot", "benchmarked"))
 ACTIVATION_FIELDS = frozenset((
     "status", "image_sha256", "image_evidence", "pilot_evidence",
     "benchmark_evidence"))
@@ -35,7 +38,7 @@ PLAN_KEYS = (
     "staged_registry_sha256", "source_commit", "image_receipt_sha256",
     "pilot_receipt_sha256", "handoff_sha256", "new_plan_sha256",
     "active_checkpoint", "checkpoints", "new_completed",
-    "owner", "boundary_evidence")
+    "case_input_hashes", "owner", "boundary_evidence")
 
 
 class MigrationError(ValueError):
@@ -163,7 +166,79 @@ def eligible_tools(data):
             if exploratory_policy.eligible(data, item["id"])]
 
 
-def _case_input_hashes(root):
+@dataclass(frozen=True)
+class _PlanCase:
+    """One frozen read-pair digest pair exposed to the scheduler planner."""
+
+    alias: str
+    cohort: str
+    hashes: dict
+
+    @property
+    def source_id(self):
+        return self.alias
+
+    def input_hashes(self):
+        return dict(self.hashes)
+
+
+class PlanCaseSource:
+    """Read-only source view over the plan's complete case input hashes.
+
+    The scheduler planner is the only authority for queue order and arm
+    identity. This view supplies the frozen read-pair digests it expects and
+    refuses sparse or unknown coverage; it never invents an alias or a hash.
+    """
+
+    def __init__(self, case_hashes):
+        if not isinstance(case_hashes, dict):
+            raise MigrationError("case_input_hashes must be an object")
+        expected = set()
+        for cohort, count, prefix in (
+                ("physical", sched.PHYSICAL_COUNT, "R"),
+                ("synthetic", sched.SYNTHETIC_COUNT, "H")):
+            for position in range(1, count + 1):
+                expected.add((cohort, f"PX-{prefix}{position:03d}"))
+        self.hashes = {}
+        for key, value in case_hashes.items():
+            if not isinstance(key, str) or key.count(",") != 1:
+                raise MigrationError("invalid case_input_hashes key: " + repr(key))
+            cohort, alias = key.split(",", 1)
+            pair = (cohort, alias)
+            if pair not in expected:
+                raise MigrationError("case_input_hashes has an unknown case: " + key)
+            if (not isinstance(value, dict)
+                    or set(value) < {"R1", "R2"}
+                    or any(not isinstance(value.get(field), str)
+                           or not SHA64.fullmatch(value[field])
+                           for field in ("R1", "R2"))):
+                raise MigrationError("invalid case input hashes: " + key)
+            self.hashes[pair] = dict(value)
+        if set(self.hashes) != expected:
+            raise MigrationError(
+                "case_input_hashes is incomplete: "
+                + str(len(expected) - len(self.hashes)) + " cases missing")
+        self._cases = {cohort: [] for cohort in sched.COHORTS}
+        for cohort, alias in sorted(self.hashes):
+            self._cases[cohort].append(
+                _PlanCase(alias, cohort, self.hashes[(cohort, alias)]))
+        self.validate()
+
+    def validate(self):
+        # The planner calls this hook; construction already proved full, valid
+        # coverage, so an externally mutated view cannot become a sparse plan.
+        coverage = sum(len(cases) for cases in self._cases.values())
+        if coverage != sched.PHYSICAL_COUNT + sched.SYNTHETIC_COUNT:
+            raise MigrationError("case source coverage changed")
+
+    def cases(self, cohort):
+        return list(self._cases[cohort])
+
+    def case(self, cohort, alias):
+        return next(item for item in self._cases[cohort] if item.alias == alias)
+
+
+def _receipt_case_hashes(root):
     """Collect case input hashes from indexed receipts; same for all tools."""
     hashes = {}
     for identifier in sched._load_index(root):
@@ -173,48 +248,15 @@ def _case_input_hashes(root):
     return hashes
 
 
-def expected_plan_digest(staged, data, *, case_input_hashes=None):
-    """Recompute scheduler digest from staged registry and case input hashes."""
-    tools = []
-    for item in data["candidates"]:
-        if not exploratory_policy.eligible(data, item["id"]):
-            continue
-        tools.append({
-            "tool_id": item["id"],
-            "source_commit": item["source_commit"],
-            "adapter_commit": data["adapter_branch_commits"][item["id"]],
-            "image_sha256": item["image_sha256"],
-        })
-    identities = []
-    case_input_hashes = case_input_hashes or {}
-    for cohort, count, prefix in (
-            ("physical", sched.PHYSICAL_COUNT, "R"),
-            ("synthetic", sched.SYNTHETIC_COUNT, "H")):
-        for i in range(1, count + 1):
-            alias = f"PX-{prefix}{i:03d}"
-            input_sha256 = case_input_hashes.get((cohort, alias))
-            if input_sha256 is None:
-                raise MigrationError(
-                    "missing case input hashes for " + cohort + " " + alias)
-            for tool in tools:
-                identities.append({
-                    "tool_id": tool["tool_id"], "cohort": cohort,
-                    "alias": alias,
-                    "source_commit": tool["source_commit"],
-                    "adapter_commit": tool["adapter_commit"],
-                    "image_sha256": tool["image_sha256"],
-                    "input_sha256": input_sha256,
-                })
-    plan = {
-        "schema": sched.SCHEMA, "qualifying": False,
-        "registry_sha256": _digest(staged),
-        "frozen_seven_manifest_sha256":
-            data["policy"]["frozen_seven_manifest_sha256"],
-        "tools": [tool["tool_id"] for tool in tools],
-        "expected_counts": sched.EXPECTED_COUNTS,
-        "total_arms": len(identities),
-        "arm_identities": identities,
-    }
+def expected_plan_digest(root, staged, case_hashes, *, provenance_root=None):
+    """Recompute the scheduler's stable digest through its own planner.
+
+    Queue ordering, arm identity and the stable digest belong to
+    ``px_cohort_scheduler``; this module restates none of them. Sparse receipts
+    are harmless because the digest covers stable arm identities only.
+    """
+    source = PlanCaseSource(case_hashes)
+    plan = sched.build_plan(staged, source, root, provenance_root=provenance_root)
     return sched._plan_digest(plan)
 
 
@@ -225,8 +267,26 @@ def _tool_identity(item, adapter_commit):
     return identity
 
 
+_ALLOWED_NONADMITTED_CHANGES = frozenset(
+    ("status", "image_sha256", "image_evidence", "pilot_evidence"))
+
+
+def _failed_pilot(root, item, adapter_commit):
+    """Require a source-bound pilot receipt that actually records a failure."""
+    bound = dict(item, adapter_commit=adapter_commit)
+    evidence = item.get("pilot_evidence")
+    if not exploratory_policy.verified_receipt(
+            bound, evidence, "pilot", _provenance(root)):
+        raise MigrationError(
+            "no verified prior pilot for image replacement: " + item["id"])
+    receipt = _load(evidence["path"])
+    return any(isinstance(receipt.get(cohort), dict)
+               and receipt[cohort].get("status") == "failure"
+               for cohort in ("physical", "synthetic"))
+
+
 def verify_additive(root, plan, staged, staged_data):
-    """Permit additive activation without mutating previously eligible arms."""
+    """Admit one tool without changing or downgrading any existing arm."""
     active = _relative(root, plan["active_registry"])
     try:
         active_data = exploratory_policy.checked(
@@ -244,36 +304,59 @@ def verify_additive(root, plan, staged, staged_data):
         raise MigrationError("candidate roster was removed or added")
     old_pins = active_data.get("adapter_branch_commits", {})
     new_pins = staged_data.get("adapter_branch_commits", {})
-    for name in before:
-        old_eligible = before[name]["status"] in ELIGIBLE
-        old_id = _tool_identity(before[name], old_pins.get(name))
-        new_id = _tool_identity(after[name], new_pins.get(name))
-        if old_eligible and old_id != new_id:
-            raise MigrationError("previously eligible identity changed: " + name)
-        if not old_eligible and old_pins.get(name) != new_pins.get(name):
-            if name != plan["tool_id"]:
-                # Non-eligible tools may move adapter pins, but only explicitly
-                # when they are not the activation target.
-                pass
-    target_old = before[plan["tool_id"]]
-    target_new = after[plan["tool_id"]]
-    if target_old["status"] in ELIGIBLE:
-        # Eligible tools may advance status only with unchanged identity.
-        if _tool_identity(target_old, old_pins.get(plan["tool_id"])) != _tool_identity(
-                target_new, new_pins.get(plan["tool_id"])):
-            raise MigrationError("eligible arm identity changed: " + plan["tool_id"])
-        if target_new["status"] not in ELIGIBLE:
-            raise MigrationError("eligible arm downgraded: " + plan["tool_id"])
-    else:
-        if target_new["status"] not in ELIGIBLE:
-            raise MigrationError("activation did not admit target: " + plan["tool_id"])
-    # Non-admitted tools' adapter pin changes are allowed, but all pin values
-    # must still be valid full hashes.
     if not isinstance(new_pins, dict) or set(new_pins) != set(before):
         raise MigrationError("adapter pins do not match roster")
     for name, value in new_pins.items():
         if not isinstance(value, str) or not SHA40.fullmatch(value):
             raise MigrationError("invalid adapter pin: " + name)
+    for name in before:
+        old, new = before[name], after[name]
+        old_admitted = old["status"] in ELIGIBLE
+        new_admitted = new["status"] in ELIGIBLE
+        changed = {key for key in set(old) | set(new)
+                   if old.get(key) != new.get(key)}
+        if old_admitted:
+            if _tool_identity(old, old_pins.get(name)) != _tool_identity(
+                    new, new_pins.get(name)):
+                raise MigrationError("previously admitted identity changed: " + name)
+            for kind in ("image", "pilot", "benchmark"):
+                prior = old.get(kind + "_evidence")
+                current = new.get(kind + "_evidence")
+                if (isinstance(prior, dict)
+                        and prior.get("sha256") != (
+                            current.get("sha256") if isinstance(current, dict) else None)):
+                    raise MigrationError("previously admitted proof changed: " + name)
+            if not new_admitted:
+                raise MigrationError("previously admitted arm downgraded: " + name)
+            continue
+        # A nonadmitted tool may only advance to the plan target, replace an
+        # existing image after a genuine failed pilot, or move its adapter pin.
+        if changed - _ALLOWED_NONADMITTED_CHANGES:
+            raise MigrationError("unvalidated roster change: " + name)
+        if "image_evidence" in changed and "image_sha256" not in changed:
+            raise MigrationError("image proof changed without an image pin: " + name)
+        if "image_sha256" in changed:
+            if old.get("image_sha256") is not None and not _failed_pilot(
+                    root, old, old_pins.get(name)):
+                raise MigrationError(
+                    "nonadmitted image replacement requires a failed pilot: " + name)
+            if not new_admitted and new["status"] != "image-pinned":
+                raise MigrationError("nonadmitted image replacement is not image-pinned: "
+                                     + name)
+        if "pilot_evidence" in changed and not (
+                (new_admitted and name == plan["tool_id"])
+                or "image_sha256" in changed):
+            raise MigrationError("unvalidated pilot proof change: " + name)
+        if new_admitted and name != plan["tool_id"]:
+            raise MigrationError("only the plan target may be admitted: " + name)
+    target_old = before[plan["tool_id"]]
+    target_new = after[plan["tool_id"]]
+    if target_new["status"] not in ELIGIBLE:
+        raise MigrationError("activation did not admit target: " + plan["tool_id"])
+    if target_old["status"] in ELIGIBLE and _tool_identity(
+            target_old, old_pins.get(plan["tool_id"])) != _tool_identity(
+            target_new, new_pins.get(plan["tool_id"])):
+        raise MigrationError("eligible arm identity changed: " + plan["tool_id"])
     return active, active_data
 
 
@@ -439,6 +522,14 @@ def _journal_path(root, plan):
         "migration-journal-" + plan["window_id"] + ".json")
 
 
+def _clear_journal(journal_path):
+    """A completed swap has no pending recovery; remove its journal."""
+    try:
+        Path(journal_path).unlink()
+    except FileNotFoundError:
+        pass
+
+
 def _plan_sha(root, plan_path):
     location = Path(plan_path)
     if not location.is_absolute():
@@ -498,20 +589,17 @@ def apply(root, plan_path):
         active_sha = _digest(active)
         if active_sha != staged_sha:
             verify_additive(root, plan, staged, staged_data)
-        case_input_hashes = _case_input_hashes(root)
-        if "case_input_hashes" in plan:
-            # Plan may supply hashes for cases not yet receipted.
-            supplied = plan["case_input_hashes"]
-            if not isinstance(supplied, dict):
-                raise MigrationError("case_input_hashes must be an object")
-            for key, value in supplied.items():
-                if (not isinstance(key, str) or "," not in key
-                        or not isinstance(value, dict)):
-                    raise MigrationError("invalid case_input_hashes entry")
-                cohort, alias = key.split(",", 1)
-                case_input_hashes.setdefault((cohort, alias), value)
+        supplied = plan["case_input_hashes"]
+        source = PlanCaseSource(supplied)
+        # Receipts attest a sparse subset; they must agree with the complete
+        # source-attested hashes the plan supplies for all 662 cases.
+        for key, value in _receipt_case_hashes(root).items():
+            if key not in source.hashes:
+                raise MigrationError("receipt case is not in the plan: " + str(key))
+            if source.hashes[key] != value:
+                raise MigrationError("case input hash drift: " + str(key))
         new_digest = expected_plan_digest(
-            staged, staged_data, case_input_hashes=case_input_hashes)
+            root, staged, supplied, provenance_root=_provenance(root))
         if new_digest != plan["new_plan_sha256"]:
             raise MigrationError("new checkpoint plan digest drift")
         receipt_path = root / "receipts" / (
@@ -526,6 +614,7 @@ def apply(root, plan_path):
                 if (receipt.get("plan_sha256") != plan_sha
                         or receipt.get("schema") != RECEIPT_SCHEMA):
                     raise MigrationError("applied receipt does not match plan")
+                _clear_journal(journal_path)
                 return {"status": "already-applied", "receipt": str(receipt_path)}
             # State swapped before receipt; finish recovery below.
         elif receipt_path.is_file():
@@ -533,10 +622,10 @@ def apply(root, plan_path):
             if (receipt.get("plan_sha256") != plan_sha
                     or receipt.get("schema") != RECEIPT_SCHEMA):
                 raise MigrationError("receipt exists but does not match plan")
+            _clear_journal(journal_path)
             return {"status": "already-applied", "receipt": str(receipt_path)}
 
         verify_boundary(root, plan, staged_data)
-        _boundary_verified(root, plan)
         snapshots = _checkpoint_snapshots(root, plan)
         accepted = verify_receipts(root, plan, staged_data)
         completed = sorted(set().union(
@@ -556,6 +645,9 @@ def apply(root, plan_path):
             "window_id": plan["window_id"], "tool_id": plan["tool_id"],
             "plan_sha256": plan_sha, "staged_registry_sha256": staged_sha,
             "new_checkpoint_plan_sha256": new_digest,
+            "previous_checkpoint_plan_sha256": cp_data.get("plan_sha256"),
+            "previous_checkpoint_completed": cp_data.get("completed", []),
+            "previous_active_registry_sha256": active_sha,
             "before": before,
         }
         sched._atomic_write(journal_path, sched._json_bytes(journal))
@@ -594,10 +686,7 @@ def apply(root, plan_path):
             },
         }
         sched._atomic_write(receipt_path, sched._json_bytes(receipt))
-        try:
-            journal_path.unlink()
-        except FileNotFoundError:
-            pass
+        _clear_journal(journal_path)
         return {"status": status, "receipt": str(receipt_path),
                 "receipt_sha256": _digest(receipt_path)}
     finally:

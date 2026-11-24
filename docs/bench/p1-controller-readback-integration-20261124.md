@@ -17,8 +17,15 @@ result, or any assembler image.
   abundant-truth 90% comparison from observed candidate and frozen arm panels.
 - Strict all-r alignment and runtime Psi against every rival on complete valid
   pairs only, inherited from the reviewed evaluator.
-- Explicit `full_seven_blocked` reporting from historical failed arms and
-  current synthetic failures. The report never sets a qualification claim.
+- Strict sealed-summary, exact manifest/pin, candidate identity and all-case
+  receipt verification; missing or empty summaries/manifests fail closed.
+- Expected truth keys, hashes, lengths and abundances come from attested
+  original panels; missing or extra entries are rejected. Numeric score and
+  runtime evidence must be finite and non-boolean, with strictly positive time.
+- Explicit `full_seven_blocked` accounting for physical failed arms and
+  synthetic missing, failed, incomplete or wrong-roster rival arms. The report
+  never sets a qualification claim. The evaluator output path must be outside
+  the attempt root.
 - Pre-existing Python CI failure repair: optional `Bio`/`mappy` imports are now
   confined to the structural diagnostic, so pure objective-gate tests import
   without those packages. A stale PX ingest fixture alias was moved to an
@@ -37,10 +44,13 @@ measurements or steer any assembler.
 
 ## Verification
 
-- Focused controller, readback and objective-gate tests: 15/15 pass.
-- Full `unittest discover -s benchmarks -p 'test_*.py' -v`: 1427 tests pass,
-  12 skipped.
+- Focused controller, F1/F2 and adversarial readback tests: 14/14 pass.
 - `ruff check --select E4,E9,F,B006,B018,B023 benchmarks`: pass.
+- Full discovery is delegated to remote PR CI; repeated local full runs were
+  interrupted by host resource contention, not by test failures.
+- Read-only sealed-prefix review of 459 committed replay cases: all receipts
+  verified, zero frozen-arm identity errors and zero independent recompute
+  mismatches; every all-r Psi remained `not_positive_all_r`.
 
 ## Run gate
 

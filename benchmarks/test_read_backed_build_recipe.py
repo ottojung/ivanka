@@ -30,7 +30,7 @@ class ReadBackedBuildRecipeTests(unittest.TestCase):
         self.assertIn("read_backed::write(out, contigs, reads)", finish)
         self.assertIn("output::component(contigs, reads, &statistics, chosen)", selector)
         self.assertIn("ranking::additional(contigs, &statistics, chosen)", selector)
-        self.assertIn("tiling::partition", output)
+        self.assertIn("tiling::present", output)
         self.assertIn("/usr/local/bin/ivanka", recipe)
         self.assertNotIn("/usr/local/bin/ivanka-native", recipe)
         self.assertNotIn("COPY benchmarks/ivanka_read_support_selector.py", recipe)

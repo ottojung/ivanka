@@ -27,11 +27,23 @@ fn scan_matches_pairwise_hashmap_reference() {
     }
     let input = reads(seqs);
     let got = count(&contigs, &input, &map);
-    let (depth, pairs, coverage, pair_masks) = reference::count(&contigs, &input, &map);
+    let (depth, pairs, coverage, pair_masks, reference_spans) =
+        reference::count(&contigs, &input, &map);
     assert_eq!(got.depth, depth);
     assert_eq!(got.pairs, pairs);
     assert_eq!(got.coverage, coverage);
     assert_eq!(got.pair_masks, pair_masks);
+    // Span push order depends on HashMap iteration in the reference and bit
+    // order in the accumulator; sort each candidate before comparing.
+    let mut integrated_spans = got.spans;
+    let mut expected_spans = reference_spans;
+    for entry in &mut integrated_spans {
+        entry.sort_unstable();
+    }
+    for entry in &mut expected_spans {
+        entry.sort_unstable();
+    }
+    assert_eq!(integrated_spans, expected_spans);
     assert!(got.pairs.iter().any(|&n| n > 0));
     assert!(got.depth.iter().flatten().any(|&d| d == 0));
     assert!(got.depth.iter().flatten().any(|&d| d >= 3));

@@ -15,10 +15,18 @@ use std::io;
 
 type Entry = (String, Vec<u8>);
 
+pub(super) fn selection(native: usize, chosen: usize, coverage: usize, pairs: usize) {
+    eprintln!("IVANKA_READ_BACKED_SELECTION native {native} selected [{chosen}] covered_31mers [{coverage}] supporting_pairs [{pairs}] read_support_products [{}]", coverage * pairs);
+}
+
 pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Result<usize> {
     if contigs.is_empty() {
         return output::write(path, &[]).map(|()| 0);
     }
+    debug_assert!(
+        contigs.len() <= 16,
+        "default pair masks hold at most sixteen candidates"
+    );
     let hits = index::build(contigs);
     let statistics = scoring::count(contigs, reads, &hits);
     let chosen = ranking::best(contigs, &statistics);

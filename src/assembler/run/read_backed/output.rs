@@ -1,4 +1,4 @@
-use super::{circle, island, scoring::Statistics, tiling, Entry, Reads, K};
+use super::{circle, ranking, scoring::Statistics, tiling, Entry, Reads};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 
@@ -14,8 +14,9 @@ pub(super) fn write(path: &str, entries: &[Entry]) -> io::Result<()> {
     output.flush()
 }
 
-// The primary and additional components use the same read-backed presentation
-// rule; the former's sequence and ordering are preserved.
+// A component with a read-unsubstantiated internal join contributes both
+// flanks instead of one bridge. Every rendered piece is a subsequence of the
+// native contig; no base is invented across the unsupported interval.
 pub(super) fn component(
     contigs: &[Vec<u8>],
     reads: &Reads,
@@ -27,17 +28,27 @@ pub(super) fn component(
         Some((seq, depths)) => (seq, depths),
         None => (&contigs[chosen], &statistics.depth[chosen]),
     };
-    let header = format!(">ivanka_{} len={}", chosen + 1, sequence.len());
+    let header = format!(">ivanka_{}", chosen + 1);
     if repaired.is_some() {
         eprintln!("IVANKA_READ_BACKED_REOPENED_CYCLE len={}", sequence.len());
     }
-    let (start, end) = island::bounds(sequence, depth);
-    let clipped = &sequence[start..end];
-    let observed = &depth[start..end.saturating_sub(K - 1).max(start)];
-    eprintln!(
-        "IVANKA_READ_BACKED_SELECTION native {} selected [{}] covered_31mers [{}] supporting_pairs [{}] read_support_products [{}]",
-        contigs.len(), chosen, statistics.coverage[chosen], statistics.pairs[chosen],
-        statistics.coverage[chosen] * statistics.pairs[chosen]
+    super::selection(
+        contigs.len(),
+        chosen,
+        statistics.coverage[chosen],
+        statistics.pairs[chosen],
     );
-    tiling::partition(&header, clipped, observed)
+    ranking::pieces(depth, sequence.len())
+        .into_iter()
+        .enumerate()
+        .flat_map(|(index, (from, to))| {
+            let name = format!("{header} len={}", to - from);
+            let name = if index == 0 {
+                name
+            } else {
+                format!("{name}_flank{}", index + 1)
+            };
+            tiling::present(sequence, depth, (from, to), &name)
+        })
+        .collect()
 }

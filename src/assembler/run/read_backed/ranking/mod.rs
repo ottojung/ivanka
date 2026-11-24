@@ -1,6 +1,10 @@
 mod independent;
+mod junction;
 use super::{scoring::Statistics, K};
 pub(super) use independent::additional;
+#[cfg(test)]
+pub(super) use junction::junction;
+pub(super) use junction::pieces;
 use std::cmp::Ordering;
 
 /// Read-covered breadth squared, weighted by supporting original fragments.

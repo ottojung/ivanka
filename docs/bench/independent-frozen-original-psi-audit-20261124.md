@@ -209,3 +209,27 @@ Candidate alignment values are bound to the score receipt and the hashed
 consensus artifact, not recomputed by this audit. An independent exact
 reference-panel rescoring pass remains a separate verification step; this
 script does not claim a cryptographically independent score computation.
+
+The subsequent optional exact readback mode removes the remaining
+candidate-score trust dependency by scoring the retained final MAX sequences
+with the independently loaded and hash-verified 33-reference panel. Supply
+both `--projects-json` and `--hxb2-fasta` to enable it. The frozen
+benchmark Python environment supplies the existing exact alignment scorer
+and SIMD accelerator; no assembler or MiCall processing is invoked.
+The mode verifies the retained MAX count and score and rejects disagreements.
+On the same 112-case partial cohort, all 112 scores were recomputed and
+matched, with zero rejections; 13 unit tests and Ruff passed.
+
+### Completion sensitivity (illustration only)
+
+The run is affected-first, so the first 112 cases are not a random sample.
+A counterfactual calculation substituted original Ivanka scores for the 86
+unfinished candidate cases while retaining actual new scores for the 112
+completed cases. This hypothetical all-paired-available score profile is
+strictly positive for all nonnegative exponents against each of the six
+rivals. It is **not a benchmark result or a prediction of qualification**:
+the remaining 86 candidate scores are unknown, and genuine rival failures
+still prevent complete seven-way evidence. In particular, the observed
+negative high-r tails and nonpositive r=0 values are reasons to investigate
+read-derived regressions, not reasons to alter or prematurely abandon the
+running candidate or to select an output by evaluation score.

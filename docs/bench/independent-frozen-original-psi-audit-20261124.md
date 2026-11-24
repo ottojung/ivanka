@@ -189,3 +189,23 @@ axes show concrete adverse differences (exact-zero boundary, negative Ψ(0),
 and negative high-r tails). The full P0 gate remains **not passed**: 90 cases
 are unfinished, two rival arms are incomplete, and the synthetic/seven-way
 phase is out of scope. No missing rival arm is implied to pass.
+
+## Follow-up review, 2026-11-24 02:00 UTC
+
+The initial attestation validated each original checkpoint digest but did not
+independently compare the copied score, runtime or success status with the
+checkpoint content. The follow-up patch now rejects such mismatches, binds
+candidate runtime and sampled RSS to the execution receipt, recomputes both
+sample floors using the verified peer values, rejects duplicate plan keys,
+and disallows writing report output inside either audited root. Twelve unit
+tests pass, including metric/status tampering and false floor claims; Ruff
+and diff checks pass. Read-only execution against 112 completed candidate
+cases accepted all 112, with zero attestation rejections. Observed score
+diagnostics still fail against ABySS (negative high-r tail), Haploflow,
+MEGAHIT, and SPAdes (nonpositive r=0); all six observed runtime axes dominate.
+These are incomplete-subset diagnostics, not the final physical result.
+
+Candidate alignment values are bound to the score receipt and the hashed
+consensus artifact, not recomputed by this audit. An independent exact
+reference-panel rescoring pass remains a separate verification step; this
+script does not claim a cryptographically independent score computation.

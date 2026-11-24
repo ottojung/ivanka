@@ -139,7 +139,7 @@ def validate_report(report):
     else:
         for key in ("best_available", "iva"):
             value = floors.get(key)
-            if not _is_int(value) or value < 0 or value > audit.EXPECTED_CASES:
+            if not _is_int(value) or value < 0 or value > (attested if attested is not None else audit.EXPECTED_CASES):
                 _reject(reasons, "floor_counts_invalid")
     comparators = report.get("comparators")
     if not isinstance(comparators, dict):
@@ -154,7 +154,7 @@ def validate_report(report):
             expected_full_cohort = False
             continue
         paired = row.get("paired")
-        if not _is_int(paired) or not 0 <= paired <= audit.EXPECTED_CASES:
+        if not _is_int(paired) or not 0 <= paired <= (attested if attested is not None else audit.EXPECTED_CASES):
             _reject(reasons, "paired_count_invalid")
             continue
         if paired != audit.EXPECTED_CASES:
@@ -186,13 +186,31 @@ def validate_report(report):
                 _reject(reasons, "verdict_unknown")
             elif verdict != verdict_from_proof(proof, paired):
                 _reject(reasons, "verdict_proof_mismatch")
-            if not _is_number(proof.get("psi0")):
+            counts = [proof.get(key) for key in ("gains", "losses", "ties")]
+            psi0 = proof.get("psi0")
+            if not all(_is_int(v) and v >= 0 for v in counts) or sum(counts) != paired:
+                _reject(reasons, "proof_counts_invalid")
+            elif not _is_number(psi0) or not math.isclose(
+                psi0, (counts[0] - counts[1]) / paired, rel_tol=0, abs_tol=1e-15
+            ):
                 _reject(reasons, "psi0_invalid")
+            if not isinstance(proof.get("positive_all_nonnegative"), bool):
+                _reject(reasons, "proof_status_invalid")
+            if proof.get("positive_all_nonnegative") is True and (
+                not _is_number(psi0) or psi0 <= 0
+                or proof.get("zeros_nonnegative") != []
+                or proof.get("proof_incomplete") is True
+                or "negative_witness_r" in proof
+                or proof.get("psi_at_positive_infinity") == "-inf"
+                or (_is_number(proof.get("psi_at_positive_infinity"))
+                    and proof["psi_at_positive_infinity"] < 0)
+            ):
+                _reject(reasons, "positive_proof_contradiction")
             limit = proof.get("psi_at_positive_infinity")
             # A zero-slope largest magnitude is reported as the exact signed
             # count divided by n, not as a symbolic string.
             if limit not in ("0", "+inf", "-inf") and (
-                not _is_number(limit) or limit < 0
+                not _is_number(limit)
             ):
                 _reject(reasons, "high_r_limit_invalid")
     if report.get("full_cohort_eligible") is not expected_full_cohort:
@@ -246,12 +264,22 @@ def decide(report):
     if attested != audit.EXPECTED_CASES:
         return _result(INCOMPLETE_COHORT, report)
     floors = report["observed_quality_floor_failures"]
-    if floors["best_available"] > 0 or floors["iva"] > 0:
-        return _result(PER_CASE_FLOOR_FAILURE, report)
+    comparators = report["comparators"]
 
+    def complete(tool):
+        return comparators[tool]["paired"] == audit.EXPECTED_CASES
+
+    def dominates(tool):
+        return all(comparators[tool][axis]["verdict"] == "dominates_on_observed_pairs"
+                   for axis in _AXES)
+
+    iva_gate = complete("iva") and dominates("iva") and floors["iva"] == 0
+    all_complete = all(complete(tool) for tool in audit.RIVALS)
+    all_dominate = all(dominates(tool) for tool in audit.RIVALS)
+    floor_pass = floors["best_available"] == 0 and floors["iva"] == 0
     failures = []
-    for tool in ("iva",) + audit.RIVALS:
-        row = report["comparators"][tool]
+    for tool in audit.RIVALS:
+        row = comparators[tool]
         for axis in _AXES:
             evidence = row[axis]
             if evidence["verdict"] == "no_paired_successes":
@@ -266,36 +294,25 @@ def decide(report):
                     "psi0": evidence["proof"]["psi0"],
                     "high_r_limit": evidence["proof"]["psi_at_positive_infinity"],
                 })
-    if failures:
-        if any(item["verdict"] == "no_paired_successes" for item in failures):
-            return _result(NO_PAIRED_EVIDENCE, report, failures=failures)
-        for state in _FAILURE_PRIORITY:
-            if any(item.get("state") == state for item in failures):
-                return _result(state, report, failures=failures)
-
-    comparators = report["comparators"]
-
-    def complete(tool):
-        return comparators[tool]["paired"] == audit.EXPECTED_CASES
-
-    def dominates(tool):
-        return all(comparators[tool][axis]["verdict"] == "dominates_on_observed_pairs"
-                   for axis in _AXES)
-
-    iva_gate = complete("iva") and dominates("iva")
-    all_complete = all(complete(tool) for tool in audit.RIVALS)
-    all_dominate = all(dominates(tool) for tool in audit.RIVALS)
-    result = _result(
-        PHYSICAL_FULL_SEVEN_PASS if all_complete and all_dominate else
-        ORIGINAL_IVA_GATE_PASS if iva_gate else
-        STRICT_PAIRED_SUCCESS_MISSING_ARMS,
-        report,
-    )
+    if not floor_pass:
+        state = PER_CASE_FLOOR_FAILURE
+    elif any(item["verdict"] == "no_paired_successes" for item in failures):
+        state = NO_PAIRED_EVIDENCE
+    elif failures:
+        state = next(state for state in _FAILURE_PRIORITY
+                     if any(item.get("state") == state for item in failures))
+    elif all_complete and all_dominate:
+        state = PHYSICAL_FULL_SEVEN_PASS
+    elif iva_gate:
+        state = ORIGINAL_IVA_GATE_PASS
+    else:
+        state = STRICT_PAIRED_SUCCESS_MISSING_ARMS
+    result = _result(state, report, failures=failures)
     result["gates"] = {
         "original_iva_gate_pass": iva_gate,
-        "strict_paired_diagnostic_pass": all_dominate,
+        "strict_paired_diagnostic_pass": all_dominate and floor_pass,
         "physical_full_seven_complete": all_complete,
-        "physical_full_seven_pass": all_complete and all_dominate,
+        "physical_full_seven_pass": all_complete and all_dominate and floor_pass,
         "expanded_464_synthetic_claim": False,
     }
     return result
@@ -353,7 +370,11 @@ def self_test():
     result = decide(report_for(full))
     check(result["decision"] == PHYSICAL_FULL_SEVEN_PASS, "full seven pass")
     check(result["gates"]["expanded_464_synthetic_claim"] is False, "no expanded claim")
-    partial = report_for(full, attested=audit.EXPECTED_CASES - 1)
+    partial = report_for(
+        {tool: {"score": [1] * (audit.EXPECTED_CASES - 1),
+                "runtime": [1] * (audit.EXPECTED_CASES - 1)} for tool in audit.RIVALS},
+        attested=audit.EXPECTED_CASES - 1,
+    )
     check(decide(partial)["decision"] == INCOMPLETE_COHORT, "incomplete")
     tampered = report_for(full)
     tampered["candidate_alignment_recomputed"] = False
@@ -388,6 +409,10 @@ def main(argv=None):
         result = from_root(args.root, args.frozen_root, args.projects_json, args.hxb2_fasta)
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.out:
+        resolved = args.out.resolve()
+        if any(resolved.is_relative_to(root.resolve()) for root in (args.root, args.frozen_root)
+               if root is not None):
+            parser.error("--out must be outside both audited roots")
         with args.out.open("x", encoding="utf-8") as handle:
             handle.write(text)
     else:

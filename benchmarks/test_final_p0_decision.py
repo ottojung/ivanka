@@ -14,8 +14,8 @@ import independent_frozen_psi_audit as audit
 def make_report(deltas=None, *, attested=audit.EXPECTED_CASES, floors=None, readback=True):
     """Build a PR433-shaped report using PR433's own signed-power implementation."""
     if deltas is None:
-        deltas = {tool: {"score": [1] * audit.EXPECTED_CASES,
-                         "runtime": [1] * audit.EXPECTED_CASES}
+        deltas = {tool: {"score": [1] * attested,
+                         "runtime": [1] * attested}
                   for tool in audit.RIVALS}
     comparators = {}
     for tool in audit.RIVALS:
@@ -166,6 +166,49 @@ class FinalDecisionTests(unittest.TestCase):
                 self.assertIn(reason, result["integrity_reasons"])
                 self.assertEqual(result["signed_power_failures"], [])
                 self.assertFalse(result["gates"]["physical_full_seven_pass"])
+
+    def test_impossible_partial_counts_rejected(self):
+        report = make_report(make_deltas(), attested=audit.EXPECTED_CASES - 1)
+        result = decision.decide(report)
+        self.assertEqual(result["decision"], decision.INTEGRITY_FAILURE)
+        self.assertIn("paired_count_invalid", result["integrity_reasons"])
+        report = make_report(attested=1, floors={"best_available": 2, "iva": 0})
+        self.assertIn("floor_counts_invalid", decision.decide(report)["integrity_reasons"])
+
+    def test_contradictory_positive_proof_rejected(self):
+        report = make_report()
+        proof = report["comparators"]["iva"]["score"]["proof"]
+        proof["zeros_nonnegative"] = [1.0]
+        self.assertIn("positive_proof_contradiction", decision.decide(report)["integrity_reasons"])
+        report = make_report()
+        proof = report["comparators"]["iva"]["score"]["proof"]
+        proof["gains"] = 0
+        self.assertIn("proof_counts_invalid", decision.decide(report)["integrity_reasons"])
+
+    def test_iva_gate_remains_independent_of_other_failures(self):
+        deltas = make_deltas()
+        deltas["abyss"] = {"score": [-1] * 198, "runtime": [1] * 198}
+        result = decision.decide(make_report(deltas))
+        self.assertEqual(result["decision"], decision.SIGNED_POWER_FAILURE_AT_R_ZERO)
+        self.assertTrue(result["gates"]["original_iva_gate_pass"])
+        self.assertTrue(result["gates"]["physical_full_seven_complete"])
+        self.assertFalse(result["gates"]["physical_full_seven_pass"])
+        result = decision.decide(make_report(floors={"best_available": 1, "iva": 0}))
+        self.assertEqual(result["decision"], decision.PER_CASE_FLOOR_FAILURE)
+        self.assertTrue(result["gates"]["original_iva_gate_pass"])
+
+    def test_negative_finite_high_r_limit_is_measured_failure(self):
+        deltas = make_deltas()
+        deltas["abyss"] = {"score": [0.5, 0.5, -1], "runtime": [1, 1, 1]}
+        result = decision.decide(make_report(deltas))
+        self.assertEqual(result["integrity_reasons"], [])
+        self.assertFalse(result["gates"]["strict_paired_diagnostic_pass"])
+
+    def test_iva_failure_not_duplicated(self):
+        deltas = make_deltas()
+        deltas["iva"] = {"score": [0, 0], "runtime": [1, 1]}
+        result = decision.decide(make_report(deltas))
+        self.assertEqual(len(result["signed_power_failures"]), 1)
 
     def test_integrity_precedes_measured_failure(self):
         report = make_report(readback=False)

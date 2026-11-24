@@ -84,9 +84,14 @@ while :; do
       echo "RESOURCE_POLICY_SOURCE_DRIFT"; exit 3
     fi
 
-    PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
-      benchmarks.assembler_bench.site_build --output "$R/neutral-site-verify" || \
-      { echo "NEUTRAL_SITE_VERIFY_FAILED"; exit 3; }
+    # A fresh directory each cycle: site_build refuses to overwrite a build.
+    VERIFY=$(mktemp -d "$R/neutral-site-verify.XXXXXX")
+    if ! PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
+        benchmarks.assembler_bench.site_build --output "$VERIFY"; then
+      rm -rf "$VERIFY"
+      echo "NEUTRAL_SITE_VERIFY_FAILED"; exit 3
+    fi
+    rm -rf "$VERIFY"
     PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
       benchmarks.assembler_bench.public_vocabulary --site "$WEB/site/bench" || \
       { echo "NEUTRAL_VOCABULARY_FAILED"; exit 3; }

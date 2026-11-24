@@ -44,8 +44,8 @@ def _document(name):
 def checked(name):
     """Return a validated recipe document or fail closed."""
     data, path = _document(name)
-    if data.get("schema") != SCHEMA or data.get("qualifying") is not False:
-        raise ValueError("recipe schema or qualification drift: " + name)
+    if data.get("schema") != SCHEMA or data.get("claim") != "measured-data-only":
+        raise ValueError("recipe schema or claim drift: " + name)
     if data.get("frozen_parent") != FROZEN_PARENT or data.get(
             "frozen_upstream_master") != MASTER:
         raise ValueError("frozen base drift: " + name)

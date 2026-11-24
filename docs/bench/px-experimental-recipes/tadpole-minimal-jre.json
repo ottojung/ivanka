@@ -1,14 +1,23 @@
 {
-  "schema": "ivanka.exploratory.recipe.v1",
-  "tool": "tadpole",
-  "qualifying": false,
+  "acceptance": [
+    "image layer delta small enough for admit() with a 1 GiB reservation",
+    "physical PX-R053 and synthetic PX-H452 canaries under the guard",
+    "paired R1+R2 canonical proof"
+  ],
+  "adapter_commit": "baaaa082c1c1eb62b203baf80b14031facde4b40",
+  "attested_source_archive_sha256": "7eaa09de4cdab334fb7ed8d11c0ebb802cd5cab660a30bd48da0b94572b8a6fe",
+  "claim": "measured-data-only",
   "frozen_parent": "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad",
   "frozen_upstream_master": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
-  "adapter_commit": "baaaa082c1c1eb62b203baf80b14031facde4b40",
-  "source_repo": "https://github.com/bbushnell/BBTools",
-  "source_commit": "fb1a2727b7b4994ecae0ddc362d4ed8148307b20",
-  "attested_source_archive_sha256": "7eaa09de4cdab334fb7ed8d11c0ebb802cd5cab660a30bd48da0b94572b8a6fe",
+  "resource_contract": {
+    "container_memory_bytes": 4000000000,
+    "max_incremental_bytes": 8589934592,
+    "min_free_bytes": 34359738368,
+    "one_worker": true,
+    "wall_seconds": 2400
+  },
   "root_cause": "Installing a full Debian JRE inside a layer over the 5.79 GB frozen parent adds enough copy-up to breach the strict 8 GiB cumulative PX cap, even with 825 MB of measured headroom.",
+  "schema": "ivanka.exploratory.recipe.v1",
   "smaller_layer_plan": [
     "build a pinned minimal JRE archive once in a guarded donor job using jlink with only java.base, java.logging and java.xml modules",
     "record the runtime archive SHA-256 and the jlink command; do not rely on apt in the tool image",
@@ -16,7 +25,8 @@
     "single-layer image: COPY trimmed BBTools + minimal JRE + two adapter files, verify all hashes in-image, symlink tadpole.sh onto PATH",
     "no reference, truth, panel or evaluator input in argv or environment"
   ],
-  "acceptance": ["image layer delta small enough for admit() with a 1 GiB reservation", "physical PX-R053 and synthetic PX-H452 canaries under the guard", "paired R1+R2 canonical proof"],
-  "resource_contract": {"one_worker": true, "max_incremental_bytes": 8589934592, "min_free_bytes": 34359738368, "container_memory_bytes": 4000000000, "wall_seconds": 2400},
-  "status": "source-only-plan-not-built"
+  "source_commit": "fb1a2727b7b4994ecae0ddc362d4ed8148307b20",
+  "source_repo": "https://github.com/bbushnell/BBTools",
+  "status": "source-only-plan-not-built",
+  "tool": "tadpole"
 }

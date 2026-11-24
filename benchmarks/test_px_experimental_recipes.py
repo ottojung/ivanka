@@ -16,7 +16,7 @@ class TestSourceOnlyRecipes(unittest.TestCase):
     def test_all_recipes_validate(self):
         for name in NAMES:
             with self.subTest(recipe=name):
-                self.assertTrue(checked(name)["qualifying"] is False)
+                self.assertEqual(checked(name)["claim"], "measured-data-only")
 
     def test_patch_is_link_only(self):
         text = checked_patch()

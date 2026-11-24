@@ -1,7 +1,6 @@
 {
   "schema": "ivanka.exploratory.public-snapshot.v1",
   "generated_utc": "2026-11-23T21:20:00Z",
-  "qualifying": false,
   "frozen_seven_manifest_sha256": "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f",
   "note": "Public, GitHub-CI-portable snapshot. Receipts are kept in a private runtime registry outside this repository; only their SHA-256 digests and public adapter/image identities appear here.",
   "candidates": [
@@ -14,8 +13,7 @@
       "image_receipt_sha256": "752b2a6d2dee4cf4a86ea722adc49b9dbd14f5a5aedb6bb193b4650dc2d063be",
       "pilot_receipt_sha256": "0e633f92300e6149ba8336e5c070b9e1b82a15a2d902e6e207ab3987fa638786",
       "physical_status": "success",
-      "synthetic_status": "success",
-      "qualifying": false
+      "synthetic_status": "success"
     },
     {
       "id": "idba-ud",
@@ -26,14 +24,12 @@
       "image_receipt_sha256": "90cd9eb2c0a1e94e504835fa3e823c0e43266c64743b69e6d7fbed11ae08180a",
       "physical_status": "success",
       "synthetic_status": "success",
-      "qualifying": false,
       "pilot_receipt_sha256": "68ef28b1f2fa95482663bd5a0569f0ee276fabed8ceba2af29be3997f0730afd",
       "native_patch_sha256": "f501a433b4a15611686d6a226758aa61928ba8fdddbef1b3ae1dfcc3edb56a10"
     },
     {
       "id": "minia",
       "status": "pilot",
-      "qualifying": false,
       "source_commit": "7b7239c69ecc63534a20fc0d0c2de30f0f67e31c",
       "adapter_commit": "ff75f0f2dca4b8b26dd8520638e4981d02484fbe",
       "image_sha256": "d218919d19ac1e053e15905a222a1f05ae085d6f7e0e0e620817bd06913df08e",
@@ -47,36 +43,31 @@
     },
     {
       "id": "ray",
-      "status": "source-pinned",
-      "qualifying": false
+      "status": "source-pinned"
     },
     {
       "id": "unicycler",
-      "status": "source-pinned",
-      "qualifying": false
+      "status": "source-pinned"
     },
     {
       "id": "tadpole",
-      "status": "source-pinned",
-      "qualifying": false
+      "status": "source-pinned"
     },
     {
       "id": "soapdenovo2",
-      "status": "image-pinned",
-      "qualifying": false,
+      "status": "pilot",
       "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11",
-      "adapter_commit": "02aff63992d68ba4a9c98e6917ad27bb402a58f1",
-      "image_sha256": "1085ee58897210030580d63a52faabf2499ce72fc7424bd49294c621369231c5",
-      "image_receipt_sha256": "f6c043e097864175b681929047be47af127fd326d51912bc3a938e2dcd7f390d",
-      "pilot_receipt_sha256": "a3aecbe84ef1041ace3230851731cb89abaebd1d63f7ce96a2a959d33771ed3f",
-      "physical_status": "failure",
+      "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+      "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+      "image_receipt_sha256": "968aee45a0a3930be17d93132abf74129aef752136f9014bf3a45098dbbfa2cf",
+      "pilot_receipt_sha256": "17f3c09cec77e9746f30f6f86eb13c40dd06bddf20a21e18463bf26ea6e76342",
+      "physical_status": "success",
       "synthetic_status": "success",
       "native_binary_sha256": "87eed4aa2e2b0944584d57e054f0a0b139ecf5fc39b52f05266d321eda617811"
     },
     {
       "id": "fermi-lite",
       "status": "pilot",
-      "qualifying": false,
       "source_commit": "85f159e5a2e15a4c4fb41cdfce91ba0c9b68d2e1",
       "adapter_commit": "7947c2a201cf942ca11e76faf0f3a23a900c0d5c",
       "image_sha256": "3cfc23c8b1bd7311d8bdc7c4c615092a7bdcc075e55541290bbee418fda6006e",
@@ -88,13 +79,12 @@
     },
     {
       "id": "penguin",
-      "status": "source-pinned",
-      "qualifying": false
+      "status": "source-pinned"
     },
     {
       "id": "savage-denovo",
-      "status": "source-pinned",
-      "qualifying": false
+      "status": "source-pinned"
     }
-  ]
+  ],
+  "claim": "measured-data-only"
 }

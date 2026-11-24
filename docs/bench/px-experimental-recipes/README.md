@@ -1,7 +1,7 @@
 # Source-only PX image engineering recipes
 
 These files are **plans and fixes**, not build evidence. They carry no image
-digest, native binary hash attestation, pilot result or qualification claim.
+digest, native binary hash attestation, pilot result or measured outcome.
 Only the four already-certified explorers (SKESA, patched IDBA-UD, Fermi-lite,
 Minia) have genuine images and paired physical/synthetic proofs.
 

@@ -40,6 +40,13 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
             state = {"tool": tool, "mode": mode, "status": "unknown",
                      "peak_rss": None, "argv_sha256":
                      hashlib.sha256(repr(argv).encode()).hexdigest()}
+            # Identity-bound guard path: pilots bind the exact issued CID and
+            # stop by CID only; builds bind the launcher tree and stop by its
+            # exact process group. Legacy positional watch() call preserved.
+            cfg["guard_mode"] = mode
+            if cidfile is not None:
+                cfg["cidfile"] = cidfile
+                cfg["env"] = env
             try:
                 state["peak_rss"] = watch(proc, cfg)
                 state["status"] = "finished" if proc.returncode == 0 else "failed"

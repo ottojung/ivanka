@@ -40,3 +40,5 @@ mod tests_bio;
 mod tests_phase;
 #[cfg(test)]
 mod tests_support;
+#[cfg(test)]
+mod tests_tails;

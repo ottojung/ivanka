@@ -7,6 +7,7 @@ fn breadth_pair_support_beats_short_count_bias() {
         depth: vec![],
         pair_masks: vec![],
         pairs: vec![410, 578],
+        raw_pairs: vec![410, 578],
         coverage: vec![1116, 420],
     };
     assert_eq!(ranking::best(&contigs, &stats), 0);
@@ -19,6 +20,7 @@ fn narrow_dense_contig_can_beat_long_unsupported_extension() {
         depth: vec![],
         pair_masks: vec![],
         pairs: vec![8416, 3191],
+        raw_pairs: vec![8416, 3191],
         coverage: vec![466, 1220],
     };
     assert_eq!(ranking::best(&contigs, &stats), 1);

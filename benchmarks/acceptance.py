@@ -1,9 +1,6 @@
 """Objective alpha gates. HXB2 score is necessary, not sufficient."""
 from pathlib import Path
 
-import mappy
-from Bio import SeqIO
-
 # Roles are supplied from a private dataset manifest, never embedded in source.
 STRUCTURAL_ROLES = {"mixed", "deletion", "fragmented"}
 
@@ -13,12 +10,18 @@ def reference_fidelity(reference_fasta: Path, output_fasta: Path, min_coverage: 
     Use alignment ONLY in the evaluator; never feed truth or HXB2 into Ivanka.
     This is a conservative check, not proof of no recombinant chimeras.
     """
+    # Both parsers are needed only for the structural diagnostic, not for the
+    # pure objective-gate tests that import this module.
+    from Bio import SeqIO
     targets = sorted(
         (x for x in SeqIO.parse(reference_fasta, "fasta") if len(x.seq) >= 2000),
         key=lambda x: len(x.seq), reverse=True,
     )[:3]
     if not targets:
         return {"pass": False, "reason": "no substantial IVA reference molecules", "coverage": []}
+    # The aligner is needed only for the structural diagnostic, not for the
+    # pure objective-gate tests that import this module.
+    import mappy
     aligner = mappy.Aligner(str(output_fasta), preset="asm5", best_n=25)
     if not aligner:
         return {"pass": False, "reason": "no indexed Ivanka output", "coverage": []}

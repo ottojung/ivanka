@@ -1,9 +1,24 @@
+import os
+from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 from acceptance import accept_sample
 
 
 class AcceptanceTests(unittest.TestCase):
+    def test_objective_gate_imports_without_optional_aligner(self):
+        code = (
+            "import sys; sys.modules['mappy']=None; "
+            "import acceptance; "
+            "assert acceptance.accept_sample('SAMPLE', "
+            "{'hxb2_score': 0}, {'hxb2_score': 0, 'stitched_count': 1})[0]"
+        )
+        env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parent))
+        result = subprocess.run([sys.executable, "-c", code], env=env,
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
     def test_ordinary_score_passes_at_95_percent(self):
         iva={"hxb2_score": 1000}
         ivanka={"hxb2_score": 950, "stitched_count": 1}

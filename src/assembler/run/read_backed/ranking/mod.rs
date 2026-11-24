@@ -1,7 +1,19 @@
 mod independent;
+mod junction;
+mod spans;
 use super::{scoring::Statistics, K};
 pub(super) use independent::additional;
+pub(super) use junction::junction;
 use std::cmp::Ordering;
+
+/// Render intervals in contig coordinates; without a detected unsupported
+/// join this is the single whole contig and the established path is unchanged.
+pub(super) fn pieces(joined: Option<(usize, usize)>, length: usize) -> Vec<(usize, usize)> {
+    joined.map_or_else(
+        || vec![(0, length)],
+        |(a, b)| vec![(0, (a + K).min(length)), (b, length)],
+    )
+}
 
 /// Read-covered breadth squared, weighted by supporting original fragments.
 fn compare(a: usize, b: usize, contigs: &[Vec<u8>], stats: &Statistics) -> Ordering {

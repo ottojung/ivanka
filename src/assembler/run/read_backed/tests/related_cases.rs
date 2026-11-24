@@ -5,7 +5,7 @@ fn stats(coverage: Vec<usize>, masks: Vec<u16>, exclusive: Vec<u16>) -> Statisti
         .map(|i| masks.iter().filter(|&&m| m & (1 << i) != 0).count())
         .collect();
     Statistics {
-        depth: vec![],
+        depth: vec![vec![3; 2000]; coverage.len()],
         pairs,
         coverage,
         pair_masks: masks,
@@ -42,4 +42,13 @@ fn shared_discriminating_fragments_cannot_establish_two_phases() {
     // haplotype consumes them, the other has no independent evidence left.
     let evidence = stats(vec![1990, 1990, 1990], vec![7; 2000], vec![6; 2000]);
     assert_eq!(ranking::additional(&long_contigs(3), &evidence, 0), vec![1]);
+}
+
+#[test]
+fn gapped_related_candidate_is_not_added() {
+    // A wide evidence hole would fragment the candidate into tiles; those
+    // fragments cannot establish one phase-contiguous haplotype.
+    let mut evidence = stats(vec![1990, 1990], vec![3; 2000], vec![2; 1200]);
+    evidence.depth[1][900..1300].fill(0);
+    assert!(ranking::additional(&long_contigs(2), &evidence, 0).is_empty());
 }

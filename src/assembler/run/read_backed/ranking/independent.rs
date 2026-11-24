@@ -16,11 +16,7 @@ pub(in super::super) fn additional(
     }
     let supported = stats.pair_masks.iter().filter(|&&mask| mask != 0).count();
     let minimum = supported.div_ceil(10).max(20);
-    let discriminating = stats
-        .exclusive_masks
-        .iter()
-        .filter(|&&mask| mask != 0)
-        .count();
+    let discriminating = stats.exclusive_masks.iter().filter(|&&m| m != 0).count();
     let related_minimum = discriminating.div_ceil(10).max(20);
     let mut selected = 1u16 << primary;
     let mut additional = Vec::new();
@@ -34,7 +30,9 @@ pub(in super::super) fn additional(
                     && positions > 0
                     && stats.coverage[i] * 5 >= positions * 4
                     && ((counts[i] >= minimum && counts[i] * 5 >= stats.pairs[i] * 4)
-                        || (related[i] >= related_minimum && related[i] * 5 >= stats.pairs[i]))
+                        || (related[i] >= related_minimum
+                            && related[i] * 5 >= stats.pairs[i]
+                            && related::uniform(&stats.depth[i])))
             })
             .max_by_key(|&i| (counts[i], stats.coverage[i], std::cmp::Reverse(i)));
         let Some(next) = next else { break };

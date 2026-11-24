@@ -18,3 +18,12 @@ pub(super) fn counts(masks: &[u16], selected: u16, len: usize) -> Vec<usize> {
     }
     counts
 }
+
+/// A related component must be one uninterrupted read-supported island.
+/// Fragmented depth would be rendered as several tiles, which cannot support
+/// a single haplotype claim. Mirrors the tiling presentation rule.
+pub(super) fn uniform(depth: &[u32]) -> bool {
+    !depth.is_empty()
+        && depth.iter().filter(|&&v| v >= 3).count() * 100 >= depth.len() * 95
+        && depth.split(|&v| v >= 3).all(|gap| gap.len() < 100)
+}

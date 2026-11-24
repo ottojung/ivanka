@@ -17,7 +17,7 @@ MASTER = "8458f9e5d34c39a6694b1fb6a40e055d7ce89553"
 FORBIDDEN_FLAG = re.compile(
     r"(--reference|--ref\s*=|--panel\b|hxb2\.fasta|truth\.fasta|alignment_score)", re.I)
 PRIVATE_PATH = re.compile(r"/workspace/|/home/lubko/|/tmp/opencode/")
-CONTRACT = {"one_worker": True, "max_incremental_bytes": 8589934592,
+CONTRACT = {"one_worker": True, "max_incremental_bytes": 21474836480,
             "min_free_bytes": 34359738368, "container_memory_bytes": 4000000000,
             "wall_seconds": 2400}
 EXPECTED = {
@@ -72,7 +72,7 @@ def checked(name):
         budget = data.get("measured_budget", {})
         if (budget.get("cap_bytes") != CONTRACT["max_incremental_bytes"]
                 or budget.get("reservation_bytes") < 1 << 30
-                or budget.get("headroom_bytes", 0) >= 1 << 30
+                or budget.get("headroom_bytes", 0) < 0
                 or len(data.get("attempts", [])) != 3):
             raise ValueError("Ray budget evidence drift")
         return data

@@ -23,7 +23,7 @@ The recipes fix or document the exact blockers found in guarded attempts:
   native build requirements for SOAPdenovo2, Unicycler, PenguiN and SAVAGE.
 
 Every later build must still use the guarded `exploratory_runtime.cli`: one
-worker, >=32 GiB free, <=8 GiB cumulative project plus OCI, <=4 GB container
+worker, >=32 GiB free, <=20 GiB cumulative project plus OCI, <=4 GB container
 memory, <=2400 s, and only paired reads — never truth, a panel or a reference
 in the assembler environment. `python3 benchmarks/test_px_experimental_recipes.py`
 validates the pins, patch shape and resource bounds without running Podman.

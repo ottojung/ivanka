@@ -222,7 +222,7 @@ class TestExploratorySpace(unittest.TestCase):
     def test_temporary_files_alone_can_breach_the_cap(self):
         temp = px_temp_dir(self.exp)
         temp.mkdir()
-        huge = 9 * 1024**3
+        huge = 21 * 1024**3
         sizes = {temp.resolve(): huge, self.exp.resolve(): huge}
         with (patch("assembler_bench.exploratory_space.allocated",
                     side_effect=lambda p: sizes.get(Path(p).resolve(), 0)),
@@ -234,7 +234,7 @@ class TestExploratorySpace(unittest.TestCase):
 
     def test_stop_when_reserve_breached(self):
         with self.assertRaisesRegex(ValueError, "disk budget"):
-            self.check(9 * 1024**3)
+            self.check(21 * 1024**3)
 
     def test_stop_when_free_space_too_low(self):
         with self.assertRaisesRegex(ValueError, "reserve"):

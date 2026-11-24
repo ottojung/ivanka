@@ -6,7 +6,7 @@ archives may be reclaimed only after diagnostics are complete, final MAX is
 preserved outside scratch, and hashes are revalidated immediately before
 deletion. Proven-dead terminal failures retain their final files and logs; infrastructure
 stops and unproven teardown preserve scratch. The
-8 GiB policy is an accounting ceiling, never a licence to discard evidence.
+20 GiB policy is an accounting ceiling, never a licence to discard evidence.
 """
 import fcntl
 import json
@@ -19,10 +19,11 @@ from benchmarks.retained_artifacts import (
     _promotion_plan, promote_finals, remove_visuals, seal_terminal_evidence, terminal_retire)
 
 from . import exploratory_space
+from .exploratory_policy import PX_BUDGET_BYTES
 from . import px_cohort_scheduler as sched
 
 SCHEMA = "ivanka.px.retention.plan.v1"
-BUDGET_BYTES = 8 * 1024**3
+BUDGET_BYTES = PX_BUDGET_BYTES
 DISPOSABLE_DIRS = frozenset(("scratch", "tmp"))
 # Post-measurement MiCall scratch archives are disposable only after final MAX
 # and complete diagnostics are preserved; they are never removed before that.

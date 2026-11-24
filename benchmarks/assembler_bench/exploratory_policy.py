@@ -4,6 +4,8 @@ import json
 import re
 from pathlib import Path
 
+PX_BUDGET_BYTES = 20 * 1024**3
+
 ORIGINAL = frozenset(("ivanka", "iva", "haploflow", "megahit", "abyss", "spades", "velvet"))
 EXPERIMENTAL = frozenset(("skesa", "idba-ud", "minia", "ray", "unicycler",
                           "tadpole", "soapdenovo2", "fermi-lite", "penguin", "savage-denovo"))
@@ -63,7 +65,7 @@ def checked(path):
             or data["qualifying"] is not False or len(names) != 10
             or set(names) != EXPERIMENTAL or len(set(names)) != len(names)
             or set(data["baseline_assemblers"]) != ORIGINAL
-            or policy["total_incremental_storage_bytes"] != 8 * 1024**3
+            or policy["total_incremental_storage_bytes"] != PX_BUDGET_BYTES
             or policy["min_workspace_free_bytes"] != 32 * 1024**3
             or policy["dedicated_image_store_root"] != "/workspace/ivanka-exploratory-podman-20261121"
             or policy["dedicated_podman_storage_conf"] != "/workspace/ivanka-exploratory-ten-20261121/storage.conf"

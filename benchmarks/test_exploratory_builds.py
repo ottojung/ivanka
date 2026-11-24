@@ -139,7 +139,7 @@ class TestExplorerBuildPlans(unittest.TestCase):
 
     def test_resource_policy_matches_frozen_px_contract(self):
         policy = self.document["policy"]
-        self.assertEqual(policy["total_incremental_storage_bytes"], 8 * 1024**3)
+        self.assertEqual(policy["total_incremental_storage_bytes"], 20 * 1024**3)
         self.assertEqual(policy["min_workspace_free_bytes"], 32 * 1024**3)
         self.assertEqual(policy["max_concurrent_exploratory_workers"], 1)
         self.assertEqual(policy["max_container_wall_seconds"], 2400)

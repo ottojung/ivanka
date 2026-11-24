@@ -88,10 +88,14 @@ def validate_case_evidence(case, cohort, score_origin):
     """Prove the paired input hash and comparable score unit of a case row."""
     manifest = {"real": PHYSICAL_MANIFEST,
                 "synthetic": V6_COHORT_SHA}.get(cohort)
+    mates = case.get("read_sha256") or case.get("input_sha256") or {}
+    paired = (SHA64.fullmatch(case.get("paired_input_sha256", "")) or
+              (set(mates) == {"R1", "R2"} and
+               all(SHA64.fullmatch(mates.get(key, "")) for key in ("R1", "R2"))))
     if (not manifest or case.get("canonical_manifest_sha256") != manifest
-            or not SHA64.fullmatch(case.get("paired_input_sha256", ""))):
+            or not paired):
         raise ValueError("case evidence is not bound to the cohort manifest")
-    reads = case.get("read_sha256")
+    reads = case.get("read_sha256") or case.get("input_sha256")
     if reads is not None:
         if (not isinstance(reads, dict) or set(reads) != {"R1", "R2"}
                 or any(not SHA64.fullmatch(reads[key])
@@ -211,11 +215,25 @@ def _join_scores(run, assemblers, joined):
             if sample is None or sample.get("score", {}).get(tool) is not None:
                 continue
             sample.setdefault("score", {})[tool] = float(case["score"])
-            sample.setdefault("measurement_evidence", {}).setdefault(tool, {
+            evidence_row = sample.setdefault("measurement_evidence", {}).setdefault(tool, {
                 key: case[key] for key in (
                     "canonical_alias", "canonical_manifest_sha256",
                     "paired_input_sha256", "read_sha256", "score_origin",
                     "reference_panel_sha256") if key in case})
+            if case.get("outcome") == "failure":
+                if tool not in sample.setdefault("failures", []):
+                    sample["failures"].append(tool)
+                sample["score"][tool] = None
+                sample["outcome"] = "failure"
+            if isinstance(case.get("diagnostics"), dict) and case["diagnostics"]:
+                sample.setdefault("diagnostics", {}).setdefault(tool, {}).update(
+                    case["diagnostics"])
+            for key in ("peak_ram_observed_mib", "input_sha256",
+                        "output_sha256", "exact_coverage", "method",
+                        "scorer_source_sha256", "source_commit",
+                        "adapter_commit", "image_sha256"):
+                if key in case:
+                    evidence_row[key] = case[key]
             joined.append((run["id"], tool, alias))
 
 
@@ -270,9 +288,18 @@ def merge_evidence(report, evidence):
         } for tool in tools]
         run.pop("_cases", None)
         expected = run.get("expected_sample_count", run.get("sample_count", 0))
-        for tool in tools:
-            run.setdefault("tool_progress", {}).setdefault(tool, {
-                "expected": expected, "finished": 0, "failed": 0})
+        # Progress is derived from the published case rows so newly joined
+        # cohort receipts advance the per-tool counters without fabrication.
+        run["tool_progress"] = {
+            tool: {
+                "expected": expected,
+                "finished": sum(
+                    sample.get("score", {}).get(tool) is not None
+                    or tool in sample.get("failures", [])
+                    for sample in run.get("samples", [])),
+                "failed": sum(tool in sample.get("failures", [])
+                              for sample in run.get("samples", [])),
+            } for tool in tools}
         for image in list(run.get("images", {})):
             if image not in tools:
                 run["images"].pop(image)

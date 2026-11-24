@@ -20,6 +20,7 @@ from pathlib import Path
 
 SCHEMA = "ivanka.existing-scratch-retention-receipt.v1"
 ATTESTATION_SCHEMA = "ivanka.p0.frozen-rust-only-reversible-scratch-archive.v1"
+LEGACY_ATTESTATION_SCHEMA = "ivanka.p0.prospective-reversible-scratch-archive.v1"
 CANDIDATE_IMAGE = "73f29f0233da2ecd1ab126178cba4deb9e246bff5a6f770ab021a8f36d71081b"
 REFERENCE_PANEL = "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8"
 RETAINED_SUBDIR = "retained-scratch"
@@ -117,7 +118,13 @@ def _read_json(path, label):
     return doc
 
 
-def _verify_terminal(case, image, panel):
+def _verify_terminal(case, image, panel, schema_kind="candidate"):
+    if schema_kind == "legacy":
+        return _verify_legacy_terminal(case)
+    return _verify_candidate_terminal(case, image, panel)
+
+
+def _verify_candidate_terminal(case, image, panel):
     receipt = _read_json(case / "prospective-execution.json", "execution receipt")
     score = _read_json(case / "posthoc_score.json", "posthoc score")
     conseq = sha_file(_regular(case / "conseq.csv", "final conseq.csv"))
@@ -155,21 +162,42 @@ def _verify_terminal(case, image, panel):
     }
 
 
+def _verify_legacy_terminal(case):
+    receipt = _read_json(case / "prospective-execution.json", "execution receipt")
+    conseq_path = _regular(case / "conseq.csv", "final conseq.csv")
+    conseq = sha_file(conseq_path)
+    if receipt.get("status") != "success":
+        raise MigrationError(f"execution receipt status mismatch in {case.name}")
+    if receipt.get("sample_sha256") != case.name:
+        raise MigrationError(f"execution receipt sample mismatch in {case.name}")
+    if receipt.get("final_conseq_sha256") != conseq:
+        raise MigrationError(f"execution receipt conseq hash mismatch in {case.name}")
+    if receipt.get("timing_origin") != "micall_in_container_monotonic_v1":
+        raise MigrationError(f"execution receipt timing origin mismatch in {case.name}")
+    if receipt.get("all_projects") is not True:
+        raise MigrationError(f"execution receipt all_projects mismatch in {case.name}")
+    if not isinstance(receipt.get("valid_final_max_count"), int):
+        raise MigrationError(f"execution receipt valid_final_max_count missing in {case.name}")
+    if receipt.get("valid_final_max_count") < 1:
+        raise MigrationError(f"execution receipt has no final MAX in {case.name}")
+    return {
+        "execution_receipt_sha256": sha_file(case / "prospective-execution.json"),
+        "posthoc_score_sha256": None,
+        "final_conseq_sha256": conseq,
+    }
+
+
 def _attestation_members(case, image):
     att = _read_json(case / ATTESTATION_NAME, "archive attestation")
-    if att.get("schema") != ATTESTATION_SCHEMA:
-        raise MigrationError(f"unknown attestation schema in {case.name}")
-    if att.get("status") != "complete":
-        raise MigrationError(f"attestation not complete in {case.name}")
-    if att.get("candidate_image_id") != image:
-        raise MigrationError(f"attestation image mismatch in {case.name}")
-    if att.get("qualification") is not False:
-        raise MigrationError(f"attestation qualification flag set in {case.name}")
-    if not HEX_SHA.fullmatch(str(att.get("sha256_archive", ""))):
-        raise MigrationError(f"attestation archive hash missing in {case.name}")
-    listed = att.get("files")
-    if not isinstance(listed, list) or not listed:
-        raise MigrationError(f"attestation member list empty in {case.name}")
+    schema = att.get("schema")
+    if schema == ATTESTATION_SCHEMA:
+        return _attestation_members_candidate(case, att, image)
+    if schema == LEGACY_ATTESTATION_SCHEMA:
+        return _attestation_members_legacy(case, att)
+    raise MigrationError(f"unknown attestation schema in {case.name}: {schema}")
+
+
+def _parse_member_list(case, listed):
     members = {}
     for item in listed:
         if not isinstance(item, dict):
@@ -183,10 +211,46 @@ def _attestation_members(case, image):
         if not isinstance(size, int) or size < 0 or not HEX_SHA.fullmatch(str(digest)):
             raise MigrationError(f"malformed attestation member hash in {case.name}: {name}")
         members[name] = {"bytes": size, "sha256": digest}
+    return members
+
+
+def _attestation_members_candidate(case, att, image):
+    if att.get("status") != "complete":
+        raise MigrationError(f"attestation not complete in {case.name}")
+    if att.get("candidate_image_id") != image:
+        raise MigrationError(f"attestation image mismatch in {case.name}")
+    if att.get("qualification") is not False:
+        raise MigrationError(f"attestation qualification flag set in {case.name}")
+    if not HEX_SHA.fullmatch(str(att.get("sha256_archive", ""))):
+        raise MigrationError(f"attestation archive hash missing in {case.name}")
+    listed = att.get("files")
+    if not isinstance(listed, list) or not listed:
+        raise MigrationError(f"attestation member list empty in {case.name}")
+    members = _parse_member_list(case, listed)
     for key in ("source_execution_receipt_sha256", "source_posthoc_score_sha256",
                 "candidate_final_conseq_sha256"):
         if not HEX_SHA.fullmatch(str(att.get(key, ""))):
             raise MigrationError(f"attestation {key} missing in {case.name}")
+    att["_schema_kind"] = "candidate"
+    return att, members
+
+
+def _attestation_members_legacy(case, att):
+    if att.get("stage") != "complete":
+        raise MigrationError(f"attestation not complete in {case.name}")
+    archive_sha = att.get("sha256_gzipped_tar")
+    if not HEX_SHA.fullmatch(str(archive_sha)):
+        raise MigrationError(f"attestation archive hash missing in {case.name}")
+    listed = att.get("scratch_files")
+    if not isinstance(listed, list) or not listed:
+        raise MigrationError(f"attestation member list empty in {case.name}")
+    members = _parse_member_list(case, listed)
+    for key in ("source_result_receipt_sha256", "source_result_conseq_sha256"):
+        if not HEX_SHA.fullmatch(str(att.get(key, ""))):
+            raise MigrationError(f"attestation {key} missing in {case.name}")
+    # Normalize to the internal keys used by the shared migration path.
+    att["sha256_archive"] = archive_sha
+    att["_schema_kind"] = "legacy"
     return att, members
 
 
@@ -270,7 +334,15 @@ def _stream_archive(case, attestation, listed, temp_dir, max_temp_bytes, stage):
 
 def _resume_plan(case, args, receipt):
     """Recover after a crash between the pre-delete receipt and finalisation."""
-    _verify_terminal(case, args.image, args.panel)
+    att = _read_json(case / ATTESTATION_NAME, "archive attestation")
+    schema = att.get("schema")
+    if schema == LEGACY_ATTESTATION_SCHEMA:
+        schema_kind = "legacy"
+    elif schema == ATTESTATION_SCHEMA:
+        schema_kind = "candidate"
+    else:
+        raise MigrationError(f"unknown attestation schema in {case.name}: {schema}")
+    _verify_terminal(case, args.image, args.panel, schema_kind)
     if sha_file(case / ATTESTATION_NAME) != receipt.get("attestation_sha256"):
         raise MigrationError(f"attestation drift while resuming {case.name}")
     for item in receipt.get("retained_members", []):
@@ -296,12 +368,19 @@ def inspect_case(case, args):
     if existing is not None and not (case / ARCHIVE_NAME).exists():
         return _resume_plan(case, args, existing)
     att, members = _attestation_members(case, args.image)
-    terminal = _verify_terminal(case, args.image, args.panel)
-    listed_receipts = {
-        "source_execution_receipt_sha256": terminal["execution_receipt_sha256"],
-        "source_posthoc_score_sha256": terminal["posthoc_score_sha256"],
-        "candidate_final_conseq_sha256": terminal["final_conseq_sha256"],
-    }
+    schema_kind = att["_schema_kind"]
+    terminal = _verify_terminal(case, args.image, args.panel, schema_kind)
+    if schema_kind == "legacy":
+        listed_receipts = {
+            "source_result_receipt_sha256": terminal["execution_receipt_sha256"],
+            "source_result_conseq_sha256": terminal["final_conseq_sha256"],
+        }
+    else:
+        listed_receipts = {
+            "source_execution_receipt_sha256": terminal["execution_receipt_sha256"],
+            "source_posthoc_score_sha256": terminal["posthoc_score_sha256"],
+            "candidate_final_conseq_sha256": terminal["final_conseq_sha256"],
+        }
     for key, digest in listed_receipts.items():
         if att.get(key) != digest:
             raise MigrationError(f"attestation receipt hash drift in {case.name}: {key}")
@@ -510,19 +589,42 @@ def apply_case(case, plan, args):
     }
 
 
+def _is_case_dir(entry):
+    if not (SAMPLE_NAME.fullmatch(entry.name) and entry.is_dir()
+            and not entry.is_symlink()
+            and (entry / ATTESTATION_NAME).is_file()):
+        return False
+    if (entry / ARCHIVE_NAME).is_file():
+        return True
+    return (entry / RECEIPT_NAME).is_file()
+
+
 def _cases(root, selected):
     if selected:
         for name in selected:
             if not SAMPLE_NAME.fullmatch(name):
                 raise MigrationError(f"invalid case selector: {name}")
-            yield root / name
+            direct = root / name
+            if _is_case_dir(direct):
+                yield direct
+                continue
+            matches = [p for p in root.glob(f"*/{name}") if _is_case_dir(p)]
+            if len(matches) == 1:
+                yield matches[0]
+                continue
+            if len(matches) > 1:
+                raise MigrationError(f"ambiguous case selector: {name}")
+            yield direct
         return
     for entry in sorted(root.iterdir()):
-        if (SAMPLE_NAME.fullmatch(entry.name) and entry.is_dir()
-                and not entry.is_symlink()
-                and (entry / ARCHIVE_NAME).is_file()
-                and (entry / ATTESTATION_NAME).is_file()):
+        if _is_case_dir(entry):
             yield entry
+            continue
+        if (entry.is_dir() and not entry.is_symlink()
+                and not SAMPLE_NAME.fullmatch(entry.name)):
+            for child in sorted(entry.iterdir()):
+                if _is_case_dir(child):
+                    yield child
 
 
 def main(argv=None):

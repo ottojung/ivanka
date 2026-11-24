@@ -111,6 +111,60 @@ def _args(root, temp, **overrides):
     return Namespace(**values)
 
 
+def _make_legacy_case(base, name=CASE, members=None, visual=True):
+    root = Path(base)
+    case = root / name
+    case.mkdir(parents=True)
+    (case / "conseq.csv").write_text("seed,consensus-percent-cutoff,sequence\na,MAX,ACGT\n")
+    receipt = {
+        "status": "success",
+        "sample_sha256": name,
+        "final_conseq_sha256": _digest((case / "conseq.csv").read_bytes()),
+        "timing_origin": "micall_in_container_monotonic_v1",
+        "all_projects": True,
+        "valid_final_max_count": 1,
+        "source_commit": "a6c8195d95076325a07661f7f625a86361dfed45",
+        "schema": "ivanka.p0.future-physical-exact-original-method.v2",
+    }
+    _write_json(case / "prospective-execution.json", receipt)
+    if members is None:
+        members = {
+            "combined_contigs.fasta": b">c\nACGT\n",
+            "assembly_tmp/seeds.fasta": b">s\nGG\n",
+            "assembly_tmp/assembler.log": b"assembled\n",
+            "trimmed1.fastq": b"@r\nACGT\n+\nIIII\n",
+            "temp.fasta.1.bt2": b"index\n",
+            "coverage.png": b"visual",
+            "remap.csv": b"read-level table",
+        }
+    archive = case / migration.ARCHIVE_NAME
+    with tarfile.open(archive, "w:gz") as tar:
+        for name_member, data in members.items():
+            info = tarfile.TarInfo(name_member)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    files = [{"relative_path": name_member, "bytes": len(data),
+              "sha256": _digest(data)} for name_member, data in sorted(members.items())]
+    attestation = {
+        "schema": migration.LEGACY_ATTESTATION_SCHEMA,
+        "stage": "complete",
+        "sha256_gzipped_tar": _digest(archive.read_bytes()),
+        "scratch_files": files,
+        "source_result_receipt_sha256": _digest(
+            (case / "prospective-execution.json").read_bytes()),
+        "source_result_conseq_sha256": receipt["final_conseq_sha256"],
+        "scratch_bytes_allocated": sum(len(data) for data in members.values()),
+        "archive_bytes_allocated": archive.stat().st_size,
+        "removed_only_uncompressed_duplicate": True,
+        "artifact_type": "lossless, independently SHA-verified archive; no scientific data discarded",
+    }
+    _write_json(case / migration.ATTESTATION_NAME, attestation)
+    if visual:
+        (case / "coverage_maps").mkdir()
+        (case / "coverage_maps" / "plot.png").write_bytes(b"plot")
+    return case
+
+
 class MigrateScratchArchivesTests(unittest.TestCase):
     def test_dry_run_only_plans(self):
         with TemporaryDirectory() as d:
@@ -332,6 +386,146 @@ class MigrateScratchArchivesTests(unittest.TestCase):
             report = json.loads(out.getvalue())
             self.assertEqual(len(report["cases"]), 1)
             self.assertEqual(report["cases"][0]["status"], "planned")
+
+
+class LegacyMigrateScratchArchivesTests(unittest.TestCase):
+    def test_legacy_dry_run_only_plans(self):
+        with TemporaryDirectory() as d:
+            case = _make_legacy_case(d)
+            before = {p.name: _digest(p.read_bytes()) for p in case.iterdir() if p.is_file()}
+            plan = migration.inspect_case(case, _args(d, d))
+            self.assertEqual(plan["retained_count"], 3)
+            self.assertEqual(plan["discarded_count"], 4)
+            self.assertEqual(before, {p.name: _digest(p.read_bytes())
+                                      for p in case.iterdir() if p.is_file()})
+            self.assertFalse((case / "retained-scratch").exists())
+
+    def test_legacy_apply_promotes_then_removes_and_is_idempotent(self):
+        with TemporaryDirectory() as d:
+            case = _make_legacy_case(d)
+            terminal = {name: _digest((case / name).read_bytes()) for name in
+                        ("conseq.csv", "prospective-execution.json",
+                         migration.ATTESTATION_NAME)}
+            args = _args(d, d, apply=True)
+            plan = migration.inspect_case(case, args)
+            result = migration.apply_case(case, plan, args)
+            self.assertEqual(result["status"], "migrated")
+            self.assertFalse((case / migration.ARCHIVE_NAME).exists())
+            self.assertFalse((case / "coverage_maps" / "plot.png").exists())
+            for name, digest in terminal.items():
+                self.assertEqual(_digest((case / name).read_bytes()), digest)
+            retained = case / migration.RETAINED_SUBDIR
+            self.assertEqual((retained / "combined_contigs.fasta").read_bytes(), b">c\nACGT\n")
+            self.assertEqual((retained / "assembly_tmp" / "seeds.fasta").read_bytes(), b">s\nGG\n")
+            self.assertFalse((retained / "trimmed1.fastq").exists())
+            receipt = json.loads((case / migration.RECEIPT_NAME).read_text())
+            self.assertTrue(receipt["archive_removed"])
+            self.assertEqual(receipt["archive_sha256"], plan["archive_sha256"])
+            self.assertEqual(len(receipt["retained_members"]), 3)
+            self.assertEqual(len(receipt["discarded_members"]), 4)
+            self.assertIsNone(receipt["terminal_receipts"]["posthoc_score_sha256"])
+            again = migration.apply_case(case, migration.inspect_case(case, args), args)
+            self.assertEqual(again["status"], "already_migrated")
+
+    def test_legacy_rejects_archive_hash_drift(self):
+        with TemporaryDirectory() as d:
+            case = _make_legacy_case(d)
+            with (case / migration.ARCHIVE_NAME).open("ab") as stream:
+                stream.write(b"\x00")
+            with self.assertRaises(migration.MigrationError):
+                migration.inspect_case(case, _args(d, d))
+            self.assertTrue((case / migration.ARCHIVE_NAME).exists())
+
+    def test_legacy_rejects_wrong_stage(self):
+        with TemporaryDirectory() as d:
+            case = _make_legacy_case(d)
+            att = json.loads((case / migration.ATTESTATION_NAME).read_text())
+            att["stage"] = "verified_archive_source_still_present"
+            _write_json(case / migration.ATTESTATION_NAME, att)
+            with self.assertRaises(migration.MigrationError):
+                migration.inspect_case(case, _args(d, d))
+
+    def test_legacy_rejects_receipt_hash_drift(self):
+        with TemporaryDirectory() as d:
+            case = _make_legacy_case(d)
+            receipt = json.loads((case / "prospective-execution.json").read_text())
+            receipt["status"] = "failed"
+            _write_json(case / "prospective-execution.json", receipt)
+            with self.assertRaises(migration.MigrationError):
+                migration.inspect_case(case, _args(d, d))
+
+    def test_legacy_rejects_unattested_member(self):
+        with TemporaryDirectory() as d:
+            case = _make_legacy_case(d)
+            archive = case / migration.ARCHIVE_NAME
+            with tarfile.open(archive, "w:gz") as tar:
+                payloads = {"combined_contigs.fasta": b">c\nACGT\n",
+                            "unattested.csv": b"unexpected\n"}
+                for name, data in payloads.items():
+                    info = tarfile.TarInfo(name)
+                    info.size = len(data)
+                    tar.addfile(info, io.BytesIO(data))
+            att = json.loads((case / migration.ATTESTATION_NAME).read_text())
+            att["sha256_gzipped_tar"] = _digest(archive.read_bytes())
+            _write_json(case / migration.ATTESTATION_NAME, att)
+            with self.assertRaises(migration.MigrationError):
+                migration.inspect_case(case, _args(d, d))
+
+    def test_legacy_rejects_sample_mismatch(self):
+        with TemporaryDirectory() as d:
+            case = _make_legacy_case(d)
+            receipt = json.loads((case / "prospective-execution.json").read_text())
+            receipt["sample_sha256"] = "f" * 64
+            _write_json(case / "prospective-execution.json", receipt)
+            att = json.loads((case / migration.ATTESTATION_NAME).read_text())
+            att["source_result_receipt_sha256"] = _digest(
+                (case / "prospective-execution.json").read_bytes())
+            _write_json(case / migration.ATTESTATION_NAME, att)
+            with self.assertRaises(migration.MigrationError):
+                migration.inspect_case(case, _args(d, d))
+
+    def test_legacy_discovery_under_group_subdir(self):
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            group = root / "p0-physical-selective-cases"
+            group.mkdir()
+            _make_legacy_case(group, name="1" * 64)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = migration.main(["--root", str(root), "--temp-dir", d])
+            self.assertEqual(code, 0)
+            report = json.loads(out.getvalue())
+            self.assertEqual(len(report["cases"]), 1)
+            self.assertEqual(report["cases"][0]["status"], "planned")
+
+    def test_nested_legacy_crash_resume_is_discoverable(self):
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            group = root / "p0-physical-selective-cases"
+            group.mkdir()
+            case = _make_legacy_case(group, name="2" * 64)
+            args = _args(root, d, apply=True)
+            plan = migration.inspect_case(case, args)
+            promoted = migration._promote(case, plan)
+            receipt = {
+                "schema": migration.SCHEMA,
+                "case_sha256": case.name,
+                "attestation_sha256": plan["attestation_sha256"],
+                "archive_sha256": plan["archive_sha256"],
+                "archive_removed": False,
+                "retained_members": promoted,
+            }
+            _write_json(case / migration.RECEIPT_NAME, receipt)
+            (case / migration.ARCHIVE_NAME).unlink()
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = migration.main(["--root", str(root), "--temp-dir", d, "--apply"])
+            self.assertEqual(code, 0)
+            report = json.loads(out.getvalue())
+            self.assertEqual(len(report["cases"]), 1)
+            self.assertEqual(report["cases"][0]["status"], "finalized")
+            final = json.loads((case / migration.RECEIPT_NAME).read_text())
+            self.assertTrue(final["archive_removed"])
 
 
 if __name__ == "__main__":

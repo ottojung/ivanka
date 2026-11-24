@@ -64,9 +64,13 @@ def check_evidence(evidence):
         if image is not None and not SHA64.fullmatch(image):
             raise ValueError("unverified image digest in public evidence")
         for case in item.get("cases", []):
+            mates = case.get("read_sha256") or case.get("input_sha256") or {}
+            bound = (SHA64.fullmatch(case.get("paired_input_sha256", "")) or
+                     (set(mates) == {"R1", "R2"} and
+                      all(SHA64.fullmatch(mates.get(m, ""))
+                          for m in ("R1", "R2"))))
             if (not ALIAS.fullmatch(case.get("canonical_alias", ""))
-                    or not SHA64.fullmatch(
-                        case.get("paired_input_sha256", ""))
+                    or not bound
                     or type(case.get("binding_receipts")) is not int
                     or case["binding_receipts"] < 3
                     or "launcher_seconds" not in case
@@ -107,9 +111,21 @@ def check_joined_measurements(run, evidence):
             if sample.get("seconds", {}).get(tool) is not None:
                 raise ValueError("launcher wall time cannot replace runtime")
             item = sample.get("measurement_evidence", {}).get(tool, {})
-            if item.get("paired_input_sha256") != case[
-                    "paired_input_sha256"]:
+            if ("paired_input_sha256" in case and
+                    item.get("paired_input_sha256") != case[
+                        "paired_input_sha256"]):
                 raise ValueError("joined case input hash mismatch")
+            if ("input_sha256" in case and
+                    item.get("input_sha256") != case["input_sha256"]):
+                raise ValueError("joined source pair hash mismatch")
+            if ("diagnostics" in case and case["diagnostics"] and
+                    sample.get("diagnostics", {}).get(tool) !=
+                    case["diagnostics"]):
+                raise ValueError("joined diagnostic metrics differ")
+            if ("peak_ram_observed_mib" in case and
+                    item.get("peak_ram_observed_mib") !=
+                    case["peak_ram_observed_mib"]):
+                raise ValueError("joined peak RAM differs")
             proof.setdefault(tool, set()).add(alias)
     return proof
 

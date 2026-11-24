@@ -17,6 +17,9 @@ LOG="$R/comparator-services/neutral-publisher.log"
 PY="$R/bench-ci-venv/bin/python"
 SYN_SOURCE=/workspace/ivanka-synthetic-v4-20261117
 Q=/workspace/ivanka-caps-qualification-20261119
+# Read-only PX receipt root: ingestion never launches or interrupts workers.
+PX_ROOT=/workspace/ivanka-exploratory-ten-20261121
+REAL_DATA=/workspace/denovo-example-io-1
 
 mkdir -p "$R/comparator-services"
 while :; do
@@ -50,6 +53,15 @@ while :; do
         --site "$WEB/site/bench" \
         $(for spec in $PX_RESULTS; do printf '%s' "--results $spec "; done) \
         --publish-neutral
+    fi
+
+    # Ingest newly immutable PX cohort case receipts (score, diagnostics,
+    # failures, peak RAM) before republishing; read-only on PX state.
+    if [ -f "$PX_ROOT/receipts/index.json" ]; then
+      PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \
+        benchmarks.assembler_bench.px_cohort_ingest \
+        --site "$WEB/site/bench" --root "$PX_ROOT" \
+        --real-data "$REAL_DATA"
     fi
 
     PYTHONPATH="$REPO:$REPO/benchmarks" "$PY" -m \

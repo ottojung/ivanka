@@ -116,7 +116,13 @@ while :; do
       site/bench/data/assembler-evidence.json
     if ! git -C "$WEB" diff --cached --quiet; then
       git -C "$WEB" commit -qm "Publish neutral cohort-owned Assembler Bench results"
-      git -C "$WEB" push -q origin HEAD:refs/heads/main
+      if ! git -C "$WEB" push -q origin HEAD:refs/heads/main; then
+        # Another publisher may have advanced main; rebase our data-only
+        # commit and retry rather than dropping verified measurements.
+        git -C "$WEB" fetch -q origin main
+        git -C "$WEB" rebase origin/main
+        git -C "$WEB" push -q origin HEAD:refs/heads/main
+      fi
       echo "NEUTRAL_SITE_PUSHED $(date -u +%FT%TZ)"
     else
       echo "NEUTRAL_SITE_UNCHANGED $(date -u +%FT%TZ)"

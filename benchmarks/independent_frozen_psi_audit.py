@@ -35,6 +35,64 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def checkpoint_matches(copied, original, panel):
+    """Verify status and both metric values, not just a checkpoint digest."""
+    if original.get("status") != "finished":
+        return False
+    if original.get("failed") is True:
+        return (copied.get("status") == "failed"
+                and copied.get("score") is None
+                and copied.get("runtime_seconds") is None)
+    if original.get("failed") is not False:
+        return False
+    measured = original.get("measurement") or {}
+    score = measured.get("score")
+    seconds = measured.get("seconds")
+    return (
+        original.get("reference_panel_sha256") == panel
+        and isinstance(score, (int, float)) and math.isfinite(score)
+        and isinstance(seconds, (int, float)) and math.isfinite(seconds)
+        and copied.get("status") == "success"
+        and copied.get("score") == score
+        and copied.get("runtime_seconds") == seconds
+    )
+
+
+def receipt_matches_metrics(score, receipt, planned, manifest):
+    """Bind the reported runtime and RSS to the execution evidence."""
+    return (
+        receipt.get("source_frozen_manifest_sha256") == manifest
+        and receipt.get("original_checkpoint_sha256") == planned.get("original_checkpoint_sha256")
+        and receipt.get("final_conseq_sha256") == score.get("candidate_conseq_sha256")
+        and receipt.get("internal_seconds") == score.get("candidate_runtime_seconds")
+        and receipt.get("sampled_rss_peak_bytes") == score.get("candidate_peak_rss_bytes")
+        and receipt.get("exit_code") == 0
+        and receipt.get("violation") is None
+        and receipt.get("original_rival_arm_recomputed") is False
+        and receipt.get("valid_final_max_count", 0) > 0
+    )
+
+
+def recomputed_floors(score):
+    """Check reported floors independently from the verified paired metrics."""
+    rivals = score.get("original_rivals", {})
+    peers = [r["score"] for tool, r in rivals.items()
+             if tool in RIVALS and r.get("status") == "success"]
+    iva = rivals.get("iva", {})
+    if not peers or iva.get("status") != "success":
+        return False
+    value = score["candidate_score"]
+    best = max(peers)
+    return (
+        score.get("original_best_available_rival_score") == best
+        and score.get("original_iva_score") == iva["score"]
+        and score.get("score_floor_90pct_best_available") is True
+        and score.get("score_floor_90pct_iva") is True
+        and value >= 0.90 * best
+        and value >= 0.90 * iva["score"]
+    )
+
+
 def attestation(root, frozen, image, manifest, panel):
     """Return (attested score rows, reason counts) without emitting identifiers.
 
@@ -50,6 +108,8 @@ def attestation(root, frozen, image, manifest, panel):
         reasons["plan_size_not_198"] = 1
         return [], reasons
     planned = {row["sample_sha256"]: row for row in plan}
+    if len(planned) != EXPECTED_CASES:
+        return [], {"duplicate_plan_keys": 1}
     cases_root = root / "physical-cases"
     rows, finished = [], 0
     for folder in sorted(cases_root.iterdir()):
@@ -85,10 +145,19 @@ def attestation(root, frozen, image, manifest, panel):
         checks["original_ivanka_checkpoint_drift"] = (
             planned_row is not None
             and rivals.get("ivanka", {}).get("checkpoint_sha256") == planned_row.get("original_checkpoint_sha256"))
+        checks["execution_metric_drift"] = (
+            planned_row is not None and receipt_matches_metrics(score, receipt, planned_row, manifest))
         for tool in ("ivanka",) + RIVALS:
             checkpoint = frozen / "phase-real198" / tool / "checkpoints" / (key + ".json")
-            checks["checkpoint_drift_" + tool] = (
-                rivals.get(tool, {}).get("checkpoint_sha256") == sha(checkpoint))
+            copied = rivals.get(tool, {})
+            original = json.loads(checkpoint.read_text())
+            checks["checkpoint_drift_" + tool] = copied.get("checkpoint_sha256") == sha(checkpoint)
+            checks["checkpoint_metric_drift_" + tool] = (
+                planned_row is not None
+                and original.get("sample") == planned_row.get("sample")
+                and checkpoint_matches(copied, original, panel))
+        if all(checks.values()):
+            checks["recomputed_floor_fail"] = recomputed_floors(score)
         failed = [name for name, passed in checks.items() if not passed]
         if failed:
             for name in failed:
@@ -218,6 +287,9 @@ def main(argv=None):
     report = diagnose(args.root, args.frozen_root)
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.out:
+        resolved = args.out.resolve()
+        if any(resolved.is_relative_to(root.resolve()) for root in (args.root, args.frozen_root)):
+            parser.error("--out must be outside both audited roots")
         with args.out.open("x", encoding="utf-8") as handle:
             handle.write(text)
     else:

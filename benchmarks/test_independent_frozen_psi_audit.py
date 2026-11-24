@@ -60,6 +60,42 @@ class IndependentAuditTests(unittest.TestCase):
         self.assertEqual(audit.cohort_status(audit.EXPECTED_CASES - 1, paired),
                          (False, False, "PARTIAL_DIAGNOSTIC_COHORT_INCOMPLETE"))
 
+    def test_checkpoint_copy_cannot_change_metrics_or_status(self):
+        original = {"status": "finished", "failed": False,
+                    "reference_panel_sha256": "panel",
+                    "measurement": {"score": 200, "seconds": 20}}
+        copied = {"status": "success", "score": 200, "runtime_seconds": 20}
+        self.assertTrue(audit.checkpoint_matches(copied, original, "panel"))
+        self.assertFalse(audit.checkpoint_matches(dict(copied, score=201), original, "panel"))
+        self.assertFalse(audit.checkpoint_matches(dict(copied, runtime_seconds=19), original, "panel"))
+        self.assertFalse(audit.checkpoint_matches(copied, original, "other"))
+        failed = dict(original, failed=True, measurement=None)
+        self.assertFalse(audit.checkpoint_matches(copied, failed, "panel"))
+        self.assertTrue(audit.checkpoint_matches(
+            {"status": "failed", "score": None, "runtime_seconds": None}, failed, "panel"))
+
+    def test_candidate_metric_copy_must_match_execution(self):
+        score = {"candidate_runtime_seconds": 10, "candidate_peak_rss_bytes": 100,
+                 "candidate_conseq_sha256": "conseq"}
+        planned = {"original_checkpoint_sha256": "original"}
+        receipt = {"source_frozen_manifest_sha256": "manifest", "original_checkpoint_sha256": "original",
+                   "final_conseq_sha256": "conseq", "internal_seconds": 10,
+                   "sampled_rss_peak_bytes": 100, "exit_code": 0, "violation": None,
+                   "original_rival_arm_recomputed": False, "valid_final_max_count": 1}
+        self.assertTrue(audit.receipt_matches_metrics(score, receipt, planned, "manifest"))
+        self.assertFalse(audit.receipt_matches_metrics(
+            dict(score, candidate_runtime_seconds=9), receipt, planned, "manifest"))
+        self.assertFalse(audit.receipt_matches_metrics(
+            score, dict(receipt, violation="disk-floor"), planned, "manifest"))
+
+    def test_claimed_floor_is_recomputed(self):
+        score = {"candidate_score": 89, "original_best_available_rival_score": 100,
+                 "original_iva_score": 100, "score_floor_90pct_best_available": True,
+                 "score_floor_90pct_iva": True,
+                 "original_rivals": {"iva": {"status": "success", "score": 100}}}
+        self.assertFalse(audit.recomputed_floors(score))
+        self.assertTrue(audit.recomputed_floors(dict(score, candidate_score=90)))
+
     def test_module_self_test(self):
         self.assertTrue(audit.self_test())
 

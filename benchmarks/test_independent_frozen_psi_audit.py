@@ -5,6 +5,8 @@ truth, sample name or clinical output is involved.
 """
 
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 import independent_frozen_psi_audit as audit
 
@@ -95,6 +97,19 @@ class IndependentAuditTests(unittest.TestCase):
                  "original_rivals": {"iva": {"status": "success", "score": 100}}}
         self.assertFalse(audit.recomputed_floors(score))
         self.assertTrue(audit.recomputed_floors(dict(score, candidate_score=90)))
+
+    def test_alignment_readback_detects_score_and_max_count_tampering(self):
+        with (patch("project_references.final_max_sequences", return_value=["ACGT"]),
+              patch("reference_panel.best_panel_alignment", return_value={"score": 4.0})):
+            folder = Path("/unused")
+            score = {"candidate_score": 4.0}
+            receipt = {"valid_final_max_count": 1}
+            references = (("test", "ACGT"),)
+            self.assertTrue(audit.alignment_matches(folder, score, receipt, references))
+            self.assertFalse(audit.alignment_matches(
+                folder, dict(score, candidate_score=5.0), receipt, references))
+            self.assertFalse(audit.alignment_matches(
+                folder, score, dict(receipt, valid_final_max_count=2), references))
 
     def test_module_self_test(self):
         self.assertTrue(audit.self_test())

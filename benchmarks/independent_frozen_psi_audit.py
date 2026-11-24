@@ -93,7 +93,31 @@ def recomputed_floors(score):
     )
 
 
-def attestation(root, frozen, image, manifest, panel):
+def load_scoring_panel(projects_path, hxb2_path, expected_hash):
+    """Load and verify the frozen public panel; never pass it to an assembler."""
+    from Bio import SeqIO
+    from reference_panel import build_reference_panel, panel_sha256
+
+    projects = json.loads(projects_path.read_text())
+    hxb2 = str(SeqIO.read(hxb2_path, "fasta").seq)
+    references = build_reference_panel(projects, hxb2)
+    if len(references) != 33 or panel_sha256(references) != expected_hash:
+        raise ValueError("reference panel identity mismatch")
+    return references
+
+
+def alignment_matches(folder, score, receipt, references):
+    """Recompute the frozen scoring objective from retained final MAX sequences."""
+    from project_references import final_max_sequences
+    from reference_panel import best_panel_alignment
+
+    sequences = final_max_sequences(folder)
+    if not sequences or len(sequences) != receipt.get("valid_final_max_count"):
+        return False
+    return best_panel_alignment(sequences, references)["score"] == score.get("candidate_score")
+
+
+def attestation(root, frozen, image, manifest, panel, references=None):
     """Return (attested score rows, reason counts) without emitting identifiers.
 
     The checks mirror the frozen workflow's proof obligations but are
@@ -158,6 +182,8 @@ def attestation(root, frozen, image, manifest, panel):
                 and checkpoint_matches(copied, original, panel))
         if all(checks.values()):
             checks["recomputed_floor_fail"] = recomputed_floors(score)
+            if references is not None:
+                checks["candidate_alignment_drift"] = alignment_matches(folder, score, receipt, references)
         failed = [name for name, passed in checks.items() if not passed]
         if failed:
             for name in failed:
@@ -216,8 +242,8 @@ def cohort_status(attested, comparators):
     return complete, full_cohort, status
 
 
-def diagnose(root, frozen, image=IMAGE, manifest=MANIFEST, panel=PANEL):
-    rows, proof = attestation(root, frozen, image, manifest, panel)
+def diagnose(root, frozen, image=IMAGE, manifest=MANIFEST, panel=PANEL, references=None):
+    rows, proof = attestation(root, frozen, image, manifest, panel, references)
     attested = len(rows)
     comparators = {}
     for tool in RIVALS:
@@ -241,6 +267,7 @@ def diagnose(root, frozen, image=IMAGE, manifest=MANIFEST, panel=PANEL):
         "attested_finished_cases": attested,
         "expected_cases": EXPECTED_CASES,
         "attestation": proof,
+        "candidate_alignment_recomputed": references is not None,
         "pinned": {"image_sha256": image, "manifest_sha256": manifest, "panel_sha256": panel},
         "comparators": comparators,
         "full_cohort_eligible": full_cohort,
@@ -276,6 +303,8 @@ def main(argv=None):
     parser.add_argument("--root", type=Path, help="read-only audited case root")
     parser.add_argument("--frozen-root", type=Path, help="read-only frozen seven root")
     parser.add_argument("--out", type=Path, help="optional new output file (never inside the audited root)")
+    parser.add_argument("--projects-json", type=Path, help="pinned MiCall reference catalog for score readback")
+    parser.add_argument("--hxb2-fasta", type=Path, help="pinned HXB2 FASTA for score readback")
     parser.add_argument("--self-test", action="store_true", help="run synthetic logic checks only")
     args = parser.parse_args(argv)
     if args.self_test:
@@ -284,7 +313,11 @@ def main(argv=None):
         return 0
     if not args.root or not args.frozen_root:
         parser.error("--root and --frozen-root are required unless --self-test is used")
-    report = diagnose(args.root, args.frozen_root)
+    if bool(args.projects_json) != bool(args.hxb2_fasta):
+        parser.error("--projects-json and --hxb2-fasta must be supplied together")
+    references = (load_scoring_panel(args.projects_json, args.hxb2_fasta, PANEL)
+                  if args.projects_json else None)
+    report = diagnose(args.root, args.frozen_root, references=references)
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.out:
         resolved = args.out.resolve()

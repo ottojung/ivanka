@@ -6,4 +6,6 @@ use std::collections::HashMap;
 pub(super) type Key = u64;
 pub(super) type Hits = HashMap<Key, Vec<(usize, usize)>>;
 pub(super) use build::build;
-pub(super) use canon::{pack, rolling};
+#[cfg(test)]
+pub(super) use canon::pack;
+pub(super) use canon::rolling;

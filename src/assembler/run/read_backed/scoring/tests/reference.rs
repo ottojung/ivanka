@@ -1,10 +1,11 @@
-use super::{Hits, Reads, K};
+use super::byte_index::ByteHits;
+use super::{Reads, K};
 use std::collections::{HashMap, HashSet};
 
 pub(super) type Stats = (Vec<Vec<u32>>, Vec<usize>, Vec<usize>, Vec<u16>);
 
 // Original pairwise HashMap/HashSet formulation, reproduced verbatim.
-pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Stats {
+pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &ByteHits) -> Stats {
     let mut depth = contigs
         .iter()
         .map(|seq| vec![0u32; seq.len().saturating_sub(K - 1)])

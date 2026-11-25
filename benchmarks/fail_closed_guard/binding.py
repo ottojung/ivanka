@@ -3,7 +3,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from . import identity, proc
+from . import proc, startup
 from .errors import GuardExceeded
 
 CID = re.compile(r"[0-9a-f]{64}\Z")
@@ -53,7 +53,13 @@ def inspect_pid(cid, env):
 
 
 def bind_container(cid, env, snapshot=None):
-    """Bind exact CID to the live init process and immutable identity."""
+    """Bind the exact CID to the live init process and immutable identity.
+
+    ``inspect_pid`` already proves ``{{.Id}} == cid`` (it fails closed with
+    ``identity_lost`` otherwise), so the binding is CID-verified. Identity is
+    the kernel starttime plus namespace -- never a bare PID and never the
+    volatile cmdline hash, which a normal exec legitimately changes.
+    """
     if not CID.fullmatch(cid):
         raise GuardExceeded("binding_unavailable")
     pid = inspect_pid(cid, env)
@@ -61,8 +67,7 @@ def bind_container(cid, env, snapshot=None):
     record = table.get(pid)
     if record is None:
         raise GuardExceeded("identity_lost")
-    return {"cid": cid, "pid": pid,
-            "fingerprint": identity.bind(record)}
+    return startup.bind(cid, pid, record, cid_verified=True)
 
 
 def bind_by_name(name, env, snapshot=None):

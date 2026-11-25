@@ -6,6 +6,20 @@ def fingerprint(record):
     return (record["starttime"], record["pid_ns"], record["cmdline_sha"])
 
 
+def stable_fingerprint(record):
+    """Immutable kernel identity only: starttime + PID namespace.
+
+    Unlike :func:`fingerprint`, this excludes ``cmdline_sha`` because a normal
+    ``execve()`` changes the cmdline while the kernel task (and therefore its
+    starttime and namespace) stays the same. Used by the exact-CID startup
+    binding in :mod:`fail_closed_guard.startup`.
+    """
+    if record is None or any(record.get(key) is None
+                             for key in ("starttime", "pid_ns")):
+        raise GuardExceeded("binding_unavailable")
+    return (record["starttime"], record["pid_ns"])
+
+
 def locate(finger, table, bound_pid=None):
     """Exactly one live process must carry the bound identity.
 

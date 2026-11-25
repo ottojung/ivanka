@@ -12,6 +12,7 @@ from assembler_bench.exploratory_space import (
     PROJECT_TMP,
     ROOTLESS_STORE,
     admit,
+    admit_reserve,
     allocated,
     allocated_optional,
     disk_measure_command,
@@ -204,6 +205,34 @@ class TestExploratorySpace(unittest.TestCase):
                         1, ["podman", "unshare", "du"], stderr=stderr)) as run):
             allocated(ROOTLESS_STORE)
             self.assertEqual(run.call_count, 1)
+
+    def test_reserve_check_never_scans_oci_or_project_tree(self):
+        with (patch("assembler_bench.exploratory_space.available",
+                    return_value=33 * 1024**3),
+              patch("assembler_bench.exploratory_space.allocated",
+                    side_effect=AssertionError("recursive usage scan")) as scan):
+            result = admit_reserve(self.r, self.base, self.exp, self.store,
+                                   self.work, 1024**3)
+            self.assertEqual(result, {"free_bytes": 33 * 1024**3,
+                                      "admitted_reservation_bytes": 1024**3})
+            scan.assert_not_called()
+        with (patch("assembler_bench.exploratory_space.available",
+                    return_value=33 * 1024**3 - 1),
+              self.assertRaisesRegex(ValueError, "workspace reserve")):
+            admit_reserve(self.r, self.base, self.exp, self.store,
+                          self.work, 1024**3)
+
+    def test_reserve_check_missing_path_and_statvfs_error_fail_closed(self):
+        self.store.rmdir()
+        with self.assertRaisesRegex(ValueError, "missing measured directory"):
+            admit_reserve(self.r, self.base, self.exp, self.store,
+                          self.work, 1024**3)
+        self.store.mkdir()
+        with (patch("assembler_bench.exploratory_space.available",
+                    side_effect=OSError("statvfs unavailable")),
+              self.assertRaisesRegex(OSError, "statvfs unavailable")):
+            admit_reserve(self.r, self.base, self.exp, self.store,
+                          self.work, 1024**3)
 
     def test_small_pilot_admitted(self):
         self.assertEqual(self.check(1024)["admitted_reservation_bytes"], 1024)

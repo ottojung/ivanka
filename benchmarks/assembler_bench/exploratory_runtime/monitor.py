@@ -116,7 +116,8 @@ def _bind_started(proc_handle, cidfile, env, *, start, wall_seconds, interval,
 
 def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
                 margin=1024**3, clock=time.monotonic, sleep=time.sleep,
-                measure=admit_reserve, stop=None, snapshot=None, on_bind=None):
+                measure=admit_reserve, stop=None, snapshot=None, on_bind=None,
+                heartbeat=None):
     """Identity-bound PX pilot guard, stopped only by exact CID."""
     if interval <= 0 or interval > 1 or margin < 1024**3:
         raise ValueError("unsafe polling interval or disk safety margin")
@@ -145,12 +146,12 @@ def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
         bound, limit=config["rss_bytes"], wall_seconds=config["wall_seconds"],
         running=(lambda: proc_handle.poll() is None), snapshot=take,
         measure=disk, stop=terminate, clock=clock, sleep=sleep, interval=interval,
-        attestation=BOUND_ATTESTATION, start=start)
+        attestation=BOUND_ATTESTATION, start=start, heartbeat=heartbeat)
 
 
 def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
                 clock=time.monotonic, sleep=time.sleep, measure=admit_reserve,
-                stop=None, snapshot=None):
+                stop=None, snapshot=None, heartbeat=None):
     """Launcher-tree guard for builds: no CID, exact process-group teardown."""
     if interval <= 0 or interval > 1 or margin < 1024**3:
         raise ValueError("unsafe polling interval or disk safety margin")
@@ -177,7 +178,8 @@ def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
         bound, limit=config["rss_bytes"], wall_seconds=config["wall_seconds"],
         running=(lambda: proc_handle.poll() is None), snapshot=take,
         measure=(lambda: _disk(config, margin, measure)), stop=terminate,
-        clock=clock, sleep=sleep, interval=interval, rss_fn=build.rss)
+        clock=clock, sleep=sleep, interval=interval, rss_fn=build.rss,
+        heartbeat=heartbeat)
 
 
 def watch(proc_handle, config, *, interval=1, margin=1024**3,
@@ -193,11 +195,12 @@ def watch(proc_handle, config, *, interval=1, margin=1024**3,
                            env=config.get("env", env), interval=interval,
                            margin=margin, clock=clock, sleep=sleep,
                            measure=measure, stop=stop, snapshot=snapshot,
-                           on_bind=on_bind)
+                           on_bind=on_bind, heartbeat=config.get("heartbeat"))
     if mode == "build" or config.get("guard_mode") == "build":
         return watch_build(proc_handle, config, interval=interval, margin=margin,
                            clock=clock, sleep=sleep, measure=measure,
-                           stop=stop, snapshot=snapshot)
+                           stop=stop, snapshot=snapshot,
+                           heartbeat=config.get("heartbeat"))
     if interval <= 0 or interval > 1 or margin < 1024**3:
         raise ValueError("unsafe polling interval or disk safety margin")
     start = clock()

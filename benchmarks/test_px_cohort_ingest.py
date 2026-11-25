@@ -417,9 +417,15 @@ class PxCohortSyntheticIngestTests(unittest.TestCase):
         self.result = {
             "schema": "ivanka.exploratory.per-sample.v1", "tool_id": "skesa",
             "cohort": "synthetic", "expected_sample_count": 464,
+            "source_commit": "1" * 40, "adapter_commit": "2" * 40,
+            "image_sha256": "c" * 64,
             "scorer_source_sha256": px_posthoc.source_sha256(),
             "samples": [{"alias": self.ALIAS, "outcome": "success",
                          "score": self.score, "method": SYNTHETIC_SCORE,
+                         "truth_sha256": self.record[
+                             "sha256"]["hidden-truth/haplotypes.fasta"],
+                         "output_sha256": "a" * 64,
+                         "runner_receipt_sha256": "b" * 64,
                          "synthetic_abundant_truth_count": 2}],
         }
         self.resource = {

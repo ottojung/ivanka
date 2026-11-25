@@ -239,7 +239,10 @@ def _case(root, name, receipt, assembler, real_data):
             or diagnostics.get("runner_receipt_sha256") != receipt[
                 "runner_receipt_sha256"]):
         raise ValueError("PX diagnostic evidence is not receipt-bound")
-    row = result["samples"][0]
+    samples = result.get("samples")
+    if not isinstance(samples, list) or len(samples) != 1:
+        raise ValueError("PX result must carry exactly one receipt-bound sample")
+    row = samples[0]
     if row.get("method") != method and cohort == "synthetic":
         raise ValueError(
             "PX synthetic score method is incompatible with the public "
@@ -256,17 +259,22 @@ def _case(root, name, receipt, assembler, real_data):
     if cohort == "synthetic":
         from . import px_cohort_scheduler as sched
         from . import px_posthoc
+        for key in ("source_commit", "adapter_commit", "image_sha256"):
+            if result.get(key) != receipt.get(key):
+                raise ValueError("PX result provenance differs from receipt")
+        for key in ("output_sha256", "runner_receipt_sha256"):
+            if row.get(key) != receipt.get(key):
+                raise ValueError("PX result " + key + " differs from receipt")
         # The frozen truth digest is opened only by the pinned scorer. Bind
         # that exact source identity before admitting a synthetic score.
         if result.get("scorer_source_sha256") != px_posthoc.source_sha256():
             raise ValueError(
                 "PX synthetic scorer does not verify the frozen truth hash")
         truth_claim = row.get("truth_sha256") or result.get("truth_sha256")
-        if truth_claim is not None:
-            truth = _synthetic_alias(receipt, ALIAS.fullmatch(receipt["alias"]))
-            if truth_claim != truth:
-                raise ValueError(
-                    "PX synthetic truth hash differs from the frozen cohort")
+        truth = _synthetic_alias(receipt, ALIAS.fullmatch(receipt["alias"]))
+        if not SHA64.fullmatch(truth_claim or "") or truth_claim != truth:
+            raise ValueError(
+                "PX synthetic truth hash differs from the frozen cohort")
         if result.get("expected_sample_count") != sched.SYNTHETIC_COUNT:
             raise ValueError(
                 "PX synthetic result is not bound to the frozen 464-case cohort")

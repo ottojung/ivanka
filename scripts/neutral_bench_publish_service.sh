@@ -34,6 +34,19 @@ while :; do
     if [ -n "$(git -C "$REPO" status --porcelain)" ]; then
       echo "NEUTRAL_PUBLISHER_SOURCE_DRIFT"; exit 3
     fi
+    # The checkout is dedicated to this publisher. Only after proving it
+    # clean under our lock may we roll back a failed cycle's own edits.
+    if [ -n "$(git -C "$WEB" status --porcelain)" ]; then
+      echo "NEUTRAL_PUBLISHER_CHECKOUT_DRIFT"; exit 3
+    fi
+    trap '
+      rc=$?
+      if [ "$rc" -ne 0 ]; then
+        git -C "$WEB" rebase --abort >/dev/null 2>&1 || :
+        git -C "$WEB" reset -q --hard HEAD || :
+      fi
+      exit "$rc"
+    ' 0
     if [ ! -f "$R/phase-synthetic464/run_manifest.json" ]; then
       echo "WAITING_FOR_SYNTHETIC_V6_SOURCE"; exit 0
     fi

@@ -60,6 +60,12 @@ COMPRESSIBLE_TABLES = frozenset({
     "unstitched_genome_coverage.csv",
     "unstitched_multimap_depth.csv",
     "unique_aligned_fragments.csv",
+    # Additional large non-scored diagnostic tables. A sealed migration must
+    # still prove every logical digest and preserve consensus/receipt bytes.
+    "amino_details.csv",
+    "nuc_details.csv",
+    "scratch_amino.csv",
+    "scratch_nuc.csv",
     # Non-receipt-bound unstitched diagnostics. These are read-level /
     # per-position tables that no sealed receipt pins by SHA-256, no reader
     # opens through a hardcoded plain path, and none is a consensus, contig or

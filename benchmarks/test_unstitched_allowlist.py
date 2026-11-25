@@ -21,6 +21,8 @@ from compressed_tables import (  # noqa: E402
 
 
 PROPOSED = frozenset({
+    "amino_details.csv", "nuc_details.csv",
+    "scratch_amino.csv", "scratch_nuc.csv",
     "unstitched_amino.csv", "unstitched_amino_details.csv",
     "unstitched_cascade.csv", "unstitched_clipping.csv",
     "unstitched_concordance.csv", "unstitched_concordance_detailed.csv",

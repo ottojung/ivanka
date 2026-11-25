@@ -263,6 +263,31 @@ def arm_image(receipt):
     return value
 
 
+def _verify_scoring_input(output_dir, receipt):
+    """Prove the exact table the canonical scorer will open before scoring."""
+    from benchmarks.compressed_tables import find_table
+    root = Path(output_dir)
+    artifact = find_table(root / sched.MAX_ARTIFACT,
+                          root / "scratch" / sched.MAX_ARTIFACT)
+    # PX keeps final MAX plain and hash-bound, even when other CSVs compress.
+    # Never score a compressed shadow table or a symlink instead of that file.
+    if (artifact is None or not artifact.is_file() or artifact.is_symlink()
+            or sched.sha256_file(artifact) != receipt["output_sha256"]):
+        raise ValueError("final MAX output is missing or changed since receipt")
+    return artifact
+
+
+def _bound_posthoc(root, arm, case, receipt, output_dir, scorer, scorer_sha):
+    _verify_scoring_input(output_dir, receipt)
+    result = sched.posthoc_score(root, arm, scorer, scorer_sha,
+                                 output_dir=output_dir, case=case)
+    # A concurrent replacement must not publish a score for changed bytes.
+    _verify_scoring_input(output_dir, receipt)
+    if sched.verify_receipt(root, arm) != receipt:
+        raise ValueError("terminal receipt changed during scoring")
+    return result
+
+
 def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
                                scorer_sha=None):
     """Seal posthoc measurements; the supervisor retires with teardown proof."""
@@ -273,8 +298,8 @@ def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
         scorer_sha = scorer.source_sha256
     if scorer_sha is None:
         raise ValueError("posthoc scorer SHA-256 is required")
-    result = sched.posthoc_score(root, arm, scorer, scorer_sha,
-                                 output_dir=output_dir, case=case)
+    result = _bound_posthoc(root, arm, case, receipt, output_dir,
+                            scorer, scorer_sha)
     path, digest = sched.write_results(root, arm, result)
     Path(str(path) + ".sha256").write_text(digest + "\n")
     exact = _exact_report(output_dir, case, receipt)
@@ -327,8 +352,8 @@ def _reconcile_arm(root, parsed, case, receipt, *, active, active_sha,
     if active is None:
         active = scorer or build_default_scorer()
         active_sha = scorer_sha or active.source_sha256
-    result = sched.posthoc_score(root, parsed, active, active_sha,
-                                 output_dir=output, case=case)
+    result = _bound_posthoc(root, parsed, case, receipt, output,
+                            active, active_sha)
     path, digest = sched.write_results(root, parsed, result)
     Path(str(path) + ".sha256").write_text(digest + "\n")
     hashes = case.input_hashes()

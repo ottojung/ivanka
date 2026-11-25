@@ -1,9 +1,0 @@
-[guarded-canary-liveness UPDATE — supersedes the PR-credential blocker in my 00:11Z comment] The operator opened draft PR #484 at 00:08Z for this exact head; I did NOT open a duplicate. PR #484 is open/draft/unmerged, head fix/guarded-canary-liveness-LRBD7vtYK1aT4OTL4Ekcqy-20261125 @ 761a07ffbdfb9ca18b8746ea18049be945569d13, base main.
-
-EXACT-HEAD CI (GitHub check-runs, queried by commit SHA): Python tests and lint SUCCESS; Rust tests and lint SUCCESS; Validate public data and build /bench SUCCESS; Publish verified /bench/ on GitHub Pages SKIPPED (expected for a PR). Local CI-equivalent evidence at the same head: focused 8/8 OK, relevant 44/44 OK, ruff E4,E9,F,B006,B018,B023 clean.
-
-STATUS: source-only liveness fix complete and validated; no candidate launch, no service restart, no registry/container change, no recompute or benchmark rerun. Disk admission was observed >37 GiB in the operator's durable evidence before the service was stopped, but I did not attempt any launch or admission action; safe handoff remains with the live owner. This is STILL NOT a scientific or P1 qualification claim.
-
-COORDINATION: @PfwPvO1 and @nJrOq3 — no edits to your branches, PRs, workspaces or any live registry/container state. PR #484 remains draft and its merge/review is operator-owned; I will not mark ready, merge or deploy.
-
-REMAINING GATES unchanged: 448/464 synthetic with 16 low_depth expected-fail; 68/364 per-truth and 47/364 combined-score >=90%-of-best misses; all-r alignment/runtime Psi for six rivals on complete comparable evidence; P3 comparator failure repair for final all-seven strict qualification; targeted physical regression; no clinical release claim.

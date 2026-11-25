@@ -742,6 +742,12 @@ class MigrationTests(unittest.TestCase):
         # scheduler-digest-migrated plan digest.
         self.active.write_bytes(self.staged.read_bytes())
         self.assertEqual(sha(self.active), sha(self.staged))
+        prior = sched.build_plan(self.staged, self._source(), self.root,
+                                 provenance_root=self.root / "receipts")
+        prior.pop("arm_identities")
+        checkpoint = json.loads(self.checkpoint.read_text())
+        checkpoint["plan_sha256"] = sched._plan_digest(prior)
+        write_json(self.checkpoint, checkpoint)
         self.assertNotEqual(
             json.loads(self.checkpoint.read_text())["plan_sha256"],
             self.plan["new_plan_sha256"])
@@ -752,6 +758,22 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(after["plan_sha256"], self.plan["new_plan_sha256"])
         self.assertTrue(Path(result["receipt"]).is_file())
         self.assertFalse(migration._journal_path(self.root, self.plan).exists())
+
+    def test_partial_swap_without_journal_is_not_legacy_upgrade(self):
+        self._interrupted_apply(self.checkpoint)
+        migration._journal_path(self.root, self.plan).unlink()
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    "partial migration state has no recovery journal"):
+            self._apply()
+
+    def test_same_registry_with_unrelated_digest_is_not_legacy_upgrade(self):
+        self.active.write_bytes(self.staged.read_bytes())
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    "partial migration state has no recovery journal"):
+            self._apply()
+
+    def test_missing_receipt_is_not_accepted(self):
+        self.assertFalse(migration._receipt_accepted(None))
 
     def test_forged_journal_cannot_authorize_recovery(self):
         self._interrupted_apply(self.active)

@@ -408,17 +408,13 @@ def _checkpoint_snapshots(root, plan):
 
 
 def _receipt_accepted(receipt):
-    return not (
-        isinstance(receipt, dict)
-        and receipt.get("outcome") == "failure"
-        and receipt.get("failure_reason") in sched.INFRASTRUCTURE_FAILURE_REASONS
-        and receipt.get("attempt", 1) < sched.MAX_INFRA_ATTEMPTS)
+    return sched._receipt_accepted(receipt)
 
 
 def _expected_arm_identities(staged_data):
     tools = []
     for item in staged_data["candidates"]:
-        if not exploratory_policy.eligible(staged_data, item["id"]):
+        if not exploratory_policy.cohort_eligible(staged_data, item["id"]):
             continue
         tools.append({
             "tool_id": item["id"],
@@ -684,8 +680,14 @@ def apply(root, plan_path, *, source=None):
                 raise MigrationError("receipt case is not in the source cohort: " + name)
             if actual_hashes[name] != value:
                 raise MigrationError("case input hash drift: " + name)
-        new_digest = expected_plan_digest(
-            root, staged, source, provenance_root=_provenance(root))
+        scheduler_plan = sched.build_plan(
+            staged, source, root, provenance_root=_provenance(root))
+        new_digest = sched._plan_digest(scheduler_plan)
+        # Only the exact old scheduler digest for these same registry bytes
+        # may authorize a no-journal legacy-only upgrade.
+        legacy_plan = dict(scheduler_plan)
+        legacy_plan.pop("arm_identities", None)
+        legacy_digest = sched._plan_digest(legacy_plan)
         if new_digest != plan["new_plan_sha256"]:
             raise MigrationError("new checkpoint plan digest drift")
         receipt_path = root / "receipts" / (
@@ -710,16 +712,15 @@ def apply(root, plan_path, *, source=None):
                 return {"status": "already-applied", "receipt": str(receipt_path)}
             # A receipt alone cannot prove the current state came from it.
             _load_recovery(root, plan, plan_sha)
-        elif partial and journal_path.is_file():
-            # A journal written before mutation proves an interrupted swap.
+        elif journal_path.is_file():
+            # Validate a journal even if interruption preceded the first swap.
             _load_recovery(root, plan, plan_sha)
         elif partial:
-            # No receipt, no journal: no mutation from this plan started.
-            # This is a fresh application (e.g. legacy digest-only upgrade
-            # where the staged registry is byte-identical to active) rather
-            # than an interrupted swap. Proceed; verify_boundary and the
-            # journaled write below make the fresh apply crash-safe.
-            pass
+            if not (active_sha == staged_sha
+                    and cp_data.get("plan_sha256") == legacy_digest
+                    and legacy_digest != new_digest):
+                raise MigrationError(
+                    "partial migration state has no recovery journal")
 
         verify_boundary(root, plan, staged_data)
         snapshots = _checkpoint_snapshots(root, plan)

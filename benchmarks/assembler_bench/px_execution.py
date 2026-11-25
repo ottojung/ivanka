@@ -210,14 +210,21 @@ def _exact_report(output_dir, case, receipt):
         return {"status": "unavailable",
                 "unavailable_reason": "no final MAX consensus sequence"}
     try:
-        from benchmarks.produce_exact_coverage import generate
+        from benchmarks.produce_exact_coverage import generate, longest_max_conseq
+        from .px_exact_source import calculator
     except ImportError as exc:
         return {"status": "unavailable",
                 "unavailable_reason": f"exact coverage module unavailable: {exc}"}
+    try:
+        longest_max_conseq(artifact)
+    except ValueError:
+        return {"status": "unavailable",
+                "unavailable_reason": "no final MAX consensus sequence"}
     csv_path = Path(output_dir) / "exact_coverage.csv"
     temp = Path(output_dir) / ".exact_coverage.csv.partial"
     try:
-        report = generate(case.r1, case.r2, artifact, temp, overlap_size=70)
+        report = generate(case.r1, case.r2, artifact, temp, overlap_size=70,
+                          calculate=calculator())
     except ImportError as exc:
         temp.unlink(missing_ok=True)
         return {"status": "unavailable",

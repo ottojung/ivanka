@@ -1,4 +1,5 @@
 """Source-only PX recipes must stay pinned, bounded and nonqualifying."""
+import copy
 import json
 import tempfile
 import unittest
@@ -65,6 +66,35 @@ class TestSourceOnlyRecipes(unittest.TestCase):
                             side_effect=lambda n: (document, target)):
                 with self.assertRaises(ValueError):
                     checked("tadpole")
+
+    def test_ray_design_preserves_historical_budget_evidence(self):
+        # measured_budget records the earlier capped build attempts; cap_bytes
+        # is historical evidence, not a live limit. Current build prose must
+        # point at that field instead of asserting a 20 GiB build cap.
+        document = json.loads(
+            (RECIPES / "ray-disk-admission-design.json").read_text())
+        budget = document["measured_budget"]
+        self.assertEqual(budget["cap_bytes"], 21474836480)
+        self.assertEqual(budget["reservation_bytes"], 1 << 30)
+        self.assertEqual(len(document["attempts"]), 3)
+        self.assertTrue(all("under the 20 GiB cap" not in option
+                            for option in document["design_options"]))
+        self.assertIn("measured_budget", document["design_options"][0])
+        for change in (
+                lambda d: d["measured_budget"].update(reservation_bytes=0),
+                lambda d: d["measured_budget"].update(headroom_bytes=-1),
+                lambda d: d.update(attempts=[])):
+            with self.subTest(change=change):
+                mutated = copy.deepcopy(document)
+                change(mutated)
+                with tempfile.TemporaryDirectory() as directory:
+                    target = Path(directory) / "ray-disk-admission-design.json"
+                    target.write_text(json.dumps(mutated))
+                    with mock.patch("px_experimental_recipes._document",
+                                    side_effect=lambda n, m=mutated, t=target:
+                                    (m, t)):
+                        with self.assertRaises(ValueError):
+                            checked("ray-disk-admission-design")
 
     def test_compact_plans_for_remaining_tools(self):
         tools = checked("native-requirements")["tools"]

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from assembler_bench.px_cohort_ingest import (assert_no_stale_scores,
                                                refresh_registry_provenance)
+from assembler_bench import px_timing_semantics as timing
 
 from assembler_bench.px_cohort_ingest import ingest
 from assembler_bench.site_build import SITE
@@ -134,6 +135,97 @@ class PxCohortIngestTests(unittest.TestCase):
         self.assertEqual(real["tool_progress"]["skesa"]["finished"], 1)
         _, _, repeated, _ = ingest(merged, evidence, self.root, self.real)
         self.assertEqual(repeated, [])
+
+    def _attest_timing(self, seconds):
+        self.receipt["seconds"] = seconds
+        self.receipt.update({
+            timing.ORIGIN_KEY: timing.ORIGIN,
+            timing.VERSION_KEY: timing.METHOD_VERSION,
+            timing.TIMER_KEY: timing.TIMER_SOURCE_SHA256,
+            timing.FILE_KEY: "e" * 64,
+        })
+        self._write_all()
+
+    def test_only_complete_timing_proof_joins_a_runtime(self):
+        self._attest_timing(66.9)
+        report = self._report()
+        evidence, merged, added, _ = ingest(
+            report, self.evidence, self.root, self.real)
+        self.assertEqual(added, [("skesa", "real", "R003")])
+        case = evidence["assemblers"][0]["cases"][0]
+        self.assertEqual(case[timing.RUNTIME_KEY], 66.9)
+        self.assertIsNone(case[timing.LAUNCHER_KEY])
+        self.assertTrue(timing.attested(case))
+        real = next(run for run in merged["runs"] if run["cohort"] == "real")
+        sample = next(row for row in real["samples"] if row["alias"] == "R003")
+        self.assertEqual(sample["seconds"]["skesa"], 66.9)
+        proof = sample["measurement_evidence"]["skesa"]
+        self.assertTrue(timing.attested(proof))
+        self.assertEqual(proof[timing.RUNTIME_KEY], 66.9)
+        baseline_run = next(run for run in report["runs"]
+                            if run["cohort"] == "real")
+        baseline = next(row for row in baseline_run["samples"]
+                        if row["alias"] == "R002")
+        unchanged = next(row for row in real["samples"]
+                         if row["alias"] == "R002")
+        for tool, value in baseline["seconds"].items():
+            if value is not None:
+                self.assertEqual(unchanged["seconds"][tool], value)
+        _, again, repeated, _ = ingest(merged, evidence, self.root, self.real)
+        self.assertEqual(repeated, [])
+        self.assertEqual(again, merged)
+
+    def test_unattested_receipt_keeps_runtime_null(self):
+        evidence, merged, _, _ = ingest(
+            self._report(), self.evidence, self.root, self.real)
+        case = evidence["assemblers"][0]["cases"][0]
+        self.assertEqual(case["launcher_seconds"], 66.9)
+        self.assertIsNone(case[timing.RUNTIME_KEY])
+        real = next(run for run in merged["runs"] if run["cohort"] == "real")
+        sample = next(row for row in real["samples"] if row["alias"] == "R003")
+        self.assertIsNone(sample["seconds"]["skesa"])
+
+    def test_partial_timing_proof_is_not_a_runtime(self):
+        self.receipt[timing.ORIGIN_KEY] = timing.ORIGIN
+        self._write_all()
+        with self.assertRaisesRegex(ValueError, "timing proof is incomplete"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+
+    def test_publish_stamps_timestamp_without_rewriting_measurements(self):
+        import shutil
+        site = self.root / "site"
+        shutil.copytree(SITE, site)
+        (site / "data/assembler-evidence.json").write_text(
+            json.dumps(self.evidence))
+        (site / "data/runs.json").write_text(json.dumps(self._report()))
+        original = json.loads((site / "data/runs.json").read_text())
+        self._attest_timing(66.9)
+        from assembler_bench.px_cohort_ingest import publish
+        with patch("assembler_bench.site_build.validate_public_site",
+                   return_value=True):
+            updated, merged, added = publish(site, self.root, self.real)
+        self.assertEqual(added, [("skesa", "real", "R003")])
+        stamp = merged.get("published_at")
+        self.assertIsNotNone(stamp)
+        self.assertNotEqual(stamp, original.get("published_at"))
+        real = next(run for run in merged["runs"] if run["cohort"] == "real")
+        sample = next(row for row in real["samples"] if row["alias"] == "R003")
+        self.assertEqual(sample["seconds"]["skesa"], 66.9)
+        baseline_run = next(run for run in original["runs"]
+                            if run["cohort"] == "real")
+        baseline = next(row for row in baseline_run["samples"]
+                        if row["alias"] == "R002")
+        unchanged = next(row for row in real["samples"]
+                         if row["alias"] == "R002")
+        for tool, value in baseline["seconds"].items():
+            if value is not None:
+                self.assertEqual(unchanged["seconds"][tool], value)
+        with patch("assembler_bench.site_build.validate_public_site",
+                   return_value=True):
+            _, repeated_merged, repeated_added = publish(
+                site, self.root, self.real)
+        self.assertEqual(repeated_added, [])
+        self.assertEqual(repeated_merged.get("published_at"), stamp)
 
     def _write_failure(self, reason, peak=None):
         self.receipt.update(outcome="failure", failure_reason=reason,

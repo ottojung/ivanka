@@ -10,6 +10,7 @@ import math
 import re
 
 from .adapter_branch_refs import adapter_provenance
+from . import px_timing_semantics as timing
 from .public_psi import public_matrix
 from .public_view import EVIDENCE_SCHEMA, assert_clean_object
 from .public_vocabulary import assert_clean
@@ -108,9 +109,19 @@ def check_joined_measurements(run, evidence):
                 continue
             if sample["score"][tool] != case["score"]:
                 raise ValueError("joined score differs from attested case value")
-            if sample.get("seconds", {}).get(tool) is not None:
-                raise ValueError("launcher wall time cannot replace runtime")
+            seconds = sample.get("seconds", {}).get(tool)
             item = sample.get("measurement_evidence", {}).get(tool, {})
+            if seconds is not None:
+                runtime = timing.comparable_seconds(case)
+                if runtime is None or not timing.attested(item):
+                    raise ValueError("launcher wall time cannot replace runtime")
+                if seconds != runtime:
+                    raise ValueError("joined runtime differs from attested case")
+                if item.get(timing.RUNTIME_KEY) != runtime:
+                    raise ValueError("joined runtime proof differs from case")
+                for key in timing.PROOF_KEYS:
+                    if item.get(key) != case.get(key):
+                        raise ValueError("joined timing proof differs from case")
             if ("paired_input_sha256" in case and
                     item.get("paired_input_sha256") != case[
                         "paired_input_sha256"]):

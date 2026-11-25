@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
 from .public_metrics import CATALOG
+from . import px_timing_semantics as timing
 from .public_view import (EVIDENCE_SCHEMA, assert_clean_object,
                           merge_evidence, scrub)
 from .px_ram_semantics import (COMPARABLE_KEY, RAW_BYTES_KEY, classify,
@@ -126,7 +127,8 @@ def _failed_case(root, name, receipt, provenance, cohort, alias):
         "score": None, "canonical_manifest_sha256": PHYSICAL_MANIFEST,
         "score_origin": "micall_final_max_reference_panel_v1",
         "reference_panel_sha256": PANEL, "method": SCORE_METHOD,
-        "launcher_seconds": None, "input_sha256": receipt["input_sha256"],
+        "launcher_seconds": None, timing.RUNTIME_KEY: None,
+        "input_sha256": receipt["input_sha256"],
         "output_sha256": None, "diagnostics": diagnostics,
         "source_commit": provenance.get("source_commit"),
         "adapter_commit": provenance.get("adapter_commit"),
@@ -147,6 +149,8 @@ def _case(root, name, receipt, assembler, real_data):
             raise ValueError("PX case provenance differs from registry")
     if receipt.get("schema") != CASE_SCHEMA or receipt.get("terminal") is not True:
         raise ValueError("PX case is not a terminal receipt")
+    if timing.has_proof_keys(receipt) and not timing.attested(receipt):
+        raise ValueError("PX timing proof is incomplete or unpinned")
     bound = _canonical_alias(receipt, real_data)
     if bound is None:
         return None
@@ -201,6 +205,13 @@ def _case(root, name, receipt, assembler, real_data):
     coverage = diagnostics["metrics"].get("exact_coverage", {})
     metrics = _metrics(diagnostics)
     metrics.update(ram_diagnostics)
+    # A comparable runtime exists only when the index-bound receipt carries
+    # the complete, pinned timer proof. Legacy seconds stay unlabeled and are
+    # never published as a measured runtime.
+    proof = timing.timing_fields(receipt)
+    runtime = timing.comparable_seconds(receipt) if proof else None
+    if proof and runtime is None:
+        raise ValueError("attested PX receipt has no valid runtime")
     fields.update({
         "cohort": cohort, "canonical_alias": alias,
         "outcome": receipt["outcome"],
@@ -209,8 +220,10 @@ def _case(root, name, receipt, assembler, real_data):
         "score_origin": "micall_final_max_reference_panel_v1",
         "reference_panel_sha256": PANEL, "method": SCORE_METHOD,
         "scorer_source_sha256": result.get("scorer_source_sha256"),
-        "launcher_seconds": receipt.get("seconds"),
-        "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1",
+        timing.LAUNCHER_KEY: None if proof else receipt.get("seconds"),
+        timing.RUNTIME_KEY: runtime,
+        timing.ORIGIN_KEY: proof[timing.ORIGIN_KEY] if proof
+        else timing.LEGACY_ORIGIN,
         "input_sha256": receipt["input_sha256"],
         "output_sha256": receipt["output_sha256"],
         "source_commit": provenance.get("source_commit"),
@@ -223,6 +236,8 @@ def _case(root, name, receipt, assembler, real_data):
         },
         "binding_receipts": 5,
     })
+    if proof:
+        fields.update(proof)
     return fields
 
 
@@ -407,6 +422,7 @@ def ingest(report, evidence, root, real_data, registry_path=None,
         for case in item.get("cases", []):
             key = (item["id"], case.get("cohort"), case.get("canonical_alias"))
             normalize_case(case, bound_receipts.get(key))
+            timing.normalize_case(case, bound_receipts.get(key))
     for name, receipt in receipts.items():
         tool = receipt.get("tool_id")
         if tool not in assemblers:

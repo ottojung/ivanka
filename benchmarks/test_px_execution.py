@@ -896,6 +896,48 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "truth hash mismatch"):
             scorer._synthetic_inputs(case)
 
+    def test_reconcile_changed_output_never_writes_score(self):
+        registry = self.promoted_registry()
+        source = self.source()
+        arm = sched.build_plan(registry, source, self.px)["pending"][0]
+        output = self._arm_output(arm)
+        artifact = output / "conseq.csv"
+        artifact.write_bytes(b"original")
+        sched.record_outcome(self.px, arm, artifact, "success", seconds=1.0)
+        artifact.write_bytes(b"changed")
+        scorer = self._scorer()
+        with patch.object(scorer, "score") as score:
+            with self.assertRaisesRegex(ValueError, "missing or changed"):
+                exe.reconcile_terminal(self.px, registry, source, scorer=scorer,
+                                       aliases={arm["alias"]})
+            score.assert_not_called()
+        path = self.px / "results" / (sched.receipt_id(arm) + "-results.json")
+        self.assertFalse(path.exists())
+
+    def test_posthoc_rejects_output_changed_during_score(self):
+        registry = self.promoted_registry()
+        source = self.source()
+        arm = sched.build_plan(registry, source, self.px)["pending"][0]
+        case = source.case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        artifact = output / "conseq.csv"
+        artifact.write_bytes(b"original")
+        receipt = sched.record_outcome(self.px, arm, artifact, "success",
+                                       seconds=1.0)
+        scorer = self._scorer()
+        original = scorer.score
+
+        def change(**kwargs):
+            artifact.write_bytes(b"changed during score")
+            return original(**kwargs)
+
+        with patch.object(scorer, "score", side_effect=change):
+            with self.assertRaisesRegex(ValueError, "missing or changed"):
+                exe.posthoc_extract_and_retain(self.px, arm, case, receipt,
+                    scorer=scorer, scorer_sha=scorer.source_sha256)
+        path = self.px / "results" / (sched.receipt_id(arm) + "-results.json")
+        self.assertFalse(path.exists())
+
     def test_reconcile_existing_successes_without_rerun(self):
         registry = self.promoted_registry()
         source = self.source()

@@ -163,6 +163,20 @@ class WatchIdentityTests(unittest.TestCase):
         self.assertEqual(self.calls, [CID])
         self.assertNotIn(9, self.calls)
 
+    def test_natural_exit_with_unreadable_final_proc_record_keeps_peak(self):
+        bound = startup.bind(CID, 9, rec(9, cmd="micall"))
+        snaps = [
+            {9: rec(9, cmd="micall")},
+            # Late-stage natural exit: proc snapshot raced with process exit.
+            {9: rec(9, cmd="micall", start=None, ns=None)},
+        ]
+        result = self.run_watch(bound, snaps)
+        self.assertEqual(result["cid"], CID)
+        self.assertEqual(result["peak_rss"], 1000)
+        self.assertEqual(self.calls, [CID])
+        self.assertEqual(result["teardown"],
+                         {"cid": CID, "container_removed": True})
+
 
 class StartupPolicyTests(unittest.TestCase):
     def test_identity_loss_at_startup_is_terminal_not_retried(self):

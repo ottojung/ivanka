@@ -1,11 +1,12 @@
 use super::{ranking, scoring::Statistics};
 
 fn stats(masks: Vec<u16>, coverage: Vec<usize>) -> Statistics {
-    let pairs = (0..coverage.len())
+    let pairs: Vec<usize> = (0..coverage.len())
         .map(|i| masks.iter().filter(|&&m| m & (1 << i) != 0).count())
         .collect();
     Statistics {
         depth: vec![],
+        raw_pairs: pairs.clone(),
         pairs,
         coverage,
         pair_masks: masks,

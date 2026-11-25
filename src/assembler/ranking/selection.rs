@@ -28,7 +28,7 @@ pub(crate) fn select_supported_contigs_with_kmers(
             no_extension_support += 1;
             continue;
         }
-        let (valid, shared, short_shadow, snv) = super::evaluation::evaluate(
+        let (valid, shared, short_shadow, snv, path) = super::evaluation::evaluate(
             &seq,
             support,
             &represented,
@@ -36,7 +36,7 @@ pub(crate) fn select_supported_contigs_with_kmers(
             &retained_support,
             sampled,
         );
-        if !is_seed && valid > 0 && (shared * 20 >= valid * 19 || short_shadow) {
+        if !is_seed && valid > 0 && (shared * 20 >= valid * 19 || short_shadow) && !path {
             super::report::duplicate(snv, seq, support, &mut variants, &mut duplicates);
             continue;
         }

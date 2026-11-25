@@ -49,6 +49,15 @@ def _final_max_sequences(output_dir):
     return final_max_sequences(Path(output_dir))
 
 
+def _manifest_truth(manifest_path):
+    """Read the exact frozen truth digest without opening truth contents."""
+    data = json.loads(Path(manifest_path).read_bytes())
+    digest = (data.get("sha256") or {}).get("hidden-truth/haplotypes.fasta")
+    if not sched.SHA256.fullmatch(digest or ""):
+        raise ValueError("synthetic truth hash is not pinned")
+    return digest
+
+
 class PxScorer:
     """Score one PX arm from its retained final MAX output only."""
 
@@ -62,14 +71,16 @@ class PxScorer:
 
     def score(self, *, alias, cohort, output_sha256, output_dir=None,
               receipt=None, arm=None, case=None):
-        del output_sha256, receipt, arm
+        del arm
         if output_dir is None:
             raise ValueError("posthoc scoring requires output_dir")
         sequences = _final_max_sequences(output_dir)
         if cohort == "physical":
             return self._score_physical(alias, sequences)
         if cohort == "synthetic":
-            return self._score_synthetic(alias, sequences, case=case)
+            return self._score_synthetic(alias, sequences, case=case,
+                                         receipt=receipt,
+                                         output_sha256=output_sha256)
         raise ValueError("unknown PX cohort")
 
     def _score_physical(self, alias, sequences):
@@ -93,6 +104,14 @@ class PxScorer:
             truth = Path(self.synthetic_truth)
             if not manifest.is_file() or not truth.is_file():
                 raise ValueError("synthetic truth inputs are missing")
+            data = json.loads(manifest.read_bytes())
+            expected = (data.get("sha256") or {}).get(
+                "hidden-truth/haplotypes.fasta")
+            if (data.get("hidden_truth_file")
+                    != "hidden-truth/haplotypes.fasta"
+                    or not sched.SHA256.fullmatch(expected or "")
+                    or sched.sha256_file(truth) != expected):
+                raise ValueError("synthetic truth hash mismatch")
             return manifest, truth
         if case is None:
             return None, None
@@ -111,7 +130,8 @@ class PxScorer:
         # The v6 cohort pins the truth hash; accept neither a rewritten FASTA
         # nor a truth file borrowed from another case.
         expected_truth = record["sha256"]["hidden-truth/haplotypes.fasta"]
-        if sched.sha256_file(truth) != expected_truth:
+        if (not sched.SHA256.fullmatch(expected_truth or "")
+                or sched.sha256_file(truth) != expected_truth):
             raise ValueError("synthetic per-case truth hash mismatch")
         manifest_data = json.loads(manifest.read_bytes())
         if (manifest_data.get("sha256") != record["sha256"]
@@ -120,17 +140,32 @@ class PxScorer:
             raise ValueError("synthetic manifest disagrees with pinned cohort")
         return manifest, truth
 
-    def _score_synthetic(self, alias, sequences, case=None):
-        if not sequences:
-            return {"alias": alias, "outcome": "success", "score": 0.0,
-                    "method": SYNTHETIC_METHOD,
-                    "synthetic_abundant_truth_count": 0}
+    def _score_synthetic(self, alias, sequences, case=None, receipt=None,
+                         output_sha256=None):
+        """Bind even a zero-contig result to the exact frozen truth digest."""
         manifest_path, truth_path = self._synthetic_inputs(case)
         if manifest_path is None or truth_path is None:
             raise ValueError("synthetic scorer is missing truth inputs")
-        manifest = json.loads(Path(manifest_path).read_bytes())
-        from benchmarks.expanded.score import score_sequences
-        scored = score_sequences(manifest, truth_path, sequences)
-        return {"alias": alias, "outcome": "success", "score": scored["score"],
-                "method": SYNTHETIC_METHOD,
-                "synthetic_abundant_truth_count": scored["reference_count"]}
+        truth = _manifest_truth(manifest_path)
+        if not isinstance(receipt, dict) or not sched.SHA256.fullmatch(
+                str(receipt.get("output_sha256") or "")):
+            raise ValueError("synthetic scoring requires an immutable receipt")
+        if receipt["output_sha256"] != output_sha256:
+            raise ValueError("synthetic output hash differs from receipt")
+        runner = receipt.get("runner_receipt_sha256")
+        if not sched.SHA256.fullmatch(str(runner or "")):
+            raise ValueError("synthetic receipt lacks a runner receipt digest")
+        if sequences:
+            manifest = json.loads(Path(manifest_path).read_bytes())
+            from benchmarks.expanded.score import score_sequences
+            scored = score_sequences(manifest, truth_path, sequences)
+            score, count = scored["score"], scored["reference_count"]
+        else:
+            # An empty final MAX yields the same zero score as before; truth
+            # binding and receipt identity are still mandatory.
+            score, count = 0.0, 0
+        return {"alias": alias, "outcome": "success", "score": score,
+                "method": SYNTHETIC_METHOD, "truth_sha256": truth,
+                "output_sha256": receipt["output_sha256"],
+                "runner_receipt_sha256": runner,
+                "synthetic_abundant_truth_count": count}

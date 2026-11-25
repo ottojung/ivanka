@@ -15,6 +15,7 @@ from . import exploratory_policy, job_temp, px_metrics, px_retention
 from . import px_cohort_scheduler as sched
 from . import px_supervisor as sup
 from .exploratory_runtime import launch
+from . import px_timing_semantics as timing
 from .px_ram_semantics import (METHOD_KEY, SCOPE_KEY, VERSION_KEY, attested)
 
 PHYSICAL_ROOT = Path("/workspace/denovo-example-io-1")
@@ -128,6 +129,21 @@ def final_max(output_dir):
     return None
 
 
+def _timing_evidence(output_dir):
+    """Return ``(seconds, sealed proof)`` from the pinned in-container clock.
+
+    An unpinned timer record cannot attest a comparable runtime even when a
+    launcher reported success; the arm then fails closed instead of publishing
+    an unlabeled duration.
+    """
+    if not timing.timer_is_pinned(TIMER):
+        return None
+    clock = Path(output_dir) / "timing.json"
+    if not clock.is_file():
+        return None
+    return timing.parse_clock(clock.read_bytes())
+
+
 def classify(state):
     """Map launcher terminal states into bounded receipt failure reasons."""
     if state.get("status") == "finished":
@@ -169,16 +185,15 @@ def run_guarded(registry, baseline, arm, case, output_dir, operate,
     if artifact is None:
         report.update(outcome="failure", failure_reason="no_final_max")
         return report
-    timing = Path(output_dir) / "timing.json"
-    seconds = None
-    if timing.is_file():
-        clock = json.loads(timing.read_bytes())
-        if clock.get("exit_code") == 0 and clock.get("seconds", 0) > 0:
-            seconds = clock["seconds"]
-    if not isinstance(seconds, (int, float)) or seconds <= 0:
+    clock = _timing_evidence(output_dir)
+    if clock is None:
         report.update(outcome="failure", failure_reason="error")
         return report
+    seconds, proof = clock
     report.update(outcome="success", output_path=artifact, seconds=seconds)
+    # The runner attestation carries the sealed clock proof into the
+    # index-bound receipt; the timing file digest is fixed here at execution.
+    report.update(proof)
     return report
 
 
@@ -248,6 +263,31 @@ def arm_image(receipt):
     return value
 
 
+def _verify_scoring_input(output_dir, receipt):
+    """Prove the exact table the canonical scorer will open before scoring."""
+    from benchmarks.compressed_tables import find_table
+    root = Path(output_dir)
+    artifact = find_table(root / sched.MAX_ARTIFACT,
+                          root / "scratch" / sched.MAX_ARTIFACT)
+    # PX keeps final MAX plain and hash-bound, even when other CSVs compress.
+    # Never score a compressed shadow table or a symlink instead of that file.
+    if (artifact is None or not artifact.is_file() or artifact.is_symlink()
+            or sched.sha256_file(artifact) != receipt["output_sha256"]):
+        raise ValueError("final MAX output is missing or changed since receipt")
+    return artifact
+
+
+def _bound_posthoc(root, arm, case, receipt, output_dir, scorer, scorer_sha):
+    _verify_scoring_input(output_dir, receipt)
+    result = sched.posthoc_score(root, arm, scorer, scorer_sha,
+                                 output_dir=output_dir, case=case)
+    # A concurrent replacement must not publish a score for changed bytes.
+    _verify_scoring_input(output_dir, receipt)
+    if sched.verify_receipt(root, arm) != receipt:
+        raise ValueError("terminal receipt changed during scoring")
+    return result
+
+
 def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
                                scorer_sha=None):
     """Seal posthoc measurements; the supervisor retires with teardown proof."""
@@ -258,8 +298,8 @@ def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
         scorer_sha = scorer.source_sha256
     if scorer_sha is None:
         raise ValueError("posthoc scorer SHA-256 is required")
-    result = sched.posthoc_score(root, arm, scorer, scorer_sha,
-                                 output_dir=output_dir, case=case)
+    result = _bound_posthoc(root, arm, case, receipt, output_dir,
+                            scorer, scorer_sha)
     path, digest = sched.write_results(root, arm, result)
     Path(str(path) + ".sha256").write_text(digest + "\n")
     exact = _exact_report(output_dir, case, receipt)
@@ -312,8 +352,8 @@ def _reconcile_arm(root, parsed, case, receipt, *, active, active_sha,
     if active is None:
         active = scorer or build_default_scorer()
         active_sha = scorer_sha or active.source_sha256
-    result = sched.posthoc_score(root, parsed, active, active_sha,
-                                 output_dir=output, case=case)
+    result = _bound_posthoc(root, parsed, case, receipt, output,
+                            active, active_sha)
     path, digest = sched.write_results(root, parsed, result)
     Path(str(path) + ".sha256").write_text(digest + "\n")
     hashes = case.input_hashes()

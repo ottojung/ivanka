@@ -168,24 +168,53 @@ class SupervisorTests(unittest.TestCase):
             self.supervisor(self.fake_runner(calls), registry).start(armed=True)
         self.assertEqual(calls, [])
 
-    def test_resume_skips_terminal_receipts_and_preserves_order(self):
+    def test_resume_skips_terminal_receipts_and_balances_tools(self):
         registry = self.registry()
         self.handoff_all(registry)
         calls = []
         first = self.supervisor(self.fake_runner(calls, stop_after=2),
                                 registry).start(armed=True)
         self.assertEqual(first["completed"], [
-            "skesa-physical-PX-R001", "skesa-physical-PX-R002"])
+            "skesa-physical-PX-R001", "minia-physical-PX-R001"])
         self.assertEqual(first["status"], "stopped")
         (self.px / sup.STOP_FILE).unlink()
         second = self.supervisor(self.fake_runner(calls, stop_after=2),
                                  registry).start(armed=True)
         self.assertEqual(second["completed"][:2], [
-            "skesa-physical-PX-R003", "skesa-physical-PX-R004"])
+            "skesa-physical-PX-R002", "minia-physical-PX-R002"])
         self.assertEqual(len(calls), 4)
         self.assertEqual(calls[:4], [
-            "skesa-physical-PX-R001", "skesa-physical-PX-R002",
-            "skesa-physical-PX-R003", "skesa-physical-PX-R004"])
+            "skesa-physical-PX-R001", "minia-physical-PX-R001",
+            "skesa-physical-PX-R002", "minia-physical-PX-R002"])
+
+    def test_balanced_dispatch_catches_up_and_preserves_plan_digest(self):
+        registry = self.registry()
+        plan = sched.build_plan(registry, self.source(), self.px)
+        # SKESA is 120 arms ahead of Minia, like the live PX campaign.
+        for arm in plan["pending"][:120]:
+            self.assertEqual(arm["tool_id"], "skesa")
+            sched.record_outcome(self.px, arm, self.out, "success",
+                                 seconds=1.0, peak_rss=100,
+                                 runner_receipt_sha256="c" * 64)
+        plan = sched.build_plan(registry, self.source(), self.px)
+        digest = sched._plan_digest(plan)
+        pending = sched.resume(plan, self.px)
+        ordered = list(sup.balanced_pending(plan, pending))
+        self.assertEqual(ordered[:120],
+                         [a for a in pending if a["tool_id"] == "minia"
+                          and a["cohort"] == "physical"][:120])
+        self.assertEqual([sched.receipt_id(a) for a in ordered[120:124]], [
+            "skesa-physical-PX-R121", "minia-physical-PX-R121",
+            "skesa-physical-PX-R122", "minia-physical-PX-R122"])
+        self.assertEqual(len(ordered), len(pending))
+        self.assertEqual({sched.receipt_id(a) for a in ordered},
+                         {sched.receipt_id(a) for a in pending})
+        physical = 2 * sched.PHYSICAL_COUNT - 120
+        self.assertTrue(all(a["cohort"] == "physical"
+                            for a in ordered[:physical]))
+        self.assertTrue(all(a["cohort"] == "synthetic"
+                            for a in ordered[physical:]))
+        self.assertEqual(sched._plan_digest(plan), digest)
 
     def test_admission_stop_prevents_any_dispatch(self):
         registry = self.registry()

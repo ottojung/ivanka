@@ -11,15 +11,16 @@ pub(super) fn write(
     out: &str, max: usize, audit_path: Option<&str>, standard: bool, prepared: super::prepare::Prepared,
 ) -> Result<usize, Box<dyn Error>> {
     let super::prepare::Prepared { reads, contigs, support: supporting_counts, protected: protected_seed_count, rescue } = prepared;
-    let (contigs, supporting_counts) = crate::assembler::run_seed::phase_veto::reject_unsupported_recombinants(
-        contigs, supporting_counts, &reads.seqs, &reads.quals, protected_seed_count,
+    let evidence = crate::assembler::run_seed::phase_veto::prepare(&reads.seqs, &reads.quals);
+    let (contigs, supporting_counts) = crate::assembler::run_seed::phase_veto::reject_with(
+        &evidence, contigs, supporting_counts, &reads.seqs, protected_seed_count,
     );
     let (mut contigs, audit) = if audit_path.is_some() {
         select_supported_contigs_with_kmers(contigs, supporting_counts, max, protected_seed_count, &reads.seed_counts)
     } else {
         (select_supported_contigs(contigs, supporting_counts, max, protected_seed_count), Vec::new())
     };
-    if let Some(rescue) = rescue.and_then(|seq| crate::assembler::run_seed::phase_veto::vet_rescue(seq, &reads.seqs, &reads.quals)) {
+    if let Some(rescue) = rescue.and_then(|seq| crate::assembler::run_seed::phase_veto::vet_rescue_with(&evidence, seq, &reads.seqs)) {
         // Never exceed the user-requested max-contigs cap. Replace only a
         // non-protected path whose canonical 31-mers remain represented;
         // otherwise withhold the rescue to avoid losing distinct evidence.

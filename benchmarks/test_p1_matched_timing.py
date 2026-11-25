@@ -76,12 +76,20 @@ class MatchedTimingTests(unittest.TestCase):
             self.assertEqual(arm[arm.index("--stop-timeout") + 1], "2")
         self.assertTrue(invariants["same_read_mount"])
         self.assertEqual(invariants["qualification_impact"], "none_diagnostic_only")
+        self.assertEqual(invariants["one_wall_deadline_seconds"], 2400)
+        self.assertTrue(invariants["exact_cid_fail_closed_rss_guard"])
+        self.assertTrue(invariants["exact_cid_teardown_in_finally"])
+        self.assertEqual(
+            invariants["real_global_worker_lock"],
+            "/workspace/ivanka-exploratory-ten-20261121/.global-worker.lock",
+        )
+        self.assertEqual(invariants["drift_conclusion"], "strong_evidence_not_causal_proof")
 
     def test_dry_run_launches_nothing(self) -> None:
         with mock.patch.object(plan_module.subprocess, "Popen", side_effect=AssertionError("launched")):
             with mock.patch("sys.stdout.write") as output:
                 self.assertEqual(plan_module.main([]), 0)
-        self.assertIn("ivanka.p1.matched-timing.v1", output.call_args_list[0][0][0])
+        self.assertIn("ivanka.p1.matched-timing.v2", output.call_args_list[0][0][0])
 
     def test_execute_requires_lock_token(self) -> None:
         with tempfile.TemporaryDirectory(prefix="p1-matched-timing-test-") as folder:

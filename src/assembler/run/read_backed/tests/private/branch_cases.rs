@@ -1,4 +1,4 @@
-use super::{ranking, scoring::Statistics};
+use super::{ranking, Statistics};
 
 fn stats(masks: Vec<u16>, coverage: Vec<usize>) -> Statistics {
     let pairs = (0..coverage.len())
@@ -9,6 +9,7 @@ fn stats(masks: Vec<u16>, coverage: Vec<usize>) -> Statistics {
         pairs,
         coverage,
         pair_masks: masks,
+        spans: vec![],
     }
 }
 

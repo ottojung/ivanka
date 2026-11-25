@@ -1,4 +1,4 @@
-use super::{circle, island, scoring::Statistics, tiling, Entry, Reads, K};
+use super::{circle, ranking, scoring::Statistics, tiling, Entry, Reads};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 
@@ -14,30 +14,29 @@ pub(super) fn write(path: &str, entries: &[Entry]) -> io::Result<()> {
     output.flush()
 }
 
-// The primary and additional components use the same read-backed presentation
-// rule; the former's sequence and ordering are preserved.
+// A read-unsubstantiated internal join is rotated at its unsupported seam:
+// both native flanks survive in one contig and no base is invented across it.
 pub(super) fn component(
     contigs: &[Vec<u8>],
     reads: &Reads,
     statistics: &Statistics,
     chosen: usize,
 ) -> Vec<Entry> {
-    let repaired = circle::repair(&contigs[chosen], &statistics.depth[chosen], reads);
+    let native = &contigs[chosen];
+    let header = format!(">ivanka_{}", chosen + 1);
+    if let Some(join) = ranking::junction(&statistics.depth[chosen], &statistics.spans[chosen]) {
+        let (sequence, depth) = ranking::native(native, &statistics.depth[chosen], join);
+        let name = format!("{header} len={}", sequence.len());
+        return tiling::present(&sequence, &depth, (0, sequence.len()), &name);
+    }
+    let repaired = circle::repair(native, &statistics.depth[chosen], reads);
     let (sequence, depth): (&[u8], &[u32]) = match &repaired {
         Some((seq, depths)) => (seq, depths),
-        None => (&contigs[chosen], &statistics.depth[chosen]),
+        None => (native, &statistics.depth[chosen]),
     };
-    let header = format!(">ivanka_{} len={}", chosen + 1, sequence.len());
     if repaired.is_some() {
         eprintln!("IVANKA_READ_BACKED_REOPENED_CYCLE len={}", sequence.len());
     }
-    let (start, end) = island::bounds(sequence, depth);
-    let clipped = &sequence[start..end];
-    let observed = &depth[start..end.saturating_sub(K - 1).max(start)];
-    eprintln!(
-        "IVANKA_READ_BACKED_SELECTION native {} selected [{}] covered_31mers [{}] supporting_pairs [{}] read_support_products [{}]",
-        contigs.len(), chosen, statistics.coverage[chosen], statistics.pairs[chosen],
-        statistics.coverage[chosen] * statistics.pairs[chosen]
-    );
-    tiling::partition(&header, clipped, observed)
+    let name = format!("{header} len={}", sequence.len());
+    tiling::present(sequence, depth, (0, sequence.len()), &name)
 }

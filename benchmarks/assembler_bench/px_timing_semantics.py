@@ -133,4 +133,10 @@ def normalize_case(case, receipt=None):
     if RUNTIME_KEY in case:
         case[RUNTIME_KEY] = None
     for key in PROOF_KEYS:
+        # A legacy/unavailable origin is a diagnostic label, not a partial
+        # in-container proof. Keep it so repeat ingestion reproduces the
+        # same provenance; a genuine proof label is still withdrawn when it
+        # is not bound to an attested receipt.
+        if key == ORIGIN_KEY and case.get(ORIGIN_KEY) == LEGACY_ORIGIN:
+            continue
         case.pop(key, None)

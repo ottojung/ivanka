@@ -88,6 +88,13 @@ def classify(raw_bytes, receipt=None):
                             VERSION_KEY: COMPARABLE_METHOD_VERSION,
                             SCOPE_KEY: COMPARABLE_SCOPE})
         return fields, diagnostics
+    if value is None and attested(receipt):
+        unavailable = {COMPARABLE_KEY: None, METHOD_KEY: COMPARABLE_METHOD,
+                       VERSION_KEY: COMPARABLE_METHOD_VERSION,
+                       SCOPE_KEY: COMPARABLE_SCOPE,
+                       UNAVAILABLE_KEY: "No valid whole-container RSS observation"}
+        fields.update(unavailable)
+        return fields, dict(unavailable)
     fields.update({COMPARABLE_KEY: None, SCOPE_KEY: LEGACY_SCOPE,
                    UNAVAILABLE_KEY: UNAVAILABLE_REASON})
     diagnostics.update({COMPARABLE_KEY: None, SCOPE_KEY: LEGACY_SCOPE,

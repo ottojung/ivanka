@@ -7,6 +7,9 @@ preserved outside scratch, and hashes are revalidated immediately before
 deletion. Proven-dead terminal failures retain their final files and logs; infrastructure
 stops and unproven teardown preserve scratch. The
 20 GiB policy is an accounting ceiling, never a licence to discard evidence.
+Lossless table compression is inherited from the common ``terminal_retire``
+policy through the sealed, dead-container ``retire_finished_arm`` path only;
+receipt-only bulk reclaim has no seal or liveness proof and never compresses.
 """
 import fcntl
 import json
@@ -186,6 +189,9 @@ def retire_finished_arm(root, arm, receipt, report):
         # its digest and exact source binding before any further removal.
         if not evidence_path.exists() and not evidence_path.is_symlink():
             seal_terminal_evidence(output, evidence, source)
+        # Shared-codec compression runs inside the common policy only after
+        # the dead-container probe and this sealed receipt are verified, so
+        # PX and P1 completed arms get identical shrink-only post-core behaviour.
         return terminal_retire(output, evidence_path=evidence_path,
                                container_dead=lambda: _observed_dead(root, cid),
                                source_hashes=source)

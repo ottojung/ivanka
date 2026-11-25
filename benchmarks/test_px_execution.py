@@ -565,6 +565,55 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual((output / "nuc.csv").read_text(), "coverage\n1\n")
         self.assertEqual(sched.verify_receipt(self.px, arm), receipt)
 
+    def test_terminal_compression_parity_with_common_policy(self):
+        """PX guarded terminal retention compresses only after a verified teardown."""
+        from assembler_bench import px_retention
+        from compressed_tables import logical_digest
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        case = self.source().case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
+        receipt = sched.record_outcome(self.px, arm, output / "conseq.csv",
+                                       "success", seconds=3.0,
+                                       runner_receipt_sha256="d" * 64)
+        scratch = output / "scratch"
+        scratch.mkdir()
+        table = "ref,coverage\n" + "".join(
+            "p%06d,12\n" % i for i in range(20000))
+        (scratch / "genome_coverage.csv").write_text(table)
+        (scratch / "temp.sam").write_text("reads")
+        exe.posthoc(self.px, arm, self._scorer(), self._scorer().source_sha256)
+        exe.extract_diagnostics(self.px, arm, output,
+                                fastq_sha256=[case.input_hashes()["R1"], case.input_hashes()["R2"]])
+        report = {"runner_receipt_sha256": "d" * 64,
+                  "retention_container_id": "c" * 64}
+        # While teardown is unverified the guarded path does not retire at all.
+        with patch.object(px_retention, "_observed_dead", return_value=False):
+            self.assertIsNone(px_retention.retire_finished_arm(
+                self.px, arm, receipt, report))
+        self.assertTrue(scratch.is_dir())
+        self.assertFalse((output / "genome_coverage.csv.zst").exists())
+        with patch.object(px_retention, "_observed_dead", return_value=True):
+            retired = px_retention.retire_finished_arm(self.px, arm, receipt, report)
+        self.assertTrue(retired["retired"])
+        self.assertIn("genome_coverage.csv", retired["compression"]["compressed"])
+        self.assertGreater(retired["compression"]["bytes_saved"], 0)
+        self.assertFalse(scratch.exists())
+        compressed = output / "genome_coverage.csv.zst"
+        self.assertTrue(compressed.is_file())
+        self.assertTrue((output / "genome_coverage.csv.zst.meta.json").is_file())
+        self.assertEqual(logical_digest(output / "genome_coverage.csv")[0],
+                         hashlib.sha256(table.encode()).hexdigest())
+        self.assertGreaterEqual(retired["verified_outputs"], 1)
+        before = compressed.read_bytes()
+        with patch.object(px_retention, "_observed_dead", return_value=True):
+            repeated = px_retention.retire_finished_arm(self.px, arm, receipt, report)
+        self.assertFalse(repeated["retired"])
+        self.assertEqual(compressed.read_bytes(), before)
+        self.assertEqual(
+            repeated["compression"]["already_compressed"], ["genome_coverage.csv"])
+
     def test_retention_revalidates_stale_plan(self):
         plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
         arm = plan["pending"][0]

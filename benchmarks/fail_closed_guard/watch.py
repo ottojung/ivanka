@@ -70,7 +70,8 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
             table = snapshot()
             try:
                 if rss_fn is None:
-                    pid = identity.locate(binding["fingerprint"], table)
+                    pid = identity.locate(binding["fingerprint"], table,
+                                          bound_pid=binding.get("pid"))
                     group = tree.members(table, pid, binding["fingerprint"])
                     used = tree.rss_bytes(table, group)
                 else:

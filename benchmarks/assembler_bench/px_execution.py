@@ -317,10 +317,10 @@ def _reconcile_arm(root, parsed, case, receipt, *, active, active_sha,
                        "result_sha256": digest})
 
 
-def retention_plan(root, arms, budget_bytes=px_retention.BUDGET_BYTES,
-                   allocated=None):
-    """Bound evidence retention by the 20 GiB policy without deleting anything."""
-    return px_retention.plan(root, arms, budget_bytes, allocated)
+def retention_plan(root, arms, allocated=None):
+    """Plan evidence retention from verified receipts without deleting anything
+    or applying a project-specific storage ceiling."""
+    return px_retention.plan(root, arms, allocated)
 
 
 def apply_retention(root, decision):

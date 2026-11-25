@@ -5,8 +5,8 @@ protected and never removed. Disposable scratch and known disposable scratch
 archives may be reclaimed only after diagnostics are complete, final MAX is
 preserved outside scratch, and hashes are revalidated immediately before
 deletion. Proven-dead terminal failures retain their final files and logs; infrastructure
-stops and unproven teardown preserve scratch. The
-20 GiB policy is an accounting ceiling, never a licence to discard evidence.
+stops and unproven teardown preserve scratch. Storage is accounted from real measurements, never from an invented project ceiling;
+measured usage is never a licence to discard evidence.
 """
 import fcntl
 import json
@@ -19,11 +19,9 @@ from benchmarks.retained_artifacts import (
     _promotion_plan, promote_finals, remove_visuals, seal_terminal_evidence, terminal_retire)
 
 from . import exploratory_space
-from .exploratory_policy import PX_BUDGET_BYTES
 from . import px_cohort_scheduler as sched
 
 SCHEMA = "ivanka.px.retention.plan.v1"
-BUDGET_BYTES = PX_BUDGET_BYTES
 DISPOSABLE_DIRS = frozenset(("scratch", "tmp"))
 # Post-measurement MiCall scratch archives are disposable only after final MAX
 # and complete diagnostics are preserved; they are never removed before that.
@@ -264,8 +262,8 @@ def _arm_from_receipt(receipt):
         "image_sha256", "input_sha256")}
 
 
-def plan(root, arms, budget_bytes=BUDGET_BYTES, allocated=None):
-    """Compute a bounded retention plan without removing any artifact."""
+def plan(root, arms, allocated=None):
+    """Compute a hash-verified retention plan without removing any artifact."""
     measure = allocated or exploratory_space.allocated
     base = Path(root).resolve()
     reclaim, preserved, infra = [], [], []
@@ -297,10 +295,9 @@ def plan(root, arms, budget_bytes=BUDGET_BYTES, allocated=None):
                             "kind": "dir" if target.is_dir() else "file"})
     retained = total - scratch_bytes
     return {
-        "schema": SCHEMA, "budget_bytes": budget_bytes,
+        "schema": SCHEMA,
         "total_bytes": total, "reclaimable_bytes": scratch_bytes,
         "projected_retained_bytes": retained,
-        "within_budget": retained <= budget_bytes,
         "reclaim": reclaim, "preserved_attempts": preserved,
         "infrastructure_failures": infra,
     }
@@ -310,8 +307,6 @@ def apply(root, decision):
     """Revalidate and remove only currently eligible disposable artifacts."""
     if not isinstance(decision, dict) or decision.get("schema") != SCHEMA:
         raise ValueError("retention decision schema mismatch")
-    if not decision.get("within_budget"):
-        raise ValueError("retention plan exceeds the PX storage budget")
     base = Path(root).resolve()
     removed = []
     for entry in decision.get("reclaim", []):

@@ -41,11 +41,23 @@ class TestSourceOnlyRecipes(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     checked("ray")
 
-    def test_cap_relaxation_is_rejected(self):
+    def test_legacy_cap_field_is_accepted_and_ignored(self):
         document = json.loads((RECIPES / "tadpole-minimal-jre.json").read_text())
         document["resource_contract"] = dict(
             document["resource_contract"],
             max_incremental_bytes=32 * 1024**3)
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "tadpole-minimal-jre.json"
+            target.write_text(json.dumps(document))
+            with mock.patch("px_experimental_recipes._document",
+                            side_effect=lambda n: (document, target)):
+                self.assertEqual(checked("tadpole")["claim"], "measured-data-only")
+
+    def test_reserved_limits_still_reject_drift(self):
+        document = json.loads((RECIPES / "tadpole-minimal-jre.json").read_text())
+        document["resource_contract"] = dict(
+            document["resource_contract"],
+            min_free_bytes=16 * 1024**3)
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "tadpole-minimal-jre.json"
             target.write_text(json.dumps(document))

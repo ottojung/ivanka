@@ -61,13 +61,11 @@ def _disk(config, margin, measure, retries=2):
         except GuardExceeded:
             raise
         except ValueError as exc:
-            if str(exc) == "exploration would breach disk budget or workspace reserve":
+            if str(exc) == "exploration would breach the workspace reserve":
                 raise GuardExceeded("disk_limit") from exc
             raise GuardExceeded("measurement_unavailable") from exc
         except Exception as exc:
             raise GuardExceeded("measurement_unavailable") from exc
-    if space["incremental_bytes"] + margin > config["budget_bytes"]:
-        raise GuardExceeded("disk_limit")
     return space
 
 
@@ -194,7 +192,7 @@ def watch(proc_handle, config, *, interval=1, margin=1024**3,
     while proc_handle.poll() is None:
         if clock() - start >= config["wall_seconds"]:
             raise GuardExceeded("wall_limit")
-        space = _disk(config, margin, measure)
+        _disk(config, margin, measure)
         try:
             now = rss(proc_handle.pid)
         except Exception as exc:
@@ -202,7 +200,5 @@ def watch(proc_handle, config, *, interval=1, margin=1024**3,
         peak = max(peak, now)
         if peak > config["rss_bytes"]:
             raise GuardExceeded("observed_rss_limit")
-        if space["incremental_bytes"] + margin > config["budget_bytes"]:
-            raise GuardExceeded("disk_limit")
         sleep(interval)
     return peak

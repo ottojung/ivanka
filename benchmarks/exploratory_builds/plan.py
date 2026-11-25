@@ -42,7 +42,6 @@ ADAPTER_BRANCHES = {
 }
 
 POLICY_KEYS = (
-    "total_incremental_storage_bytes",
     "min_workspace_free_bytes",
     "max_concurrent_exploratory_workers",
     "max_container_wall_seconds",

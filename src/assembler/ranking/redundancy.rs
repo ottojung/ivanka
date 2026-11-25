@@ -1,4 +1,7 @@
-use super::{canonical_kmer, rolling_canonical_kmers, supported_snv_alternative, HashSet};
+use super::{
+    canonical_kmer, rolling_canonical_kmers, supported_path_alternative, supported_snv_alternative,
+    HashSet,
+};
 pub(super) fn overlap(
     seq: &[u8],
     represented: &HashSet<u64>,
@@ -30,13 +33,22 @@ pub(super) fn is_supported_alternative(
     sampled: &super::HashMap<u64, u32>,
 ) -> bool {
     supported_snv_alternative(
-        &seq,
+        seq,
         support,
         retained,
         retained_support,
         sampled,
         canonical_kmer,
     )
+}
+
+pub(super) fn is_supported_path(
+    seq: &[u8],
+    support: usize,
+    represented: &HashSet<u64>,
+    sampled: &super::HashMap<u64, u32>,
+) -> bool {
+    supported_path_alternative(seq, support, represented, sampled, canonical_kmer)
 }
 
 // Canonical windows are an orientation-independent redundancy summary.

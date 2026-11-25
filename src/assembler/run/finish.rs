@@ -1,6 +1,6 @@
 use super::{
-    append_preserving_diversity, canonical_kmer, select_supported_contigs,
-    select_supported_contigs_with_kmers, write_snv_audit,
+    append_preserving_diversity, canonical_kmer, select_supported_contigs_with_kmers,
+    write_snv_audit,
 };
 use std::error::Error;
 
@@ -22,25 +22,21 @@ pub(super) fn write(
         protected: protected_seed_count,
         rescue,
     } = prepared;
-    let (mut contigs, audit) = if audit_path.is_some() {
-        select_supported_contigs_with_kmers(
-            contigs,
-            supporting_counts,
-            max,
-            protected_seed_count,
-            &reads.seed_counts,
-        )
-    } else {
-        (
-            select_supported_contigs(contigs, supporting_counts, max, protected_seed_count),
-            Vec::new(),
-        )
-    };
+    let (mut contigs, audit) = select_supported_contigs_with_kmers(
+        contigs,
+        supporting_counts,
+        max,
+        protected_seed_count,
+        &reads.seed_counts,
+    );
     if let Some(rescue) = rescue {
         // Never exceed the user-requested max-contigs cap. Replace only a
         // non-protected path whose canonical 31-mers remain represented;
         // otherwise withhold the rescue to avoid losing distinct evidence.
         append_preserving_diversity(&mut contigs, rescue, max, protected_seed_count);
+    }
+    if skip_matching_seeds.is_some() {
+        super::native_fragments::retain(&mut contigs, &reads, max, skip_matching_seeds)?;
     }
     let count = super::write_results::write(out, &contigs, &reads, standard, skip_matching_seeds)?;
     if let Some(path) = audit_path {

@@ -1,14 +1,13 @@
 mod finish;
+mod native_fragments;
 mod prepare;
 mod read_backed;
 mod seed_duplicates;
 mod seeds;
 mod write_results;
 use super::extension::extend;
-use super::ranking::{
-    canonical_kmer, select_supported_contigs, select_supported_contigs_with_kmers,
-};
-use super::reads::{encode, fasta_seeds, rc, Reads, K};
+use super::ranking::{canonical_kmer, select_supported_contigs_with_kmers};
+use super::reads::{encode, fasta_seeds, rc, rolling_canonical_kmers, Reads, K};
 use super::run_seed::{append_preserving_diversity, assemble_candidates, rescue_short};
 use super::setup::{balanced_seed_candidates, parse, write_fasta, write_snv_audit, Config};
 use std::io;

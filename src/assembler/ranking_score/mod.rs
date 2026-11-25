@@ -48,7 +48,9 @@ pub(super) fn ranked_candidates(
 use super::ranking::select_supported_contigs;
 
 // Variant-specific evidence is separate from the primary ranking score.
+mod path;
 mod snv;
+pub(super) use path::supported_path_alternative;
 pub(super) use snv::supported_snv_alternative;
 
 #[cfg(test)]

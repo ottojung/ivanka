@@ -30,17 +30,17 @@ class PxCohortIngestTests(unittest.TestCase):
         self.real.mkdir()
         (self.real / "manifest.tsv").write_text(
             "sample\tother\n" + "".join("S%03d\t1\n" % i for i in range(1, 5)))
-        sample = self.real / "samples" / "S004"
+        sample = self.real / "samples" / "S003"
         sample.mkdir(parents=True)
         self.mates = {}
         for mate in ("R1", "R2"):
-            path = sample / ("S004_L001_" + mate + "_001.fastq.gz")
+            path = sample / ("S003_L001_" + mate + "_001.fastq.gz")
             path.write_bytes(("read" + mate).encode())
             self.mates[mate] = _sha(path)
-        self.name = "skesa-physical-PX-R004"
+        self.name = "skesa-physical-PX-R003"
         self.receipt = {
             "schema": "ivanka.px.case.receipt.v1", "tool_id": "skesa",
-            "alias": "PX-R004", "cohort": "physical", "terminal": True,
+            "alias": "PX-R003", "cohort": "physical", "terminal": True,
             "outcome": "success", "failure_reason": None,
             "seconds": 66.9, "peak_rss_bytes": 81195008,
             "input_sha256": self.mates, "output_sha256": "a" * 64,
@@ -51,19 +51,19 @@ class PxCohortIngestTests(unittest.TestCase):
         self.result = {
             "schema": "ivanka.exploratory.per-sample.v1", "tool_id": "skesa",
             "cohort": "physical", "scorer_source_sha256": "d" * 64,
-            "samples": [{"alias": "PX-R004", "outcome": "success",
+            "samples": [{"alias": "PX-R003", "outcome": "success",
                          "score": 188.0, "peak_ram_observed_mib": 77.433594,
                          "method": "best_final_max_contig_local_alignment_over_reference_panel",
                          "reference_panel_sha256":
                              "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8"}],
         }
         self.resource = {"schema": "ivanka.px.arm-resource.v1",
-                         "tool_id": "skesa", "alias": "PX-R004",
+                         "tool_id": "skesa", "alias": "PX-R003",
                          "peak_ram_observed_mib": 77.433594,
                          "peak_rss_bytes": 81195008, "outcome": "success"}
         self.diagnostics = {
             "schema": "ivanka.px.diagnostics.v3", "tool_id": "skesa",
-            "alias": "PX-R004", "output_sha256": "a" * 64,
+            "alias": "PX-R003", "output_sha256": "a" * 64,
             "runner_receipt_sha256": "b" * 64,
             "metrics": {
                 "canonical_micall": {"status": "extracted",
@@ -112,9 +112,9 @@ class PxCohortIngestTests(unittest.TestCase):
         report = self._report()
         evidence, merged, added, joined = ingest(
             report, self.evidence, self.root, self.real)
-        self.assertEqual(added, [("skesa", "real", "R004")])
+        self.assertEqual(added, [("skesa", "real", "R003")])
         real = next(run for run in merged["runs"] if run["cohort"] == "real")
-        sample = next(row for row in real["samples"] if row["alias"] == "R004")
+        sample = next(row for row in real["samples"] if row["alias"] == "R003")
         self.assertEqual(sample["score"]["skesa"], 188.0)
         self.assertIsNone(sample["seconds"]["skesa"])
         self.assertEqual(sample["diagnostics"]["skesa"][
@@ -147,7 +147,7 @@ class PxCohortIngestTests(unittest.TestCase):
         # source FASTQ bytes for the canonical alias.
         self.receipt["input_sha256"]["R1"] = self.mates["R1"]
         self._write_all()
-        pair = self.real / "samples" / "S004" / "S004_L001_R1_001.fastq.gz"
+        pair = self.real / "samples" / "S003" / "S003_L001_R1_001.fastq.gz"
         pair.write_bytes(b"tampered-read")
         with self.assertRaisesRegex(ValueError, "original source pair"):
             ingest(report, self.evidence, self.root, self.real)
@@ -156,7 +156,7 @@ class PxCohortIngestTests(unittest.TestCase):
         report = self._report()
         _, merged, _, _ = ingest(report, self.evidence, self.root, self.real)
         real = next(run for run in merged["runs"] if run["cohort"] == "real")
-        sample = next(row for row in real["samples"] if row["alias"] == "R004")
+        sample = next(row for row in real["samples"] if row["alias"] == "R003")
         self.assertNotIn("skesa", sample.get("exact_profiles", {}))
         proof = sample["measurement_evidence"]["skesa"]["exact_coverage"]
         self.assertEqual(proof["status"], "unavailable")

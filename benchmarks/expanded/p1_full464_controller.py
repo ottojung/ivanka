@@ -467,6 +467,19 @@ def terminal_retirement(folder, candidate, success, source_hashes, env):
                            source_hashes=source_hashes)
 
 
+def complete_per_truth(outcome):
+    """A usable comparison needs a success arm with a non-empty truth panel."""
+    panel = outcome.get("per_truth")
+    return isinstance(panel, dict) and bool(panel)
+
+
+def valid_score(outcome):
+    """Only a finite numeric combined score may drive a floor or a Psi pair."""
+    score = outcome.get("score")
+    return (isinstance(score, (int, float)) and not isinstance(score, bool)
+            and math.isfinite(score))
+
+
 def evaluate(records):
     """Pinned 0.90 floors and strict all-r Psi on complete valid pairs only."""
     rows = list(records)
@@ -481,35 +494,49 @@ def evaluate(records):
         rivals = {name: arm for name, arm in results.items() if name != "ivanka"}
         available = [name for name, arm in rivals.items()
                      if arm.get("status") == "success"
-                     and isinstance(arm.get("per_truth"), dict)
-                     and arm.get("per_truth")]
-        failed = [name for name, arm in rivals.items()
-                  if arm.get("status") != "success"]
+                     and complete_per_truth(arm)]
+        # A success-status rival whose truth panel is empty or absent is
+        # incomplete evidence. Count it as failed rather than letting it vanish
+        # from both rosters while still entering the all-r Psi loop.
+        incomplete = [name for name, arm in rivals.items()
+                      if arm.get("status") == "success" and name not in available]
+        failed = [name for name in rivals if name not in available]
         case_errors = []
         if set(rivals) != expected_rivals:
             case_errors.append("wrong_rival_roster")
         if ivanka.get("status") != "success":
             case_errors.append("candidate_not_success")
+        for name in sorted(incomplete):
+            case_errors.append(f"rival_incomplete_evidence:{name}")
+        # The floor ratio and check_sample both read each arm's "score"; a
+        # missing score is a reported failure, never an unhandled KeyError.
+        scored = [name for name in available if valid_score(rivals[name])]
+        for name in sorted(available):
+            if name not in scored:
+                case_errors.append(f"rival_missing_score:{name}")
+        ivanka_scored = valid_score(ivanka)
+        if ivanka.get("status") == "success" and not ivanka_scored:
+            case_errors.append("candidate_missing_score")
         if available:
-            if ivanka.get("status") == "success":
-                best = max(rivals[name]["score"] for name in available)
+            if ivanka.get("status") == "success" and scored and ivanka_scored:
+                best = max(rivals[name]["score"] for name in scored)
                 if ivanka["score"] + 1e-7 < FLOOR * best:
                     case_errors.append("below_90pct_best_available_rival")
-            if ivanka.get("status") == "success":
+            if ivanka.get("status") == "success" and scored and ivanka_scored:
                 checked = {"ivanka": ivanka,
-                           **{name: rivals[name] for name in available}}
+                           **{name: rivals[name] for name in scored}}
                 case_errors.extend(check_sample(
-                    row["id"], checked, available, FLOOR))
+                    row["id"], checked, scored, FLOOR))
         else:
             case_errors.append("no_complete_rival_for_comparison")
         per_case.append({
             "id": row["id"], "family": row.get("family"),
             "errors": case_errors, "failed_rivals": sorted(failed),
             "available_rivals": sorted(available),
+            "incomplete_rivals": sorted(incomplete),
             "candidate_score": ivanka.get("score"),
             "best_rival_score": max(
-                (rivals[name]["score"] for name in available
-                 if isinstance(rivals[name].get("score"), (int, float))),
+                (rivals[name]["score"] for name in scored),
                 default=None),
         })
         errors.extend(f"{row['id']}:{error}" for error in case_errors)
@@ -522,6 +549,12 @@ def evaluate(records):
             first, second = arms.get("ivanka"), arms.get(rival)
             if not first or not second or first.get("status") != "success" or (
                     second.get("status") != "success"):
+                continue
+            # All-r Psi needs complete valid comparable evidence on both axes:
+            # an empty truth panel or a missing score is not a comparable pair.
+            if not all(complete_per_truth(arm) for arm in (first, second)):
+                continue
+            if not all(valid_score(arm) for arm in (first, second)):
                 continue
             if not all(isinstance(arm.get("seconds"), (int, float))
                        and arm["seconds"] > 0 for arm in (first, second)):

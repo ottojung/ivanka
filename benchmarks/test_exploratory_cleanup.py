@@ -1,4 +1,4 @@
-"""Orphaned Buildah storage is reclaimed only after a failed PX build."""
+"""Orphaned Buildah storage is reclaimed after every stopped PX build."""
 import unittest
 from unittest.mock import patch
 

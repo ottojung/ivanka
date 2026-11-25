@@ -3,7 +3,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from . import identity, proc
+from . import proc, startup
 from .errors import GuardExceeded
 
 CID = re.compile(r"[0-9a-f]{64}\Z")
@@ -53,16 +53,42 @@ def inspect_pid(cid, env):
 
 
 def bind_container(cid, env, snapshot=None):
-    """Bind exact CID to the live init process and immutable identity."""
+    """Bind the exact CID to the live init process and immutable identity.
+
+    Inspect the exact CID *before* sampling: the sample must describe the
+    process that inspection attests, not one observed earlier. A second
+    read-only inspection then proves the same CID still resolves to the same
+    init PID; a change is terminal ``identity_lost``. ``snapshot`` may be a
+    table (legacy callers) or a zero-argument sampler (the startup watcher),
+    which is invoked strictly after the first inspection. No PID is signalled
+    and no volatile cmdline hash is used as identity.
+    """
     if not CID.fullmatch(cid):
         raise GuardExceeded("binding_unavailable")
     pid = inspect_pid(cid, env)
-    table = snapshot if snapshot is not None else proc.snapshot()
+    table = snapshot() if callable(snapshot) else snapshot
+    if table is None:
+        table = proc.snapshot()
+    if inspect_pid(cid, env) != pid:
+        raise GuardExceeded("identity_lost")
+    return bind_sampled(cid, pid, table)
+
+
+def bind_sampled(cid, pid, table):
+    """Bind from a snapshot taken strictly after inspecting the exact CID.
+
+    The caller inspects ``cid -> pid`` before and after the sample and expects
+    the same answer both times; ``inspect_pid`` itself proves ``{{.Id}} == cid``
+    on every call. This helper only binds that already-captured record: it
+    never re-samples, never signals a PID and never turns a missing observation
+    into a success.
+    """
+    if not CID.fullmatch(cid):
+        raise GuardExceeded("binding_unavailable")
     record = table.get(pid)
     if record is None:
         raise GuardExceeded("identity_lost")
-    return {"cid": cid, "pid": pid,
-            "fingerprint": identity.bind(record)}
+    return startup.bind(cid, pid, record, cid_verified=True)
 
 
 def bind_by_name(name, env, snapshot=None):

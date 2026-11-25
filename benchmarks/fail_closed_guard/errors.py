@@ -11,13 +11,16 @@ class GuardExceeded(Exception):
     """
 
     def __init__(self, reason, *, peak_rss=None, guard_result=None,
-                 teardown=None, teardown_error=None):
+                 teardown=None, teardown_error=None, identity_observation=None):
         super().__init__(reason)
         self.reason = reason
         self.peak_rss = peak_rss
         self.guard_result = guard_result
         self.teardown = teardown
         self.teardown_error = teardown_error
+        # Bound-vs-observed identity at the moment of failure. Diagnostic only;
+        # it never changes the fail-closed decision.
+        self.identity_observation = identity_observation
 
 
 class TeardownError(Exception):

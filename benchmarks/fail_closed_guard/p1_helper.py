@@ -9,8 +9,13 @@ def bind(name, env):
 
 def observe(bound, snapshot=None):
     table = snapshot if snapshot is not None else proc.snapshot()
-    from . import identity, tree
-    pid = identity.locate(bound["fingerprint"], table)
+    from . import identity, startup, tree
+    if bound.get("stable"):
+        # Exact-CID binding uses immutable kernel identity; a normal exec must
+        # not be mistaken for PID reuse here either.
+        pid = startup.locate(bound, table)
+    else:
+        pid = identity.locate(bound["fingerprint"], table)
     group = tree.members(table, pid, bound["fingerprint"])
     return tree.rss_bytes(table, group)
 

@@ -243,7 +243,7 @@ class IntegrationTests(unittest.TestCase):
         registry = self.promoted_registry()
         for tool in TOOLS:
             sup.make_handoff(self.px, registry, tool)
-        admission = patch("assembler_bench.exploratory_space.admit",
+        admission = patch("assembler_bench.exploratory_space.admit_reserve",
                           return_value={"incremental_bytes": 0,
                                         "free_bytes": 100 * 1024**3,
                                         "admitted_reservation_bytes": 1024**3})
@@ -526,7 +526,7 @@ class IntegrationTests(unittest.TestCase):
                                       "container_removed": True}}
 
         with patch.object(px_retention, "_observed_dead", return_value=True), patch(
-                "assembler_bench.exploratory_space.admit",
+                "assembler_bench.exploratory_space.admit_reserve",
                 return_value={"incremental_bytes": 0,
                               "free_bytes": 100 * 1024**3,
                               "admitted_reservation_bytes": 1024**3}):
@@ -682,7 +682,7 @@ class IntegrationTests(unittest.TestCase):
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "d" * 64}
 
-        with patch("assembler_bench.exploratory_space.admit",
+        with patch("assembler_bench.exploratory_space.admit_reserve",
                    return_value={"incremental_bytes": 0,
                                  "free_bytes": 100 * 1024**3,
                                  "admitted_reservation_bytes": 1024**3}):
@@ -743,7 +743,7 @@ class IntegrationTests(unittest.TestCase):
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "d" * 64}
 
-        with patch("assembler_bench.exploratory_space.admit",
+        with patch("assembler_bench.exploratory_space.admit_reserve",
                    return_value={"incremental_bytes": 0,
                                  "free_bytes": 100 * 1024**3,
                                  "admitted_reservation_bytes": 1024**3}):
@@ -785,7 +785,7 @@ class IntegrationTests(unittest.TestCase):
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "c" * 64}
 
-        with patch("assembler_bench.exploratory_space.admit",
+        with patch("assembler_bench.exploratory_space.admit_reserve",
                    return_value={"incremental_bytes": 0,
                                  "free_bytes": 100 * 1024**3,
                                  "admitted_reservation_bytes": 1024**3}):
@@ -809,7 +809,7 @@ class IntegrationTests(unittest.TestCase):
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "d" * 64}
 
-        with patch("assembler_bench.exploratory_space.admit",
+        with patch("assembler_bench.exploratory_space.admit_reserve",
                    return_value={"incremental_bytes": 0,
                                  "free_bytes": 100 * 1024**3,
                                  "admitted_reservation_bytes": 1024**3}):

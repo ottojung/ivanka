@@ -50,7 +50,7 @@ class SupervisorTests(unittest.TestCase):
         self.addCleanup(self.policy.stop)
         # Real admission behaviour is proved in test_px_cohort_scheduler; here
         # the supervisor is exercised with a deterministic admitted decision.
-        self.admission = patch("assembler_bench.exploratory_space.admit",
+        self.admission = patch("assembler_bench.exploratory_space.admit_reserve",
                                return_value={"incremental_bytes": 0,
                                              "free_bytes": 100 * 1024**3,
                                              "admitted_reservation_bytes": 1024**3})

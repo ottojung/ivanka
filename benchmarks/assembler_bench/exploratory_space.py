@@ -76,8 +76,8 @@ def available(path):
     return stats.f_bavail * stats.f_frsize
 
 
-def admit(registry, baseline, root, image_store, workspace, proposed_bytes):
-    """Assess free space + total new OCI layers + retained exploration data."""
+def admit_reserve(registry, baseline, root, image_store, workspace, proposed_bytes):
+    """Check the only disk limit in constant time; no recursive usage scan."""
     cfg = registry["policy"]
     if (baseline["schema"] != "ivanka.exploratory.storage-baseline.v1"
             or baseline["root"] != str(Path(root).resolve())
@@ -88,6 +88,24 @@ def admit(registry, baseline, root, image_store, workspace, proposed_bytes):
             or not isinstance(proposed_bytes, int) or proposed_bytes < 1
             or baseline.get("active_job") is not None):
         raise ValueError("invalid or concurrently active exploration admission")
+    # All writes governed by this reservation must live on the measured
+    # filesystem. A missing/relocated mount fails closed instead of measuring
+    # an unrelated free-space counter.
+    paths = [Path(p).resolve() for p in (root, image_store, workspace)]
+    if not all(p.is_dir() for p in paths):
+        raise ValueError("missing measured directory")
+    if len({p.stat().st_dev for p in paths}) != 1:
+        raise ValueError("exploration paths are not on the shared filesystem")
+    free = available(workspace)
+    if free - proposed_bytes < cfg["min_workspace_free_bytes"]:
+        raise ValueError("exploration would breach the workspace reserve")
+    return {"free_bytes": free, "admitted_reservation_bytes": proposed_bytes}
+
+
+def admit(registry, baseline, root, image_store, workspace, proposed_bytes):
+    """Optional usage audit, not a runtime guard or project quota."""
+    admit_reserve(registry, baseline, root, image_store, workspace, proposed_bytes)
+    cfg = registry["policy"]
     extra_layers = max(0, allocated(image_store) - baseline["base_store_bytes"])
     retained_all = allocated(root)
     # Podman image imports and builds spill large temporary layers into TMPDIR.

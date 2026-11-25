@@ -7,7 +7,7 @@ teardown. No bare-PID signalling. Kernel hard-cap is never claimed.
 import subprocess
 import time
 
-from assembler_bench.exploratory_space import admit
+from assembler_bench.exploratory_space import admit_reserve
 from assembler_bench.px_ram_semantics import (
     COMPARABLE_METHOD, COMPARABLE_METHOD_VERSION, COMPARABLE_SCOPE,
     METHOD_KEY, SCOPE_KEY, VERSION_KEY, sampler_fields)
@@ -116,7 +116,7 @@ def _bind_started(proc_handle, cidfile, env, *, start, wall_seconds, interval,
 
 def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
                 margin=1024**3, clock=time.monotonic, sleep=time.sleep,
-                measure=admit, stop=None, snapshot=None, on_bind=None):
+                measure=admit_reserve, stop=None, snapshot=None, on_bind=None):
     """Identity-bound PX pilot guard, stopped only by exact CID."""
     if interval <= 0 or interval > 1 or margin < 1024**3:
         raise ValueError("unsafe polling interval or disk safety margin")
@@ -149,7 +149,7 @@ def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
 
 
 def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
-                clock=time.monotonic, sleep=time.sleep, measure=admit,
+                clock=time.monotonic, sleep=time.sleep, measure=admit_reserve,
                 stop=None, snapshot=None):
     """Launcher-tree guard for builds: no CID, exact process-group teardown."""
     if interval <= 0 or interval > 1 or margin < 1024**3:
@@ -181,7 +181,7 @@ def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
 
 
 def watch(proc_handle, config, *, interval=1, margin=1024**3,
-          clock=time.monotonic, sleep=time.sleep, measure=admit,
+          clock=time.monotonic, sleep=time.sleep, measure=admit_reserve,
           rss=rss_group_bytes, cidfile=None, env=None, stop=None,
           snapshot=None, mode=None, on_bind=None):
     """Legacy sampler for existing callers; bound path for guarded callers."""

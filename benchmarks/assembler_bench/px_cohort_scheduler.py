@@ -560,7 +560,7 @@ def admit_arm(registry, baseline, root, reserve_bytes):
     data = exploratory_policy.checked(registry)
     if not MIN_RESERVE <= reserve_bytes <= MAX_RESERVE:
         raise ValueError("PX arm reservation must be 1-4 GiB")
-    return exploratory_space.admit(data, baseline, root,
+    return exploratory_space.admit_reserve(data, baseline, root,
                                    baseline["image_store"], baseline["workspace"],
                                    reserve_bytes)
 

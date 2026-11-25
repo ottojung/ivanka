@@ -7,6 +7,7 @@ can never start a competing benchmark worker.
 """
 import json
 import time
+from collections import deque
 from pathlib import Path
 
 from . import exploratory_policy
@@ -84,6 +85,28 @@ def verify_handoff(root, registry, tool, *, provenance_root=None):
         bound, pilot, "pilot", provenance_root)
 
 
+def balanced_pending(plan, pending):
+    """Dispatch least-complete tools first, without changing plan identity.
+
+    Pending is the receipt-authoritative result of resume(). All tools in
+    a cohort share the same denominator. Count accepted terminal arms as
+    expected minus pending; a retryable infrastructure failure stays pending.
+    Keep canonical alias order within each tool and registry order for ties.
+    The original plan (including its digest) is never modified.
+    """
+    tools = plan["tools"]
+    for cohort in sched.COHORTS:
+        queues = {tool: deque() for tool in tools}
+        for arm in pending:
+            if arm["cohort"] == cohort:
+                queues[arm["tool_id"]].append(arm)
+        while any(queues.values()):
+            # Larger remaining count means fewer finished arms. max() keeps
+            # the first registry-order tool on equal counts.
+            tool = max(tools, key=lambda name: len(queues[name]))
+            yield queues[tool].popleft()
+
+
 class BackgroundSupervisor:
     """Sequential, resumable driver. ``runner`` is the guarded launcher adapter."""
 
@@ -113,7 +136,7 @@ class BackgroundSupervisor:
                 raise HandoffRequired("no verified image-agent handoff for " + tool)
         pending = sched.resume(plan, self.root)
         completed = []
-        for arm in pending:
+        for arm in balanced_pending(plan, pending):
             if (self.root / STOP_FILE).is_file():
                 break
             self._run_arm(arm, plan, completed)

@@ -411,8 +411,146 @@ def _verify_metrics(metrics, root):
     return checked
 
 
+def _allocated_bytes(path):
+    """Allocated storage of a file in bytes, not its apparent size."""
+    return Path(path).stat().st_blocks * 512
+
+
+def _shared_compression_codec():
+    """Load the shared lossless table codec owned by the compression workfront.
+
+    The import is deliberately lazy: arms that never compress need no codec,
+    and retention never carries a private copy of the reader or writer.
+    """
+    try:
+        from benchmarks import compressed_tables as codec
+    except ImportError:
+        import compressed_tables as codec
+    return codec
+
+
+def compress_retained_tables(arm, *, evidence, container_dead, root=None):
+    """Losslessly compress sealed final tables, keeping only a real shrink.
+
+    This is the common post-terminal compression seam. It runs only after
+    terminal evidence is sealed, source hashes are bound to that receipt and
+    the container is *observed* dead, so no arm can still write the directory.
+    Every candidate name is a sealed scored output; the shared codec's reader
+    re-verifies its logical SHA-256 before any plain original is removed. Any
+    codec, proof or digest failure leaves the original untouched (fail closed).
+    The compressed variant is kept only when allocated bytes actually shrink;
+    otherwise the redundant pair is dropped and a ``no_gain`` record is made.
+    A verified compressed pair is left alone on replay (idempotent), and no
+    archive or full-scratch copy is ever created.
+    """
+    dead = container_dead() if callable(container_dead) else container_dead
+    if dead is not True:
+        raise RetentionGateError("compression requires an observed dead container")
+    if (not isinstance(evidence, dict) or evidence.get("sealed") is not True
+            or evidence.get("schema") != RECEIPT_SCHEMA):
+        raise RetentionGateError("compression requires sealed terminal evidence")
+    sealed_hashes = evidence.get("source_hashes")
+    if not isinstance(sealed_hashes, dict) or not sealed_hashes:
+        raise RetentionGateError("compression requires sealed source hashes")
+    metrics = evidence.get("metrics")
+    if metrics is None:
+        # A failure receipt has no sealed scored outputs to bind a table to.
+        # Preserve its logs/finals untouched; there is nothing safe to compress.
+        return {"compressed": [], "no_gain": [], "already_compressed": [],
+                "logical_verified": 0, "bytes_saved": 0,
+                "skipped": "no sealed metrics"}
+    if not isinstance(metrics, dict) or not isinstance(metrics.get("outputs"), dict):
+        raise RetentionGateError("compression requires sealed metrics")
+    arm = Path(arm)
+    if arm.is_symlink() or not arm.is_dir():
+        raise RetentionGateError(f"unsafe benchmark output: {arm}")
+    base = arm.resolve() if root is None else Path(root).resolve()
+    if base != arm.resolve():
+        raise RetentionGateError("compression root is not the arm directory")
+
+    codec = _shared_compression_codec()
+    outputs = metrics["outputs"]
+    report = {"compressed": [], "no_gain": [], "already_compressed": [],
+              "logical_verified": 0, "bytes_saved": 0}
+
+    def _verify(name, path):
+        try:
+            digest, size = codec.logical_digest(path)
+        except codec.TableError as exc:
+            raise RetentionGateError(
+                f"compression proof failed for {name}: {exc}") from exc
+        if digest != outputs[name]["sha256"]:
+            raise RetentionGateError(f"sealed logical digest drift for {name}")
+        report["logical_verified"] += 1
+        return digest, size
+
+    for name in sorted(codec.COMPRESSIBLE_TABLES):
+        record = outputs.get(name)
+        if not isinstance(record, dict) or record.get("exists") is False:
+            continue
+        expected = record.get("sha256")
+        if (not isinstance(expected, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", expected)):
+            raise RetentionGateError(f"invalid sealed digest for table: {name}")
+        plain = base / name
+        compressed = base / (name + codec.ZST_SUFFIX)
+        meta = base / (name + codec.META_SUFFIX)
+        for path in (plain, compressed, meta):
+            try:
+                _assert_inside(path, base)
+            except (ValueError, OSError) as exc:
+                raise RetentionGateError(str(exc)) from exc
+            if path.exists() and path.is_symlink():
+                raise RetentionGateError(
+                    f"refusing symlinked compression path: {path.name}")
+        has_plain, has_compressed, has_meta = (
+            plain.is_file(), compressed.is_file(), meta.is_file())
+        if has_meta != has_compressed:
+            raise RetentionGateError(f"incomplete compression proof for {name}")
+        if not has_plain and not has_compressed:
+            continue
+        if not has_plain:
+            # Replay: the shared reader verifies the compressed pair alone.
+            _verify(name, plain)
+            report["already_compressed"].append(name)
+            continue
+
+        # Verify every variant with the shared reader before touching anything.
+        _verify(name, plain)
+        plain_alloc = _allocated_bytes(plain)
+        pair_alloc = (None if not has_compressed else
+                      _allocated_bytes(compressed) + _allocated_bytes(meta))
+        if pair_alloc is None or pair_alloc < plain_alloc:
+            try:
+                codec.compress_table(plain, keep_plain=True)
+                _verify(name, plain)  # shared reader checks the compressed bytes
+                pair_alloc = (_allocated_bytes(compressed)
+                              + _allocated_bytes(meta))
+            except Exception:
+                # Remove only a pair created in this call. The plain original
+                # is never deleted on a proof or codec failure.
+                if meta.is_file():
+                    meta.unlink()
+                if compressed.is_file():
+                    compressed.unlink()
+                raise
+        if pair_alloc < plain_alloc:
+            codec.compress_table(plain, keep_plain=False)
+            report["compressed"].append(name)
+            report["bytes_saved"] += plain_alloc - pair_alloc
+        else:
+            # No real allocated shrink: keep the original, drop the redundant
+            # pair. Both variants were proven logically identical above.
+            meta.unlink()
+            compressed.unlink()
+            report["no_gain"].append({
+                "name": name, "plain_bytes": plain_alloc,
+                "compressed_bytes": pair_alloc})
+    return report
+
+
 def terminal_retire(arm, *, evidence_path, container_dead, source_hashes=None,
-                    archive_scratch=False):
+                    archive_scratch=False, compress_tables=True):
     """Common fail-closed terminal scratch retirement policy.
 
     Deletion happens only after the container is observed dead, terminal
@@ -440,6 +578,10 @@ def terminal_retire(arm, *, evidence_path, container_dead, source_hashes=None,
             report["verified_outputs"] = _verify_metrics(evidence["metrics"], root)
         visuals = remove_visuals(arm)
         report.update(visuals)
+        if compress_tables:
+            # Still gated by the dead probe and sealed receipt checked above.
+            report["compression"] = compress_retained_tables(
+                arm, evidence=evidence, container_dead=dead, root=root)
         return report
     promoted = []
     try:
@@ -464,6 +606,15 @@ def terminal_retire(arm, *, evidence_path, container_dead, source_hashes=None,
         raise
     report["promoted"] = [target.name for _, target in promoted]
     report.update(remove_visuals(arm))
+    if compress_tables:
+        # Scratch is gone and the container was observed dead before any
+        # codec runs; re-verify the sealed logical digests afterwards so a
+        # compression change can never alter scientific evidence.
+        report["compression"] = compress_retained_tables(
+            arm, evidence=evidence, container_dead=dead, root=root)
+        if "metrics" in evidence:
+            report["verified_outputs"] = _verify_metrics(
+                evidence["metrics"], root)
     return report
 
 

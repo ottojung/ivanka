@@ -2,7 +2,7 @@
 
 These recipes are plans, not evidence: they never assert an image digest, a
 native hash, a pilot result or a qualification outcome. They exist so a later
-guarded build job can be reviewed before it consumes the shared PX budget.
+guarded build job can be reviewed before it consumes shared-filesystem headroom.
 """
 import json
 import re

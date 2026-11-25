@@ -324,7 +324,7 @@ def retention_plan(root, arms, allocated=None):
 
 
 def apply_retention(root, decision):
-    """Reclaim only verified scratch from an in-budget retention plan."""
+    """Reclaim only verified scratch from a hash-verified retention plan."""
     return px_retention.apply(root, decision)
 
 

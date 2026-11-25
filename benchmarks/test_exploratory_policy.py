@@ -93,6 +93,16 @@ class TestExplorerRegistry(unittest.TestCase):
         self.assertNotIn("total_incremental_storage_bytes",
                          self.current["policy"])
 
+    def test_preserved_limits_reject_drift(self):
+        self.mutate(PATH, lambda d: d["policy"].update(
+            min_workspace_free_bytes=16 * 1024**3))
+        self.mutate(PATH, lambda d: d["policy"].update(
+            max_container_wall_seconds=4800))
+        self.mutate(PATH, lambda d: d["policy"].update(
+            max_sampled_process_tree_rss_bytes=8_000_000_000))
+        self.mutate(PATH, lambda d: d["policy"].update(
+            frozen_seven_manifest_sha256="not-a-sha256"))
+
     def test_current_registry_has_no_incremental_ceiling(self):
         self.assertNotIn("total_incremental_storage_bytes",
                          self.current["policy"])

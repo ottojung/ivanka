@@ -6,11 +6,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from assembler_bench import px_cohort_scheduler as sched
+from assembler_bench import px_posthoc
+from assembler_bench.current_validation_v2 import V6_COHORT_SHA
 from assembler_bench.px_cohort_ingest import (assert_no_stale_scores,
                                                refresh_registry_provenance)
 from assembler_bench import px_timing_semantics as timing
 
 from assembler_bench.px_cohort_ingest import ingest
+from assembler_bench.public_view import PHYSICAL_SCORE, SYNTHETIC_SCORE
+from assembler_bench.px_ram_semantics import validate_publication
 from assembler_bench.site_build import SITE
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -459,6 +464,242 @@ class RegistryActivationTests(unittest.TestCase):
                 evidence, registry_path, self.root / "handoff")
         self.assertEqual(adopted, ["idba-ud"])
         self.assertEqual(evidence["assemblers"][0]["image_sha256"], "c" * 64)
+
+
+class PxCohortSyntheticIngestTests(unittest.TestCase):
+    """Synthetic admission built only from the frozen 464-case source manifest."""
+
+    ALIAS = "PX-H192"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        for folder in ("receipts", "receipts/attempts", "results", "diagnostics"):
+            (self.root / folder).mkdir(parents=True)
+        self.real = self.root / "source"  # synthetic binding never reads private data
+        cases = json.loads(Path(sched.SYNTHETIC_COHORT).read_bytes())["cases"]
+        aliases = sched.canonical_aliases((case["id"] for case in cases),
+                                          "synthetic")
+        source = next(item for item, alias in aliases.items()
+                      if alias == self.ALIAS)
+        self.record = next(case for case in cases if case["id"] == source)
+        self.inputs = {mate: self.record["sha256"]["reads/" + mate + ".fastq.gz"]
+                       for mate in ("R1", "R2")}
+        published = json.loads(
+            (SITE / "data/assembler-evidence.json").read_text())
+        skesa = next(item for item in published["assemblers"]
+                     if item["id"] == "skesa")
+        # The score is SKESA's already published measurement for this exact
+        # case; the fixture invents no measurement, truth or site data.
+        self.score = next(case["score"] for case in skesa["cases"]
+                          if case.get("cohort") == "synthetic"
+                          and case.get("canonical_alias") == "H192")
+        self.name = "skesa-synthetic-" + self.ALIAS
+        self.receipt = {
+            "schema": "ivanka.px.case.receipt.v1", "tool_id": "skesa",
+            "alias": self.ALIAS, "cohort": "synthetic", "terminal": True,
+            "qualifying": False, "outcome": "success", "failure_reason": None,
+            "seconds": 90.16703, "peak_rss_bytes": None,
+            "input_sha256": dict(self.inputs), "output_sha256": "a" * 64,
+            "runner_receipt_sha256": "b" * 64,
+            "source_commit": "1" * 40, "adapter_commit": "2" * 40,
+            "image_sha256": "c" * 64,
+        }
+        self.result = {
+            "schema": "ivanka.exploratory.per-sample.v1", "tool_id": "skesa",
+            "cohort": "synthetic", "expected_sample_count": 464,
+            "source_commit": "1" * 40, "adapter_commit": "2" * 40,
+            "image_sha256": "c" * 64,
+            "scorer_source_sha256": px_posthoc.source_sha256(),
+            "samples": [{"alias": self.ALIAS, "outcome": "success",
+                         "score": self.score, "method": SYNTHETIC_SCORE,
+                         "truth_sha256": self.record[
+                             "sha256"]["hidden-truth/haplotypes.fasta"],
+                         "output_sha256": "a" * 64,
+                         "runner_receipt_sha256": "b" * 64,
+                         "synthetic_abundant_truth_count": 2}],
+        }
+        self.resource = {
+            "schema": "ivanka.px.arm-resource.v1", "tool_id": "skesa",
+            "alias": self.ALIAS, "cohort": "synthetic", "outcome": "success",
+            "attempt": 1, "peak_rss_bytes": None,
+            "peak_ram_observed_mib": None,
+        }
+        self.diagnostics = {
+            "schema": "ivanka.px.diagnostics.v3", "tool_id": "skesa",
+            "alias": self.ALIAS, "output_sha256": "a" * 64,
+            "runner_receipt_sha256": "b" * 64,
+            "metrics": {
+                "canonical_micall": {"status": "extracted",
+                                     "values": {"average_read_depth": 12.5}},
+                "exact_coverage": {"status": "unavailable",
+                                   "unavailable_reason": "module unavailable"},
+            },
+        }
+        self._write_all()
+        self.evidence = json.loads(
+            (SITE / "data/assembler-evidence.json").read_text())
+        item = next(item for item in self.evidence["assemblers"]
+                    if item["id"] == "skesa")
+        item["source_commit"] = "1" * 40
+        item["adapter_commit"] = "2" * 40
+        item["image_sha256"] = "c" * 64
+        item["cases"] = []
+
+    def _report(self):
+        report = json.loads((SITE / "data/runs.json").read_text())
+        for run in report["runs"]:
+            for sample in run["samples"]:
+                for key in ("score", "seconds", "diagnostics",
+                            "measurement_evidence", "exact_profiles"):
+                    sample.get(key, {}).pop("skesa", None)
+                if "skesa" in sample.get("failures", []):
+                    sample["failures"].remove("skesa")
+        return report
+
+    def _write_all(self):
+        path = self.root / "receipts" / (self.name + ".json")
+        path.write_text(json.dumps(self.receipt, sort_keys=True))
+        (self.root / "receipts" / "index.json").write_text(json.dumps({
+            "schema": "ivanka.px.case.receipt-index.v1",
+            "entries": {self.name: _sha(path)}}, sort_keys=True))
+        (self.root / "results" / (self.name + "-results.json")).write_text(
+            json.dumps(self.result, sort_keys=True))
+        (self.root / "results" / (self.name + "-resource.json")).write_text(
+            json.dumps(self.resource, sort_keys=True))
+        (self.root / "diagnostics" / (self.name + ".json")).write_text(
+            json.dumps(self.diagnostics, sort_keys=True))
+
+    def test_synthetic_success_uses_frozen_inputs_and_public_score_unit(self):
+        evidence, merged, added, _ = ingest(
+            self._report(), self.evidence, self.root, self.real)
+        self.assertEqual(added, [("skesa", "synthetic", "H192")])
+        synthetic = next(run for run in merged["runs"]
+                         if run["cohort"] == "synthetic")
+        sample = next(row for row in synthetic["samples"]
+                      if row["alias"] == "H192")
+        self.assertEqual(sample["score"]["skesa"], self.score)
+        proof = sample["measurement_evidence"]["skesa"]
+        self.assertEqual(proof["canonical_manifest_sha256"], V6_COHORT_SHA)
+        self.assertEqual(proof["score_origin"], SYNTHETIC_SCORE)
+        self.assertEqual(proof["method"], SYNTHETIC_SCORE)
+        self.assertEqual(proof["input_sha256"], self.inputs)
+        self.assertIsNone(proof.get("reference_panel_sha256"))
+        self.assertIsNone(sample["seconds"]["skesa"])
+        self.assertIsNone(sample["diagnostics"]["skesa"][
+            "peak_ram_observed_mib"])
+        self.assertEqual(synthetic["tool_progress"]["skesa"]["finished"], 1)
+        self.assertGreater(validate_publication(merged, evidence), 0)
+        _, again, repeated, _ = ingest(merged, evidence, self.root, self.real)
+        self.assertEqual(repeated, [])
+        self.assertEqual(again, merged)
+
+    def test_unknown_synthetic_alias_is_rejected(self):
+        self.receipt["alias"] = "PX-H999"
+        self._write_all()
+        with self.assertRaisesRegex(
+                ValueError, "not a canonical synthetic cohort case"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+
+    def test_swapped_and_tampered_input_hashes_are_rejected(self):
+        cases = json.loads(Path(sched.SYNTHETIC_COHORT).read_bytes())["cases"]
+        aliases = sched.canonical_aliases((case["id"] for case in cases),
+                                          "synthetic")
+        other = next(case for case in cases
+                     if aliases[case["id"]] == "PX-H001")
+        self.receipt["input_sha256"] = {
+            mate: other["sha256"]["reads/" + mate + ".fastq.gz"]
+            for mate in ("R1", "R2")}
+        self._write_all()
+        with self.assertRaisesRegex(
+                ValueError, "input hash differs from frozen synthetic cohort"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+        # A tampered hash re-indexed with its receipt still disagrees with the
+        # immutable cohort manifest.
+        self.receipt["input_sha256"] = dict(self.inputs)
+        self.receipt["input_sha256"]["R1"] = "e" * 64
+        self._write_all()
+        with self.assertRaisesRegex(
+                ValueError, "input hash differs from frozen synthetic cohort"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+
+    def test_declared_truth_hash_must_match_frozen_cohort(self):
+        self.result["samples"][0]["truth_sha256"] = "f" * 64
+        self._write_all()
+        with self.assertRaisesRegex(
+                ValueError, "truth hash differs from the frozen cohort"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+        self.result["samples"][0]["truth_sha256"] = self.record[
+            "sha256"]["hidden-truth/haplotypes.fasta"]
+        self._write_all()
+        _, _, added, _ = ingest(
+            self._report(), self.evidence, self.root, self.real)
+        self.assertEqual(added, [("skesa", "synthetic", "H192")])
+
+    def test_incompatible_score_method_fails_closed(self):
+        self.result["samples"][0]["method"] = PHYSICAL_SCORE
+        self._write_all()
+        with self.assertRaisesRegex(
+                ValueError, "incompatible with the public synthetic metric"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+        with self.assertRaisesRegex(ValueError, "prospective posthoc"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+
+    def test_unbound_scorer_or_cohort_fails_closed(self):
+        self.result["scorer_source_sha256"] = "e" * 64
+        self._write_all()
+        with self.assertRaisesRegex(
+                ValueError, "does not verify the frozen truth hash"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+        self.result["scorer_source_sha256"] = px_posthoc.source_sha256()
+        self.result["expected_sample_count"] = 400
+        self._write_all()
+        with self.assertRaisesRegex(
+                ValueError, "frozen 464-case cohort"):
+            ingest(self._report(), self.evidence, self.root, self.real)
+
+    def test_terminal_failure_retry_and_null_observation(self):
+        self.receipt.update(outcome="failure", failure_reason="identity_lost",
+                            output_sha256=None, seconds=None, attempt=1)
+        self.resource.update(outcome="failure", attempt=1)
+        (self.root / "results" / (self.name + "-results.json")).unlink()
+        (self.root / "diagnostics" / (self.name + ".json")).unlink()
+        self._write_all()
+        _, merged, added, _ = ingest(
+            self._report(), self.evidence, self.root, self.real)
+        self.assertEqual(added, [])
+        synthetic = next(run for run in merged["runs"]
+                         if run["cohort"] == "synthetic")
+        self.assertEqual(synthetic["tool_progress"]["skesa"]["finished"], 0)
+
+        # A preserved infrastructure failure makes the second attempt accepted.
+        (self.root / "receipts" / "attempts" / (
+            self.name + ".attempt-001.json")).write_text(
+                json.dumps(self.receipt, sort_keys=True))
+        self.receipt.update(failure_reason="error", attempt=2)
+        self.resource.update(attempt=2)
+        self._write_all()
+        evidence, merged, added, _ = ingest(
+            self._report(), self.evidence, self.root, self.real)
+        self.assertEqual(added, [("skesa", "synthetic", "H192")])
+        synthetic = next(run for run in merged["runs"]
+                         if run["cohort"] == "synthetic")
+        row = next(row for row in synthetic["samples"]
+                   if row["alias"] == "H192")
+        self.assertIn("skesa", row["failures"])
+        self.assertIsNone(row["score"]["skesa"])
+        self.assertIsNone(row["diagnostics"]["skesa"][
+            "peak_ram_observed_mib"])
+        proof = row["measurement_evidence"]["skesa"]
+        self.assertEqual(proof["canonical_manifest_sha256"], V6_COHORT_SHA)
+        self.assertEqual(proof["score_origin"], SYNTHETIC_SCORE)
+        self.assertEqual(proof["failure_reason"], "error")
+        self.assertEqual(synthetic["tool_progress"]["skesa"]["failed"], 1)
+        _, again, repeated, _ = ingest(merged, evidence, self.root,
+                                       self.real)
+        self.assertEqual(repeated, [])
+        self.assertEqual(again, merged)
 
 
 if __name__ == "__main__":

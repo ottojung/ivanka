@@ -107,9 +107,11 @@ def _bind_started(proc_handle, cidfile, env, *, start, wall_seconds, interval,
             # sleep, and never wait beyond the arm's own deadline.
             sleep(min(interval, remaining))
             continue
-        # A visible CID binds immediately: identity loss is terminal here and
-        # is never mistaken for a not-yet-written file.
-        return binding.bind_container(cid, env, snapshot=snapshot())
+        # Pass the sampler callable, not a pre-sampled table: bind_container
+        # inspects the exact CID first, samples strictly afterwards, then
+        # re-inspects to prove the same CID still maps to the same init PID.
+        # No PID is ever signalled; a changed identity is terminal here.
+        return binding.bind_container(cid, env, snapshot=snapshot)
 
 
 def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,

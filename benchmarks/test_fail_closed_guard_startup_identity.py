@@ -211,5 +211,98 @@ class StartupPolicyTests(unittest.TestCase):
                              CID)
 
 
+class StartupBindingOrderTests(unittest.TestCase):
+    """The exact-CID inspect must precede the /proc sample, and be repeated."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.cidfile = Path(self.tmp.name) / "pilot.cid"
+        self.cidfile.write_text(CID)
+
+    def started(self, inspect, snapshot, *, sleeps=None):
+        sleeps = sleeps if sleeps is not None else []
+        with patch.object(binding, "inspect_pid", side_effect=inspect):
+            return (monitor._bind_started(
+                Proc(), self.cidfile, {}, start=0.0, wall_seconds=30,
+                interval=0.25, clock=lambda: 0.0,
+                sleep=lambda seconds: sleeps.append(seconds),
+                disk=lambda: None, snapshot=snapshot), sleeps)
+
+    def test_sample_is_taken_after_inspect_and_cid_reverified(self):
+        events = []
+
+        def inspect(cid, env):
+            events.append(("inspect", cid))
+            return 9
+
+        def sample():
+            events.append(("sample",))
+            return {9: rec(9)}
+
+        bound, _ = self.started(inspect, sample)
+        self.assertEqual(events, [("inspect", CID), ("sample",),
+                                  ("inspect", CID)])
+        self.assertEqual(bound["pid"], 9)
+        self.assertEqual(bound["cid"], CID)
+        self.assertTrue(bound["stable"])
+
+    def test_inspect_pid_change_fails_closed_without_retry_or_bare_signal(self):
+        events = []
+
+        def inspect(cid, env):
+            events.append(("inspect", cid))
+            return 9 if len(events) == 1 else 10
+
+        def sample():
+            events.append(("sample",))
+            # Both PIDs are present; the stale one must not be bound and the
+            # new one must not be silently adopted.
+            return {9: rec(9), 10: rec(10, start=200)}
+
+        sleeps = []
+        with patch.object(os, "kill",
+                          side_effect=AssertionError("bare PID kill")), \
+                patch.object(os, "killpg",
+                             side_effect=AssertionError("bare PGID kill")):
+            with self.assertRaises(GuardExceeded) as caught:
+                self.started(inspect, sample, sleeps=sleeps)
+        self.assertEqual(caught.exception.reason, "identity_lost")
+        self.assertEqual(sleeps, [])
+        self.assertEqual(events, [("inspect", CID), ("sample",),
+                                  ("inspect", CID)])
+
+    def test_second_inspect_cid_mismatch_is_terminal(self):
+        events = []
+
+        def inspect(cid, env):
+            events.append(cid)
+            if len(events) == 2:
+                raise GuardExceeded("identity_lost")
+            return 9
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self.started(inspect, lambda: {9: rec(9)})
+        self.assertEqual(caught.exception.reason, "identity_lost")
+        self.assertEqual(events, [CID, CID])
+
+    def test_direct_bind_container_accepts_callable_sampled_after_inspect(self):
+        events = []
+
+        def inspect(cid, env):
+            events.append(("inspect", cid))
+            return 9
+
+        def sample():
+            events.append(("sample",))
+            return {9: rec(9)}
+
+        with patch.object(binding, "inspect_pid", side_effect=inspect):
+            bound = binding.bind_container(CID, {}, snapshot=sample)
+        self.assertEqual(events, [("inspect", CID), ("sample",),
+                                  ("inspect", CID)])
+        self.assertEqual(bound["fingerprint"], [100, 7])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -219,22 +219,26 @@ class TestExploratorySpace(unittest.TestCase):
         self.assertEqual(result["retained_bytes"], 20_000)
         self.assertEqual(result["incremental_bytes"], 30_000)
 
-    def test_temporary_files_alone_can_breach_the_cap(self):
+    def test_large_incremental_usage_is_admitted_without_a_ceiling(self):
         temp = px_temp_dir(self.exp)
         temp.mkdir()
-        huge = 21 * 1024**3
+        huge = 200 * 1024**3
         sizes = {temp.resolve(): huge, self.exp.resolve(): huge}
-        with (patch("assembler_bench.exploratory_space.allocated",
-                    side_effect=lambda p: sizes.get(Path(p).resolve(), 0)),
-              self.assertRaisesRegex(ValueError, "disk budget")):
-            self.check(1024)
+        with patch("assembler_bench.exploratory_space.allocated",
+                   side_effect=lambda p: sizes.get(Path(p).resolve(), 0)):
+            result = self.check(1024)
+        self.assertEqual(result["temp_bytes"], huge)
+        self.assertEqual(result["retained_bytes"], 0)
+        self.assertEqual(result["incremental_bytes"], huge)
+        self.assertEqual(result["admitted_reservation_bytes"], 1024)
 
     def test_missing_temporary_directory_counts_as_zero(self):
         self.assertEqual(allocated_optional(px_temp_dir(self.exp)), 0)
 
-    def test_stop_when_reserve_breached(self):
-        with self.assertRaisesRegex(ValueError, "disk budget"):
-            self.check(21 * 1024**3)
+    def test_large_arm_reservation_is_admitted_without_a_ceiling(self):
+        # 21 GiB was the old ceiling; only the 32 GiB shared reserve still binds.
+        result = self.check(21 * 1024**3)
+        self.assertEqual(result["admitted_reservation_bytes"], 21 * 1024**3)
 
     def test_stop_when_free_space_too_low(self):
         with self.assertRaisesRegex(ValueError, "reserve"):

@@ -159,7 +159,7 @@ class WatchTeardownTests(unittest.TestCase):
 
         config = {"rss_bytes": 1000, "wall_seconds": 100, "registry": {},
                   "baseline": {}, "root": ".", "image_store": ".",
-                  "workspace": ".", "budget_bytes": 10**12}
+                  "workspace": "."}
         stopped = []
         with patch.object(monitor.binding, "read_cid", return_value=CID), \
                 patch.object(monitor.binding, "inspect_pid", return_value=9), \
@@ -179,7 +179,7 @@ class WatchTeardownTests(unittest.TestCase):
 
         config = {"rss_bytes": 1000, "wall_seconds": 100, "registry": {},
                   "baseline": {}, "root": ".", "image_store": ".",
-                  "workspace": ".", "budget_bytes": 10**12}
+                  "workspace": "."}
         stopped = []
         calls = [0]
 

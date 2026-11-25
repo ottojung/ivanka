@@ -651,6 +651,8 @@ class IntegrationTests(unittest.TestCase):
         archive = output / "scratch.tar.gz"
         archive.write_bytes(b"big")
         decision = exe.retention_plan(self.px, [arm], allocated=lambda p: 10)
+        self.assertNotIn("budget_bytes", decision)
+        self.assertNotIn("within_budget", decision)
         self.assertTrue(any(e["target"].endswith("scratch.tar.gz")
                             for e in decision["reclaim"]))
         removed = exe.apply_retention(self.px, decision)

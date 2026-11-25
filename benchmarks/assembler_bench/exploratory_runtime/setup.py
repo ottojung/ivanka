@@ -32,7 +32,6 @@ def prepare(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         raise ValueError("invalid dedicated-only container storage config")
     cfg = {"registry": reg, "baseline": base, "root": root,
            "image_store": base["image_store"], "workspace": base["workspace"],
-           "budget_bytes": reg["policy"]["total_incremental_storage_bytes"],
            "rss_bytes": reg["policy"]["max_sampled_process_tree_rss_bytes"],
            "wall_seconds": reg["policy"]["max_container_wall_seconds"]}
     return root, base, reg, cfg

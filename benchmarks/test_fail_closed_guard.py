@@ -136,7 +136,7 @@ class GuardTests(unittest.TestCase):
     def test_pilot_watch_breach_stops_by_cid_not_pid(self):
         config = {"rss_bytes": 1000, "wall_seconds": 100, "registry": {},
                   "baseline": {}, "root": ".", "image_store": ".",
-                  "workspace": ".", "budget_bytes": 10**12}
+                  "workspace": "."}
         bound = {"cid": CID, "fingerprint": fingerprint(rec(9, 0, 1))}
         snaps = [{9: rec(9, 0, 5000)}, {9: rec(9, 0, 5000)}]
         stopped = []

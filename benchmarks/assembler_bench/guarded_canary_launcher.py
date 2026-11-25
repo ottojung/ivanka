@@ -23,6 +23,7 @@ Nothing here evaluates scientific scores or makes a qualification claim.
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import os
@@ -59,7 +60,13 @@ EXPECTED_ARGV_PREFIX = (
 )
 BAD_CYCLES_HEADER = b"tile,cycle\n"
 SAFE_CASE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,126}$")
+ALLOWED_RECEIPT_STATUSES = frozenset({"attempted", "failed", "success"})
+RECEIPT_FIELDS = frozenset({
+    "schema", "case", "attempt_id", "status", "qualification_claim",
+    "argv_sha256", "bad_cycles_sha256", "guard_bounds",
+})
 MAX_ATTEMPT_SUFFIX = 1000
+MAX_PID = 4_194_303
 MAX_RETRY_ATTEMPTS = 3
 MAX_RETRY_DELAY_SECONDS = 5.0
 
@@ -157,6 +164,19 @@ def _mount(token: str) -> tuple[str, str, str]:
     return source, f"{target}:{mode}", mode
 
 
+def _validate_bounded_number(token: str, prefix: str, low: int, high: int, label: str) -> int:
+    """Parse an exact numeric flag and enforce its hard bound in the validator."""
+    if not token.startswith(prefix):
+        raise UnsafeCommand(f"{label} is not the exact {prefix} flag")
+    value = token[len(prefix):]
+    if not re.fullmatch(r"[0-9]+", value):
+        raise UnsafeCommand(f"{label} is not a non-negative integer: {value!r}")
+    number = int(value)
+    if not low <= number <= high:
+        raise UnsafeCommand(f"{label} outside [{low}, {high}]: {number}")
+    return number
+
+
 def assert_reference_blind(argv, *, allowed_values, expected_sources):
     """Validate an *exact* allowlisted command; fail closed on anything else.
 
@@ -213,10 +233,9 @@ def assert_reference_blind(argv, *, allowed_values, expected_sources):
     for position, (expected, token) in enumerate(zip(EXPECTED_ARGV_PREFIX, non_mount)):
         if expected is not None and token != expected:
             raise UnsafeCommand(f"argv token {position} differs from exact contract")
-    if not re.fullmatch(r"--cpus=\d+", non_mount[13]):
-        raise UnsafeCommand("cpu limit is not an exact bounded flag")
-    if not re.fullmatch(r"--memory=\d+", non_mount[14]):
-        raise UnsafeCommand("memory limit is not an exact bounded flag")
+    _validate_bounded_number(non_mount[13], "--cpus=", 1, 32, "cpu limit")
+    _validate_bounded_number(non_mount[14], "--memory=", 1, 4_000_000_000, "memory limit")
+    _validate_bounded_number("--timeout=" + non_mount[16], "--timeout=", 1, 2400, "timeout")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", non_mount[19]):
         raise UnsafeCommand("image is not an exact sha256 digest")
     tail = tuple(non_mount[-len(MICALL_TAIL):])
@@ -298,14 +317,24 @@ def _unique_attempt_path(root, case: str, stamp: str, pid: int, token: str,
 def new_attempt(root, case: str, *, stamp: str | None = None, pid: int | None = None,
                 token: str | None = None, max_suffix: int = MAX_ATTEMPT_SUFFIX) -> Path:
     """Exclusively create a unique attempt namespace; never overwrite evidence."""
-    if not isinstance(max_suffix, int) or not 1 <= max_suffix <= MAX_ATTEMPT_SUFFIX:
+    if not isinstance(max_suffix, int) or isinstance(max_suffix, bool) \
+            or not 1 <= max_suffix <= MAX_ATTEMPT_SUFFIX:
         raise UnsafeCommand(f"max_suffix outside [1, {MAX_ATTEMPT_SUFFIX}]")
-    stamp = stamp or time.strftime("%Y%m%dT%H%M%S%fZ", time.gmtime())
-    if not re.fullmatch(r"\d{8}T\d{12}Z", stamp):
+    pid = os.getpid() if pid is None else pid
+    if not isinstance(pid, int) or isinstance(pid, bool) or not 0 <= pid <= MAX_PID:
+        raise UnsafeCommand(f"pid must be an int in [0, {MAX_PID}]: {pid!r}")
+    if stamp is None:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        stamp = now.strftime("%Y%m%dT%H%M%S") + f"{now.microsecond:06d}Z"
+    if not isinstance(stamp, str) or not re.fullmatch(r"\d{8}T\d{12}Z", stamp):
         raise UnsafeCommand("stamp must be YYYYmmddTHHMMSSffffffZ")
-    return _unique_attempt_path(
-        root, case, stamp, os.getpid() if pid is None else pid,
-        secrets.token_hex(6) if token is None else token, max_suffix)
+    token = secrets.token_hex(6) if token is None else token
+    if not isinstance(token, str) or not re.fullmatch(r"[0-9a-f]{12}", token):
+        raise UnsafeCommand("attempt token must be 12 lowercase hex chars")
+    for label, value in (("case", case), ("stamp", stamp), ("token", token)):
+        if "/" in value or ".." in value:
+            raise UnsafeCommand(f"{label} contains a path escape: {value!r}")
+    return _unique_attempt_path(root, case, stamp, pid, token, max_suffix)
 
 
 class AppendOnlyLog:
@@ -394,6 +423,11 @@ def write_receipt(attempt, *, case: str, attempt_id: str, argv: list[str],
     if not SAFE_CASE.fullmatch(case) or not attempt_id:
         raise UnsafeCommand("invalid case or attempt id for receipt")
     guard.validate()
+    if status not in ALLOWED_RECEIPT_STATUSES:
+        raise UnsafeCommand(f"receipt status outside allowlist: {status!r}")
+    target = Path(attempt) / "receipt.json"
+    if target.exists():
+        raise UnsafeCommand("receipt.json already exists in this attempt; never overwrite")
     bad_cycles = Path(attempt) / "bad_cycles.csv"
     verify_bad_cycles(bad_cycles)
     receipt = {
@@ -411,16 +445,25 @@ def write_receipt(attempt, *, case: str, attempt_id: str, argv: list[str],
             "max_retry_attempts": guard.max_retry_attempts,
         },
     }
-    _atomic_json(Path(attempt) / "receipt.json", receipt)
+    _atomic_json(target, receipt)
     return receipt
 
 
-def verify_receipt(attempt, *, case: str, attempt_id: str, argv: list[str]) -> dict:
+def verify_receipt(attempt, *, case: str, attempt_id: str, argv: list[str],
+                   expected_status: str = "attempted") -> dict:
     """Re-read a receipt and prove it still binds to this exact attempt."""
     receipt = json.loads((Path(attempt) / "receipt.json").read_text(encoding="utf-8"))
-    if receipt.get("schema") != SCHEMA_RECEIPT:
+    if not isinstance(receipt, dict) or set(receipt) != RECEIPT_FIELDS:
+        raise UnsafeCommand("receipt field set differs from exact contract")
+    if receipt["schema"] != SCHEMA_RECEIPT:
         raise UnsafeCommand("receipt schema mismatch")
-    if receipt.get("case") != case or receipt.get("attempt_id") != attempt_id:
+    if receipt["status"] not in ALLOWED_RECEIPT_STATUSES:
+        raise UnsafeCommand(f"receipt status outside allowlist: {receipt['status']!r}")
+    if receipt["status"] != expected_status:
+        raise UnsafeCommand("receipt status differs from the expected attempt status")
+    if receipt["qualification_claim"] != "NONE":
+        raise UnsafeCommand("receipt claims qualification; fail closed")
+    if receipt["case"] != case or receipt["attempt_id"] != attempt_id:
         raise UnsafeCommand("receipt is bound to a different attempt")
     if receipt.get("argv_sha256") != sha256_bytes(json.dumps(argv, sort_keys=True).encode()):
         raise UnsafeCommand("receipt argv digest differs")

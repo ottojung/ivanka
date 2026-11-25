@@ -5,6 +5,7 @@ The first three tests reproduce the exact prelaunch failure modes from the
 unbounded retry storm) and prove the repaired path is bounded and fail-closed.
 No container, live service, sealed root or candidate image is involved.
 """
+import json
 import pathlib
 import tempfile
 import unittest
@@ -172,6 +173,52 @@ class GuardianLauncherTests(unittest.TestCase):
             launcher.verify_receipt(
                 self.attempt, case="coverage_hole-s002", attempt_id="attempt-9",
                 argv=self.argv)
+
+    # --- independent-review hardening (PR484 NO-GO defects) ----------------
+    def test_new_attempt_rejects_path_escape_and_unsafe_pid(self):
+        for bad_pid in ("../../../../tmp/PR484_ESCAPE", "42/x", True, -1, 4_194_304, 1.5):
+            with self.assertRaises(launcher.UnsafeCommand):
+                launcher.new_attempt(self.root, "coverage_hole-s002", pid=bad_pid,
+                                     token="abcdef123456")
+        for bad_case in ("../escape", "case/../escape", ""):
+            with self.assertRaises(launcher.UnsafeCommand):
+                launcher.new_attempt(self.root, bad_case, pid=42, token="abcdef123456")
+        self.assertTrue(launcher.new_attempt(
+            self.root, "coverage_hole-s002", pid=42, token="abcdef123456").is_dir())
+
+    def test_validator_enforces_numeric_bounds_not_only_format(self):
+        for position, bad in ((13, "--cpus=999999999"),
+                              (14, "--memory=99999999999999"),
+                              (16, "999999"), (16, "abc"), (16, "-1")):
+            argv = list(self.argv)
+            argv[position] = bad
+            allowed, sources = self._allowlists(argv)
+            with self.assertRaises(launcher.UnsafeCommand):
+                launcher.assert_reference_blind(
+                    argv, allowed_values=allowed, expected_sources=sources)
+
+    def test_receipt_rejects_status_claim_extra_fields_and_overwrite(self):
+        launcher.setup_bad_cycles(self.attempt)
+        original = launcher.write_receipt(
+            self.attempt, case="coverage_hole-s002", attempt_id="attempt-9",
+            argv=self.argv)
+        with self.assertRaises(launcher.UnsafeCommand):
+            launcher.write_receipt(
+                self.attempt, case="coverage_hole-s002", attempt_id="attempt-9",
+                argv=self.argv)
+        path = self.attempt / "receipt.json"
+        for field, value in (("status", "success"),
+                             ("qualification_claim", "QUALIFIED"),
+                             ("unexpected_field", "x")):
+            path.write_text(json.dumps(dict(original, **{field: value})))
+            with self.assertRaises(launcher.UnsafeCommand):
+                launcher.verify_receipt(
+                    self.attempt, case="coverage_hole-s002", attempt_id="attempt-9",
+                    argv=self.argv)
+        path.write_text(json.dumps(original))
+        self.assertEqual(launcher.verify_receipt(
+            self.attempt, case="coverage_hole-s002", attempt_id="attempt-9",
+            argv=self.argv)["status"], "attempted")
 
 
 if __name__ == "__main__":

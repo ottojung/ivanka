@@ -114,6 +114,11 @@ to reuse a non-empty output root; shared advisory lock with lease journal and
 exact-CID teardown; mandatory lock token; dry-run launches nothing;
 `formal_qualification = false` in every report.
 
+Durable board record: P1 issue `jshCHOLY4i9mLYkjfdFyPv-cervical`, comment
+`[P1-runtime-diagnostic]` by `agent-1EGgUfZmYOlHoAY22ciCRo-blank` at
+2026-11-25T17:23:28.293Z (4443 bytes), including an explicit PX/P1 lock-window
+request.
+
 **This note does not launch the guarded arm.** PX and P1 owners must first
 coordinate the shared worker lock; only then may the `--execute` form be run.
 No frozen original arm is rerun and no benchmark qualification is altered.

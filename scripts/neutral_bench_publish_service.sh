@@ -24,6 +24,9 @@ REAL_DATA=/workspace/denovo-example-io-1
 
 mkdir -p "$R/comparator-services"
 while :; do
+  # Keep the child out of an OR-list: POSIX shells suppress errexit there.
+  # The parent records the exit status and retries on the next cycle.
+  set +e
   (
     set -eu
     flock -n 9 || exit 0
@@ -31,6 +34,19 @@ while :; do
     if [ -n "$(git -C "$REPO" status --porcelain)" ]; then
       echo "NEUTRAL_PUBLISHER_SOURCE_DRIFT"; exit 3
     fi
+    # The checkout is dedicated to this publisher. Only after proving it
+    # clean under our lock may we roll back a failed cycle's own edits.
+    if [ -n "$(git -C "$WEB" status --porcelain)" ]; then
+      echo "NEUTRAL_PUBLISHER_CHECKOUT_DRIFT"; exit 3
+    fi
+    trap '
+      rc=$?
+      if [ "$rc" -ne 0 ]; then
+        git -C "$WEB" rebase --abort >/dev/null 2>&1 || :
+        git -C "$WEB" reset -q --hard HEAD || :
+      fi
+      exit "$rc"
+    ' 0
     if [ ! -f "$R/phase-synthetic464/run_manifest.json" ]; then
       echo "WAITING_FOR_SYNTHETIC_V6_SOURCE"; exit 0
     fi
@@ -129,7 +145,11 @@ while :; do
     else
       echo "NEUTRAL_SITE_UNCHANGED $(date -u +%FT%TZ)"
     fi
-  ) 9>"$R/comparator-services/neutral-publisher.lock" >>"$LOG" 2>&1 ||
-    echo "NEUTRAL_PUBLICATION_RETRY $(date -u +%FT%TZ)" >>"$LOG"
+  ) 9>"$R/comparator-services/neutral-publisher.lock" >>"$LOG" 2>&1
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    echo "NEUTRAL_PUBLICATION_RETRY rc=$rc $(date -u +%FT%TZ)" >>"$LOG"
+  fi
   sleep 300
 done

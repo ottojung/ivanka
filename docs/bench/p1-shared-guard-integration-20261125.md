@@ -33,8 +33,10 @@ NOT created.
 `run_guarded` (which accepted an already bound CID before acquiring a lease)
 is replaced by `run_prospective`. The ordered pre-spawn gates are: owner-bound
 STOP, lease reconciliation, durable lease + unique pinned cidfile, exclusive
-flock, watchdog readiness (injected checker or readiness file) and independent
-disk reservation. Only then does the caller spawn; the exact CID is read from
+flock, watchdog **identity/namespace** readiness (`ready`, `identity_bound`,
+`starttime`, `pid_ns`; optional exact CID), an absolute epoch wall deadline
+that a restarted harness cannot reset, and independent disk reservation. Only
+then does the caller spawn; the exact CID is read from
 the pinned cidfile and bound to the same lease. There is no foreign container
 name acceptance path. A crash after spawn before bind leaves the lease open
 with its pinned cidfile so startup reconciliation blocks admission. Caller

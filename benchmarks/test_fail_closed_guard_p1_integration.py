@@ -7,6 +7,7 @@ live case is touched.
 import fcntl
 import os
 import tempfile
+import time
 import unittest
 from contextlib import nullcontext
 from pathlib import Path
@@ -297,14 +298,16 @@ class P1HarnessLifecycleTests(unittest.TestCase):
 
     def _checker(self):
         self.calls["watchdog"].append("ready")
-        return True
+        return {"ready": True, "identity_bound": True, "pid_ns": 7,
+                "starttime": 5, "cid": CID}
 
     def _usage(self):
         return lambda _: (self.calls["disk"].append("checked") or
                           DiskHelper(free=1_000_000))
 
     def _run(self, *, owner="real-owner", spawn=None, attestation=None,
-             disk_usage=None, lock=None, watchdog_ready=None, lock_path=None):
+             disk_usage=None, lock=None, watchdog_ready=None, lock_path=None,
+             deadline_utc=None):
         ticks = iter([True, False])
         return p1_harness.run_prospective(
             owner=owner, lease_root=self.root, stop_path=self.stop_path,
@@ -317,7 +320,7 @@ class P1HarnessLifecycleTests(unittest.TestCase):
                             else watchdog_ready),
             disk_reserve_bytes=100,
             disk_usage=disk_usage or self._usage(),
-            limit=4_000_000, wall_seconds=30,
+            limit=4_000_000, wall_seconds=30, deadline_utc=deadline_utc,
             running=lambda: next(ticks, None) is not None,
             measure=lambda: True, snapshot=lambda: self.table,
             clock=lambda: 0, sleep=lambda _: None,
@@ -387,8 +390,24 @@ class P1HarnessLifecycleTests(unittest.TestCase):
 
     def test_watchdog_not_ready_refuses_spawn(self):
         with self.assertRaises(GuardExceeded) as caught:
-            self._run(watchdog_ready=lambda: False)
-        self.assertEqual(caught.exception.reason, "watchdog_unavailable")
+            self._run(watchdog_ready=lambda: {"ready": False,
+                                              "identity_bound": True,
+                                              "pid_ns": 7, "starttime": 5})
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        self.assertEqual(self.calls["spawn"], [])
+
+    def test_watchdog_without_identity_binding_refuses_spawn(self):
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(watchdog_ready=lambda: {"ready": True,
+                                              "identity_bound": False,
+                                              "pid_ns": 7, "starttime": 5})
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        self.assertEqual(self.calls["spawn"], [])
+
+    def test_absolute_deadline_expired_refuses_spawn(self):
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(deadline_utc=time.time() - 1)
+        self.assertEqual(caught.exception.reason, "wall_limit")
         self.assertEqual(self.calls["spawn"], [])
 
     def test_exclusive_lock_held_refuses_spawn(self):

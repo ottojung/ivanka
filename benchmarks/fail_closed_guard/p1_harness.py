@@ -91,25 +91,41 @@ def require_watchdog_ready(*, checker=None, path=None):
     """
     if checker is not None:
         try:
-            ready = checker()
+            record = checker()
         except Exception as exc:
             raise GuardExceeded("watchdog_unavailable") from exc
-        if ready is not True:
+        source = "checker"
+    elif path is not None:
+        target = Path(path)
+        if target.is_symlink() or not target.is_file():
             raise GuardExceeded("watchdog_unavailable")
-        return {"source": "checker", "ready": True}
-    if path is None:
+        try:
+            record = json.loads(target.read_text())
+        except (OSError, ValueError) as exc:
+            raise GuardExceeded("watchdog_unavailable") from exc
+        source = str(path)
+    else:
         raise GuardExceeded("watchdog_unavailable")
-    target = Path(path)
-    if target.is_symlink() or not target.is_file():
-        raise GuardExceeded("watchdog_unavailable")
-    try:
-        record = json.loads(target.read_text())
-    except (OSError, ValueError) as exc:
-        raise GuardExceeded("watchdog_unavailable") from exc
+
+    # Identity/namespace readiness is mandatory: a merely "alive" watchdog
+    # is not a bound watchdog and cannot cover the crash window.
     if not isinstance(record, dict) or record.get("ready") is not True \
-            or not record.get("schema"):
-        raise GuardExceeded("watchdog_unavailable")
-    return {"source": str(path), "ready": True, "schema": record["schema"]}
+            or record.get("identity_bound") is not True:
+        raise GuardExceeded("watchdog_unbound")
+    if not isinstance(record.get("pid_ns"), int) or record["pid_ns"] <= 0 \
+            or not isinstance(record.get("starttime"), int) \
+            or record["starttime"] <= 0:
+        raise GuardExceeded("watchdog_unbound")
+    result = {"source": source, "ready": True, "identity_bound": True,
+              "pid_ns": record["pid_ns"], "starttime": record["starttime"]}
+    if record.get("schema"):
+        result["schema"] = record["schema"]
+    if record.get("cid") is not None:
+        if not isinstance(record["cid"], str) or not binding.CID.fullmatch(
+                record["cid"]):
+            raise GuardExceeded("watchdog_unbound")
+        result["cid"] = record["cid"]
+    return result
 
 
 def pin_cidfile(root, ident):
@@ -163,7 +179,7 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                     env=None, lock_path=None, lock=None,
                     watchdog_ready=None, watchdog_path=None,
                     disk_reserve_bytes=DEFAULT_RESERVE_BYTES, disk_usage=None,
-                    limit=4_000_000_000, wall_seconds=2400,
+                    limit=4_000_000_000, wall_seconds=2400, deadline_utc=None,
                     running=None, measure=None, snapshot=None, clock=None,
                     sleep=None, audit=None, attestation=None,
                     bind_container=None, stop_cid=None):
@@ -175,6 +191,10 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
     """
     if not owner or running is None or measure is None:
         raise GuardExceeded("invalid_config")
+    # One absolute epoch deadline covers pre-spawn gates, bind and sampling;
+    # a restarted harness cannot reset an injected monotonic clock to gain time.
+    if deadline_utc is None:
+        deadline_utc = time.time() + wall_seconds
     env = dict(env or {})
 
     # Gate 1: STOP must already be armed for this caller before any lease or
@@ -194,7 +214,10 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         raise GuardExceeded("lock_unavailable")
 
     with ctx:
-        # Gate 3: watchdog readiness and independent disk reserve BEFORE spawn.
+        # Gate 3: watchdog identity/namespace readiness, absolute deadline
+        # and independent disk reserve BEFORE spawn.
+        if time.time() >= deadline_utc:
+            raise GuardExceeded("wall_limit")
         require_watchdog_ready(checker=watchdog_ready, path=watchdog_path)
         disk.check_reserve(disk_path, disk_reserve_bytes, usage=disk_usage)
 
@@ -247,6 +270,7 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                 measure=measure, stop=stopper,
                 disk_path=disk_path, disk_reserve_bytes=disk_reserve_bytes,
                 disk_usage=disk_usage, strict_proof=True,
+                deadline_utc=deadline_utc,
                 attestation=_attestation(attestation), **kwargs)
             proof = result.get("teardown")
             outcome = {"status": "completed", "result": result}
@@ -271,6 +295,7 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                          cid=cid)
         outcome["stop_retired_by"] = str(owner)
         outcome["lease"] = ident
+        outcome["deadline_utc"] = deadline_utc
         if outcome["status"] == "fail_closed":
             raise GuardExceeded(outcome["reason"], guard_result=outcome["result"],
                                 teardown=proof,

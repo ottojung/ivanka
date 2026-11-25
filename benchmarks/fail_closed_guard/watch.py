@@ -67,7 +67,7 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                 stop, clock=time.monotonic, sleep=time.sleep, audit=None,
                 interval=0.5, rss_fn=None, attestation=None, start=None,
                 disk_path=None, disk_reserve_bytes=None, disk_usage=None,
-                strict_proof=False):
+                strict_proof=False, deadline_utc=None):
     """Sample a bound container tree; fail closed on any unknown state.
 
     `stop(cid)` must be CID-only with teardown proof. The watcher never
@@ -139,6 +139,10 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
     try:
         while running():
             if clock() - start >= wall_seconds:
+                raise GuardExceeded("wall_limit")
+            if deadline_utc is not None and time.time() >= deadline_utc:
+                # Absolute epoch deadline survives a harness/monotonic clock
+                # restart; a crashed controller cannot grant itself new time.
                 raise GuardExceeded("wall_limit")
             if disk_reserve_bytes is not None:
                 disk_observation["free_bytes"] = disk.check_reserve(

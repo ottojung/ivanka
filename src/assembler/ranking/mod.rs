@@ -9,6 +9,10 @@ mod selection;
 pub(super) type ContigSelection = (Vec<Vec<u8>>, Vec<(Vec<u8>, usize)>);
 pub(super) use kmer::canonical_kmer;
 pub(super) use selection::select_supported_contigs_with_kmers;
+// Test-only convenience for redundancy rules that need no read evidence.
+// Production never uses an empty sampled map: without read k-mers a suppressed
+// Hamming-1 neighbour has no audit channel and a true haplotype would be lost.
+#[cfg(test)]
 pub(super) fn select_supported_contigs(
     seqs: Vec<Vec<u8>>,
     counts: Vec<usize>,

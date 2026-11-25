@@ -1,4 +1,17 @@
 use super::{canonical_kmer, rolling_canonical_kmers, supported_snv_alternative, HashSet};
+// A fraction-based overlap rule is length dependent: one substitution removes
+// K canonical windows, which is 3.5% of a 900-base contig but 11% of a
+// 310-base one. Treat a single-substitution neighbour as redundant at any
+// length so short contigs do not leak near-duplicates into the stitcher.
+pub(super) fn single_substitution_apart(seq: &[u8], retained: &[Vec<u8>]) -> bool {
+    // Below the SNV audit's 128 nt minimum a rejected neighbour has no
+    // separate unphased evidence channel, so keep it rather than lose a
+    // possibly abundant true haplotype entirely.
+    seq.len() >= 128
+        && retained.iter().any(|prior| {
+            prior.len() == seq.len() && prior.iter().zip(seq).filter(|(a, b)| a != b).count() == 1
+        })
+}
 pub(super) fn overlap(
     seq: &[u8],
     represented: &HashSet<u64>,

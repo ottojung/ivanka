@@ -2,11 +2,17 @@ mod finish;
 mod prepare;
 mod read_backed;
 mod seeds;
+#[cfg(test)]
+mod test_finish;
+#[cfg(test)]
+mod test_finish_cases;
+#[cfg(test)]
+mod test_finish_failclosed;
+#[cfg(test)]
+mod test_finish_seq;
 mod write_results;
 use super::extension::extend;
-use super::ranking::{
-    canonical_kmer, select_supported_contigs, select_supported_contigs_with_kmers,
-};
+use super::ranking::{canonical_kmer, select_supported_contigs_with_kmers};
 use super::reads::{encode, fasta_seeds, Reads, K};
 use super::run_seed::{append_preserving_diversity, assemble_candidates, rescue_short};
 use super::setup::{balanced_seed_candidates, parse, write_fasta, write_snv_audit, Config};

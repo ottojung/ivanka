@@ -45,3 +45,16 @@ fn missing_cooccurrence_alone_cannot_declare_a_flank_join() {
     assert_eq!(ranking::junction(&vec![130; 3000], &[]), None);
     assert_eq!(ranking::pieces(None, 3000), vec![(0, 3000)]);
 }
+
+#[test]
+fn valley_narrower_than_a_kmer_is_not_split() {
+    let depth = [vec![120; 1200], vec![4; 10], vec![120; 1200]].concat();
+    assert_eq!(ranking::junction(&depth, &dense_spans()), None);
+}
+
+#[test]
+fn one_mate_inside_the_valley_vetoes_a_false_join() {
+    let mut spans = dense_spans();
+    spans.extend(vec![(1000, 1220); 40]);
+    assert_eq!(ranking::junction(&split_depth(), &spans), None);
+}

@@ -36,7 +36,8 @@ pub(in super::super) fn junction(
             i += 1;
         }
         let core = depth[start..i].iter().copied().min().unwrap_or(0);
-        if i - start <= MAX_VALLEY
+        if i - start >= K
+            && i - start <= MAX_VALLEY
             && start >= MIN_FLANK
             && depth.len() - i >= MIN_FLANK
             && core <= low

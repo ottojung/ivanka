@@ -17,7 +17,8 @@ def bind_launcher(pid, snapshot=None):
 
 def rss(table, binding):
     """Builds share the host PID namespace: use identity + PPID descendants."""
-    pid = identity.locate(binding["fingerprint"], table)
+    pid = identity.locate(binding["fingerprint"], table,
+                          bound_pid=binding.get("pid"))
     return tree.rss_bytes(table, tree.descendants(table, pid))
 
 

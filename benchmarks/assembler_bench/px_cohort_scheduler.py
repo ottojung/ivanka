@@ -43,9 +43,12 @@ TERMINAL_OUTCOMES = frozenset(("success", "failure"))
 FAILURE_REASONS = frozenset((
     "error", "timeout", "no_contigs", "no_final_max", "disk_stop",
     "wall_limit", "observed_rss_limit", "measurement_unavailable",
+    "identity_lost", "binding_unavailable",
 ))
 # Infrastructure failures preserve attempts and may be retried boundedly.
-INFRASTRUCTURE_FAILURE_REASONS = frozenset(("disk_stop", "measurement_unavailable"))
+INFRASTRUCTURE_FAILURE_REASONS = frozenset(
+    ("disk_stop", "measurement_unavailable", "identity_lost",
+     "binding_unavailable"))
 MAX_INFRA_ATTEMPTS = 2
 MAX_RESERVE = 4 * 1024**3
 MIN_RESERVE = 1024**3

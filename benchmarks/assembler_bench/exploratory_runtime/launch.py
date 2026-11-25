@@ -168,11 +168,15 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                     if "pilot_cleanup_error" in state and state["status"] == "finished":
                         state["status"] = "failed"
                         state["reason"] = "pilot_cleanup_unverified"
-                if mode == "build" and state["status"] != "finished":
-                    # External Buildah "Storage" work containers survive
-                    # SIGTERM and are invisible to ordinary podman ps/prune.
-                    # Cleanup is restricted to this project's exact graphroot
-                    # and occurs ONLY after the monitored build group stopped.
+                if mode == "build":
+                    # External Buildah "Storage" work containers survive a
+                    # build and are invisible to ordinary podman ps/prune.
+                    # They leak on SUCCESS as well as on failure, so every
+                    # stopped build must reclaim them before its lease closes;
+                    # otherwise the next image build is blocked by orphans the
+                    # launcher itself left behind. Cleanup stays restricted to
+                    # this project's exact graphroot and runs ONLY after the
+                    # monitored process group has been reaped above.
                     try:
                         state["orphan_cleanup"] = clean_stopped_build(root, env)
                     except (OSError, ValueError, RuntimeError,
@@ -185,7 +189,10 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                 teardown_ok = (
                     state.get("exit_code") is not None
                     and "pilot_cleanup_error" not in state
-                    and not state.get("orphan_cleanup_error"))
+                    and not state.get("orphan_cleanup_error")
+                    # A build must carry a real cleanup proof, not merely the
+                    # absence of an error, before its lease may be released.
+                    and (mode != "build" or bool(state.get("orphan_cleanup"))))
                 if teardown_ok:
                     try:
                         state["job_temp_cleanup"] = job_temp.clean_job_temp(

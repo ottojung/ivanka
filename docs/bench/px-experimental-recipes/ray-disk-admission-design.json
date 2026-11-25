@@ -18,7 +18,7 @@
   ],
   "claim": "measured-data-only",
   "design_options": [
-    "build Ray donor from pinned source with sibling RayPlatform c8d9fe2 under the 20 GiB cap and 1 GiB reservation",
+    "build Ray donor from pinned source with sibling RayPlatform c8d9fe2; historical disk headroom, reservation and cap from the earlier attempt are recorded in measured_budget (attempt evidence, not a current build cap), with a 1 GiB per-arm reservation",
     "attest Ray ELF, then a single-layer image from frozen parent that adds the pinned Debian MPI runtime",
     "if admission still fails, re-measure precisely and recover only verified disposable build leftovers; never delete evidence"
   ],

@@ -104,6 +104,43 @@ class TestExplorerRegistry(unittest.TestCase):
         self.mutate(PATH, lambda d: d["candidates"][0].update(status="proposed"))
         self.mutate(PATH, lambda d: d["policy"].update(max_concurrent_exploratory_workers=2))
 
+    def test_preserved_resource_policy_fields_fail_closed(self):
+        import json
+        from tempfile import TemporaryDirectory
+        # With the PX storage ceiling removed, checked() is the only guard on
+        # the reserve, wall clock, sampled RSS and frozen-manifest pin. The
+        # focused suite only mutation-tested one_worker, so a regression that
+        # weakened any other bound could pass unnoticed. Require rejection
+        # when each preserved field is altered or dropped. checked() validates
+        # the manifest pin's SHA64 form; the exact digest is fixed by the
+        # assertion above, so a different pinned value cannot pass silently.
+        policy = self.current["policy"]
+        self.assertEqual(policy["min_workspace_free_bytes"], 32 * 1024**3)
+        self.assertEqual(policy["max_container_wall_seconds"], 2400)
+        self.assertEqual(policy["max_sampled_process_tree_rss_bytes"],
+                         4_000_000_000)
+        self.assertEqual(policy["frozen_seven_manifest_sha256"],
+                         "9db6e1b569b17aed8b7e96abea495b09374e609478834371e"
+                         "2943b16df36884f")
+        for field, weakened in (
+                ("min_workspace_free_bytes", 16 * 1024**3),
+                ("max_container_wall_seconds", 3000),
+                ("max_sampled_process_tree_rss_bytes", 5_000_000_000),
+                ("frozen_seven_manifest_sha256", "0" * 40)):
+            with self.subTest(field=field, kind="altered"):
+                self.mutate(PATH, lambda d, f=field, v=weakened:
+                            d["policy"].update({f: v}))
+            with self.subTest(field=field, kind="dropped"):
+                with TemporaryDirectory() as temp:
+                    target = Path(temp) / "candidates.json"
+                    data = copy.deepcopy(self.current)
+                    data["policy"].pop(field)
+                    target.write_text(json.dumps(data))
+                    # A missing required field may raise KeyError before
+                    # checked() reaches its explicit ValueError.
+                    with self.assertRaises((ValueError, KeyError)):
+                        checked(target)
+
     def test_reject_duplicate_or_replacement(self):
         self.mutate(PATH, lambda d: d["candidates"][0].update(id="iva"))
         self.mutate(PATH, lambda d: d["candidates"][0].update(id=d["candidates"][1]["id"]))

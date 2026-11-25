@@ -168,7 +168,8 @@ class ReceiptAttestationTests(unittest.TestCase):
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "conseq.csv").write_bytes(b"MAX\n")
         (folder / "timing.json").write_text(
-            json.dumps({"exit_code": 0, "seconds": 12.5}))
+            json.dumps({"exit_code": 0, "seconds": 12.5,
+                        "timing_origin": "micall_in_container_monotonic_v1"}))
         return folder
 
     def report(self, state):

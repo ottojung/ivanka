@@ -13,6 +13,7 @@ from assembler_bench import exploratory_policy, px_metrics
 from assembler_bench import px_cohort_scheduler as sched
 from assembler_bench import px_execution as exe
 from assembler_bench import px_supervisor as sup
+from assembler_bench import px_timing_semantics as timing
 from assembler_bench.px_ram_semantics import (COMPARABLE_METHOD,
                                               COMPARABLE_METHOD_VERSION,
                                               COMPARABLE_SCOPE, METHOD_KEY,
@@ -201,7 +202,8 @@ class IntegrationTests(unittest.TestCase):
             calls.append((tool, mode, argv, reserve))
             (output / "conseq.csv").write_bytes(b"final-MAX\n")
             (output / "timing.json").write_text(
-                json.dumps({"exit_code": 0, "seconds": 12.5}))
+                json.dumps({"exit_code": 0, "seconds": 12.5,
+                            "timing_origin": "micall_in_container_monotonic_v1"}))
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "c" * 64}
 
@@ -212,6 +214,121 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(Path(report["output_path"]).name, sched.MAX_ARTIFACT)
         self.assertEqual(report["seconds"], 12.5)
         self.assertEqual(report["alias"], case.alias)
+
+    def test_run_guarded_seals_pinned_in_container_clock(self):
+        case = exe.load_physical(self.physical)[0]
+        arm = {"tool_id": "skesa", "cohort": "physical",
+               "alias": case.alias, "input_sha256": case.input_hashes(),
+               "source_commit": "a" * 40, "adapter_commit": "a" * 40,
+               "image_sha256": "b" * 64}
+        output = self.px / "sealed"
+        output.mkdir()
+        blob = json.dumps({"exit_code": 0, "seconds": 12.5,
+                           "timing_origin": timing.ORIGIN},
+                          sort_keys=True).encode()
+        (output / "timing.json").write_bytes(blob)
+
+        def operate(*args):
+            (output / "conseq.csv").write_bytes(b"final-MAX\n")
+            return {"status": "finished", "peak_rss": 1_000_000,
+                    "log_sha256": "c" * 64}
+
+        report = exe.run_guarded("reg", "base", arm, case, output, operate)
+        self.assertEqual(report["outcome"], "success")
+        self.assertEqual(report["seconds"], 12.5)
+        self.assertTrue(timing.attested(report))
+        self.assertEqual(report[timing.ORIGIN_KEY], timing.ORIGIN)
+        self.assertEqual(report[timing.TIMER_KEY], timing.TIMER_SOURCE_SHA256)
+        self.assertEqual(report[timing.FILE_KEY], timing.sha256_bytes(blob))
+
+    def test_run_guarded_fails_closed_on_unpinned_timer_or_bad_clock(self):
+        case = exe.load_physical(self.physical)[0]
+        arm = {"tool_id": "skesa", "cohort": "physical",
+               "alias": case.alias, "input_sha256": case.input_hashes(),
+               "source_commit": "a" * 40, "adapter_commit": "a" * 40,
+               "image_sha256": "b" * 64}
+        bad_timer = self.px / "foreign-timer.py"
+        bad_timer.write_text("different timer bytes\n")
+        valid = {"exit_code": 0, "seconds": 12.5,
+                 "timing_origin": timing.ORIGIN}
+        trials = [
+            ("unpinned timer", valid, bad_timer),
+            ("wrong origin", dict(valid, timing_origin="launcher_wall_v1"),
+             None),
+            ("nonzero exit", dict(valid, exit_code=1), None),
+            ("zero seconds", dict(valid, seconds=0), None),
+            ("negative seconds", dict(valid, seconds=-1.5), None),
+            ("nan seconds", dict(valid, seconds=float("nan")), None),
+            ("infinite seconds", dict(valid, seconds=float("inf")), None),
+            ("boolean seconds", dict(valid, seconds=True), None),
+            ("text seconds", dict(valid, seconds="12.5"), None),
+        ]
+        for index, (label, clock, timer) in enumerate(trials):
+            with self.subTest(label=label):
+                output = self.px / ("clock-" + str(index))
+                output.mkdir()
+                (output / "conseq.csv").write_bytes(b"final-MAX\n")
+                (output / "timing.json").write_text(json.dumps(clock))
+                with patch.object(exe, "TIMER", timer or exe.TIMER):
+                    report = exe.run_guarded(
+                        "reg", "base", arm, case, output,
+                        lambda *args: {"status": "finished",
+                                       "peak_rss": 1_000_000})
+                self.assertEqual(report["outcome"], "failure")
+                self.assertEqual(report["failure_reason"], "error")
+                self.assertNotIn("seconds", report)
+                self.assertFalse(timing.attested(report))
+
+    def test_index_bound_receipt_carries_only_complete_timing_proof(self):
+        plan = sched.build_plan(self.promoted_registry(), self.source(),
+                                self.px)
+        arm = plan["pending"][0]
+        output = self._arm_output(arm)
+        (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
+        proof = {
+            timing.ORIGIN_KEY: timing.ORIGIN,
+            timing.VERSION_KEY: timing.METHOD_VERSION,
+            timing.TIMER_KEY: timing.TIMER_SOURCE_SHA256,
+            timing.FILE_KEY: "f" * 64,
+        }
+        report = {"alias": arm["alias"], "cohort": arm["cohort"],
+                  "input_sha256": arm["input_sha256"], "seconds": 7.5,
+                  **proof}
+        sched.record_outcome(self.px, arm, output / "conseq.csv", "success",
+                             seconds=7.5, runner_attestation=report)
+        receipt = sched.verify_receipt(self.px, arm)
+        self.assertTrue(timing.attested(receipt))
+        self.assertEqual(timing.comparable_seconds(receipt), 7.5)
+        self.assertEqual(receipt[timing.FILE_KEY], "f" * 64)
+        path = sched.receipt_path(self.px, arm)
+        tampered = json.loads(path.read_text())
+        tampered[timing.FILE_KEY] = "0" * 64
+        path.write_text(json.dumps(tampered))
+        with self.assertRaisesRegex(ValueError, "unindexed or changed"):
+            sched.verify_receipt(self.px, arm)
+
+    def test_partial_timing_label_never_seals_a_receipt(self):
+        plan = sched.build_plan(self.promoted_registry(), self.source(),
+                                self.px)
+        arm = plan["pending"][0]
+        output = self._arm_output(arm)
+        (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
+        sched.record_outcome(
+            self.px, arm, output / "conseq.csv", "success", seconds=7.5,
+            runner_attestation={timing.ORIGIN_KEY: timing.ORIGIN})
+        receipt = sched.verify_receipt(self.px, arm)
+        self.assertFalse(timing.has_proof_keys(receipt))
+        self.assertIsNone(timing.comparable_seconds(receipt))
+        proof = {
+            timing.ORIGIN_KEY: timing.ORIGIN,
+            timing.VERSION_KEY: timing.METHOD_VERSION,
+            timing.TIMER_KEY: timing.TIMER_SOURCE_SHA256,
+            timing.FILE_KEY: "f" * 64,
+        }
+        with self.assertRaisesRegex(ValueError, "cannot claim runtime"):
+            sched.record_outcome(
+                self.px, plan["pending"][1], None, "failure",
+                failure_reason="error", runner_attestation=proof)
 
     def test_failure_classification_is_bounded(self):
         case = exe.load_synthetic(self.synthetic)[0]
@@ -259,7 +376,8 @@ class IntegrationTests(unittest.TestCase):
                 (self.px / sup.STOP_FILE).write_text("stop\n")
             (output / "conseq.csv").write_bytes(b"MAX\n")
             (output / "timing.json").write_text(
-                json.dumps({"exit_code": 0, "seconds": 3.0}))
+                json.dumps({"exit_code": 0, "seconds": 3.0,
+                            "timing_origin": "micall_in_container_monotonic_v1"}))
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "c" * 64}
 
@@ -695,7 +813,8 @@ class IntegrationTests(unittest.TestCase):
                         "log_sha256": "c" * 64}
             (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
             (output / "timing.json").write_text(
-                json.dumps({"exit_code": 0, "seconds": 3.0}))
+                json.dumps({"exit_code": 0, "seconds": 3.0,
+                            "timing_origin": "micall_in_container_monotonic_v1"}))
             (self.px / sup.STOP_FILE).write_text("stop\n")
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "d" * 64}
@@ -756,7 +875,8 @@ class IntegrationTests(unittest.TestCase):
                         "log_sha256": "c" * 64}
             (output / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
             (output / "timing.json").write_text(
-                json.dumps({"exit_code": 0, "seconds": 3.0}))
+                json.dumps({"exit_code": 0, "seconds": 3.0,
+                            "timing_origin": "micall_in_container_monotonic_v1"}))
             (self.px / sup.STOP_FILE).write_text("stop\n")
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "d" * 64}
@@ -797,7 +917,8 @@ class IntegrationTests(unittest.TestCase):
             calls.append(output.name)
             (Path(output) / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
             (Path(output) / "timing.json").write_text(
-                json.dumps({"exit_code": 0, "seconds": 3.0}))
+                json.dumps({"exit_code": 0, "seconds": 3.0,
+                            "timing_origin": "micall_in_container_monotonic_v1"}))
             if len(calls) == 2:
                 (self.px / sup.STOP_FILE).write_text("stop\n")
             return {"status": "finished", "peak_rss": 1_000_000,
@@ -823,7 +944,8 @@ class IntegrationTests(unittest.TestCase):
             (self.px / sup.STOP_FILE).write_text("stop\n")
             (Path(output) / "conseq.csv").write_bytes(b"region,MAX\nHIV1,ACGT\n")
             (Path(output) / "timing.json").write_text(
-                json.dumps({"exit_code": 0, "seconds": 3.0}))
+                json.dumps({"exit_code": 0, "seconds": 3.0,
+                            "timing_origin": "micall_in_container_monotonic_v1"}))
             return {"status": "finished", "peak_rss": 1_000_000,
                     "log_sha256": "d" * 64}
 
@@ -913,6 +1035,48 @@ class IntegrationTests(unittest.TestCase):
         truth.write_bytes(b">t\nAAAA\n")
         with self.assertRaisesRegex(ValueError, "truth hash mismatch"):
             scorer._synthetic_inputs(case)
+
+    def test_reconcile_changed_output_never_writes_score(self):
+        registry = self.promoted_registry()
+        source = self.source()
+        arm = sched.build_plan(registry, source, self.px)["pending"][0]
+        output = self._arm_output(arm)
+        artifact = output / "conseq.csv"
+        artifact.write_bytes(b"original")
+        sched.record_outcome(self.px, arm, artifact, "success", seconds=1.0)
+        artifact.write_bytes(b"changed")
+        scorer = self._scorer()
+        with patch.object(scorer, "score") as score:
+            with self.assertRaisesRegex(ValueError, "missing or changed"):
+                exe.reconcile_terminal(self.px, registry, source, scorer=scorer,
+                                       aliases={arm["alias"]})
+            score.assert_not_called()
+        path = self.px / "results" / (sched.receipt_id(arm) + "-results.json")
+        self.assertFalse(path.exists())
+
+    def test_posthoc_rejects_output_changed_during_score(self):
+        registry = self.promoted_registry()
+        source = self.source()
+        arm = sched.build_plan(registry, source, self.px)["pending"][0]
+        case = source.case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        artifact = output / "conseq.csv"
+        artifact.write_bytes(b"original")
+        receipt = sched.record_outcome(self.px, arm, artifact, "success",
+                                       seconds=1.0)
+        scorer = self._scorer()
+        original = scorer.score
+
+        def change(**kwargs):
+            artifact.write_bytes(b"changed during score")
+            return original(**kwargs)
+
+        with patch.object(scorer, "score", side_effect=change):
+            with self.assertRaisesRegex(ValueError, "missing or changed"):
+                exe.posthoc_extract_and_retain(self.px, arm, case, receipt,
+                    scorer=scorer, scorer_sha=scorer.source_sha256)
+        path = self.px / "results" / (sched.receipt_id(arm) + "-results.json")
+        self.assertFalse(path.exists())
 
     def test_reconcile_existing_successes_without_rerun(self):
         registry = self.promoted_registry()

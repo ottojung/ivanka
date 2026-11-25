@@ -4,7 +4,7 @@ Owner: `1EGgUfZmYOlHoAY22ciCRo-blank` (P1 ultradeep runtime). Diagnostic only:
 no benchmark metric, gate, frozen artifact, MiCall source, OCI image or
 qualification verdict is changed by this work.
 
-## 1. The observed failure is whole-pipeline drift, not an Ivanka regression
+## 1. Strong evidence of whole-pipeline drift, not proof of an algorithm regression
 
 Case `ultradeep-s009`, exact reads
 `/workspace/ivanka-synthetic-abundance15-464-20261117/ultradeep-s009/reads`
@@ -51,8 +51,10 @@ retained logs; repeated stage names are numbered (`#2`).
 
 Every stage, including stages that never execute Ivanka code, is slower in the
 candidate run. The native assembler reports 1 contig and 9648/9678 covered
-31-mers in both runs. This is a uniform slowdown of the whole MiCall container,
-not a 5x assembler algorithm regression.
+31-mers in both runs. This is **strong evidence** of a uniform slowdown of the
+whole MiCall container and against a 5x native-algorithm regression; it is
+**not causal proof**. The cause is established only by the controlled
+same-resource experiment below, which has not been launched.
 
 ### Resource/argv confounds
 
@@ -93,26 +95,46 @@ inside the throttled container.
 
 ## 3. Reproducible matched-resource confirmatory plan
 
-`benchmarks/p1_matched_timing.py` builds one argv template for the frozen Ivanka
-image and the P1 candidate image. Only image digest, result directory and
-unique container name differ. Both arms use `--cpus=2`,
-`--memory=4000000000`, `--timeout=2400`, `--stop-timeout=2`, identical read and
-timer mounts, identical `micall analyze sample … --denovo --keep_scratch
---all_projects`, and run back-to-back in one host/time window. It records
-argv, timing.json, per-stage durations, host load/cgroup quota, and output
-hashes into a fresh output root; it never opens truth/reference data.
+`benchmarks/p1_matched_timing.py` (schema `ivanka.p1.matched-timing.v2`) builds
+one argv template for the frozen Ivanka image and the P1 candidate image. Only
+image digest, result directory and unique container name differ. Both arms use
+`--cpus=2`, `--memory=4000000000`, `--timeout=2400`, `--stop-timeout=2`,
+identical read and timer mounts, identical `micall analyze sample …
+--denovo --keep_scratch --all_projects`, and run back-to-back in one host/time
+window. It records argv, timing.json, per-stage durations, host load/cgroup
+quota, and output hashes into a fresh output root; it never opens
+truth/reference data.
+
+Guarding (reviewed 2026-11-25): the tool takes the **real** PX flock on
+`/workspace/ivanka-exploratory-ten-20261121/.global-worker.lock` with
+`fcntl.flock(LOCK_EX|LOCK_NB)` — no private `open(x)` lock and no environment
+override — and requires an operator-placed `STOP` sentinel containing the
+supplied `--lock-token`, a clear `.worker-lease.jsonl`, no active containers,
+and a re-check between arms. `benchmarks/p1_fail_closed_guard.py` binds the
+exact 64-hex CID from the known container name, verifies it against
+`podman inspect {{.Id}} {{.State.Pid}}`, fingerprints the init process, and
+samples identity-bound `/proc` VmRSS every 0.5 s. Null/unreadable RSS fails
+closed (`measurement_unavailable`), never zero; 4 GB breach, lost identity and
+deadline breach all fail closed. One 2400 s wall deadline covers CID binding,
+sampling and process wait. `podman rm -f <exact-cid>` with before/after absence
+proof runs in `finally` for both arms; no process is signalled by bare PID.
+On this host the OCI memory cap is not kernel-enforced (read-only, undelegated
+cgroup), so the guard is userspace observation, explicitly reported as
+`kernel_enforcement=false`.
 
 * Plan only (no subprocess, no file write):
   `python3 benchmarks/p1_matched_timing.py`
 * Guarded execution (requires PX/P1 owner coordination first):
   `python3 benchmarks/p1_matched_timing.py --execute --output-root <FRESH-DIR> --lock-token "<PX/P1-owner-token>"`
 
-Safety invariants enforced in code and unit tests
-(`benchmarks/test_p1_matched_timing.py`, 8 tests PASS): pinned read/timer
-sha256 verification; refusal to write inside any sealed evidence root; refusal
-to reuse a non-empty output root; shared advisory lock with lease journal and
-exact-CID teardown; mandatory lock token; dry-run launches nothing;
-`formal_qualification = false` in every report.
+Safety invariants enforced in code and unit tests (23 tests PASS:
+`test_p1_matched_timing.py`, `test_p1_fail_closed_guard.py`,
+`test_p1_native_byte_equivalence.py`): pinned read/timer sha256 verification;
+refusal to write inside any sealed evidence root; refusal to reuse a non-empty
+output root; real global flock plus STOP/lease/container boundary; wrong-lock,
+lost-identity and null-RSS regressions; exact-CID teardown in `finally`;
+mandatory lock token; dry-run launches nothing; `formal_qualification = false`
+and `strong_evidence_not_causal_proof` in every report.
 
 Durable board record: P1 issue `jshCHOLY4i9mLYkjfdFyPv-cervical`, comment
 `[P1-runtime-diagnostic]` by `agent-1EGgUfZmYOlHoAY22ciCRo-blank` at

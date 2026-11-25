@@ -74,6 +74,46 @@ class TestRunner(unittest.TestCase):
         self.assertTrue(probe.parent.resolve().is_relative_to(metered))
         self.assertEqual(probe.read_text(), str(probe.parent.resolve()))
 
+    def test_successful_build_reclaims_invisible_buildah_work_containers(self):
+        # A successful build can leave external Buildah "Storage" containers
+        # that ordinary podman ps/prune cannot see. Cleanup must run before the
+        # lease closes even when the monitored process group exited cleanly.
+        proof = {"removed_external_build_containers": [["abcdef012345", "debian-working-container"]],
+                 "dedicated_store_bytes_after_cleanup": 0}
+        with patch(
+            "assembler_bench.exploratory_runtime.launch.clean_stopped_build",
+            return_value=proof,
+        ) as cleaner:
+            result = self.run_job()
+        cleaner.assert_called_once()
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(result["orphan_cleanup"], proof)
+        self.assertNotIn("orphan_cleanup_error", result)
+        self.assertNotIn("lease_state", result)
+
+    def test_successful_build_without_cleanup_proof_keeps_lease_active(self):
+        # Fail closed: an unrecognized or unmeasurable external container must
+        # not release the worker lease or delete this job's forensic scratch.
+        with patch(
+            "assembler_bench.exploratory_runtime.launch.clean_stopped_build",
+            side_effect=RuntimeError("unrecognized external container; stop cleanup"),
+        ):
+            result = self.run_job()
+        self.assertEqual(result["status"], "finished")
+        self.assertIn("unrecognized", result["orphan_cleanup_error"])
+        self.assertEqual(result["lease_state"], "active_unreleased")
+        self.assertEqual(result["job_temp_cleanup"]["removed"], False)
+
+    def test_empty_cleanup_proof_never_releases_lease(self):
+        # Absence of an error is not proof of teardown.
+        with patch(
+            "assembler_bench.exploratory_runtime.launch.clean_stopped_build",
+            return_value={},
+        ):
+            result = self.run_job()
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(result["lease_state"], "active_unreleased")
+
     def test_unbuilt_source_cannot_pilot(self):
         with self.assertRaises(ValueError):
             self.run_job("pilot")

@@ -1,5 +1,7 @@
-use super::{index, island, ranking, scoring, tiling, trimming, Reads, K};
+use super::{index, island, output, ranking, scoring, tiling, trimming, Reads, K};
 mod independent_cases;
+mod junction_cases;
+mod junction_output_cases;
 mod pair_masks;
 mod private_branch_cases;
 mod private_evidence_cases;
@@ -12,11 +14,13 @@ fn private_stats(coverage: Vec<usize>, depth: Vec<Vec<u32>>) -> scoring::Statist
     let pairs = (0..2)
         .map(|i| masks.iter().filter(|&&m| m & (1 << i) != 0).count())
         .collect();
+    let spans = vec![vec![]; coverage.len()];
     scoring::Statistics {
         depth,
         pairs,
         coverage,
         pair_masks: masks,
+        spans,
     }
 }
 
@@ -44,4 +48,9 @@ fn reverse(seq: &[u8]) -> Vec<u8> {
             _ => b'A',
         })
         .collect()
+}
+
+/// Dense flanking pair evidence with no fragment spanning the middle valley.
+pub(super) fn dense_spans() -> Vec<(usize, usize)> {
+    [vec![(500, 650); 100], vec![(1840, 1970); 100]].concat()
 }

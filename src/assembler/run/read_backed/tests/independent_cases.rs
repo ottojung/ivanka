@@ -4,11 +4,13 @@ fn stats(masks: Vec<u16>, coverage: Vec<usize>) -> Statistics {
     let pairs = (0..coverage.len())
         .map(|i| masks.iter().filter(|&&m| m & (1 << i) != 0).count())
         .collect();
+    let spans = vec![vec![]; coverage.len()];
     Statistics {
         depth: vec![],
         pairs,
         coverage,
         pair_masks: masks,
+        spans,
     }
 }
 

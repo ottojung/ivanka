@@ -8,7 +8,7 @@ import time
 
 from assembler_bench.exploratory_space import admit
 
-from fail_closed_guard import identity, lease, teardown
+from fail_closed_guard import heartbeat, identity, lease, teardown
 from fail_closed_guard import proc as process_snapshot
 from fail_closed_guard.errors import GuardExceeded
 
@@ -30,7 +30,8 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         # is alive or its liveness cannot be proven.
         guard_env = {**os.environ,
                      "CONTAINERS_STORAGE_CONF": str(root / "storage.conf")}
-        lease.require_clear(root, guard_env)
+        lease.require_clear(root, guard_env,
+                            watchdog_path=heartbeat.alive_path(root))
         admit(reg, base, root, base["image_store"], base["workspace"], reserve_bytes)
         ident = tool + "-" + str(time.time_ns())
         argv, cidfile = bind_pilot(root, mode, argv, ident)
@@ -44,6 +45,10 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         # A per-job directory makes teardown provably scoped to this job alone.
         temp = job_temp.job_temp_dir(root, ident)
         temp.mkdir(parents=True, exist_ok=True)
+        # The controller proves its own kernel identity before a container can
+        # exist and refreshes it throughout the bounded watch below.
+        emitter = heartbeat.Emitter(root, ident)
+        emitter.before_spawn()
         env = {**os.environ, "CONTAINERS_STORAGE_CONF": str(root / "storage.conf"),
                "TMPDIR": str(temp), "TMP": str(temp), "TEMP": str(temp)}
         with log.open("xb") as output:
@@ -73,6 +78,7 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
             # stop by CID only; builds bind the launcher tree and stop by its
             # exact process group. Legacy positional watch() call preserved.
             cfg["guard_mode"] = mode
+            cfg["heartbeat"] = emitter.refresh
             if cidfile is not None:
                 cfg["cidfile"] = cidfile
                 cfg["env"] = env
@@ -83,6 +89,7 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                 # before the monitor can be killed. Cleanup never reads the
                 # transient cidfile again once this binding exists.
                 state["bound_cid"] = bound["cid"]
+                emitter.bound(bound["cid"])
                 try:
                     lease.bind_cid(root, ident, bound["cid"], cidfile=cidfile,
                                    pid=bound.get("pid"),

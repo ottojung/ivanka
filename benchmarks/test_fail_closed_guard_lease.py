@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from assembler_bench.exploratory_policy import checked
 from assembler_bench.exploratory_runtime import launch, monitor
-from fail_closed_guard import binding, identity, lease, proc, tree
+from fail_closed_guard import binding, heartbeat, identity, lease, proc, tree
 from fail_closed_guard.errors import GuardExceeded, OrphanLease
 from fail_closed_guard.watch import watch_bound
 
@@ -283,6 +283,7 @@ class LauncherAdmissionTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
 
     def operate(self):
+        heartbeat.ping(self.root)
         return launch.operate(REG, self.baseline, "skesa", "build",
                               [sys.executable, "-c", "print('hello')"], 1024**3)
 

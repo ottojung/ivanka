@@ -19,7 +19,7 @@ from assembler_bench.px_ram_semantics import (COMPARABLE_KEY,
                                               COMPARABLE_METHOD_VERSION,
                                               COMPARABLE_SCOPE, METHOD_KEY,
                                               SCOPE_KEY, VERSION_KEY, attested)
-from fail_closed_guard import binding, build
+from fail_closed_guard import binding, build, heartbeat
 from fail_closed_guard.errors import GuardExceeded
 
 CID = "a" * 64
@@ -288,6 +288,7 @@ class LaunchTeardownTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def operate(self):
+        heartbeat.ping(self.root)
         return launch.operate(REG, self.baseline, "skesa", "pilot",
                               [sys.executable, "-c", "print('hello')"], 1024**3)
 

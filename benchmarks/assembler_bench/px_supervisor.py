@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import exploratory_policy
 from . import px_cohort_scheduler as sched
+from . import px_retry_authorization as authz
 
 HANDOFF_SCHEMA = "ivanka.px.supervisor.handoff.v1"
 PX_BOARD = "V9roZ0y80gjXs7WrOCgNbH-moral"
@@ -145,7 +146,18 @@ class BackgroundSupervisor:
                 "completed": completed, "remaining": len(pending) - len(completed)}
 
     def _run_arm(self, arm, plan, completed):
-        for _ in range(sched.MAX_INFRA_ATTEMPTS):
+        existing = sched.verify_receipt(self.root, arm)
+        first = 1 if existing is None else existing.get("attempt", 1) + 1
+        for attempt in range(first, sched.AUTHORIZED_EXTRA_ATTEMPT + 1):
+            if attempt > sched.MAX_INFRA_ATTEMPTS:
+                if ((self.root / STOP_FILE).is_file()
+                        or authz.verify(self.root, arm) is None):
+                    break
+            prior = sched.verify_receipt(self.root, arm)
+            if prior is not None:
+                # Every dispatch after a failure, including resume after STOP
+                # or a rejected admission, must archive the failed output first.
+                self._prepare_retry(arm, prior, attempt - 1)
             sched.admit_arm(self.registry, self.baseline, self.root,
                             self.reserve_bytes)
             case = self.source.case(arm["cohort"], arm["alias"])
@@ -156,11 +168,13 @@ class BackgroundSupervisor:
             sched.write_resource(self.root, arm, receipt)
             retryable = (receipt.get("outcome") == "failure"
                          and receipt.get("failure_reason")
-                         in sched.INFRASTRUCTURE_FAILURE_REASONS
-                         and receipt.get("attempt", 1) < sched.MAX_INFRA_ATTEMPTS)
-            if retryable and not (self.root / STOP_FILE).is_file():
-                self._preserve_attempt(arm, receipt.get("attempt", 1))
-                continue
+                         in sched.INFRASTRUCTURE_FAILURE_REASONS)
+            authorized = (retryable
+                          and receipt.get("attempt") == sched.MAX_INFRA_ATTEMPTS
+                          and authz.verify(self.root, arm) is not None)
+            if ((retryable and attempt < sched.MAX_INFRA_ATTEMPTS) or authorized):
+                if not (self.root / STOP_FILE).is_file():
+                    continue
             self._posthoc(arm, case, receipt)
             if report.get("retention_container_id"):
                 from .px_retention import retire_finished_arm
@@ -171,14 +185,33 @@ class BackgroundSupervisor:
         completed.append(sched.receipt_id(arm))
         sched.write_checkpoint(self.root, plan, completed)
 
+    def _prepare_retry(self, arm, prior, expected_attempt):
+        """Fail closed unless the prior receipt authorizes exactly this retry."""
+        if prior.get("attempt") != expected_attempt:
+            raise ValueError("prior receipt is not the dispatch being retried")
+        if (prior.get("outcome") != "failure"
+                or prior.get("failure_reason")
+                not in sched.INFRASTRUCTURE_FAILURE_REASONS):
+            raise ValueError("prior terminal receipt is not a retryable failure")
+        if (prior.get("attempt") == sched.MAX_INFRA_ATTEMPTS
+                and authz.verify(self.root, arm) is None):
+            raise ValueError("exhausted PX attempt is not authorized")
+        if prior.get("attempt") >= sched.AUTHORIZED_EXTRA_ATTEMPT:
+            raise ValueError("no further attempts beyond the authorized retry")
+        self._preserve_attempt(arm, expected_attempt)
+
     def _preserve_attempt(self, arm, attempt):
         output = self.root / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
         if not output.exists():
             return
+        if not output.is_dir():
+            raise ValueError("canonical output is not a directory")
         archive = (self.root / "outputs" / "attempts"
                    / (arm["tool_id"] + "-" + arm["alias"]
                       + f".attempt-{attempt:03d}"))
         if archive.exists():
+            # A preserved archive alongside a live output directory is an
+            # interrupted retry; moving one over the other would mix attempts.
             raise ValueError("attempt output already preserved")
         archive.parent.mkdir(parents=True, exist_ok=True)
         output.rename(archive)

@@ -262,6 +262,14 @@ def _join_scores(run, assemblers, joined):
             # Withdraw any comparable peak published before the launcher-group
             # scope was known; only attested whole-container readings remain.
             if COMPARABLE_KEY in case:
+                # A scope downgrade must remove old method metadata, not
+                # merely overwrite the comparable value with null.
+                for key in (METHOD_KEY, VERSION_KEY, SCOPE_KEY,
+                            UNAVAILABLE_KEY, LAUNCHER_DIAGNOSTIC):
+                    if key not in case.get("diagnostics", {}):
+                        arm.pop(key, None)
+                    if key not in case:
+                        evidence_row.pop(key, None)
                 arm[COMPARABLE_KEY] = case[COMPARABLE_KEY]
             for key in (COMPARABLE_KEY, RAW_BYTES_KEY, METHOD_KEY, VERSION_KEY,
                         SCOPE_KEY, UNAVAILABLE_KEY, LAUNCHER_DIAGNOSTIC,

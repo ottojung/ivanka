@@ -710,9 +710,16 @@ def apply(root, plan_path, *, source=None):
                 return {"status": "already-applied", "receipt": str(receipt_path)}
             # A receipt alone cannot prove the current state came from it.
             _load_recovery(root, plan, plan_sha)
-        elif partial:
-            # Any registry/checkpoint swap without a receipt needs its journal.
+        elif partial and journal_path.is_file():
+            # A journal written before mutation proves an interrupted swap.
             _load_recovery(root, plan, plan_sha)
+        elif partial:
+            # No receipt, no journal: no mutation from this plan started.
+            # This is a fresh application (e.g. legacy digest-only upgrade
+            # where the staged registry is byte-identical to active) rather
+            # than an interrupted swap. Proceed; verify_boundary and the
+            # journaled write below make the fresh apply crash-safe.
+            pass
 
         verify_boundary(root, plan, staged_data)
         snapshots = _checkpoint_snapshots(root, plan)

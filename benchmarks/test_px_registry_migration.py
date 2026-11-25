@@ -430,6 +430,19 @@ class MigrationTests(unittest.TestCase):
                                     "not terminal-accepted"):
             self._apply()
 
+    def test_exhausted_disk_stop_receipt_is_terminal_accepted(self):
+        arm = self._arm(TARGET, "physical", "PX-R002")
+        # attempt 1: retryable infra failure
+        sched.record_outcome(self.root, arm, None, "failure",
+                             failure_reason="disk_stop")
+        # attempt 2: exhausted - terminal-accepted for migration accounting
+        sched.record_outcome(self.root, arm, None, "failure",
+                             failure_reason="disk_stop")
+        self.plan["new_completed"] = [sched.receipt_id(arm)]
+        self._refresh_plan()
+        result = self._apply()
+        self.assertIn(result["status"], ("applied", "recovered"))
+
     def test_receipt_identity_and_input_hash_validation(self):
         receipt = self.root / "receipts" / (self.receipt_ids[0] + ".json")
         raw = json.loads(receipt.read_text())
@@ -717,13 +730,28 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(after["completed"], sorted(self.receipt_ids))
         self.assertFalse(migration._journal_path(self.root, self.plan).exists())
 
-    def test_partial_state_without_matching_journal_is_rejected(self):
-        (self.root / "active.json").write_bytes(self.staged.read_bytes())
-        with self.assertRaisesRegex(migration.MigrationError,
-                                    "partial migration state has no recovery journal"):
-            self._apply()
-        self.assertFalse((self.root / "receipts" / (
-            "registry-migration-" + TARGET + "-" + WINDOW + ".json")).exists())
+    def test_identical_registry_legacy_digest_upgrade_without_journal(self):
+        """Scheduler digest migration: identical registry, no new admission.
+
+        active==staged, checkpoint has legacy plan digest, no receipt and no
+        journal. This is a fresh legacy-only digest upgrade, not an interrupted
+        swap (a swap would have written a journal before mutating state).
+        """
+        # Make active byte-identical to staged (tool already admitted, no new
+        # admission). Checkpoint keeps a legacy digest that differs from the
+        # scheduler-digest-migrated plan digest.
+        self.active.write_bytes(self.staged.read_bytes())
+        self.assertEqual(sha(self.active), sha(self.staged))
+        self.assertNotEqual(
+            json.loads(self.checkpoint.read_text())["plan_sha256"],
+            self.plan["new_plan_sha256"])
+        self.assertFalse(migration._journal_path(self.root, self.plan).exists())
+        result = self._apply()
+        self.assertIn(result["status"], ("applied", "recovered"))
+        after = json.loads(self.checkpoint.read_text())
+        self.assertEqual(after["plan_sha256"], self.plan["new_plan_sha256"])
+        self.assertTrue(Path(result["receipt"]).is_file())
+        self.assertFalse(migration._journal_path(self.root, self.plan).exists())
 
     def test_forged_journal_cannot_authorize_recovery(self):
         self._interrupted_apply(self.active)

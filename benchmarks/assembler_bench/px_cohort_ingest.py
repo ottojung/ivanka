@@ -13,6 +13,7 @@ import re
 import tempfile
 import shutil
 from pathlib import Path
+from datetime import datetime, timezone
 
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
 from .public_metrics import CATALOG
@@ -89,6 +90,52 @@ def _metrics(diagnostics):
     return result
 
 
+def _failed_case(root, name, receipt, provenance, cohort, alias):
+    """Publish an accepted terminal failure without fabricating measurements."""
+    from . import px_cohort_scheduler as sched
+    arm = {key: receipt[key] for key in (
+        "tool_id", "cohort", "alias", "source_commit", "adapter_commit",
+        "image_sha256", "input_sha256")}
+    if sched.receipt_id(arm) != name:
+        raise ValueError("PX failure receipt name differs from identity")
+    verified = sched.verify_receipt(root, arm)
+    if verified != receipt:
+        raise ValueError("PX failure receipt is not verified")
+    if (receipt["failure_reason"] in sched.INFRASTRUCTURE_FAILURE_REASONS
+            and receipt.get("attempt", 1) < sched.MAX_INFRA_ATTEMPTS):
+        return None  # pending retry, not a completed failed measurement
+    resource_path = root / "results" / (name + "-resource.json")
+    if not resource_path.is_file():
+        return None
+    resource = _load(resource_path)
+    raw = receipt.get(RAW_BYTES_KEY)
+    if (resource.get("schema") != RESOURCE_SCHEMA
+            or resource.get("tool_id") != receipt["tool_id"]
+            or resource.get("alias") != receipt["alias"]
+            or resource.get("cohort") != receipt["cohort"]
+            or resource.get("outcome") != "failure"
+            or resource.get("attempt", 1) != receipt.get("attempt", 1)
+            or resource.get(RAW_BYTES_KEY) != raw):
+        raise ValueError("PX failure resource evidence differs from receipt")
+    if raw is not None and observed_mib(raw) is None:
+        raise ValueError("PX failure has invalid RAM observation")
+    fields, diagnostics = classify(raw, receipt)
+    fields.update({
+        "cohort": cohort, "canonical_alias": alias,
+        "outcome": "failure", "failure_reason": receipt["failure_reason"],
+        "score": None, "canonical_manifest_sha256": PHYSICAL_MANIFEST,
+        "score_origin": "micall_final_max_reference_panel_v1",
+        "reference_panel_sha256": PANEL, "method": SCORE_METHOD,
+        "launcher_seconds": None, "input_sha256": receipt["input_sha256"],
+        "output_sha256": None, "diagnostics": diagnostics,
+        "source_commit": provenance.get("source_commit"),
+        "adapter_commit": provenance.get("adapter_commit"),
+        "image_sha256": provenance.get("image_sha256"),
+        "binding_receipts": 3,
+    })
+    return fields
+
+
 def _case(root, name, receipt, assembler, real_data):
     """Validate one receipt and its post-hoc result/resource/diagnostic files."""
     tool = receipt.get("tool_id")
@@ -104,6 +151,10 @@ def _case(root, name, receipt, assembler, real_data):
     if bound is None:
         return None
     cohort, alias = bound
+    if receipt.get("outcome") == "failure":
+        return _failed_case(root, name, receipt, provenance, cohort, alias)
+    if receipt.get("outcome") != "success":
+        raise ValueError("unknown PX terminal outcome")
     stem = name
     files = (root / "results" / (stem + "-results.json"),
              root / "results" / (stem + "-resource.json"),
@@ -384,6 +435,8 @@ def publish(site, root, real_data, registry_path=None, handoff_dir=None):
     updated, merged, added, joined = ingest(
         report, evidence, root, real_data, registry_path, handoff_dir)
     validate_publication(merged, updated)
+    if merged != report or updated != evidence:
+        merged["published_at"] = datetime.now(timezone.utc).isoformat()
     with tempfile.TemporaryDirectory(prefix="px-ingest-") as scratch:
         staged = Path(scratch) / "bench"
         shutil.copytree(site, staged)

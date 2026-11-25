@@ -135,6 +135,57 @@ class PxCohortIngestTests(unittest.TestCase):
         _, _, repeated, _ = ingest(merged, evidence, self.root, self.real)
         self.assertEqual(repeated, [])
 
+    def _write_failure(self, reason, peak=None):
+        self.receipt.update(outcome="failure", failure_reason=reason,
+                            qualifying=False, output_sha256=None, seconds=None,
+                            peak_rss_bytes=peak, attempt=1,
+                            peak_ram_method="container_process_tree_sampled_rss",
+                            peak_ram_method_version="ivanka.px.whole-container-rss.v2",
+                            peak_ram_scope="whole_container_process_tree")
+        self.resource.update(outcome="failure", cohort="physical", attempt=1,
+                             peak_rss_bytes=peak, peak_ram_observed_mib=None)
+        self._write_all()
+        (self.root / "results" / (self.name + "-results.json")).unlink()
+        (self.root / "diagnostics" / (self.name + ".json")).unlink()
+
+    def test_terminal_failure_publishes_without_score_or_ram(self):
+        self._write_failure("error")
+        evidence, merged, added, _ = ingest(
+            self._report(), self.evidence, self.root, self.real)
+        self.assertEqual(added, [("skesa", "real", "R003")])
+        real = next(run for run in merged["runs"] if run["cohort"] == "real")
+        row = next(row for row in real["samples"] if row["alias"] == "R003")
+        self.assertIn("skesa", row["failures"])
+        self.assertEqual(row["measurement_evidence"]["skesa"]["failure_reason"],
+                         "error")
+        self.assertIsNone(row["score"]["skesa"])
+        self.assertIsNone(row["seconds"]["skesa"])
+        self.assertIsNone(row["diagnostics"]["skesa"]["peak_ram_observed_mib"])
+        self.assertEqual(row["diagnostics"]["skesa"]["peak_ram_scope"],
+                         "whole_container_process_tree")
+        self.assertEqual(real["tool_progress"]["skesa"]["failed"], 1)
+        self.assertEqual(real["tool_progress"]["skesa"]["finished"], 1)
+        _, again, repeated, _ = ingest(merged, evidence, self.root, self.real)
+        self.assertEqual(repeated, [])
+        self.assertEqual(again, merged)
+
+    def test_retryable_failure_does_not_count_as_finished(self):
+        self._write_failure("identity_lost")
+        _, merged, added, _ = ingest(
+            self._report(), self.evidence, self.root, self.real)
+        self.assertEqual(added, [])
+        real = next(run for run in merged["runs"] if run["cohort"] == "real")
+        self.assertEqual(real["tool_progress"]["skesa"]["finished"], 0)
+
+    def test_terminal_failure_cannot_replace_a_genuine_score(self):
+        self._write_failure("error")
+        report = self._report()
+        real = next(run for run in report["runs"] if run["cohort"] == "real")
+        row = next(row for row in real["samples"] if row["alias"] == "R003")
+        row["score"]["skesa"] = 42
+        with self.assertRaisesRegex(ValueError, "overwrite a genuine score"):
+            ingest(report, self.evidence, self.root, self.real)
+
     def test_tampered_indexed_receipt_or_source_pair_is_rejected(self):
         report = self._report()
         # The index binds the receipt bytes; editing a receipt breaks the digest.

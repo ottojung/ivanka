@@ -116,7 +116,10 @@ def validate_case_evidence(case, cohort, score_origin):
             "binding_receipts"] < 2:
         raise ValueError("case input hash is not independently corroborated")
     score = case.get("score")
-    if type(score) not in (int, float) or score < 0:
+    if case.get("outcome") == "failure":
+        if score is not None or not case.get("failure_reason"):
+            raise ValueError("failed case must not invent a score or omit its reason")
+    elif type(score) not in (int, float) or score < 0:
         raise ValueError("case evidence has no genuine score")
     return _canonical_alias(case)
 
@@ -220,7 +223,11 @@ def _join_scores(run, assemblers, joined):
             # Re-running the publisher must refresh verified evidence fields
             # even when a genuine score is already present. The score itself
             # is only written when this case supplies the original reading.
-            if sample.get("score", {}).get(tool) is None:
+            existing = sample.get("score", {}).get(tool)
+            if case.get("outcome") == "failure":
+                if existing is not None:
+                    raise ValueError("failure would overwrite a genuine score")
+            elif existing is None:
                 sample.setdefault("score", {})[tool] = float(case["score"])
                 joined.append((run["id"], tool, alias))
             evidence_row = sample.setdefault("measurement_evidence", {}).setdefault(tool, {
@@ -244,7 +251,8 @@ def _join_scores(run, assemblers, joined):
                         SCOPE_KEY, UNAVAILABLE_KEY, LAUNCHER_DIAGNOSTIC,
                         "input_sha256", "output_sha256", "exact_coverage",
                         "method", "scorer_source_sha256", "source_commit",
-                        "adapter_commit", "image_sha256"):
+                        "adapter_commit", "image_sha256", "outcome",
+                        "failure_reason"):
                 if key in case:
                     evidence_row[key] = case[key]
 

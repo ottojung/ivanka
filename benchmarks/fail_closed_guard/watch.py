@@ -98,8 +98,10 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                     used = rss_fn(table, binding)
             except GuardExceeded as exc:
                 # A process that has already exited is a completed arm, not a
-                # breach. While it is still live, identity loss is fail-closed.
-                if exc.reason == "identity_lost" and not running():
+                # breach. While it is still live, an unreadable or lost identity
+                # fails closed; a dead process cannot be measured, so preserve the
+                # last real peak and let the normal teardown proof complete.
+                if exc.reason in ("identity_lost", "measurement_unavailable") and not running():
                     break
                 raise
             peak = used if peak is None else max(peak, used)

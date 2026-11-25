@@ -1,7 +1,10 @@
 """No invisible wall/RSS/disk failures may escape supervisor."""
+import os
+import signal
 import unittest
+from unittest.mock import patch
 
-from assembler_bench.exploratory_runtime.monitor import GuardExceeded, watch
+from assembler_bench.exploratory_runtime.monitor import GuardExceeded, watch, watch_build
 
 
 class Dummy:
@@ -61,3 +64,54 @@ class TestMonitor(unittest.TestCase):
     def test_requires_fast_poll(self):
         with self.assertRaises(ValueError):
             watch(Dummy(), self.params, interval=2)
+
+    def test_build_exited_during_snapshot_null_record_is_not_killed(self):
+        class Exited:
+            pid = 424242
+            returncode = 0
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                return self.returncode
+
+        # Snapshot read raced with exit: pid present but identity unreadable.
+        null_record = {"pid": 424242, "ppid": None, "starttime": None,
+                       "pid_ns": None, "cmdline_sha": None,
+                       "rss": None, "cgroup": None}
+        snapshot = lambda: {424242: null_record}
+        with patch("assembler_bench.exploratory_runtime.monitor.build.os.killpg",
+                   side_effect=ProcessLookupError):
+            result = watch_build(Exited(), self.params, snapshot=snapshot,
+                                 measure=self.measure,
+                                 clock=lambda: 0, sleep=lambda s: None)
+        self.assertIsNone(result["peak_rss"])
+        self.assertIsNone(result["cid"])
+        self.assertEqual(result["teardown"],
+                         {"process_group": 424242, "stopped": True})
+        self.assertEqual(result["enforcement"], "userspace_observed")
+        self.assertFalse(result["kernel_enforcement"])
+
+    def test_build_live_unreadable_snapshot_fails_closed(self):
+        class Running:
+            pid = 434343
+
+            def poll(self):
+                return None
+
+            def wait(self, timeout=None):
+                return -15
+
+        null_record = {"pid": 434343, "ppid": None, "starttime": None,
+                       "pid_ns": None, "cmdline_sha": None,
+                       "rss": None, "cgroup": None}
+        snapshot = lambda: {434343: null_record}
+        with patch("assembler_bench.exploratory_runtime.monitor.build.os.killpg",
+                   side_effect=ProcessLookupError):
+            with self.assertRaisesRegex(GuardExceeded, "measurement_unavailable") as caught:
+                watch_build(Running(), self.params, snapshot=snapshot,
+                            measure=self.measure,
+                            clock=lambda: 0, sleep=lambda s: None)
+        self.assertEqual(caught.exception.teardown,
+                         {"process_group": 434343, "stopped": True})

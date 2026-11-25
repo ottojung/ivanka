@@ -1,10 +1,9 @@
-use super::{private, Statistics, K};
+use super::{private, retained, Statistics, K};
 
 // Independent original fragments, rather than the length of a competing
 // genome, determine whether a second densely covered component is useful.
-// A fragment already explained by a retained component cannot vote again.
-// Homologous strains share most fragments; a bounded stretch of private
-// 31-mers still identifies a distinct read-supported branch without a join.
+// Homologous strains share most fragments, so a read-supported private
+// stretch can establish a distinct branch where no fragment votes alone.
 pub(in super::super) fn additional(
     contigs: &[Vec<u8>],
     stats: &Statistics,
@@ -19,9 +18,10 @@ pub(in super::super) fn additional(
     let mut additional = Vec::new();
     loop {
         let counts = independent_counts(&stats.pair_masks, selected, contigs.len());
-        let retained = (0..contigs.len())
+        let chosen = (0..contigs.len())
             .filter(|&i| selected & (1 << i) != 0)
             .collect::<Vec<_>>();
+        let evidence = private::scores(contigs, &stats.depth, &retained::keys(contigs, &chosen));
         let next = (0..contigs.len())
             .filter(|&i| {
                 let positions = contigs[i].len().saturating_sub(K - 1);
@@ -30,11 +30,10 @@ pub(in super::super) fn additional(
                     return false;
                 }
                 let strong = counts[i] >= minimum && counts[i] * 5 >= stats.pairs[i] * 4;
-                let private = private::positions(contigs, &retained, i);
-                strong || (private * 10 >= positions && private * 2 <= positions)
+                private::qualifies(evidence[i], positions, strong)
             })
             .max_by_key(|&i| {
-                let private = private::positions(contigs, &retained, i);
+                let (private, _, _) = evidence[i];
                 (counts[i], private, stats.coverage[i], std::cmp::Reverse(i))
             });
         let Some(next) = next else { break };

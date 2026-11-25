@@ -1,39 +1,57 @@
-use super::K;
-use std::collections::HashSet;
+use super::{
+    retained::{self, Keys},
+    K,
+};
 
-// Positions whose oriented 31-mer is absent from every retained component.
-// Only original reads and already chosen candidates are consulted; a shared
-// fragment cannot masquerade as distinct evidence.
-pub(super) fn positions(contigs: &[Vec<u8>], selected: &[usize], candidate: usize) -> usize {
-    let mut retained = HashSet::<[u8; K]>::new();
-    for &index in selected {
-        for window in contigs[index].windows(K) {
-            if let Ok(key) = <[u8; K]>::try_from(window) {
-                retained.insert(key);
-                retained.insert(reverse(window));
-            }
-        }
-    }
-    contigs[candidate]
-        .windows(K)
-        .filter(|window| {
-            let Ok(key) = <[u8; K]>::try_from(*window) else {
-                return false;
-            };
-            !retained.contains(&key) && !retained.contains(&reverse(window))
+const MIN_DEPTH: u32 = 3;
+const MIN_RUN: usize = 8;
+
+// Private windows the original read pairs actually cover, and their longest
+// contiguous run. Whole-contig breadth cannot prove a private tail is derived
+// from reads, so per-window read-pair depth gates both the count and the run.
+pub(super) fn scores(
+    contigs: &[Vec<u8>],
+    depth: &[Vec<u32>],
+    retained: &Keys,
+) -> Vec<(usize, usize, usize)> {
+    (0..contigs.len())
+        .map(|i| {
+            let reading = depth.get(i).map(Vec::as_slice).unwrap_or_default();
+            evidence(&contigs[i], reading, retained)
         })
-        .count()
+        .collect()
 }
 
-fn reverse(window: &[u8]) -> [u8; K] {
-    let mut key = [0u8; K];
-    for (target, base) in key.iter_mut().zip(window.iter().rev()) {
-        *target = match base {
-            b'A' => b'T',
-            b'C' => b'G',
-            b'G' => b'C',
-            _ => b'A',
+pub(super) fn qualifies(evidence: (usize, usize, usize), positions: usize, strong: bool) -> bool {
+    let (_, supported, run) = evidence;
+    strong || (supported * 10 >= positions && supported * 2 <= positions && run > 0)
+}
+
+fn evidence(contig: &[u8], depth: &[u32], retained: &Keys) -> (usize, usize, usize) {
+    let (mut private, mut supported, mut run, mut longest) = (0, 0, 0, 0);
+    for (i, window) in contig.windows(K).enumerate() {
+        let Ok(key) = <[u8; K]>::try_from(window) else {
+            longest = close(run, longest);
+            run = 0;
+            continue;
         };
+        if retained.contains(&key) || retained.contains(&retained::reverse(window)) {
+            longest = close(run, longest);
+            run = 0;
+            continue;
+        }
+        private += 1;
+        if depth.get(i).copied().unwrap_or(0) < MIN_DEPTH {
+            longest = close(run, longest);
+            run = 0;
+            continue;
+        }
+        supported += 1;
+        run += 1;
     }
-    key
+    (private, supported, close(run, longest))
+}
+
+fn close(run: usize, longest: usize) -> usize {
+    longest.max(if run >= MIN_RUN { run } else { 0 })
 }

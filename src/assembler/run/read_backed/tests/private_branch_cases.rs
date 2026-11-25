@@ -1,50 +1,37 @@
-use super::{ranking, scoring::Statistics};
+use super::{branch, primary, private_depth, private_stats, ranking, scoring::Statistics};
 
-fn stats(masks: Vec<u16>, coverage: Vec<usize>) -> Statistics {
-    let pairs = (0..coverage.len())
-        .map(|i| masks.iter().filter(|&&m| m & (1 << i) != 0).count())
-        .collect();
-    Statistics {
-        depth: vec![],
-        pairs,
-        coverage,
-        pair_masks: masks,
-    }
-}
-
-fn primary() -> Vec<u8> {
-    vec![b'A'; 4000]
-}
-
-fn branch(private_bases: usize) -> Vec<u8> {
-    let mut seq = vec![b'A'; 4000 - private_bases];
-    seq.extend(vec![b'G'; private_bases]);
-    seq
+fn case(bases: usize, coverage: usize) -> (Vec<Vec<u8>>, Statistics) {
+    let branch = branch(bases);
+    let depth = vec![
+        private_depth(&primary(), true),
+        private_depth(&branch, true),
+    ];
+    (
+        vec![primary(), branch],
+        private_stats(vec![3970, coverage], depth),
+    )
 }
 
 #[test]
 fn bounded_private_branch_with_shared_pairs_is_retained() {
-    let evidence = stats([vec![3; 700], vec![2; 300]].concat(), vec![3970, 3970]);
-    assert_eq!(
-        ranking::additional(&[primary(), branch(1000)], &evidence, 0),
-        vec![1]
-    );
+    let (contigs, evidence) = case(1000, 3970);
+    assert_eq!(ranking::additional(&contigs, &evidence, 0), vec![1]);
 }
 
 #[test]
 fn wholly_distinct_branch_is_left_to_the_strict_rule() {
-    let evidence = stats([vec![3; 700], vec![2; 300]].concat(), vec![3970, 3970]);
-    assert!(ranking::additional(&[primary(), branch(4000)], &evidence, 0).is_empty());
+    let (contigs, evidence) = case(4000, 3970);
+    assert!(ranking::additional(&contigs, &evidence, 0).is_empty());
 }
 
 #[test]
 fn tiny_private_branch_is_not_retained() {
-    let evidence = stats([vec![3; 700], vec![2; 300]].concat(), vec![3970, 3970]);
-    assert!(ranking::additional(&[primary(), branch(100)], &evidence, 0).is_empty());
+    let (contigs, evidence) = case(100, 3970);
+    assert!(ranking::additional(&contigs, &evidence, 0).is_empty());
 }
 
 #[test]
 fn sparse_private_branch_is_not_retained() {
-    let evidence = stats([vec![3; 700], vec![2; 300]].concat(), vec![3970, 1000]);
-    assert!(ranking::additional(&[primary(), branch(1000)], &evidence, 0).is_empty());
+    let (contigs, evidence) = case(1000, 1000);
+    assert!(ranking::additional(&contigs, &evidence, 0).is_empty());
 }

@@ -4,9 +4,13 @@ use super::{canonical_kmer, rolling_canonical_kmers, supported_snv_alternative, 
 // 310-base one. Treat a single-substitution neighbour as redundant at any
 // length so short contigs do not leak near-duplicates into the stitcher.
 pub(super) fn single_substitution_apart(seq: &[u8], retained: &[Vec<u8>]) -> bool {
-    retained.iter().any(|prior| {
-        prior.len() == seq.len() && prior.iter().zip(seq).filter(|(a, b)| a != b).count() == 1
-    })
+    // Below the SNV audit's 128 nt minimum a rejected neighbour has no
+    // separate unphased evidence channel, so keep it rather than lose a
+    // possibly abundant true haplotype entirely.
+    seq.len() >= 128
+        && retained.iter().any(|prior| {
+            prior.len() == seq.len() && prior.iter().zip(seq).filter(|(a, b)| a != b).count() == 1
+        })
 }
 pub(super) fn overlap(
     seq: &[u8],

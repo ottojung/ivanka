@@ -377,6 +377,11 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(sched.resume(plan, self.px), plan["pending"])
         arm = plan["pending"][0]
         sched.write_checkpoint(self.px, plan, [sched.receipt_id(arm)])
+        # A checkpoint hint never authorizes skipping without a terminal receipt.
+        self.assertEqual(sched.resume(plan, self.px), plan["pending"])
+        output = self.root / "conseq.csv"
+        output.write_bytes(b"x")
+        sched.record_outcome(self.px, arm, output, "success", seconds=1)
         self.assertEqual(sched.resume(plan, self.px), plan["pending"][1:])
         raw = json.loads(sched.checkpoint_path(self.px).read_text())
         raw["completed"].append("not-an-arm")

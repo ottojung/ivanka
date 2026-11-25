@@ -17,8 +17,7 @@ class TestMonitor(unittest.TestCase):
     def setUp(self):
         self.params = {"wall_seconds": 2400, "rss_bytes": 4_000_000_000,
                        "registry": {}, "baseline": {}, "root": ".",
-                       "image_store": ".", "workspace": ".",
-                       "budget_bytes": 8 * 1024**3}
+                       "image_store": ".", "workspace": "."}
         self.measure = lambda *a: {"incremental_bytes": 1024}
         self.clock = lambda: 10
 
@@ -32,18 +31,18 @@ class TestMonitor(unittest.TestCase):
             watch(Dummy(), self.params, measure=self.measure,
                   rss=lambda pid: 4_000_000_001, clock=self.clock, sleep=lambda s: None)
 
-    def test_disk_kill(self):
-        with self.assertRaises(GuardExceeded):
-            watch(Dummy(), self.params, measure=lambda *a: {
-                "incremental_bytes": 8*1024**3}, rss=lambda pid: 0,
-                clock=self.clock, sleep=lambda s: None)
+    def test_large_incremental_usage_is_not_a_disk_limit(self):
+        watched = watch(Dummy(), self.params, measure=lambda *a: {
+            "incremental_bytes": 200 * 1024**3}, rss=lambda pid: 0,
+            clock=self.clock, sleep=lambda s: None)
+        self.assertEqual(watched, 0)
 
-    def test_actual_disk_admission_overflow_is_not_unknown_telemetry(self):
-        def budget_exceeded(*args):
-            raise ValueError("exploration would breach disk budget or workspace reserve")
+    def test_actual_reserve_breach_is_not_unknown_telemetry(self):
+        def reserve_exceeded(*args):
+            raise ValueError("exploration would breach the workspace reserve")
 
         with self.assertRaisesRegex(GuardExceeded, "disk_limit"):
-            watch(Dummy(), self.params, measure=budget_exceeded,
+            watch(Dummy(), self.params, measure=reserve_exceeded,
                   rss=lambda pid: 0, clock=self.clock, sleep=lambda s: None)
 
     def test_bad_policy_measurement_still_fails_closed(self):

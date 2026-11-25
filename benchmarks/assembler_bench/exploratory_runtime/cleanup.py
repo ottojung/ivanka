@@ -1,7 +1,8 @@
-"""Recover only orphaned Buildah working containers in the isolated PX store.
+"""Recover orphaned Buildah working containers after any stopped PX build.
 
-After the monitored build group has stopped, old --external/Storage overlays
-can outlive podman build and exceed the exploratory disk limit.
+Both successful and failed builds can leave --external/Storage overlays behind;
+they are invisible to ordinary podman ps/prune and block later trustworthy
+image builds. Callers invoke this only after the monitored build group stopped.
 Never touch containers in another store or a running container.
 """
 import re

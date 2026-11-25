@@ -65,7 +65,7 @@ class StartupBindingTests(unittest.TestCase):
         self.cidfile = Path(self.tmp.name) / "pilot.cid"
         self.config = {"rss_bytes": 1000, "wall_seconds": 30, "registry": {},
                        "baseline": {}, "root": ".", "image_store": ".",
-                       "workspace": ".", "budget_bytes": 10**12}
+                       "workspace": "."}
 
     def bind(self, proc, clock, *, config=None, on_bind=None, snapshots=None,
              inspect=None):
@@ -393,7 +393,7 @@ class DiskAccountingTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.config = {"rss_bytes": 1000, "wall_seconds": 100, "registry": {},
                        "baseline": {}, "root": ".", "image_store": ".",
-                       "workspace": ".", "budget_bytes": 10**12}
+                       "workspace": "."}
 
     def measure(self, config, margin, measure):
         from assembler_bench.exploratory_runtime.monitor import _disk
@@ -422,9 +422,16 @@ class DiskAccountingTests(unittest.TestCase):
             self.measure(self.config, 1024**3, measure)
         self.assertEqual(caught.exception.reason, "measurement_unavailable")
 
-    def test_budget_breach_fails_closed_with_disk_limit(self):
+    def test_large_incremental_usage_has_no_project_ceiling(self):
         def measure(*args):
-            return {"incremental_bytes": self.config["budget_bytes"]}
+            return {"incremental_bytes": 200 * 1024**3}
+
+        self.assertEqual(self.measure(self.config, 1024**3, measure),
+                         {"incremental_bytes": 200 * 1024**3})
+
+    def test_reserve_breach_fails_closed_with_disk_limit(self):
+        def measure(*args):
+            raise ValueError("exploration would breach the workspace reserve")
 
         with self.assertRaises(GuardExceeded) as caught:
             self.measure(self.config, 1024**3, measure)

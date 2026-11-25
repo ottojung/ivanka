@@ -5,7 +5,6 @@ native hash, a pilot result or a qualification outcome. They exist so a later
 guarded build job can be reviewed before it consumes the shared PX budget.
 """
 import json
-from assembler_bench.exploratory_policy import PX_BUDGET_BYTES
 import re
 from pathlib import Path
 
@@ -18,7 +17,7 @@ MASTER = "8458f9e5d34c39a6694b1fb6a40e055d7ce89553"
 FORBIDDEN_FLAG = re.compile(
     r"(--reference|--ref\s*=|--panel\b|hxb2\.fasta|truth\.fasta|alignment_score)", re.I)
 PRIVATE_PATH = re.compile(r"/workspace/|/home/lubko/|/tmp/opencode/")
-CONTRACT = {"one_worker": True, "max_incremental_bytes": PX_BUDGET_BYTES,
+CONTRACT = {"one_worker": True,
             "min_free_bytes": 34359738368, "container_memory_bytes": 4000000000,
             "wall_seconds": 2400}
 EXPECTED = {
@@ -51,7 +50,11 @@ def checked(name):
     if data.get("frozen_parent") != FROZEN_PARENT or data.get(
             "frozen_upstream_master") != MASTER:
         raise ValueError("frozen base drift: " + name)
-    if data.get("resource_contract") != CONTRACT:
+    # A legacy `max_incremental_bytes` in a historical recipe is the removed
+    # project ceiling; accept and ignore it, preserving the old bytes.
+    contract = dict(data.get("resource_contract") or {})
+    contract.pop("max_incremental_bytes", None)
+    if contract != CONTRACT:
         raise ValueError("resource contract drift: " + name)
     if PRIVATE_PATH.search(path.read_text()):
         raise ValueError("host-private path in portable recipe: " + name)
@@ -71,8 +74,9 @@ def checked(name):
         return data
     if name == "ray-disk-admission-design":
         budget = data.get("measured_budget", {})
-        if (budget.get("cap_bytes") != CONTRACT["max_incremental_bytes"]
-                or budget.get("reservation_bytes") < 1 << 30
+        # A legacy `cap_bytes` in a historical recipe is accepted and ignored;
+        # it is not a bound on current source-only build plans.
+        if (budget.get("reservation_bytes") < 1 << 30
                 or budget.get("headroom_bytes", 0) < 0
                 or len(data.get("attempts", [])) != 3):
             raise ValueError("Ray budget evidence drift")

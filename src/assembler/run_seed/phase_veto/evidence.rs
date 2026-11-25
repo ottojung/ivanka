@@ -1,5 +1,13 @@
 use std::collections::HashMap;
-const A:usize=25; const Q15:u8=48; type K128=u128; const INV:u64=u64::MAX;
+use std::hash::{Hasher,BuildHasherDefault};
+pub(super) const A:usize=25; const Q15:u8=48; pub(super) type K128=u128; pub(super) const INV:u64=u64::MAX;
+#[derive(Default)] pub(super) struct FastHasher(u64);
+impl Hasher for FastHasher{
+    fn write(&mut self,b:&[u8]){for &x in b{self.0=self.0.rotate_left(5)^(x as u64);}}
+    fn write_u128(&mut self,i:u128){self.0=(i as u64).wrapping_mul(0x9E3779B97F4A7C15)^((i>>64) as u64).wrapping_mul(0xC2B2AE3D27D4EB4F);}
+    fn finish(&self)->u64{let mut x=self.0;x^=x>>30;x=x.wrapping_mul(0xBF58476D1CE4E5B9);x^=x>>27;x}
+}
+pub(super) type FlankIndex=HashMap<K128,Option<usize>,BuildHasherDefault<FastHasher>>;
 pub(super) struct Prep{pub km:Vec<u64>,pub lq:Vec<usize>}
 fn kcodes(seq:&[u8],a:usize)->Vec<u64>{
     let mut out=vec![INV;seq.len().saturating_sub(a.saturating_sub(1))];
@@ -8,38 +16,23 @@ fn kcodes(seq:&[u8],a:usize)->Vec<u64>{
         f=((f<<2)&mask)|d; v+=1; if v>=a { out[i+1-a]=f; } } out
 }
 fn lowq(q:&[u8])->Vec<usize>{ let mut o=vec![0;q.len()+1]; for (i,&x) in q.iter().enumerate(){o[i+1]=o[i]+usize::from(x<Q15);} o }
-fn validw(p:&[usize],s:usize,e:usize)->bool{ e<p.len() && s<=e && p[s]==p[e] }
+pub(super) fn validw(p:&[usize],s:usize,e:usize)->bool{ e<p.len() && s<=e && p[s]==p[e] }
 fn encode_a(seq:&[u8])->Option<u64>{ let mut n=0u64; for &b in seq { n=(n<<2)|match b{b'A'=>0,b'C'=>1,b'G'=>2,b'T'=>3,_=>return None}; } Some(n) }
 pub(super) fn make_preps(reads:&[Vec<u8>],quals:&[Vec<u8>])->Vec<Prep>{
     reads.iter().zip(quals).map(|(r,q)|{ let fallback=vec![b'I';r.len()]; Prep{km:kcodes(r,A),lq:lowq(if q.len()==r.len(){q}else{&fallback})} }).collect() }
-fn uniq_flanks(seq:&[u8])->HashMap<K128,Option<usize>>{
-    let mut out=HashMap::new();
+// Distinct original R1/R2 sequence signatures are identified once, not per
+// candidate. Group indices identify physical read-pair observations; equal
+// sequences share an id so they cannot inflate the distinct-signature count.
+pub(super) fn signature_ids(reads:&[Vec<u8>])->Vec<u32>{
+    let mut map:HashMap<(&[u8],&[u8]),u32>=HashMap::new();
+    reads.chunks_exact(4).map(|g|{
+        let next=map.len() as u32+1; *map.entry((g[0].as_slice(),g[2].as_slice())).or_insert(next)
+    }).collect()
+}
+pub(super) fn uniq_flanks(seq:&[u8])->FlankIndex{
+    let mut out=FlankIndex::default();
     for (i,w) in seq.windows(2*A+1).enumerate(){ if w[A]==b'N'{continue;}
         let (Some(l),Some(r))=(encode_a(&w[..A]),encode_a(&w[A+1..])) else {continue;};
         let key=((l as K128)<<(2*A))|(r as K128);
         out.entry(key).and_modify(|v|if *v!=Some(i+A){*v=None;}).or_insert(Some(i+A)); } out
-}
-struct Pl{st:isize,en:isize,cl:HashMap<usize,u8>}
-fn locate(read:&[u8],prep:&Prep,index:&HashMap<K128,Option<usize>>)->Option<Pl>{
-    if read.len()<2*A+1||read.len()!=prep.lq.len().saturating_sub(1){return None;}
-    let mut st=None; let mut cl=HashMap::new();
-    for i in 0..=read.len().saturating_sub(2*A+1){ if !validw(&prep.lq,i,i+2*A+1)||i+A+1>=prep.km.len(){continue;}
-        let (l,r)=(prep.km[i],prep.km[i+A+1]); if l==INV||r==INV{continue;}
-        let key=((l as K128)<<(2*A))|(r as K128); let Some(Some(pos))=index.get(&key) else {continue;};
-        let place=*pos as isize-(i+A) as isize; if place<0||st.is_some_and(|s|s!=place){return None;}
-        st=Some(place); let b=read[i+A]; cl.entry(*pos).and_modify(|x|if *x!=b{*x=b'N';}).or_insert(b); }
-    cl.retain(|_,b|*b!=b'N'); if cl.len()<2{return None;} let st=st?; Some(Pl{st,en:st+read.len() as isize,cl})
-}
-fn pair_calls(pr:[&Vec<u8>;4],pp:[&Prep;4],index:&HashMap<K128,Option<usize>>)->HashMap<usize,u8>{
-    let o=[locate(pr[0],pp[0],index),locate(pr[1],pp[1],index),locate(pr[2],pp[2],index),locate(pr[3],pp[3],index)];
-    let (a,b)=match &o{ [Some(r1),None,None,Some(r2)] if r1.st<=r2.st=>(r1,r2), [None,Some(r1),Some(r2),None] if r2.st<=r1.st=>(r1,r2), _=>return HashMap::new()};
-    let longest=pr.iter().map(|r|r.len()).max().unwrap_or(0);
-    if (a.en.max(b.en)-a.st.min(b.st)) as usize>longest.saturating_mul(2).saturating_add(200).min(750){return HashMap::new();}
-    let mut cl=a.cl.clone(); for (&p,&base) in &b.cl{ cl.entry(p).and_modify(|e|if *e!=base{*e=b'N';}).or_insert(base);} cl.retain(|_,b|*b!=b'N'); cl
-}
-pub(super) fn observations(seq:&[u8],reads:&[Vec<u8>],preps:&[Prep])->Vec<HashMap<usize,u8>>{
-    let index=uniq_flanks(seq);
-    reads.chunks_exact(4).zip(preps.chunks_exact(4)).map(|(pr,pp)|{
-        pair_calls([&pr[0],&pr[1],&pr[2],&pr[3]],[&pp[0],&pp[1],&pp[2],&pp[3]],&index)
-    }).collect()
 }

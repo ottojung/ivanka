@@ -1,0 +1,267 @@
+{
+  "adapters": {
+    "savage-denovo": {
+      "adapter_branch": "bench/frozen-8458f9e5-savage-20261123",
+      "adapter_commit": "0919ffa97f609b6f0b650ce834f0fc79822f18e5",
+      "adapter_files": {
+        "benchmark_assembler.py": {
+          "bytes": 1243,
+          "sha256": "687bdbbe155ffe1243957394fdb889a51223fde80595b682747ffa99a399b919",
+          "staged_copy_match": true
+        },
+        "denovo.py": {
+          "bytes": 2487,
+          "sha256": "7a5be8d7d26f5232b0cebf4a054e5d769afd29a2e7375e9eeb0f5786568ceedb",
+          "staged_copy_match": true
+        }
+      },
+      "changed_paths": [
+        "Containerfile.assembler-bench",
+        "assembler-bench/README.md",
+        "micall/core/benchmark_assembler.py",
+        "micall/core/denovo.py",
+        "micall/tests/test_benchmark_assembler.py",
+        "micall/tests/test_denovo.py"
+      ],
+      "minimal_source_only_build": {
+        "compiled": {
+          "benchmark_assembler.py": {
+            "py_compile": "OK",
+            "pyc_bytes": 2309
+          },
+          "denovo.py": {
+            "py_compile": "OK",
+            "pyc_bytes": 4325
+          }
+        },
+        "contract": {
+          "benchmark_assembler.py": {
+            "assemble_signature_fixed": true,
+            "forbidden_flags_absent_from_cli_constants": true,
+            "required_cli_constants": true,
+            "seeds_unused_by_subprocess": true
+          },
+          "denovo.py": {
+            "assemble_called_with_paired_reads_only": true,
+            "deterministic_cache_scope": true,
+            "forbidden_flags_absent_from_cli_constants": true
+          }
+        }
+      },
+      "native_asset": {
+        "path": "/workspace/ivanka-exploratory-ten-20261121/native/savage-pinned/ViralQuasispecies",
+        "sha256_expected": "199d97b7330df213f0adf99aaebb8f74d59806dfe90379f15dea28f0aa0c6590",
+        "verified": true
+      }
+    },
+    "unicycler": {
+      "adapter_branch": "bench/minimal-8458f9e5-unicycler-20261123",
+      "adapter_commit": "5ad7874fe193043fa378063efc123018bff546da",
+      "adapter_files": {
+        "benchmark_assembler.py": {
+          "bytes": 1389,
+          "sha256": "3848b4442b5015057fce79c5cfc8ecc761d1713fb7c59834929e6a147883bdc0",
+          "staged_copy_match": true
+        },
+        "denovo.py": {
+          "bytes": 2493,
+          "sha256": "7294ebb59cd0504d47e179afdf04e4c8bb7c272dbbbdcabdd8ac8b07191b7c39",
+          "staged_copy_match": true
+        }
+      },
+      "changed_paths": [
+        ".dockerignore",
+        "Containerfile.assembler-bench",
+        "assembler-bench/README.md",
+        "micall/core/benchmark_assembler.py",
+        "micall/core/denovo.py",
+        "micall/tests/test_benchmark_assembler.py",
+        "micall/tests/test_denovo.py"
+      ],
+      "minimal_source_only_build": {
+        "compiled": {
+          "benchmark_assembler.py": {
+            "py_compile": "OK",
+            "pyc_bytes": 2124
+          },
+          "denovo.py": {
+            "py_compile": "OK",
+            "pyc_bytes": 4331
+          }
+        },
+        "contract": {
+          "benchmark_assembler.py": {
+            "assemble_signature_fixed": true,
+            "forbidden_flags_absent_from_cli_constants": true,
+            "required_cli_constants": true,
+            "seeds_unused_by_subprocess": true
+          },
+          "denovo.py": {
+            "assemble_called_with_paired_reads_only": true,
+            "deterministic_cache_scope": true,
+            "forbidden_flags_absent_from_cli_constants": true
+          }
+        }
+      },
+      "native_asset": {
+        "path": "/workspace/ivanka-exploratory-ten-20261121/native/unicycler-pinned/cpp_functions.so",
+        "sha256_expected": "293f840641afaf17ef8b73858ecc7418553c453958bfece305f658223f2dc668",
+        "verified": true
+      }
+    }
+  },
+  "checks": [
+    {
+      "check": "unicycler:adapter-parent",
+      "detail": "parent of 5ad7874fe193043fa378063efc123018bff546da == frozen 8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+      "status": "PASS"
+    },
+    {
+      "check": "unicycler:adapter-only-diff",
+      "detail": "changed=['.dockerignore', 'Containerfile.assembler-bench', 'assembler-bench/README.md', 'micall/core/benchmark_assembler.py', 'micall/core/denovo.py', 'micall/tests/test_benchmark_assembler.py', 'micall/tests/test_denovo.py']; unexpected=[]",
+      "status": "PASS"
+    },
+    {
+      "check": "unicycler:adapter-file:benchmark_assembler.py",
+      "detail": "git-object sha256=3848b4442b5015057fce79c5cfc8ecc761d1713fb7c59834929e6a147883bdc0; expected=3848b4442b5015057fce79c5cfc8ecc761d1713fb7c59834929e6a147883bdc0; staged copy byte-identical=True",
+      "status": "PASS"
+    },
+    {
+      "check": "unicycler:adapter-file:denovo.py",
+      "detail": "git-object sha256=7294ebb59cd0504d47e179afdf04e4c8bb7c272dbbbdcabdd8ac8b07191b7c39; expected=7294ebb59cd0504d47e179afdf04e4c8bb7c272dbbbdcabdd8ac8b07191b7c39; staged copy byte-identical=True",
+      "status": "PASS"
+    },
+    {
+      "check": "unicycler:adapter-contract:benchmark_assembler.py",
+      "detail": "{\"assemble_signature_fixed\": true, \"forbidden_flags_absent_from_cli_constants\": true, \"required_cli_constants\": true, \"seeds_unused_by_subprocess\": true}",
+      "status": "PASS"
+    },
+    {
+      "check": "unicycler:adapter-contract:denovo.py",
+      "detail": "{\"assemble_called_with_paired_reads_only\": true, \"deterministic_cache_scope\": true, \"forbidden_flags_absent_from_cli_constants\": true}",
+      "status": "PASS"
+    },
+    {
+      "check": "unicycler:native-asset",
+      "detail": "/workspace/ivanka-exploratory-ten-20261121/native/unicycler-pinned/cpp_functions.so: sha256=293f840641afaf17ef8b73858ecc7418553c453958bfece305f658223f2dc668; expected=293f840641afaf17ef8b73858ecc7418553c453958bfece305f658223f2dc668",
+      "status": "PASS"
+    },
+    {
+      "check": "savage-denovo:adapter-parent",
+      "detail": "parent of 0919ffa97f609b6f0b650ce834f0fc79822f18e5 == frozen 8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+      "status": "PASS"
+    },
+    {
+      "check": "savage-denovo:adapter-only-diff",
+      "detail": "changed=['Containerfile.assembler-bench', 'assembler-bench/README.md', 'micall/core/benchmark_assembler.py', 'micall/core/denovo.py', 'micall/tests/test_benchmark_assembler.py', 'micall/tests/test_denovo.py']; unexpected=[]",
+      "status": "PASS"
+    },
+    {
+      "check": "savage-denovo:adapter-file:benchmark_assembler.py",
+      "detail": "git-object sha256=687bdbbe155ffe1243957394fdb889a51223fde80595b682747ffa99a399b919; expected=687bdbbe155ffe1243957394fdb889a51223fde80595b682747ffa99a399b919; staged copy byte-identical=True",
+      "status": "PASS"
+    },
+    {
+      "check": "savage-denovo:adapter-file:denovo.py",
+      "detail": "git-object sha256=7a5be8d7d26f5232b0cebf4a054e5d769afd29a2e7375e9eeb0f5786568ceedb; expected=7a5be8d7d26f5232b0cebf4a054e5d769afd29a2e7375e9eeb0f5786568ceedb; staged copy byte-identical=True",
+      "status": "PASS"
+    },
+    {
+      "check": "savage-denovo:adapter-contract:benchmark_assembler.py",
+      "detail": "{\"assemble_signature_fixed\": true, \"forbidden_flags_absent_from_cli_constants\": true, \"required_cli_constants\": true, \"seeds_unused_by_subprocess\": true}",
+      "status": "PASS"
+    },
+    {
+      "check": "savage-denovo:adapter-contract:denovo.py",
+      "detail": "{\"assemble_called_with_paired_reads_only\": true, \"deterministic_cache_scope\": true, \"forbidden_flags_absent_from_cli_constants\": true}",
+      "status": "PASS"
+    },
+    {
+      "check": "savage-denovo:native-asset",
+      "detail": "/workspace/ivanka-exploratory-ten-20261121/native/savage-pinned/ViralQuasispecies: sha256=199d97b7330df213f0adf99aaebb8f74d59806dfe90379f15dea28f0aa0c6590; expected=199d97b7330df213f0adf99aaebb8f74d59806dfe90379f15dea28f0aa0c6590",
+      "status": "PASS"
+    },
+    {
+      "check": "archive:spades-v3.15.5.tar.gz",
+      "detail": "sha256=9848b69a3a6bab4621eb82b71cac6ed96b111c4109c754e283596e9fa3184b1b; expected=9848b69a3a6bab4621eb82b71cac6ed96b111c4109c754e283596e9fa3184b1b; bytes=15310638; expected_bytes=15310638",
+      "status": "PASS"
+    },
+    {
+      "check": "archive:Python-2.7.18.tgz",
+      "detail": "sha256=da3080e3b488f648a3d7a4560ddee895284c3380b11d6de75edb986526b9a814; expected=da3080e3b488f648a3d7a4560ddee895284c3380b11d6de75edb986526b9a814; bytes=17539408; expected_bytes=17539408",
+      "status": "PASS"
+    },
+    {
+      "check": "archive:cpython-v2.7.18.tar.gz",
+      "detail": "sha256=aa3822dc1615ccaf88352f1c4f2e5687d708be9a45c4c1c93cec64ee123dbec7; expected=aa3822dc1615ccaf88352f1c4f2e5687d708be9a45c4c1c93cec64ee123dbec7; bytes=17517628; expected_bytes=17517628",
+      "status": "PASS"
+    },
+    {
+      "check": "archive:scipy-1.2.3.tar.gz",
+      "detail": "sha256=ecbe6413ca90b8e19f8475bfa303ac001e81b04ec600d17fa7f816271f7cca57; expected=ecbe6413ca90b8e19f8475bfa303ac001e81b04ec600d17fa7f816271f7cca57; bytes=23335997; expected_bytes=23335997",
+      "status": "PASS"
+    },
+    {
+      "check": "tag:ablab/spades v3.15.5",
+      "detail": "git ls-remote refs/tags/v3.15.5 -> 896694ce5c7a9050a6ffa9fccc950a4cd9f04363; expected 896694ce5c7a9050a6ffa9fccc950a4cd9f04363",
+      "status": "PASS"
+    },
+    {
+      "check": "tag:python/cpython v2.7.18",
+      "detail": "git ls-remote refs/tags/v2.7.18 -> 41ca0e7833977c2475722ccc3dd5c16865d96dc1; expected 41ca0e7833977c2475722ccc3dd5c16865d96dc1",
+      "status": "PASS"
+    }
+  ],
+  "failed_checks": [],
+  "frozen_master": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+  "generated_utc": "2026-11-25T19:32:26Z",
+  "schema": "ivanka.px.dependency-donor-evidence.v1",
+  "scope": "source-only; no OCI build; no live container; no registry/frozen/cfe-lab mutation",
+  "source_archives": {
+    "Python-2.7.18.tgz": {
+      "bytes": 17539408,
+      "role": "python2.7 donor source (canonical python.org release)",
+      "sha256": "da3080e3b488f648a3d7a4560ddee895284c3380b11d6de75edb986526b9a814",
+      "url": "https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz",
+      "verified": true
+    },
+    "cpython-v2.7.18.tar.gz": {
+      "bytes": 17517628,
+      "role": "python2.7 donor source (cpython tag mirror, cross-check)",
+      "sha256": "aa3822dc1615ccaf88352f1c4f2e5687d708be9a45c4c1c93cec64ee123dbec7",
+      "url": "https://github.com/python/cpython/archive/refs/tags/v2.7.18.tar.gz",
+      "verified": true
+    },
+    "scipy-1.2.3.tar.gz": {
+      "bytes": 23335997,
+      "role": "last Python-2.7-compatible scipy release (SAVAGE runtime dependency)",
+      "sha256": "ecbe6413ca90b8e19f8475bfa303ac001e81b04ec600d17fa7f816271f7cca57",
+      "url": "https://files.pythonhosted.org/packages/62/4f/7e95c5000c411164d5ca6f55ac54cda5d200a3b6719dafd215ee0bd61578/scipy-1.2.3.tar.gz",
+      "verified": true
+    },
+    "spades-v3.15.5.tar.gz": {
+      "bytes": 15310638,
+      "role": "spades-core donor source (ablab/spades v3.15.5)",
+      "sha256": "9848b69a3a6bab4621eb82b71cac6ed96b111c4109c754e283596e9fa3184b1b",
+      "url": "https://github.com/ablab/spades/archive/refs/tags/v3.15.5.tar.gz",
+      "verified": true
+    }
+  },
+  "status": "PASS",
+  "upstream_tags": {
+    "ablab/spades v3.15.5": {
+      "commit": "896694ce5c7a9050a6ffa9fccc950a4cd9f04363",
+      "expected": "896694ce5c7a9050a6ffa9fccc950a4cd9f04363",
+      "ref": "refs/tags/v3.15.5",
+      "repo": "https://github.com/ablab/spades.git",
+      "verified": true
+    },
+    "python/cpython v2.7.18": {
+      "commit": "41ca0e7833977c2475722ccc3dd5c16865d96dc1",
+      "expected": "41ca0e7833977c2475722ccc3dd5c16865d96dc1",
+      "ref": "refs/tags/v2.7.18",
+      "repo": "https://github.com/python/cpython.git",
+      "verified": true
+    }
+  }
+}

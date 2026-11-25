@@ -1,0 +1,184 @@
+{
+  "schema": "ivanka.px.dependency-donor-evidence.v1",
+  "created_utc": "2026-11-25T19:35:00Z",
+  "owner": "agent-hy4-flash-free-source-only",
+  "scope": "Source-only packaging and tests for the two remaining PX assemblers. No OCI build, no live container, no registry activation, no frozen MiCall edit, no cfe-lab push.",
+  "status": "source-evidence-complete-binary-attestations-blocked",
+  "frozen_baseline": {
+    "micall_frozen_master": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+    "adapter_parent": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+    "frozen_parent_image_sha256": "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad",
+    "frozen_parent_tag": "localhost/micall:minimal-8458f9e5-ivanka-20261117",
+    "frozen_seven_manifest_sha256": "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f",
+    "guard_audit_adapter_baseline": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
+    "note": "Handoff adapters are direct children of the frozen master; the separate guard-audit adapter family is based on eeca0381 and is not used by this evidence."
+  },
+  "donor_dependencies": {
+    "spades-core": {
+      "consumer": "unicycler (short-read mode is an external SPAdes optimiser)",
+      "source_repo": "https://github.com/ablab/spades",
+      "tag": "v3.15.5",
+      "source_commit": "896694ce5c7a9050a6ffa9fccc950a4cd9f04363",
+      "tag_verification": "git ls-remote https://github.com/ablab/spades.git refs/tags/v3.15.5 -> 896694ce5c7a9050a6ffa9fccc950a4cd9f04363 (2026-11-25T19:31Z)",
+      "version_attestation": "assembler/VERSION == 3.15.5 inside the byte-pinned archive",
+      "source_archive": {
+        "url": "https://github.com/ablab/spades/archive/refs/tags/v3.15.5.tar.gz",
+        "sha256": "9848b69a3a6bab4621eb82b71cac6ed96b111c4109c754e283596e9fa3184b1b",
+        "bytes": 15310638
+      },
+      "license": {
+        "spdx": "GPL-2.0-only",
+        "file": "assembler/LICENSE",
+        "redistributable": true,
+        "obligations": "Distribute corresponding source and GPL-2 notices with any image; bundled ext/ libraries carry their own licenses (samtools MIT, hmmer GPL, bwa GPL, googletest BSD, mimalloc MIT, nlopt LGPL). Do not relabel SPAdes as GPL-3.0."
+      },
+      "donor_build_path": "git clone https://github.com/ablab/spades /opt/spades-src && cd /opt/spades-src && git checkout 896694ce5c7a9050a6ffa9fccc950a4cd9f04363 && cd assembler && PREFIX=/opt/spades ./spades_compile.sh -j2",
+      "expected_outputs": [
+        "/opt/spades/bin/spades.py",
+        "/opt/spades/bin/spades-core"
+      ],
+      "binary_sha256": null,
+      "attestation_status": "SOURCE_ATTESTED_BINARY_UNATTESTED",
+      "blocker": "No guarded donor job may run until the crash-safe guard is deployed and the worker slot is free; spades-core SHA-256 must come from that job, never inferred."
+    },
+    "python2.7": {
+      "consumer": "savage-denovo (HaploConduct haploconduct.py / savage.py are Python 2 scripts)",
+      "source_repo": "https://github.com/python/cpython",
+      "tag": "v2.7.18",
+      "source_commit": "41ca0e7833977c2475722ccc3dd5c16865d96dc1",
+      "tag_verification": "git ls-remote https://github.com/python/cpython.git refs/tags/v2.7.18 -> 41ca0e7833977c2475722ccc3dd5c16865d96dc1 (2026-11-25T19:31Z)",
+      "version_attestation": "Include/patchlevel.h PY_VERSION == 2.7.18 in both byte-pinned archives",
+      "source_archives": [
+        {
+          "url": "https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz",
+          "sha256": "da3080e3b488f648a3d7a4560ddee895284c3380b11d6de75edb986526b9a814",
+          "bytes": 17539408,
+          "role": "canonical python.org release (preferred donor)"
+        },
+        {
+          "url": "https://github.com/python/cpython/archive/refs/tags/v2.7.18.tar.gz",
+          "sha256": "aa3822dc1615ccaf88352f1c4f2e5687d708be9a45c4c1c93cec64ee123dbec7",
+          "bytes": 17517628,
+          "role": "GitHub tag mirror cross-check"
+        }
+      ],
+      "license": {
+        "spdx": "PSF-2.0",
+        "file": "LICENSE (Python Software Foundation License Version 2)",
+        "redistributable": true,
+        "obligations": "GPL-compatible; retain the PSF license agreement and copyright notice in any distributed image."
+      },
+      "scipy_dependency": {
+        "version": "1.2.3",
+        "why": "last scipy release whose PyPI requires_python includes 2.7; scipy 1.3.0 requires >=3.5",
+        "sdist_url": "https://files.pythonhosted.org/packages/62/4f/7e95c5000c411164d5ca6f55ac54cda5d200a3b6719dafd215ee0bd61578/scipy-1.2.3.tar.gz",
+        "sdist_sha256": "ecbe6413ca90b8e19f8475bfa303ac001e81b04ec600d17fa7f816271f7cca57",
+        "sdist_bytes": 23335997,
+        "license": "BSD",
+        "requires_python": ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*"
+      },
+      "donor_build_path": "curl -fsSLO https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz && tar xzf Python-2.7.18.tgz && cd Python-2.7.18 && ./configure --prefix=/opt/python27 && make -j2 && make install && cd .. && tar xzf scipy-1.2.3.tar.gz && cd scipy-1.2.3 && /opt/python27/bin/python setup.py install",
+      "expected_outputs": [
+        "/opt/python27/bin/python2.7",
+        "scipy import under python2.7"
+      ],
+      "binary_sha256": null,
+      "attestation_status": "SOURCE_ATTESTED_BINARY_UNATTESTED",
+      "blocker": "Prior Dockerfile used apt python2.7/python-scipy, which is not source-attested. Source-built donor binary hash and interpreter version output must come from a guarded donor job after guard deployment."
+    }
+  },
+  "adapters": {
+    "unicycler": {
+      "source_commit": "1429301eb24df9162f3c9386e8522f942594ae42",
+      "source_repo": "https://github.com/rrwick/Unicycler",
+      "source_license": "GPL-3.0-or-later",
+      "adapter_branch": "bench/minimal-8458f9e5-unicycler-20261123",
+      "adapter_commit": "5ad7874fe193043fa378063efc123018bff546da",
+      "adapter_parent": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+      "adapter_files": {
+        "benchmark_assembler.py": {
+          "sha256": "3848b4442b5015057fce79c5cfc8ecc761d1713fb7c59834929e6a147883bdc0",
+          "bytes": 1389
+        },
+        "denovo.py": {
+          "sha256": "7294ebb59cd0504d47e179afdf04e4c8bb7c272dbbbdcabdd8ac8b07191b7c39",
+          "bytes": 2493
+        }
+      },
+      "native_asset": "native/unicycler-pinned/cpp_functions.so",
+      "native_asset_sha256": "293f840641afaf17ef8b73858ecc7418553c453958bfece305f658223f2dc668",
+      "source_only_build": "PASS (py_compile + de-novo CLI contract, no container)"
+    },
+    "savage-denovo": {
+      "source_commit": "24e4d9fc35ef6a93e336949a9a8f98ed4ceef362",
+      "source_repo": "https://github.com/HaploConduct/HaploConduct",
+      "source_license": "GPL-3.0",
+      "adapter_branch": "bench/frozen-8458f9e5-savage-20261123",
+      "adapter_commit": "0919ffa97f609b6f0b650ce834f0fc79822f18e5",
+      "adapter_parent": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+      "adapter_files": {
+        "benchmark_assembler.py": {
+          "sha256": "687bdbbe155ffe1243957394fdb889a51223fde80595b682747ffa99a399b919",
+          "bytes": 1243
+        },
+        "denovo.py": {
+          "sha256": "7a5be8d7d26f5232b0cebf4a054e5d769afd29a2e7375e9eeb0f5786568ceedb",
+          "bytes": 2487
+        }
+      },
+      "native_asset": "native/savage-pinned/ViralQuasispecies",
+      "native_asset_sha256": "199d97b7330df213f0adf99aaebb8f74d59806dfe90379f15dea28f0aa0c6590",
+      "source_only_build": "PASS (py_compile + de-novo CLI contract, no container)",
+      "note": "Donor diag.txt attests ViralQuasispecies only; quick-cliques was not attested and must not be claimed."
+    }
+  },
+  "verification": {
+    "script": "benchmarks/assembler_bench/verify_px_dependency_donors.py",
+    "script_sha256": "b63d4588b3867f12952c4a0d1b0169b6fcace1fda415efd9123ae645ec29c354",
+    "command": "python3 benchmarks/assembler_bench/verify_px_dependency_donors.py --online --out docs/bench/px-unicycler-savage-dependency-verification-20261125.json",
+    "result": "PASS 20/20 checks",
+    "result_artifact": "docs/bench/px-unicycler-savage-dependency-verification-20261125.json",
+    "checks_summary": [
+      "both adapter pins are direct children of frozen master 8458f9e5",
+      "both adapter diffs contain only allowlisted adapter paths",
+      "all four adapter-file SHA-256 values match the pinned git objects and the staged copies byte-for-byte",
+      "both native donor assets match their handoff SHA-256 pins",
+      "all four source archives match pinned SHA-256 and byte counts",
+      "both upstream tags resolve to the pinned commits via git ls-remote"
+    ],
+    "offline_reproduction": "Archives cached under /workspace/ivanka-exploratory-ten-20261121/dependency-evidence-cache-20261125; omit --online to verify without network."
+  },
+  "blockers": [
+    {
+      "id": "SPADES_CORE_BINARY_UNATTESTED",
+      "detail": "No source-bound spades.py/spades-core SHA-256 exists. cpp_functions.so (293f8406...) is Unicycler's own C++ module and was mislabeled 'Unicycler/SPAdes core' in benchmarks/assembler_bench/px_frozen_ten_attestation.json; it is not SPAdes core and must not be used as SPAdes attestation."
+    },
+    {
+      "id": "PYTHON27_BINARY_UNATTESTED",
+      "detail": "Frozen parent has no python2.7; apt python2.7/python-scipy in the guard-audit Dockerfile is not source-attested. Need source-built python2.7 + scipy 1.2.3 hashes from a guarded donor job."
+    },
+    {
+      "id": "GUARD_NOT_DEPLOYED",
+      "detail": "Common crash-safe guard (PR473 537fc7f, PR474 c26cf5b) is source-reviewed only; PR478 integration validated source-only. Merge and deployment remain with the PR owner/operator. PR488 (1ba3a968) and PR489 (fa9173d9) merged; migration cutover owned by aLx. No live container until the guard is reviewed/deployed."
+    },
+    {
+      "id": "WORKER_SLOT_HELD",
+      "detail": "Shared .global-worker.lock held by the live PX cohort supervisor; one guarded worker only. Bounded donor/pilot jobs need an aLx-coordinated STOP + lock handoff."
+    },
+    {
+      "id": "ADMISSION_MUST_BE_REMEASURED",
+      "detail": "Handoff measured 38,317,387,776 B free (1 GiB reservation dry-run PASS); an earlier progress file measured 22,510,690,304 B free (fail closed). Re-run df -B1 /workspace and admit() before any guarded job; never bypass the 34,359,738,368 B reserve."
+    },
+    {
+      "id": "IMAGES_AND_PILOTS_ABSENT",
+      "detail": "No Unicycler or SAVAGE OCI image receipts/images; no paired pilots. Registry activation stays with aLx migration cutover."
+    }
+  ],
+  "next_actions": [
+    "After guard deployment and slot grant: one guarded donor job builds spades-core from 896694ce and records its SHA-256 (and spades.py); fail closed on mismatch.",
+    "After guard deployment and slot grant: one guarded donor job builds python2.7 from Python-2.7.18.tgz plus scipy 1.2.3 and records exact version output and SHA-256.",
+    "Correct the mislabeled native_artifact_kind in px_frozen_ten_attestation.json before claiming any Unicycler image attestation.",
+    "Only after both binary hashes exist: build each adapter-only image from the existing frozen parent da795bbb (no duplicate base image, no frozen edit), then run the two paired pilots per tool.",
+    "Do not promote registry, touch frozen MiCall, or push to cfe-lab at any point."
+  ]
+}

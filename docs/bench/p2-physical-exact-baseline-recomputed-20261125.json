@@ -1,0 +1,156 @@
+{
+ "diagnostics": {
+  "average_concordance": {
+   "first_greater": 43,
+   "mean_difference": -0.02534371787438491,
+   "paired_cases": 189,
+   "second_greater": 90,
+   "ties": 56
+  },
+  "average_read_depth": {
+   "first_greater": 22,
+   "mean_difference": -499.16724688631007,
+   "paired_cases": 198,
+   "second_greater": 152,
+   "ties": 24
+  },
+  "nuc_soft_clips_count": {
+   "first_greater": 81,
+   "mean_difference": -3531.158163265306,
+   "paired_cases": 196,
+   "second_greater": 76,
+   "ties": 39
+  },
+  "total_read_depth": {
+   "first_greater": 98,
+   "mean_difference": 240217.2323232323,
+   "paired_cases": 198,
+   "second_greater": 76,
+   "ties": 24
+  },
+  "unique_aligned_fragments": {
+   "first_greater": 71,
+   "mean_difference": -30.0,
+   "paired_cases": 198,
+   "second_greater": 71,
+   "ties": 56
+  }
+ },
+ "exact": {
+  "exact_coverage.breadth_ge_1": {
+   "first_greater": 23,
+   "mean_difference": -0.02168059349349116,
+   "paired_cases": 197,
+   "second_greater": 43,
+   "ties": 131
+  },
+  "exact_coverage.longest_zero_run": {
+   "first_greater": 42,
+   "mean_difference": 24.14213197969543,
+   "paired_cases": 197,
+   "second_greater": 22,
+   "ties": 133
+  },
+  "exact_coverage.mean": {
+   "first_greater": 29,
+   "mean_difference": -178.65763579046398,
+   "paired_cases": 197,
+   "second_greater": 48,
+   "ties": 120
+  },
+  "exact_coverage.zero_fraction": {
+   "first_greater": 43,
+   "mean_difference": 0.02168059349349117,
+   "paired_cases": 197,
+   "second_greater": 23,
+   "ties": 131
+  },
+  "exact_coverage_overlapped.breadth_ge_1": {
+   "first_greater": 30,
+   "mean_difference": -0.013064262657490893,
+   "paired_cases": 197,
+   "second_greater": 47,
+   "ties": 120
+  },
+  "exact_coverage_overlapped.longest_zero_run": {
+   "first_greater": 43,
+   "mean_difference": 24.95431472081218,
+   "paired_cases": 197,
+   "second_greater": 20,
+   "ties": 134
+  },
+  "exact_coverage_overlapped.mean": {
+   "first_greater": 29,
+   "mean_difference": -79.0079584571375,
+   "paired_cases": 197,
+   "second_greater": 48,
+   "ties": 120
+  },
+  "exact_coverage_overlapped.zero_fraction": {
+   "first_greater": 47,
+   "mean_difference": 0.013064262657490892,
+   "paired_cases": 197,
+   "second_greater": 30,
+   "ties": 120
+  }
+ },
+ "excluded_cases": {
+  "exact_coverage.breadth_ge_1": {
+   "iva": [],
+   "ivanka": [
+    176
+   ]
+  },
+  "exact_coverage.longest_zero_run": {
+   "iva": [],
+   "ivanka": [
+    176
+   ]
+  },
+  "exact_coverage.mean": {
+   "iva": [],
+   "ivanka": [
+    176
+   ]
+  },
+  "exact_coverage.zero_fraction": {
+   "iva": [],
+   "ivanka": [
+    176
+   ]
+  },
+  "exact_coverage_overlapped.breadth_ge_1": {
+   "iva": [],
+   "ivanka": [
+    176
+   ]
+  },
+  "exact_coverage_overlapped.longest_zero_run": {
+   "iva": [],
+   "ivanka": [
+    176
+   ]
+  },
+  "exact_coverage_overlapped.mean": {
+   "iva": [],
+   "ivanka": [
+    176
+   ]
+  },
+  "exact_coverage_overlapped.zero_fraction": {
+   "iva": [],
+   "ivanka": [
+    176
+   ]
+  }
+ },
+ "schema": "ivanka.p2.physical-exact-baseline.v1",
+ "sources": {
+  "canonical_sample_count": 198,
+  "runs_sha256": "9781131c1623c1d9bf5b513feed9617fb252c1a634a32139c0ae0b22e39e18df",
+  "sidecar_method": "micall-longest-final-MAX-exact-v2",
+  "sidecar_overlap_size": 70,
+  "witness_order_matches": true,
+  "witness_sha256": "eae5ec56edcd0a6db966b4fffc704c4be65598985a9e1caf0c294697b8c32b89"
+ }
+}

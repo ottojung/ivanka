@@ -25,12 +25,15 @@ pub(crate) fn build(contigs: &[Vec<u8>]) -> Hits {
                 continue;
             }
             let key: Key = window.try_into().expect("fixed-length window");
-            index.entry(key).or_default().push((candidate, position));
+            index
+                .entry(key)
+                .or_default()
+                .push((candidate, position, true));
             let reverse = reverse_complement(&key);
             index
                 .entry(reverse)
                 .or_default()
-                .push((candidate, position));
+                .push((candidate, position, false));
         }
     }
     index.retain(|_, loci| loci.len() <= 8);

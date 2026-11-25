@@ -1,17 +1,15 @@
-use super::{index::Hits, Reads, K};
+use super::{Hits, Reads, K};
 use std::collections::{HashMap, HashSet};
 
-pub(super) struct Statistics {
-    pub(super) depth: Vec<Vec<u32>>,
-    pub(super) pairs: Vec<usize>,
-    pub(super) coverage: Vec<usize>,
-}
-
-/// Count each original read pair once per contig, irrespective of hit count.
-pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statistics {
+/// Original union-of-loci pair rule; strand annotations are deliberately ignored.
+pub(crate) fn legacy(
+    contigs: &[Vec<u8>],
+    reads: &Reads,
+    hits: &Hits,
+) -> (Vec<Vec<u32>>, Vec<usize>) {
     let mut depth = contigs
         .iter()
-        .map(|seq| vec![0; seq.len().saturating_sub(K - 1)])
+        .map(|s| vec![0; s.len().saturating_sub(K - 1)])
         .collect::<Vec<_>>();
     let mut pairs = vec![0usize; contigs.len()];
     for oriented in reads.seqs.chunks_exact(4).take(80_000) {
@@ -22,7 +20,7 @@ pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statisti
             }
             for pos in (0..=read.len() - K).step_by(2) {
                 if let Some(locations) = hits.get(&read[pos..pos + K]) {
-                    for &(candidate, locus) in locations {
+                    for &(candidate, locus, _) in locations {
                         matched.entry(candidate).or_default().insert(locus);
                     }
                 }
@@ -38,13 +36,5 @@ pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statisti
             }
         }
     }
-    let coverage = depth
-        .iter()
-        .map(|d| d.iter().filter(|&&v| v >= 3).count())
-        .collect();
-    Statistics {
-        depth,
-        pairs,
-        coverage,
-    }
+    (depth, pairs)
 }

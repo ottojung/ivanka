@@ -2,6 +2,7 @@ use super::scoring::Statistics;
 use std::cmp::Ordering;
 
 /// Read-covered breadth squared, weighted by supporting original fragments.
+/// Opposite-strand, two-mate links break otherwise exact ties; primary evidence is unchanged.
 fn compare(a: usize, b: usize, contigs: &[Vec<u8>], stats: &Statistics) -> Ordering {
     let (x, y) = (stats.coverage[a] as u128, stats.coverage[b] as u128);
     let (p, q) = (stats.pairs[a] as u128, stats.pairs[b] as u128);
@@ -15,6 +16,7 @@ fn compare(a: usize, b: usize, contigs: &[Vec<u8>], stats: &Statistics) -> Order
         .then_with(|| y.cmp(&x))
         .then_with(|| q.cmp(&p))
         .then_with(|| contigs[b].len().cmp(&contigs[a].len()))
+        .then_with(|| stats.concordant[b].cmp(&stats.concordant[a]))
         .then_with(|| a.cmp(&b))
 }
 

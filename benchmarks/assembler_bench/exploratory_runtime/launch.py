@@ -122,10 +122,15 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                 # A killed arm keeps its genuine peak and teardown record;
                 # failure reason and observed attestation are never replaced
                 # by a generic upward error.
-                if getattr(exc, "peak_rss", None) is not None:
+                guard_result = getattr(exc, "guard_result", None)
+                if guard_result is not None:
+                    state["guard_result"] = guard_result
+                    # A failed arm attests the same real sampler as a finished
+                    # one; carry method/version/scope out of the error path.
+                    state.update(attest(guard_result))
+                    state["peak_rss"] = state["peak_rss_bytes"]
+                elif getattr(exc, "peak_rss", None) is not None:
                     state["peak_rss"] = exc.peak_rss
-                if getattr(exc, "guard_result", None) is not None:
-                    state["guard_result"] = exc.guard_result
                 if getattr(exc, "teardown", None) is not None:
                     state["bound_cid"] = state.get("bound_cid") or exc.teardown.get("cid")
                 if getattr(exc, "teardown_error", None):

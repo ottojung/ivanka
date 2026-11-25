@@ -15,6 +15,7 @@ from . import exploratory_policy, job_temp, px_metrics, px_retention
 from . import px_cohort_scheduler as sched
 from . import px_supervisor as sup
 from .exploratory_runtime import launch
+from .px_ram_semantics import (METHOD_KEY, SCOPE_KEY, VERSION_KEY, attested)
 
 PHYSICAL_ROOT = Path("/workspace/denovo-example-io-1")
 PHYSICAL_MANIFEST = PHYSICAL_ROOT / "manifest.tsv"
@@ -155,6 +156,12 @@ def run_guarded(registry, baseline, arm, case, output_dir, operate,
             and sched.SHA256.fullmatch(cleanup.get("pilot_container_id") or "")):
         report["retention_container_id"] = cleanup["pilot_container_id"]
     report["peak_rss"] = state.get("peak_rss")
+    # Only a complete, bound whole-container attestation may travel into the
+    # immutable receipt. Legacy or partial labels stay unattested and keep the
+    # established publication semantics for older arms.
+    if attested(state):
+        report.update({key: state[key] for key in
+                       (METHOD_KEY, VERSION_KEY, SCOPE_KEY)})
     if outcome != "success":
         report.update(outcome="failure", failure_reason=outcome)
         return report

@@ -394,8 +394,13 @@ def _write_canonical_receipt(root, arm, receipt):
 
 
 def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
-                   failure_reason=None, runner_receipt_sha256=None):
-    """Write an immutable terminal receipt; preserve original infra failures."""
+                   failure_reason=None, runner_receipt_sha256=None,
+                   runner_attestation=None):
+    """Write an immutable terminal receipt; preserve original infra failures.
+
+    Sampler attestation is read only from the runner's bound evidence, never
+    from dispatch metadata or post-hoc side files.
+    """
     existing = verify_receipt(root, arm)
     attempt = 1
     if existing is not None:
@@ -425,7 +430,12 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
         "runner_receipt_sha256": runner_receipt_sha256, "terminal": True,
         "attempt": attempt,
     }
-    receipt.update(peak_ram_fields(arm))
+    # Only a complete whole-container attestation from the runner may mark an
+    # immutable receipt; a partial or legacy label stays absent so comparable
+    # publication is never implied by an unverified method.
+    fields = peak_ram_fields(runner_attestation)
+    if attested(fields):
+        receipt.update(fields)
     if outcome == "success" and (not isinstance(seconds, (int, float))
                                  or seconds <= 0):
         raise ValueError("successful arm needs a positive runtime")

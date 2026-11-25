@@ -103,3 +103,29 @@ retryable; and the stable fingerprint remains lease/reconcile compatible.
 Verification performed (no live PX): 16/16 new tests, 59/59 existing guard
 tests, 42/42 monitor/pilot/runner/space tests, and
 `ruff check --select E4,E9,F,B006,B018,B023` — all pass.
+
+## Follow-up: startup sample/inspect ordering (PR494 fast-forward)
+
+`monitor._bind_started()` previously evaluated `snapshot()` as an argument to
+`binding.bind_container()`, so the `/proc` sample was taken *before* the exact
+CID was inspected. `binding.bind_container()` now inspects the exact CID first,
+samples strictly afterwards (the injected `snapshot` callable is invoked after
+inspection, exactly once), then re-inspects to prove the same CID still resolves
+to the same init PID. A changed PID or CID is terminal `identity_lost`, never a
+retry. The existing injected-snapshot tests keep working because
+`_bind_started()` still passes the sampler to `bind_container()`; no PID is
+signalled anywhere in the path.
+
+New tests in `test_fail_closed_guard_startup_identity.py` pin inspect → sample
+→ re-inspect ordering, reject a changed inspect PID (even when the replacement
+PID is present in the sample), reject a second-inspect CID mismatch, and assert
+no `os.kill`/`os.killpg` and no startup retry.
+
+**Coordination boundary (YuIy / common watchdog):** this change does not touch
+`fail_closed_guard/proc.py` (partial/null record semantics) or the independent
+crash watchdog; those remain YuIy's ownership. Contract relied on here: a
+partial record carries `starttime`/`pid_ns` as `None` and the startup binding
+fails closed with `binding_unavailable`/`measurement_unavailable`;
+`cmdline_sha` may be null because it is diagnostic only. The double inspection
+is read-only and adds no signal, so it is compatible with a watchdog that also
+samples `/proc`.

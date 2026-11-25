@@ -1,7 +1,7 @@
 """Prospective bounded userspace watcher over injected snapshots."""
 import time
 
-from . import identity, tree
+from . import identity, startup, tree
 from .errors import GuardExceeded
 
 
@@ -16,7 +16,8 @@ def audit_event(path, event):
         os.close(fd)
 
 
-def _result(binding, peak, teardown, teardown_error=None, attestation=None):
+def _result(binding, peak, teardown, teardown_error=None, attestation=None,
+            identity_observation=None):
     result = {"peak_rss": peak, "cid": binding.get("cid"), "teardown": teardown,
                "enforcement": "userspace_observed", "kernel_enforcement": False}
     # Only a caller that actually ran the bound whole-container sampler may
@@ -26,6 +27,12 @@ def _result(binding, peak, teardown, teardown_error=None, attestation=None):
         result.update(attestation)
     if teardown_error is not None:
         result["teardown_error"] = teardown_error
+    # Additive instrumentation: record both the bound identity and the last
+    # observed identity, so a receipt can distinguish a normal exec (cmdline
+    # changed, kernel identity intact) from PID reuse (kernel identity changed).
+    # Never used to relax a fail-closed decision.
+    if identity_observation is not None:
+        result["identity_observation"] = identity_observation
     return result
 
 
@@ -51,14 +58,17 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
     peak = None
     teardown = None
     stopped = False
+    last_identity = None
     cid = binding.get("cid")
 
     def collect(exc):
         """Attach evidence to a fail-closed exception before it escapes."""
         exc.peak_rss = peak
+        exc.identity_observation = last_identity
         exc.guard_result = _result(binding, peak, teardown,
                                    teardown_error=exc.teardown_error,
-                                   attestation=attestation)
+                                   attestation=attestation,
+                                   identity_observation=last_identity)
         if teardown is not None:
             exc.teardown = teardown
         return exc
@@ -68,10 +78,19 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
             if clock() - start >= wall_seconds:
                 raise GuardExceeded("wall_limit")
             table = snapshot()
+            if binding.get("stable"):
+                # Exact-CID startup binding: immutable kernel identity only.
+                last_identity = startup.observation(binding, table)
             try:
                 if rss_fn is None:
-                    pid = identity.locate(binding["fingerprint"], table,
-                                          bound_pid=binding.get("pid"))
+                    if binding.get("stable"):
+                        # A normal exec changes cmdline but not starttime/ns,
+                        # so it keeps the binding; PID reuse cannot.
+                        pid = startup.locate(binding, table,
+                                             bound_pid=binding.get("pid"))
+                    else:
+                        pid = identity.locate(binding["fingerprint"], table,
+                                              bound_pid=binding.get("pid"))
                     group = tree.members(table, pid, binding["fingerprint"])
                     used = tree.rss_bytes(table, group)
                 else:
@@ -130,4 +149,5 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
         teardown = stop(cid)
     except Exception as exc:
         raise GuardExceeded("teardown_unverified") from exc
-    return _result(binding, peak, teardown, attestation=attestation)
+    return _result(binding, peak, teardown, attestation=attestation,
+                   identity_observation=last_identity)

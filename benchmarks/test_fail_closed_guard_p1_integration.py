@@ -4,15 +4,18 @@ All probes use synthetic /proc trees, temp journal files and injected stop /
 disk functions. No container, STOP sentinel, shared lock, frozen receipt or
 live case is touched.
 """
+import fcntl
+import os
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from fail_closed_guard import (disk, lease, p1_harness, p1_helper, proc, stop,
                                teardown, tree, watch)
-from fail_closed_guard.errors import GuardExceeded, OrphanLease
+from fail_closed_guard.errors import GuardExceeded
 
 CID = "a" * 64
 CID_B = "b" * 64
@@ -262,67 +265,156 @@ class D5TeardownProofTests(unittest.TestCase):
         self.assertIn("teardown_error", caught.exception.guard_result)
 
 
-class P1HarnessIntegrationTests(unittest.TestCase):
+class P1HarnessLifecycleTests(unittest.TestCase):
+    """PR505 lifecycle: durable ownership precedes spawn; bind follows it."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.stop_path = self.root / "STOP"
         self.table = {100: rec(100, 1, 5, 7, 1_000_000)}
         self.bound = stable_binding(self.table)
-        self.patches = [
-            patch("fail_closed_guard.lease._command", return_value=CID),
-            patch("fail_closed_guard.teardown.stop_cid",
-                  side_effect=lambda env, cid: proof(cid)),
-        ]
-        for item in self.patches:
-            item.start()
+        self.calls = {"spawn": [], "bind": [], "stop": [], "watchdog": [],
+                      "disk": []}
+        self.stop_path.write_text("real-owner\n")
 
     def tearDown(self):
-        for item in reversed(self.patches):
-            item.stop()
         self.tmp.cleanup()
 
-    def _run(self, owner):
-        self.stop_path.write_text("hold\n")
-        ticks = iter([True, False])
-        return p1_harness.run_guarded(
-            self.bound, owner=owner, lease_root=self.root,
-            stop_path=self.stop_path, limit=4_000_000, wall_seconds=30,
-            running=lambda: next(ticks, None) is not None,
-            measure=lambda: True, env={}, disk_path=str(self.root),
-            disk_reserve_bytes=100,
-            disk_usage=lambda _: DiskHelper(free=1_000_000),
-            snapshot=lambda: self.table, clock=lambda: 0,
-            sleep=lambda _: None)
+    def _spawn(self, cidfile, env):
+        self.calls["spawn"].append(cidfile)
+        Path(cidfile).write_text(CID + "\n")
 
-    def test_owner_run_completes_with_attested_proof(self):
-        outcome = self._run("real-owner")
+    def _binder(self, cid, env, snapshot=None):
+        self.calls["bind"].append(cid)
+        result = dict(self.bound)
+        result["cid"] = cid
+        return result
+
+    def _stopper(self, cid):
+        self.calls["stop"].append(cid)
+        return proof(cid)
+
+    def _checker(self):
+        self.calls["watchdog"].append("ready")
+        return True
+
+    def _usage(self):
+        return lambda _: (self.calls["disk"].append("checked") or
+                          DiskHelper(free=1_000_000))
+
+    def _run(self, *, owner="real-owner", spawn=None, attestation=None,
+             disk_usage=None, lock=None, watchdog_ready=None, lock_path=None):
+        ticks = iter([True, False])
+        return p1_harness.run_prospective(
+            owner=owner, lease_root=self.root, stop_path=self.stop_path,
+            disk_path=str(self.root), spawn=spawn or self._spawn, env={},
+            lock=lock if lock is not None else (
+                nullcontext() if lock_path is None
+                else p1_harness.ExclusiveLock(lock_path)),
+            lock_path=lock_path,
+            watchdog_ready=(self._checker if watchdog_ready is None
+                            else watchdog_ready),
+            disk_reserve_bytes=100,
+            disk_usage=disk_usage or self._usage(),
+            limit=4_000_000, wall_seconds=30,
+            running=lambda: next(ticks, None) is not None,
+            measure=lambda: True, snapshot=lambda: self.table,
+            clock=lambda: 0, sleep=lambda _: None,
+            attestation=attestation, bind_container=self._binder,
+            stop_cid=self._stopper)
+
+    def test_pre_spawn_order_watchdog_disk_then_spawn_then_bind(self):
+        outcome = self._run()
         self.assertEqual(outcome["status"], "completed")
+        acquired = [event for event in lease.events(self.root)
+                    if event.get("state") == "active"]
+        self.assertTrue(acquired)
+        self.assertEqual(self.calls["watchdog"], ["ready"])
+        # Pre-spawn reservation check happens first; the watcher re-checks it.
+        self.assertEqual(self.calls["disk"][0], "checked")
+        self.assertEqual(len(self.calls["spawn"]), 1)
+        # The exact CID came only from the unique pinned cidfile, not a name.
+        pinned = Path(self.calls["spawn"][0])
+        self.assertEqual(pinned.parent.name, "cidfiles")
+        self.assertEqual(pinned.read_text().strip(), CID)
+        self.assertEqual(self.calls["bind"], [CID])
+        self.assertTrue(outcome["result"]["teardown"]["fresh_absence_check"])
+        self.assertFalse(self.stop_path.exists())
+
+    def test_pre_spawn_disk_failure_never_spawns_and_keeps_stop(self):
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(disk_usage=lambda _: DiskHelper(free=99))
+        self.assertEqual(caught.exception.reason, "reserve_shortfall")
+        self.assertEqual(self.calls["spawn"], [])
+        self.assertEqual(self.calls["bind"], [])
+        self.assertTrue(self.stop_path.is_file())
+        self.assertEqual(
+            lease.latest(lease.events(self.root))[next(
+                e["lease"] for e in lease.events(self.root)
+                if e.get("state") == "active")]["state"], "active")
+
+    def test_crash_after_spawn_before_bind_leaves_lease_open(self):
+        def crash(cidfile, env):
+            self._spawn(cidfile, env)
+            raise RuntimeError("backend died after spawn")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=crash)
+        self.assertEqual(caught.exception.reason, "spawn_failed")
+        self.assertEqual(self.calls["bind"], [])
+        self.assertTrue(self.stop_path.is_file())
+        active = [event for event in lease.events(self.root)
+                  if event.get("state") == "active"]
+        self.assertTrue(active)
+        self.assertEqual(active[-1]["cidfile"], self.calls["spawn"][0])
+        # Reconciliation sees the container named by the pinned cidfile and
+        # refuses a new admission; the crashed owner's lease is not released.
+        with patch("fail_closed_guard.binding.command", return_value=CID + "\n"):
+            report = lease.reconcile(self.root, {})
+        self.assertTrue(report["blocked"])
+        self.assertEqual(report["blocked"][0]["reason"],
+                         "orphan_container_alive")
+
+    def test_foreign_stop_refused_before_lease_or_spawn(self):
+        self.stop_path.write_text("other-owner\n")
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(owner="real-owner")
+        self.assertEqual(caught.exception.reason, "stop_owner_unauthorized")
+        self.assertEqual(self.calls["spawn"], [])
+        self.assertEqual(lease.events(self.root), [])
+        self.assertTrue(self.stop_path.is_file())
+
+    def test_watchdog_not_ready_refuses_spawn(self):
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(watchdog_ready=lambda: False)
+        self.assertEqual(caught.exception.reason, "watchdog_unavailable")
+        self.assertEqual(self.calls["spawn"], [])
+
+    def test_exclusive_lock_held_refuses_spawn(self):
+        lock_path = self.root / "worker.lock"
+        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(lock_path=lock_path)
+            self.assertEqual(caught.exception.reason, "lock_unavailable")
+            self.assertEqual(self.calls["spawn"], [])
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
+    def test_attestation_cannot_override_safety_facts(self):
+        outcome = self._run(attestation={
+            "kernel_enforcement": True, "enforcement": "fabricated",
+            "rss_sample_scope": "launcher_process_group",
+            "method": "caller-method", "version": "caller-version"})
         result = outcome["result"]
-        self.assertFalse(result["kernel_enforcement"])
+        self.assertIs(result["kernel_enforcement"], False)
+        self.assertEqual(result["enforcement"], "userspace_observed")
         self.assertEqual(result["rss_sample_scope"],
                          "whole_container_process_tree")
-        self.assertTrue(result["teardown"]["fresh_absence_check"])
-        self.assertFalse(self.stop_path.exists())
-        states = [event.get("state") for event in lease.events(self.root)]
-        self.assertIn("released", states)
-        self.assertTrue(any(event.get("owner") == "real-owner"
-                            for event in lease.events(self.root)))
-
-    def test_foreign_owner_run_fails_closed_and_keeps_stop(self):
-        lease.acquire(self.root, "prior", "pilot", cid=CID,
-                      owner="real-owner")
-        lease.bind_cid(self.root, "prior", CID, owner="real-owner")
-        self.stop_path.write_text("hold\n")
-        # A still-open owner lease blocks admission before any sampling.
-        with self.assertRaises(OrphanLease):
-            self._run("intruder")
-        # Direct foreign STOP retirement is refused even with a valid proof.
-        with self.assertRaises(GuardExceeded) as caught:
-            stop.retire_stop(self.stop_path, proof(), owner="intruder",
-                             lease_root=self.root, cid=CID)
-        self.assertEqual(caught.exception.reason, "stop_owner_unauthorized")
-        self.assertTrue(self.stop_path.is_file())
+        self.assertEqual(result["method"], "caller-method")
 
 
 if __name__ == "__main__":

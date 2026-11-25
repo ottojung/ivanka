@@ -26,7 +26,23 @@ NOT created.
 - **D5** — `teardown.stop_cid()` emits `fresh_absence_check` with before/after
   proof; `watch.watch_bound()` validates proof shape on every exit and
   converts teardown faults into `GuardExceeded` carrying `teardown_error`.
-  `p1_harness.run_guarded()` enables `strict_proof=True`.
+  `p1_harness.run_prospective()` enables `strict_proof=True`.
+
+## PR505 lifecycle review closure
+
+`run_guarded` (which accepted an already bound CID before acquiring a lease)
+is replaced by `run_prospective`. The ordered pre-spawn gates are: owner-bound
+STOP, lease reconciliation, durable lease + unique pinned cidfile, exclusive
+flock, watchdog readiness (injected checker or readiness file) and independent
+disk reservation. Only then does the caller spawn; the exact CID is read from
+the pinned cidfile and bound to the same lease. There is no foreign container
+name acceptance path. A crash after spawn before bind leaves the lease open
+with its pinned cidfile so startup reconciliation blocks admission. Caller
+attestation may describe only method/version; `kernel_enforcement=False`,
+`enforcement=userspace_observed` and the measured RSS scope are forced by the
+guard. Lifecycle tests cover pre-spawn failure, crash-after-spawn-before-bind,
+foreign STOP, unready watchdog, held lock, attestation tamper and the normal
+owner path.
 
 ## Evidence honesty / retention
 

@@ -24,7 +24,13 @@ def _result(binding, peak, teardown, teardown_error=None, attestation=None,
     # supply method/version/scope. Carry them on every exit so a killed arm
     # keeps the same real sampling evidence as a finished one.
     if attestation:
-        result.update(attestation)
+        # Descriptive method/version/scope may be supplied only by a caller
+        # that actually ran the sampler, but safety facts are non-negotiable.
+        supplied = {key: value for key, value in attestation.items()
+                    if key not in ("enforcement", "kernel_enforcement")}
+        result.update(supplied)
+    result["enforcement"] = "userspace_observed"
+    result["kernel_enforcement"] = False
     if teardown_error is not None:
         result["teardown_error"] = teardown_error
     if identity_observation is not None:

@@ -35,9 +35,13 @@ This package replaces bare-PID sampling/signalling with:
 - `stop.retire_stop()` — only the active lease owner may unlink a STOP sentinel,
   and only with a valid exact-CID fresh-absence proof.
 - `disk.check_reserve()` — fail-closed independent filesystem reserve check.
-- `p1_harness.run_guarded()` — prospective P1 integration: lease -> bound
-  watch (with disk reserve) -> exact-CID teardown proof -> owner-only STOP
-  retirement. Source-only; it never starts a container or takes the PX lock.
+- `p1_harness.run_prospective()` — prospective P1 lifecycle: owner-bound STOP,
+  durable lease + unique pinned cidfile, exclusive lock, watchdog readiness
+  and disk reserve are ALL verified BEFORE the caller's spawn; the exact CID
+  from that cidfile is then bound to the SAME lease, watched with disk reserve,
+  and followed by exact-CID teardown proof and owner-only STOP retirement.
+  No foreign container name is accepted. Source-only: the adapter never starts
+  a container or takes the PX lock itself.
 
 Success is reported only after the bound monitor has stopped and proven removal
 of the exact resource. The advisory `.global-worker.lock` protects a live

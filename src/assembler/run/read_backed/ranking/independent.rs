@@ -1,4 +1,4 @@
-use super::{Statistics, K};
+use super::{balanced, Statistics, K};
 
 // Independent original fragments, rather than the length of a competing
 // genome, determine whether a second densely covered component is useful.
@@ -23,8 +23,8 @@ pub(in super::super) fn additional(
                 selected & (1 << i) == 0
                     && positions > 0
                     && stats.coverage[i] * 5 >= positions * 4
-                    && counts[i] >= minimum
-                    && counts[i] * 5 >= stats.pairs[i] * 4
+                    && (counts[i] >= minimum && counts[i] * 5 >= stats.pairs[i] * 4
+                        || balanced::qualifies(contigs, stats, selected, primary, i))
             })
             .max_by_key(|&i| (counts[i], stats.coverage[i], std::cmp::Reverse(i)));
         let Some(next) = next else { break };

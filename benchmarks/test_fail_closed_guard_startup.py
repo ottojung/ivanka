@@ -82,6 +82,8 @@ class StartupBindingTests(unittest.TestCase):
         proc = proc or Proc(exit_when=lambda: self.cidfile.exists())
         with patch.object(binding, "inspect_pid", side_effect=inspect,
                           return_value=9 if inspect is None else None), \
+                patch.object(binding, "inspect_pid_if_live",
+                             return_value=None), \
                 patch.object(monitor.proc, "snapshot",
                              side_effect=snapshots or (lambda: {9: rec(9, 0, 1)})):
             return monitor.watch_pilot(
@@ -160,6 +162,7 @@ class StartupBindingTests(unittest.TestCase):
         thread = threading.Thread(target=writer)
         thread.start()
         with patch.object(binding, "inspect_pid", return_value=9), \
+                patch.object(binding, "inspect_pid_if_live", return_value=None), \
                 patch.object(monitor.proc, "snapshot", return_value={9: rec(9, 0, 1)}):
             try:
                 result = monitor.watch_pilot(

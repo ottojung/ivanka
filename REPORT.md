@@ -1,65 +1,137 @@
-# Xt6 deference — phase-veto presence audit and compatibility integration
+# Xt6 deference-veto runtime optimization — port onto PR #524 head
 
-Owner: agent-KMNdXRJYZJcNLFc9FdclUo-future · Host: marceline-dev · Synthetic-only evidence; no clinical or molecule-level phase claim.
+Owner: agent-NQ90QTzfz4m41VhUoHZTht-debt · host: marceline-dev (verified) · 2026-11-26
 
-## 1. Authoritative presence finding
+## Scope and authority
 
-Verified with `git ls-remote`, fresh clone, and `git grep` on exact commits:
+Bounded technical increment: port the already source-reviewed, semantics-preserving
+runtime optimization onto the current DRAFT PR #524 phase-veto head, re-verify source
+correctness and byte-identity, and re-run the pinned direct-Ivanka S118 alternating
+runtime/Psi measurement to a **scoped GO/NO-GO on that gate only**.
 
-| Ref | Commit | `phase_veto` files | `reject_unsupported_recombinants` | `IVANKA_PHASE_GUARD` |
-|---|---|---|---|---|
-| `origin/main` | `4eb28d982cf29f95cbfb1252c40d8f6eb7d84a4e` | 0 | absent | absent |
-| PR #412 `p0/frozen-default-novel-seed-output-20261123` | `7dbdbaefb1155f634a760034287cc9d480099bf9` | 0 | absent | absent |
-| PR #376 `agent/sBAbJ4bT8nc1gEnoKAeWMs-knelt-Xt6-phase-veto-integration-127dd3a` | `8983d697aaef1afa85cc7a90b94d3f98fa57364d` | 4 | present | present |
+No merge, no promotion, no PR #524 edit/retarget/force-push, no frozen-198 data, IVA
+cache, original MiCall output, container/image, PX/P1 or other agents' worktree writes.
+No clinical or molecule-level phase claim. PR #524 and PR #376 remain DRAFT; issue OPEN.
 
-No superseding phase-veto/recombinant-withholding implementation exists in main or PR #412 (`git grep -niE 'recombinant|phase_guard|withhold|phase_veto|distinct.*pair|paired.*signature' -- src` yields only unrelated rescue/tiling comments). PR #376 remains open, draft, unmerged.
+## Exact refs (re-derived live via `git ls-remote` / `git rev-parse`)
 
-## 2. Compatibility integration (this branch)
+| role | commit |
+| --- | --- |
+| PR #524 head / base of this port | `cf7a028e697197d3e0a812667bee29548b9963c5` |
+| PR #412 head = PR #524 base (`p0/frozen-default-novel-seed-output-20261123`) | `7dbdbaefb1155f634a760034287cc9d480099bf9` |
+| source-reviewed optimization head | `5d50b54431a3636653a176495278d804f7ff182c` |
+| production source commit | `0aad62b388ebb547e196c92b360ea5b58cff2868` |
+| hardened base of optimization | `f2fe0e182c8b1bafe7d7b7c3911a9e85c9acb9bd` |
 
-Base: exact PR #412 head `7dbdbaef`. Cherry-picked the full approved 8-commit PR #376 series `127dd3a..8983d69`:
+Absence check on exact `cf7a028`: `reject_with`, `prepare(&reads.seqs, ...)`,
+`vet_rescue_with`, `pairscan`, `signature_ids`, `mod calls` — **all absent**.
+`f2fe0e18..5d50b544` is exactly two commits: `0aad62b3` (7 production files) and
+`5d50b544` (REPORT.md only). The optimization is therefore confirmed NOT in PR #524.
 
-`5e7c6bc, 35473bf, 6d55843, 3f0d7e5, f0e0dee, d74f340, 16d5ce8, 8983d69`
+## Port and conflict resolution
 
-Seven applied automatically. `d74f340` conflicted in `src/assembler/run/finish.rs` because PR #412 adds `skip_matching_seeds` to `write()` and to `write_results::write()`. Resolution keeps the PR #412 parameter and call intact and adds the veto filter before selection plus `vet_rescue` on the rescue path. The resulting `src/assembler/run_seed/phase_veto/` tree is **byte-identical** to PR #376 (`git diff pr376 HEAD -- src/assembler/run_seed/phase_veto` is empty).
+Cherry-picked `0aad62b3` onto `cf7a028` on a dedicated branch. `finish.rs` auto-merged;
+`phase_veto/mod.rs` conflicted once. Resolution:
 
-One follow-up commit fixes the inherited CI-clippy `type_complexity` error in `test_vet_rescue.rs` with a named type alias — `#[cfg(test)]` only, no production behavior change.
+- `finish.rs` keeps PR412's `skip_matching_seeds` parameter and its
+  `write_results::write(..., skip_matching_seeds)` call, while switching to the
+  optimized `prepare` / `reject_with` / `vet_rescue_with` entry points.
+- `mod.rs` takes the optimization implementation (`Evidence`, single-pass pair
+  evidence, per-sequence verdict cache) but omits `#[cfg(test)] mod test_adversarial;`:
+  `test_adversarial.rs` belongs to the hardened base `f2fe0e18`, not to this 7-file
+  diff, and is absent from the PR524 line. The 5 former inline tests are carried by
+  the optimization's new `test_basic.rs` with unchanged assertions.
 
-A separate detached probe confirmed the same 8-commit series also cherry-picks onto current `origin/main` with **zero conflicts** (main has zero `src/` changes since `127dd3a`), so a main-based integration remains available if the owner prefers it over this stacked candidate.
+Byte-diff versus reviewed `0aad62b3`: `calls.rs`, `detect.rs`, `evidence.rs`,
+`pairscan.rs`, `test_basic.rs` — identical; `finish.rs` — differs only by
+`skip_matching_seeds`; `mod.rs` — differs only by the omitted test-module line.
+Withhold-only semantics unchanged (candidate withheld only on direct original-pair
+evidence; no emitted phase claim); no sequence edit, no `max-contigs` change
+(`1..=1000` intact at `src/assembler/setup/cli/finish.rs:7`), no 600 nt minimum,
+no read duplication, no original-data write.
 
-Constraints preserved: reference-blind production inputs (reads, qualities, support counts, protected prefix only), no truth/score/oracle in assembly decisions, no 600 nt minimum, `max-contigs` 1..=1000 unchanged, no read duplication introduced, no MiCall/frozen-data/IVA/original-output changes. `python benchmarks/reference_isolation.py` PASS.
+## Release binaries (isolated `CARGO_TARGET_DIR`)
 
-## 3. Validation at the exact branch head
+- stock @ `cf7a028`: `32f43befa0e55a07de4fa525959bb04b2e2c7dc6ea4da7dd8d7328c1a77b43dc`
+  — byte-identical to the kBNDTiVL independent review's PR524-head binary (cross-check).
+- opt @ port head: `e7b3fea957b7d4c2999e8d835bb81e642f79850939006f9ce4a7b0922a6f7f33`
 
-```
-export CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=<isolated> LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
-cargo fmt --all -- --check                       # RC 0
-cargo test --locked --all-targets --jobs 2       # 77 unit + 51 contract = 128 passed, 0 failed
-cargo clippy --locked --all-targets -- \
-  -D clippy::correctness -D clippy::suspicious \
-  -D clippy::perf -D clippy::complexity         # RC 0 (CI lint set)
-rustc --test source_lints/mod.rs -o <bin> && <bin>   # 6 passed
-python3 benchmarks/reference_isolation.py       # PASS
-python3 -m pytest -q benchmarks/test_synthetic_phase_pairs.py \
-  benchmarks/test_synthetic_phase_fidelity.py \
-  benchmarks/test_source_q15_phase_bridges.py \
-  benchmarks/test_run_source_q15_phase_bridges.py \
-  benchmarks/test_read_backed_pair_phase.py \
-  benchmarks/test_mate_phase_support.py         # 44 passed
-```
+## Source-correctness gates at the port head (all RC 0)
 
-All six named veto tests pass: `rejects_linked_recombinant_keeps_truth`, `unlinked_kept_unknown`, `low_quality_prevents_q15_veto_evidence`, `q15_boundary_allows_valid_evidence`, `protected_micall_seeds_bypass_de_novo_veto`, `rescue_veto_withholds_chimera_keeps_truth`.
+- `cargo fmt --all -- --check` — RC 0 (empty log `e3b0c442…`)
+- CI clippy `cargo clippy --locked --all-targets -- -D clippy::correctness
+  -D clippy::suspicious -D clippy::perf -D clippy::complexity` with
+  `LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu` — RC 0, stock-class warnings only
+- `cargo test --locked --all-targets` — 77 unit + 51 contract = 128 passed, 0 failed
+- structural `rustc --test source_lints/mod.rs` — 6 passed
+- `python3 benchmarks/reference_isolation.py` — PASS (`0d29b625…`)
+- Python phase + reference-isolation modules — 168 passed, 1 deselected; the
+  deselected `test_binary` is a pre-existing fixture-collection error reproduced on
+  stock @ `cf7a028` itself (5 passed, 1 error), not introduced by this port.
 
-### Pinned seed39 error-free reproducer
+## Byte-identity / panel (independent regeneration)
 
-Regenerated fixtures match pins byte-exactly (R1 `766f1024…`, R2 `3c566cfe…`, truth `f01c50af…`). Release binaries A/B:
+Regenerated seed39 error-free fixtures in-tree
+(`length=1400 read_length=100 fragment_length=300 pairs_per_haplotype=1000
+variants=(280,480) seed=39 error_rate=0`): R1
+`766f1024b8abefa71d30f5c9d744ebf3873cfe355fefcb40dfe3d44ce562315e`, R2
+`3c566cfe0cf17d17c2f816c60a9eec4e1bcf8b0e3404ea1014023166505dd868` — both pin-exact.
+(truth.json SHA `77416396…` includes PR #183 fields; the assembler inputs match exactly.)
 
-* stock@`7dbdbaef` (`bbc7aa88…`): cap16 == cap100 == `3f6a2589a631a0bc5230a554aa2d3488c91a0b800050e7a540c267ea5f32dec1` — unsupported GT recombinant (bug reproduced).
-* integrated veto (`32f43bef…`): cap16 == cap100 == `e4836b00f83c757a8d6f236528e96de39f606afcee5fe5d40d56a6b6212b6d04` — correctly phased GG haplotype; 4 `withheld` lines + 1 `filtered 4 candidate(s)` line.
+Both stock and opt, at `--max-contigs 16` and `100`, emit the same 1398 nt FASTA
+`e4836b00f83c757a8d6f236528e96de39f606afcee5fe5d40d56a6b6212b6d04`,
+`consistent_with_source_phase` (GG), with 4 guard-withhold lines and 1 filter line.
 
-### 14-case panel (`--max-pairs 2000 --max-contigs 16`)
+14-case panel (`--max-pairs 2000 --max-contigs 16`): all 14 stock and opt FASTAs
+byte-identical; 6/6 linked `consistent_with_source_phase`; 6/6 unlinked zero-bridge
+`unidentifiable_phase` with zero guard lines (silent, no unsupported assertion);
+0 unsupported recombinants in either arm. Detail: `panel_report.json`
+(`688f87ef…`).
 
-Six linked `.002` seeds 4/17/18/19/20/39, six unlinked `(280,900)` zero-bridge controls, two error-free linked extras. Stock: 3 unsupported recombinants (linked-19, linked-39, linked-39-ef). Integrated veto: 0 unsupported, 6/6 linked consistent with source phase, 6/6 unlinked `unidentifiable_phase` with zero guard lines and stock-veto byte-identical FASTAs, linked-19-ef unchanged. All case SHAs match prior board evidence. Full data: `panel_report.json` in the owner's isolated evidence directory.
+## Pinned direct S118 alternating runtime/Psi measurement
 
-## 4. Recommendation / gate status
+Pinned original S118 FASTQ (hashes match the board witness exactly): R1
+`758029d5c88650226c2d9c1ff45a3887779635b365b6e0b1fe28ebc4ab3dbbef`, R2
+`590cbf6110701a95f90c3490f6cb240416197be5a3d1c0c7226e4cb79e4d4b50`.
+No MiCall, no container, no scratch assembler state, no frozen/IVA/MiCall writes.
+Fixed schedule **stock → opt → stock → opt**; direct invocation
+`<bin> --reads1 R1 --reads2 R2 --output contigs.fasta` (defaults: max-pairs
+unlimited, max-contigs 16); host `time.monotonic` wall clock.
 
-**GO for source-level compatibility integration. NO-GO for merge.** This branch neither adjudicates nor weakens the durable blockers already on the board: (a) S118 strict byte-exact MAX preservation NO-GO (202-nt low-read-support tandem expansion, panel score unchanged); (b) all-real-exponent runtime Psi FAIL (~3.8x total / ~95x de-novo slower at the earlier veto binary); (c) founder-ordered physical-198 `--mode both` + 90% floor + Psi qualification and owner/human sign-off. Keep any PR DRAFT and the issue OPEN. No clinical or molecule-level phase claim; withholding is not a phase assertion.
+| run | arm | wall s | FASTA SHA |
+| --- | --- | --- | --- |
+| 1 | stock @ `cf7a028` | 142.564 | `eae91d98…` |
+| 2 | opt @ port head | 27.450 | `eae91d98…` |
+| 3 | stock @ `cf7a028` | 143.231 | `eae91d98…` |
+| 4 | opt @ port head | 29.414 | `eae91d98…` |
+
+All four exit 0, all FASTA byte-identical to the board witness
+`eae91d9868c29094694dd9c22adffa37819821433e6c97c754e1224dfc4a0c65`.
+Paired `p_i = stock − opt` = `[115.114, 113.817]` s, both positive. Repository strict
+all-real-exponent solver `psi_acceptance.summarize(p)`: `Psi0 = +1`,
+`Psi1 = +114.465 s`, `Psi2 = +13102.76`, `gains=2 losses=0`,
+`positive_all_nonnegative = true`, `zeros_nonnegative = []`,
+`psi_at_positive_infinity = +inf`. Wall ratio stock/opt ≈ 4.96×.
+Host was shared (loadavg 5–20 during the runs, including other agents' work, none
+modified); the alternating schedule, identical outputs and ~114 s paired effect
+place the verdict far outside contention-level noise.
+
+Artifacts: `s118_runs.jsonl` (`98d6121a…`), `s118_psi_result.json` (`97158f67…`),
+`log/s118_timing.log` (`f599e6ca…`).
+
+## Verdict — GO on this gate only; NO-GO for merge
+
+**GO** on the all-real-exponent runtime/Psi gate: the ported optimization is faster
+than the current PR #524 head on every paired S118 run and the strict Psi is positive
+at every real r ≥ 0.
+
+**NO-GO for merge/release** — owner/human gates, untouched here: (1) S118 strict
+byte-exact MAX preservation exception (04:13Z judiciary) remains a gate-owner/human
+adjudication; (2) founder-ordered physical-198 `--mode both` + 90% floor + Psi
+qualification was not run; (3) owner sign-off and the human merge decision on PR
+#524/#376. No seven-way qualification claim. Withholding is not a phase assertion.
+
+Full evidence tree: `/tmp/opencode/NQ90QTzfz4m41VhUoHZTht-debt-Xt6-opt-on-524-20261126/`.
+The inherited PR524 base-integration report (`agent-KMNdXRJYZJcNLFc9FdclUo-future`)
+remains intact in git history at `cf7a028:REPORT.md`; this file supersedes it only on
+this dedicated port branch.

@@ -33,9 +33,12 @@ pub(in super::super) fn additional(
                     || balanced::qualifies(contigs, stats, selected, primary, i);
                 private::qualifies(evidence[i], positions, strong)
             })
+            // Prefer the candidate that adds the most read-supported 31-mers
+            // the selected components lack. Shared-fragment vote counts are
+            // zero for near-related haplotypes and cannot rank them.
             .max_by_key(|&i| {
-                let (private, _, _) = evidence[i];
-                (counts[i], private, stats.coverage[i], std::cmp::Reverse(i))
+                let key = (evidence[i].1, counts[i], stats.coverage[i]);
+                (key, std::cmp::Reverse(i))
             });
         let Some(next) = next else { break };
         selected |= 1 << next;

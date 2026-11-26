@@ -9,6 +9,7 @@ fn stable_suffix_overhangs_ignore_left_prepend() {
     let max_read_len = read.len();
     let index = build_index(&[read.clone()]);
     let reads = Reads {
+        quals: vec![vec![b'I'; read.len()]],
         seqs: vec![read],
         index,
         seed_counts: HashMap::new(),

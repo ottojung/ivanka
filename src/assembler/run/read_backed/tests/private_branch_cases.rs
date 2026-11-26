@@ -44,7 +44,7 @@ fn additional_prefers_novel_read_support_over_shared_votes() {
     second.extend(vec![b'C'; 800]);
     let mut partial = vec![0u32; 3970];
     partial[3470..].fill(3);
-    let evidence = scoring::Statistics {
+    let evidence = Statistics {
         depth: vec![vec![3; 3970], partial, vec![3; 3970]],
         pairs: vec![1000, 700, 300],
         coverage: vec![3970; 3],

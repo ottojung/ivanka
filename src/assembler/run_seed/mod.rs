@@ -9,7 +9,6 @@ use std::collections::HashSet;
 
 mod assembly;
 pub(super) use assembly::assemble_candidates;
-#[rustfmt::skip]
 pub(crate) mod phase_veto;
 
 mod rescue;

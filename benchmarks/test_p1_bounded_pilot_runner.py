@@ -120,7 +120,7 @@ class DesignAndSourceTests(unittest.TestCase):
         self.assertEqual(runner.PINS_V2["storage_conf"],
                          runner.SHARED_PX_BOUNDARY["storage_conf_sha256"])
         self.assertEqual(runner.INTEGRATION_BASE,
-                         "aad9a2cde61d7e8b12b44268f0135ee5060911ef")
+                         "3fb720c7fd74e08b77d453441c10fdfed3eb305f")
         # STOP stays owner-bound; exclusion primitives must be shared with PX.
         self.assertEqual(runner.DEFAULT_STOP,
                          str(runner.PILOT_ROOT / "p1-prospective.STOP"))
@@ -225,17 +225,26 @@ class PinAndBindingTests(unittest.TestCase):
             path = Path(tmp) / "slot.json"
             with self.assertRaises(ValueError):
                 runner.verify_operator_slot(runner.PENDING_SLOT, path=path)
-            path.write_text(json.dumps({
+            bindings = {"source_commit": runner.SOURCE_COMMIT, "image": "i" * 64,
+                        "cases_sha256": "c" * 64, "owner": "owner"}
+            path.write_text(json.dumps(dict({
                 "schema": "ivanka.p1.operator-slot.v1",
                 "slot": "slot-abc", "expires_utc": 9999999999,
-            }))
+            }, **bindings)))
             self.assertEqual(runner.verify_operator_slot(
-                "slot-abc", path=path, wall=lambda: 1)["slot"], "slot-abc")
+                "slot-abc", path=path, wall=lambda: 1, **bindings)["slot"], "slot-abc")
             with self.assertRaises(ValueError):
-                runner.verify_operator_slot("other", path=path, wall=lambda: 1)
+                runner.verify_operator_slot("other", path=path, wall=lambda: 1,
+                                            **bindings)
             with self.assertRaises(ValueError):
                 runner.verify_operator_slot("slot-abc", path=path,
-                                            wall=lambda: 99999999999)
+                                            wall=lambda: 99999999999, **bindings)
+            with self.assertRaises(ValueError):
+                runner.verify_operator_slot("slot-abc", path=path,
+                                            wall=lambda: 1, image="x" * 64,
+                                            source_commit=bindings["source_commit"],
+                                            cases_sha256=bindings["cases_sha256"],
+                                            owner=bindings["owner"])
 
 
 class SharedBoundaryTests(unittest.TestCase):
@@ -515,7 +524,8 @@ class PrepareTests(unittest.TestCase):
         args = self.args()
         with mock.patch.object(runner, "verify_pins", return_value=True), \
              mock.patch.object(runner, "verify_px_store_binding",
-                               return_value={"graphroot": "/workspace/px/store"}), \
+                               return_value={"graphroot": "/workspace/px/store",
+                                             "storage_conf": str(self.root / "storage.conf")}), \
              mock.patch.object(runner, "verify_shared_px_boundary",
                                return_value={"shared": True}), \
              mock.patch.object(runner, "verify_image_contract", return_value={}), \

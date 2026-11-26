@@ -15,7 +15,7 @@ is gated on watchdog deployment plus an exact operator slot token.
 | Candidate binary | `8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786` | native release build, verified present; NOT rebuilt |
 | Previous hwe8M runner | `babc4dba90d7753a18458f284951c3452c26e8ef` | `fix/p1-bounded-pilot-runner-integration`, base `0e6969fd` |
 | Prior rebase (superseded) | `7567302af86593e9bff9ac69fc6d13162dd51d28` | was on exact PR520 `1b6e88c0`; bundle retained |
-| Rebase target | `b185c7f2b95c84edce5f1323f93addd5be7ead2d` | **final reviewed exact PR527 head** (`Require exact CID absence in Podman stderr, not command argv`); parent `aad9a2cd…`; independent GO at this head; PR527 = `p1/reconciled-watchdog-current-main-20261126`, base main `bc98e05` |
+| Rebase target | `b185c7f2b95c84edce5f1323f93addd5be7ead2d` | **final reviewed exact PR527 head** (`Require exact CID absence in Podman stderr, not command argv`); parent `aad9a2cd…`; independent GO; PR527 merged 18:18Z into main at integrated head `3fb720c7fd74e08b77d453441c10fdfed3eb305f` (the controller's `INTEGRATION_BASE`) |
 | This branch | `science/p1-bounded-pilot-950fe331-on-pr527-20261126` | clean worktree, single commit rebased onto exact PR527 |
 | Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | linear chain whose parent chain reaches exactly `b185c7f2…`; no force-push / history rewrite |
 | Fallback bundle | `p1-pilot-7567302a.bundle` (prior base) — verify with prerequisite `1b6e88c0`; the current source is the rebased branch above | offline provenance only |
@@ -84,9 +84,13 @@ Rebase was clean (2/2); parent chain reaches exactly the reviewed PR527 head.
    cohort/manifest/FASTA token in argv. Truth is opened only by the post-hoc
    scorer after guarded exit.
 6. **Exact slot gate** — default is `--check` (read-only). Live execution requires
-   both `--armed` and an exact token from `operator-slot.json` (schema
-   `ivanka.p1.operator-slot.v1`, non-expired). No token, no spawn. The shared
-   boundary proof is mandatory even for `--check`.
+   `--armed` plus an exact token from `operator-slot.json` (schema
+   `ivanka.p1.operator-slot.v1`). The token must bind the exact
+   `source_commit` (`950fe331…`), candidate `image` digest, `cases_sha256` of
+   the explicit case list and `owner`. Expiry and all bindings are re-checked
+   before EACH arm; the slot is atomically consumed once per evidence root and
+   any replay is refused. No token, no spawn. The shared boundary proof is
+   mandatory even for `--check`.
 
 ## 3. Deliverable files / manifests
 
@@ -119,19 +123,31 @@ mkdir -p "$STAGE"
 cp --preserve=all \
   /workspace/ivanka-combined-candidate-20261126/binaries/combined-950fe331 \
   "$STAGE/combined-950fe331"
-sha256sum "$STAGE/combined-950fe331"   # MUST be 8569290d…3786
+# MANDATORY host preverification before any build (source-only, read-only):
+PYTHONPATH=.:benchmarks python3 -c '
+from expanded.p1_bounded_pilot_runner import verify_binary_stage
+print(verify_binary_stage("'"$STAGE"'"))'
+# proves exactly one file, ELF magic 7f454c46, SHA256 8569290d…3786, mode 0755.
 
-# Build only after watchdog deployment + exact slot grant:
+# Build only after watchdog deployment + exact slot grant. The Containerfile is
+# COPY-ONLY (no RUN): a RUN would add a second layer and break the contract.
 podman build --pull=never --network=none \
   --build-arg BINARY_SHA256=8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786 \
   -f benchmarks/expanded/Containerfile.p1-pilot-950fe331-binary-only \
   -t localhost/ivanka-p1-pilot-950fe331:candidate "$STAGE"
 podman image inspect --format '{{.Id}} {{json .Config.Labels}}' \
   localhost/ivanka-p1-pilot-950fe331:candidate
+# MANDATORY independent layer-content verification before use: obtain a
+# read-only listing of the single added layer as {path: sha256} and require
+# exactly {"/usr/local/bin/ivanka": "8569290d…3786"}:
+PYTHONPATH=.:benchmarks python3 -c '
+from expanded.p1_bounded_pilot_runner import verify_binary_layer_entries
+print(verify_binary_layer_entries(<independent-layer-entries>))'
 # Use the resulting full 64-hex digest as --image below.
 ```
 Original images are never retagged, overwritten, deleted or re-imported. No
-large image import is performed by this change.
+large image import is performed by this change. Disk must be >= 33 GiB free;
+current host was only ~32–44 GiB, so admission still gates the build.
 
 ## 4. Bounded case design — 4 residual + 2 control + physical canary
 
@@ -183,7 +199,9 @@ PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_bounded_pilot_ru
 
 PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_watchdog_readiness.py
 # 12 passed (simulated s6 layout; no live service, ALIVE record or PX touch)
-# Real-host probe: python3 -m expanded.p1_watchdog_readiness --check  (rc=1, fail closed until deployed)
+# Real-host probe after 18:18Z deployment:
+#   python3 -m expanded.p1_watchdog_readiness --check  -> rc=0, ready=true,
+#   live_pid 1503395 with verified starttime/pid_ns AND cmdline_sha fingerprint.
 
 PYTHONPATH=.:benchmarks python3 -m pytest -q \
   benchmarks/test_p1_bounded_pilot_runner.py \
@@ -223,12 +241,16 @@ git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach b185c7f2…
 - [ ] `--check` prepared manifest contains `shared_px_boundary.shared=true`, the
       real PX `.global-worker.lock`, the shared `.worker-lease.jsonl` root and
       the PX graphroot; no pilot-private lock/lease is used.
-- [ ] Shared watchdog deployed with `WATCHDOG_ROOT` = the PX worker root; its
-      ALIVE record names the pinned PX graphroot and is freshly identity-bound.
-- [ ] Operator writes `operator-slot.json` with the exact slot token and expiry.
+- [ ] Shared watchdog deployed (18:18Z) with `WATCHDOG_ROOT` = PX worker root;
+      probe rc=0 with a LIVE PID fingerprint verified (starttime/pid_ns/cmdline_sha),
+      not merely ALIVE text.
+- [ ] `verify_binary_stage()` and `verify_binary_layer_entries()` both verified;
+      Containerfile is COPY-ONLY (no RUN, no second layer).
+- [ ] Operator writes `operator-slot.json` with exact token, expiry and exact
+      source/image/cases/owner bindings; replay-consumption marker absent.
 - [ ] Free space `>= 33 GiB` on shared `/workspace`; no competing worker holds
       the shared PX lock.
-- [ ] Binary-only image built from the prepared recipe; digest/labels match the manifest.
+- [ ] Binary-only image built from the prepared recipe; digest/labels/layer match.
 - [ ] `--check` manifest reviewed; then (and only then) `--armed --slot`.
 - Keep the issue open. `STATUS=ATTEMPTED_NOT_QUALIFIED`, `qualified=false`,
   `kernel_enforcement=false`. No PR merge, promotion, deploy, seven-way/Ψ gate

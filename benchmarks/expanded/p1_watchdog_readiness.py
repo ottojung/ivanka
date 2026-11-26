@@ -24,7 +24,7 @@ import re
 import stat
 from pathlib import Path
 
-from benchmarks.fail_closed_guard import heartbeat, watchdog_contract
+from benchmarks.fail_closed_guard import heartbeat, identity, proc, startup, watchdog_contract
 from benchmarks.fail_closed_guard.errors import GuardExceeded
 
 from .p1_bounded_pilot_runner import SHARED_PX_BOUNDARY
@@ -45,6 +45,8 @@ def default_expected():
     """Expected pins derived from the shared PX worker boundary."""
     return {
         "WATCHDOG_ROOT": SHARED_PX_BOUNDARY["worker_root"],
+        # Deployed 18:18Z at /workspace/ivanka-oci-transfer-20261126 (CLI sha pinned below).
+        "WATCHDOG_CODE": "/workspace/ivanka-oci-transfer-20261126",
         "WATCHDOG_STORAGE_CONF": SHARED_PX_BOUNDARY["storage_conf"],
         "WATCHDOG_GRAPHROOT": SHARED_PX_BOUNDARY["graphroot"],
         "watchdog_cli_sha256": WATCHDOG_CLI_SHA256,
@@ -139,27 +141,45 @@ def _sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def probe_alive(*, root, graphroot, wall=None, max_age=None):
-    """Read-only check of the shared watchdog ALIVE record via the guard contract."""
+def probe_alive(*, root, graphroot, wall=None, max_age=None, snapshot=None):
+    """Read-only ALIVE check, including a LIVE PID fingerprint comparison.
+
+    An ALIVE record is only textual evidence. The guard contract is given a
+    live /proc snapshot so a stale/reused PID fails closed; additionally the
+    immutable starttime/pid_ns pair and the recorded cmdline hash are compared
+    against the live process table before readiness is claimed.
+    """
     path = heartbeat.alive_path(Path(root))
+    live_snapshot = snapshot or proc.snapshot
     try:
         readiness = watchdog_contract.require_watchdog_readiness(
-            path, graphroot=graphroot, wall=wall, max_age=max_age)
+            path, graphroot=graphroot, wall=wall, max_age=max_age,
+            snapshot=live_snapshot)
+        record = json.loads(path.read_text())
+        pid = int(record["pid"])
+        observed = live_snapshot().get(pid)
+        if observed is None:
+            raise GuardExceeded("watchdog_identity_mismatch")
+        if (startup.stable_fingerprint(observed) != tuple(record["fingerprint"])
+                or identity.fingerprint(observed)[2] != record.get("cmdline_sha")):
+            raise GuardExceeded("watchdog_identity_mismatch")
     except GuardExceeded as exc:
         return {"ready": False, "reason": exc.reason,
                 "path": str(path), "root": str(root)}
     return {"ready": True, "path": str(path), "root": str(root),
+            "live_pid": pid, "live_fingerprint_verified": True,
             "readiness": readiness}
 
 
 def probe(*, scan_dir=S6_SCAN_DIR, services_dir=S6_SERVICE_DIR,
-          service=SERVICE_NAME, expected=None, wall=None):
+          service=SERVICE_NAME, expected=None, wall=None, snapshot=None):
     """Combine s6 layout, pin and ALIVE probes into one fail-closed verdict."""
     exp = dict(expected or default_expected())
     layout = probe_service_layout(scan_dir=scan_dir, services_dir=services_dir,
                                   service=service, expected=exp)
     alive = probe_alive(root=exp["WATCHDOG_ROOT"],
-                        graphroot=exp["WATCHDOG_GRAPHROOT"], wall=wall)
+                        graphroot=exp["WATCHDOG_GRAPHROOT"], wall=wall,
+                        snapshot=snapshot)
     return {"schema": SCHEMA, "ready": bool(layout["ready"] and alive["ready"]),
             "service_layout": layout, "alive": alive,
             "armed": bool(layout["checks"].get("armed")),
@@ -178,7 +198,7 @@ def deployment_plan(*, expected=None):
         "run_script": {
             "exports": {
                 "WATCHDOG_ROOT": exp["WATCHDOG_ROOT"],
-                "WATCHDOG_CODE": "<reviewed PR527 checkout; CLI sha256 %s>" % exp["watchdog_cli_sha256"],
+                "WATCHDOG_CODE": "%s (CLI sha256 %s)" % (exp["WATCHDOG_CODE"], exp["watchdog_cli_sha256"]),
                 "WATCHDOG_STORAGE_CONF": exp["WATCHDOG_STORAGE_CONF"],
                 "WATCHDOG_GRAPHROOT": exp["WATCHDOG_GRAPHROOT"],
                 "WATCHDOG_ARMED": "0 until operator authorization at a natural PX boundary",

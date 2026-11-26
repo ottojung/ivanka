@@ -17,7 +17,7 @@ write a lease/STOP, invoke Podman, or touch a live arm.
 | supervisor | `<service dir>/supervise/status` |
 | existing PX service | `px-cohort-supervisor` → `/run/s6/legacy-services/px-cohort-supervisor`, **up** (live PX arm) |
 | retired legacy P1 service | `ivanka-p1-narrow-canary` (inert; source-pinned image absent; do not restart) |
-| watchdog service | **absent** — `/run/service/ivanka-watchdog` does not exist; `WATCHDOG_ARMED` not set |
+| watchdog service | **deployed and armed 18:18Z** — `/run/service/ivanka-watchdog` symlink active, `WATCHDOG_ARMED=1`, PID 1503395; ALIVE bound to the exact PX graphroot |
 
 The independent watchdog's run script is source-only at
 `scripts/px_watchdog_s6_service.sh` on exact PR527 `b185c7f2`. It discovers
@@ -30,7 +30,7 @@ plus complete pins before doing anything.
 | Export / artifact | Required value | Source |
 |---|---|---|
 | `WATCHDOG_ROOT` | `/workspace/ivanka-exploratory-ten-20261121` | actual PX worker root; hosts `.worker-lease.jsonl` and `.watchdog-alive.json` |
-| `WATCHDOG_CODE` | a reviewed PR527 checkout whose `benchmarks/fail_closed_guard/watchdog_cli.py` SHA256 is `e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369` | exact reviewed head `b185c7f2b95c84edce5f1323f93addd5be7ead2d` |
+| `WATCHDOG_CODE` | `/workspace/ivanka-oci-transfer-20261126` (deployed), CLI SHA256 `e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369`, git HEAD pinned to merged `3fb720c7fd74e08b77d453441c10fdfed3eb305f` | exact reviewed head `b185c7f2b95c84edce5f1323f93addd5be7ead2d`, now merged |
 | `WATCHDOG_STORAGE_CONF` | `/workspace/ivanka-exploratory-ten-20261121/storage.conf` (SHA `fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21`) | shared PX store |
 | `WATCHDOG_GRAPHROOT` | `/workspace/ivanka-exploratory-podman-20261121/store` | derived from the shared PX storage.conf |
 | `WATCHDOG_ARMED` | `0` until operator authorization at a natural PX boundary; `1` only after | operator gate |
@@ -49,10 +49,12 @@ PYTHONPATH=.:benchmarks python3 -m expanded.p1_watchdog_readiness --deployment-p
 # prints the exact source-only deployment plan (no execution)
 ```
 
-Current real-host result (17:52Z window): **not ready, fail closed** —
-`s6 activation symlink missing`, `WATCHDOG_ARMED` absent, and
-`watchdog_alive.reason = watchdog_unavailable`. This is expected: the watchdog
-is deliberately not deployed. No arm is attempted.
+Real-host result after the 18:18Z operator cutover: **ready, rc=0** — all eight
+s6 layout/pin checks true, `armed=true`, ALIVE record fresh and graphroot-bound,
+and the LIVE PID 1503395 fingerprint `(starttime, pid_ns, cmdline_sha)` verified
+against `/proc` (not merely ALIVE text). No arm, lease, STOP or container was
+touched by this probe. The 17:52Z pre-deployment result was correctly
+fail-closed (`s6 activation symlink missing`, `watchdog_unavailable`).
 
 Tests: `PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_watchdog_readiness.py`
 (12 deterministic tests over a simulated s6 layout; no live service touched).

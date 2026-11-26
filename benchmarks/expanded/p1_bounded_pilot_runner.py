@@ -32,6 +32,7 @@ import hashlib
 import json
 import math
 import os
+import stat
 import subprocess
 import time
 import tomllib
@@ -68,8 +69,9 @@ from .p1_full464_controller import (
 SCHEMA = "ivanka.p1.bounded-pilot-controller.v2"
 STATUS = "ATTEMPTED_NOT_QUALIFIED"
 SOURCE_COMMIT = "950fe331dfcd857011bfd63f9eeca92462708545"
+BINARY_SHA = "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786"
 PARENT_IMAGE = ORIGINAL_IVANKA_IMAGE
-INTEGRATION_BASE = "aad9a2cde61d7e8b12b44268f0135ee5060911ef"
+INTEGRATION_BASE = "3fb720c7fd74e08b77d453441c10fdfed3eb305f"
 
 CASES_MANIFEST = Path(__file__).with_name("p1_pilot_cases.json")
 IMAGE_MANIFEST = Path(__file__).with_name("p1_pilot_image_manifest.json")
@@ -249,17 +251,31 @@ def verify_shared_px_boundary(*, lock, lease_root, watchdog_path,
     }
 
 
-def _default_inspect(image, fmt):
-    """Read-only Podman inspect; never run, import, tag or delete an image."""
+def pinned_inspect_env(storage_conf=None):
+    """Build an inspect env pinned to the ACTUAL shared PX store (read-only)."""
+    conf = Path(storage_conf or SHARED_PX_BOUNDARY["storage_conf"])
+    if conf.is_symlink() or not conf.is_file():
+        raise ValueError("pinned shared PX storage.conf missing or symlink")
+    if sha256(conf) != PINS_V2["storage_conf"]:
+        raise ValueError("pinned shared PX storage.conf hash differs")
+    return podman_env(conf)
+
+
+def _default_inspect(image, fmt, *, env=None):
+    """Read-only Podman inspect in the pinned store; never import/tag/delete."""
     result = subprocess.run(
         ["podman", "image", "inspect", "--format", fmt, image],
-        capture_output=True, text=True, timeout=60, check=False)
+        env=env, capture_output=True, text=True, timeout=60, check=False)
     return result.returncode, result.stdout.strip()
 
 
 def verify_image_contract(image, commit, *, env=None, inspect=None,
                           image_manifest=None):
-    """Bind image to source, binary and frozen parent without building it."""
+    """Bind image to source, binary and frozen parent without building it.
+
+    Inspection must use the pinned shared PX storage.conf: an ambient Podman
+    store could resolve a different image with the same digest string.
+    """
     manifest = image_manifest or load_image_manifest()[0]
     if (len(image) != 64 or any(c not in "0123456789abcdef" for c in image)):
         raise ValueError("candidate image must be a full immutable SHA-256")
@@ -267,7 +283,10 @@ def verify_image_contract(image, commit, *, env=None, inspect=None,
         raise ValueError("frozen baseline image may not be rerun as candidate")
     if commit != manifest["candidate_source_commit"]:
         raise ValueError("candidate source commit differs from pinned image manifest")
-    run_inspect = inspect or _default_inspect
+    inspect_env = env or pinned_inspect_env()
+    if inspect_env.get("CONTAINERS_STORAGE_CONF") != SHARED_PX_BOUNDARY["storage_conf"]:
+        raise ValueError("image inspection must use the pinned shared PX storage.conf")
+    run_inspect = inspect or (lambda i, f: _default_inspect(i, f, env=inspect_env))
     rc, identity = run_inspect(image, "{{.Id}}")
     if rc != 0 or identity.removeprefix("sha256:") != image:
         raise ValueError("candidate image identity differs from its digest")
@@ -290,8 +309,55 @@ def verify_image_contract(image, commit, *, env=None, inspect=None,
             "layer_contract": manifest["layer_contract"]}
 
 
-def verify_operator_slot(slot, *, path=SLOT_AUTH_PATH, wall=None):
-    """Require the operator's exact, currently-valid slot token."""
+def verify_binary_stage(stage_dir, *, expected_sha=None):
+    """Host pre-build proof: the stage holds exactly the pinned ELF binary.
+
+    Source-only and read-only. This is the check that permits a copy-only
+    Containerfile (no RUN, therefore a single added layer).
+    """
+    base = Path(stage_dir)
+    if base.is_symlink() or not base.is_dir():
+        raise ValueError("build context missing or symlink")
+    entries = sorted(path.name for path in base.iterdir())
+    if entries != ["combined-950fe331"]:
+        raise ValueError("build context must contain exactly combined-950fe331")
+    binary = base / "combined-950fe331"
+    if binary.is_symlink() or not binary.is_file():
+        raise ValueError("staged binary missing or symlink")
+    digest = sha256(binary)
+    if digest != (expected_sha or BINARY_SHA):
+        raise ValueError("staged binary SHA256 differs from pin")
+    with binary.open("rb") as stream:
+        magic = stream.read(4)
+    if magic != b"\x7fELF":
+        raise ValueError("staged binary lacks ELF magic")
+    mode = stat.S_IMODE(binary.stat().st_mode)
+    if mode != 0o755:
+        raise ValueError("staged binary mode must be 0755")
+    return {"verified": True, "path": str(binary), "sha256": digest,
+            "elf_magic": magic.hex(), "mode": "0755", "entries": entries}
+
+
+def verify_binary_layer_entries(entries, *, expected_sha=None):
+    """Independent proof that the single added layer has only the pinned binary."""
+    want = {"/usr/local/bin/ivanka": expected_sha or BINARY_SHA}
+    if not isinstance(entries, dict) or entries != want:
+        raise ValueError("added layer contents differ from the binary-only contract")
+    return {"verified": True, "expected_entries": want}
+
+
+# Exact fields an operator slot must bind before every arm.
+SLOT_BINDING_KEYS = ("source_commit", "image", "cases_sha256", "owner")
+
+
+def verify_operator_slot(slot, *, path=SLOT_AUTH_PATH, wall=None, **bindings):
+    """Require an exact, currently-valid slot bound to this specific arm.
+
+    A slot is valid only for the exact source commit, candidate image digest,
+    explicit case list hash and owner it was granted for, and only until its
+    expiry. Callers must re-check before EACH arm so a stale/expired or
+    different-target token cannot authorize another case.
+    """
     if not isinstance(slot, str) or not slot or slot == PENDING_SLOT:
         raise ValueError("no operator slot granted")
     target = Path(path)
@@ -306,7 +372,38 @@ def verify_operator_slot(slot, *, path=SLOT_AUTH_PATH, wall=None):
     if (not isinstance(expiry, (int, float)) or not math.isfinite(expiry)
             or (wall or time.time)() > expiry):
         raise ValueError("operator slot expired")
+    for key in SLOT_BINDING_KEYS:
+        expected = bindings.get(key)
+        if expected is None:
+            raise ValueError(f"slot binding {key} was not supplied by caller")
+        if record.get(key) != expected:
+            raise ValueError(f"slot binding {key} differs from granted slot")
     return record
+
+
+def slot_bindings(manifest, explicit_cases_sha):
+    """Exact target identity a slot must be bound to for this pilot run."""
+    return {"source_commit": manifest["candidate_source_commit"],
+            "image": manifest["candidate_image"],
+            "cases_sha256": explicit_cases_sha,
+            "owner": manifest["owner"]}
+
+
+def claim_slot(out, slot, *, owner, cases_sha256, wall=None):
+    """Atomically consume a slot once per evidence root; refuse any replay."""
+    digest = hashlib.sha256(slot.encode()).hexdigest()
+    marker = Path(out) / (".slot-" + digest + ".consumed")
+    if marker.exists() or marker.is_symlink():
+        raise ValueError("operator slot already consumed (replay refused)")
+    fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as stream:
+        json.dump({"schema": "ivanka.p1.slot-consumption.v1",
+                   "slot_sha256": digest, "owner": str(owner),
+                   "cases_sha256": cases_sha256,
+                   "at_utc": (wall or time.time)()}, stream, sort_keys=True)
+        stream.flush()
+        os.fsync(stream.fileno())
+    return marker
 
 
 def check_own_stop(stop_path, owner):
@@ -658,8 +755,8 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         storage_conf=store_conf or args.storage_conf,
         graphroot=store["graphroot"])
     contract = verify_image_contract(
-        args.image, args.commit, inspect=image_inspect,
-        image_manifest=image_doc or image_manifest)
+        args.image, args.commit, env=podman_env(store["storage_conf"]),
+        inspect=image_inspect, image_manifest=image_doc or image_manifest)
 
     free = (disk_usage_fn or _disk_free)(args.disk_path)
     if free < PILOT_REQUIRED_FREE_BYTES:
@@ -765,7 +862,10 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
         atomic_json(out / "check_summary.json", summary)
         return summary
 
-    slot = verify_operator_slot(args.slot, wall=wall)
+    explicit_cases_sha = hashlib.sha256(json.dumps(
+        manifest["explicit_case_list"], sort_keys=True).encode()).hexdigest()
+    bindings = slot_bindings(manifest, explicit_cases_sha)
+    slot = verify_operator_slot(args.slot, wall=wall, **bindings)
     if not args.armed:
         raise ValueError("--armed required to spawn; source-only until slot granted")
     if not manifest.get("shared_px_boundary", {}).get("shared"):
@@ -776,6 +876,8 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
     if manifest["paths"]["stop"] != DEFAULT_STOP:
         raise ValueError("pilot must use its own owner-bound STOP")
     summary["slot"] = slot["slot"]
+    claim_slot(out, args.slot, owner=manifest["owner"],
+               cases_sha256=explicit_cases_sha, wall=wall)
 
     case_hashes, _frozen, frozen_hash = load_case_hashes(args.data,
                                                           args.frozen_results)
@@ -792,6 +894,9 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
     results_path = out / "results.jsonl"
     completed = []
     for case_id in manifest["explicit_case_list"]:
+        # Re-check expiry AND exact target binding before EVERY arm; a slot
+        # that expired or was re-targeted mid-run cannot authorize this case.
+        verify_operator_slot(args.slot, wall=wall, **bindings)
         physical = case_id == canary["case_id"]
         if physical:
             spec, _ = load_pinned_json(

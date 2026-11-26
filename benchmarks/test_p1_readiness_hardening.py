@@ -140,7 +140,9 @@ class LiveFingerprintTests(unittest.TestCase):
         exp = w.default_expected()
         self.assertNotIn("WATCHDOG_CODE", exp)
         self.assertEqual(exp["watchdog_service_head"],
-                         "f861f25b6e62e1266a498340e7d3cf9a09a9087f")
+                         "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
+        self.assertNotEqual(exp["watchdog_service_head"],
+                            "f861f25b6e62e1266a498340e7d3cf9a09a9087f")
 
     def test_probe_alive_checks_live_fingerprint(self):
         tmp = tempfile.TemporaryDirectory()
@@ -345,3 +347,56 @@ class LiveWatchdogCheckTests(unittest.TestCase):
         self.assertEqual(b["image"], "i" * 64)
         for key in ("source_commit", "image", "cases_sha256", "owner", "evidence_root"):
             self.assertIn(key, b)
+
+
+class ProspectiveGuardPinTests(unittest.TestCase):
+    def test_reviewed_guard_head_pinned_source_only(self):
+        proof = r.verify_guard_source_pins()
+        self.assertEqual(proof["head"], "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
+        self.assertTrue(proof["prospective"])
+        self.assertFalse(proof["deployed"])
+        self.assertEqual(len(proof["digests"]), 5)
+
+    def test_mismatched_guard_source_refused(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name)
+        for name, (relative, _digest) in r.REVIEWED_GUARD_DIGESTS.items():
+            path = base / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(name)
+        with self.assertRaises(ValueError):
+            r.verify_guard_source_pins(base)
+
+
+class SeparatePcrCandidateTests(unittest.TestCase):
+    def test_existing_950fe331_pin_untouched(self):
+        path = Path(r.__file__).with_name("p1_pilot_image_manifest.json")
+        self.assertEqual(r.sha256(path),
+                         "29f48843d74f41b107495ae003ee65787653d9d22599dd3b3e9f7a4a2cdef13b")
+        doc = json.loads(path.read_text())
+        self.assertEqual(doc["candidate_source_commit"], r.SOURCE_COMMIT)
+
+    def test_pcr_candidate_staged_separately(self):
+        path = Path(r.__file__).with_name("p1_pcr_image_manifest.json")
+        doc = json.loads(path.read_text())
+        self.assertEqual(doc["candidate_source_commit"],
+                         "19386765b40a4d57dce15c0984a731486b69121e")
+        self.assertEqual(doc["binary"]["sha256"],
+                         "ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563")
+        self.assertFalse(doc["build"]["executed"])
+        self.assertIsNone(doc["supersedes_or_overwrites"])
+        src = Path(r.__file__).with_name(
+            "Containerfile.p1-pcr-19386765-binary-only").read_text()
+        self.assertIn("COPY new-candidate /usr/local/bin/ivanka", src)
+        self.assertNotIn("\nRUN ", src)
+
+    def test_no_truth_or_receipt_leakage_in_staged_recipes(self):
+        forbidden = ("hidden-truth/", "results.jsonl", "conseq.csv",
+                     "reference_panel", "panel_path", "truth.fasta")
+        for name in ("p1_pilot_image_manifest.json", "p1_pcr_image_manifest.json",
+                     "Containerfile.p1-pilot-950fe331-binary-only",
+                     "Containerfile.p1-pcr-19386765-binary-only"):
+            text = Path(r.__file__).with_name(name).read_text()
+            for token in forbidden:
+                self.assertNotIn(token, text, (name, token))

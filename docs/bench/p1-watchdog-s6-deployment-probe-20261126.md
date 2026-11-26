@@ -17,7 +17,7 @@ write a lease/STOP, invoke Podman, or touch a live arm.
 | supervisor | `<service dir>/supervise/status` |
 | existing PX service | `px-cohort-supervisor` → `/run/s6/legacy-services/px-cohort-supervisor`, **up** (live PX arm) |
 | retired legacy P1 service | `ivanka-p1-narrow-canary` (inert; source-pinned image absent; do not restart) |
-| watchdog service | **deployed and armed; current cutover 19:16Z** — `/run/service/ivanka-watchdog` symlink active, `WATCHDOG_ARMED=1`, PID 1882045; ALIVE bound to the exact PX graphroot |
+| watchdog service | **deployed and armed; cutover 19:16Z** — `/run/service/ivanka-watchdog` symlink active, `WATCHDOG_ARMED=1`; live PID is DERIVED from the current `.watchdog-alive.json` (never hardcoded here); ALIVE bound to the exact PX graphroot |
 
 The independent watchdog's run script is source-only at
 `scripts/px_watchdog_s6_service.sh` on exact PR527 `b185c7f2`. It discovers
@@ -49,19 +49,21 @@ PYTHONPATH=.:benchmarks python3 -m expanded.p1_watchdog_readiness --deployment-p
 # prints the exact source-only deployment plan (no execution)
 ```
 
-Real-host result after the 19:16Z operator cutover (merged PR530 `f861f25b`):
-**ready, rc=0** — all ten s6 layout/pin/head checks true, `armed=true`, ALIVE
-record fresh and graphroot-bound, code path derived from the run script
-(`/workspace/ivanka-guard-pr530-staged-20261126`), and the LIVE PID 1882045
-fingerprint `(starttime, pid_ns, cmdline_sha)` verified against `/proc` (not
-merely ALIVE text). No arm, lease, STOP or container was touched by this probe.
-Earlier pre-deployment probes correctly failed closed.
+Historical 19:16Z result at deployed PR530 `f861f25b` was **ready, rc=0** with
+all layout/pin checks true and a live PID fingerprint verified against `/proc`.
+That PID is intentionally NOT recorded here: it must be read from the current
+ALIVE record at admission time. With the **prospective pin** updated to the
+reviewed merged PR536 guard `091f56275ae823cb3291b81dbdf016fcf16c3ea0`, the
+probe now correctly **fails closed** while the deployed watchdog is still at
+`f861f25b`. Runtime refuses any arm until the operator deploys the reviewed
+head; this source change does not deploy or claim readiness.
 
-**Explicit dependency (not integrated):** P1 natural-exit attestation branch
-PR536 `861d77bd6006e7eb0d0bf6e17d46ec43bc286fd4` received an independent
-**NO-GO** at 19:18Z (deadline expiry not fail-closed on a real launcher result).
-It is NOT merged into this pilot; no P1 arm may start until a corrected exact
-head is independently reviewed and pinned here.
+**Dependency status:** PR536 was reviewed GO at corrected head `6e6886a8` and
+merged at `091f5627`; it is integrated into this candidate's base `9f810867`
+but NOT DEPLOYED. PR535 (guard copy-only overlay admission, author `ottojung`,
+head `c7356b58`) remains open/draft and NO-GO; coordinate with its author and
+do not arm until it is resolved. PR531 is source GO at `bf3c1162` and staged
+only — no arm is claimed.
 
 Tests: `PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_watchdog_readiness.py`
 (12 deterministic tests over a simulated s6 layout; no live service touched).

@@ -218,7 +218,8 @@ PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_watchdog_readine
 # 12 passed (simulated s6 layout; no live service, ALIVE record or PX touch)
 # Real-host probe after 18:18Z deployment:
 #   python3 -m expanded.p1_watchdog_readiness --check  -> rc=0, ready=true,
-#   live_pid 1503395 with verified starttime/pid_ns AND cmdline_sha fingerprint.
+#   a live_pid derived from the current ALIVE record with verified
+#   starttime/pid_ns AND cmdline_sha fingerprint (no stale PID).
 
 PYTHONPATH=.:benchmarks python3 -m pytest -q \
   benchmarks/test_p1_bounded_pilot_runner.py \
@@ -252,14 +253,20 @@ git rev-parse FETCH_HEAD   # exact tip SHA posted to the P1 board
 git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach b185c7f2…
 ```
 
-## 6b. Explicit external dependency — P1 natural-exit attestation
-PR536 `861d77bd6006e7eb0d0bf6e17d46ec43bc286fd4` (parent `cdbcb832`, PR530)
-wires exact-CID natural-exit attestation into `p1_helper.watch_p1` and
-`p1_harness.run_prospective`. Its 19:18Z independent review is **NO-GO**
-(deadline expiry not fail-closed on a real launcher result), so it is NOT
-integrated here and PR531 changed paths do not overlap it. Before any P1 arm,
-a corrected exact head must be independently reviewed and pinned into this
-runbook and the slot bindings. No arm is authorized by this source-only change.
+## 6b. Dependency status and prospective guard pin
+- This candidate is integrated on `9f81086715cade9d383f4aec62e284873ab21ba0`,
+  which already contains the reviewed+merged PR536 guard at merge commit
+  `091f56275ae823cb3291b81dbdf016fcf16c3ea0` (corrected head `6e6886a8` was
+  independently GO'd). `verify_guard_source_pins()` pins those exact source
+  digests and is prospective only: `deployed=false`.
+- PR536 guard is **NOT DEPLOYED** (live watchdog still at PR530 `f861f25b`).
+  The readiness probe therefore fails closed until the operator deploys the
+  reviewed head. No arm is authorized by this change.
+- PR535 (copy-only overlay admission, author `ottojung`, head `c7356b58`)
+  remains open/draft and NO-GO; coordinate with its author before any arm.
+- Separate staged candidate: PCR integration at exact source
+  `19386765b40a4d57dce15c0984a731486b69121e` has its OWN binary-only recipe
+  and manifest; it does NOT overwrite the `950fe331` pin. No build performed.
 
 ## 7. Boundary / operator checklist
 

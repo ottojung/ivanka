@@ -265,6 +265,39 @@ AMBIENT_CONTAINER_SELECTORS = ("CONTAINERS_CONF", "CONTAINERS_STORAGE_CONF",
                                "CONTAINERS_STORAGE_DRIVER", "CONTAINERS_ROOTLESS")
 
 
+# Prospective pin to the reviewed, MERGED PR536 guard. Deployment is a
+# separate operator action; this source pin must never imply readiness.
+REVIEWED_GUARD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
+REVIEWED_GUARD_DIGESTS = {
+    "natural_exit": ("fail_closed_guard/natural_exit.py",
+                     "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6"),
+    "watch": ("fail_closed_guard/watch.py",
+              "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96"),
+    "monitor": ("assembler_bench/exploratory_runtime/monitor.py",
+                "b0bbefa221ff092acf33021b0203f2b07a912c250fc0893e8fdd59dad642293c"),
+    "p1_helper": ("fail_closed_guard/p1_helper.py",
+                  "b950ff947da8144271d8f4f0064fe72b4d6b1a492591e36610b942a553f21a27"),
+    "p1_harness": ("fail_closed_guard/p1_harness.py",
+                   "c193ca79b23fc6f2190b92ae7ce70d46de582a3fd71d9c17d09c6b6704d185fb"),
+}
+
+
+def verify_guard_source_pins(bench_dir=None):
+    """Prove the SOURCE guard matches the reviewed PR536 head (no deploy claim)."""
+    base = Path(bench_dir) if bench_dir else Path(__file__).resolve().parents[1]
+    got = {}
+    for name, (relative, expected) in REVIEWED_GUARD_DIGESTS.items():
+        path = base / relative
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"reviewed guard module missing: {name}")
+        actual = sha256(path)
+        if actual != expected:
+            raise ValueError(f"reviewed guard pin mismatch: {name}")
+        got[name] = actual
+    return {"head": REVIEWED_GUARD_HEAD, "digests": got,
+            "prospective": True, "deployed": False}
+
+
 def pinned_podman_env(storage_conf=None, *, expected_sha=None):
     """Minimal env with ONLY the verified shared store selector set.
 
@@ -912,6 +945,7 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         raise ValueError(f"unknown case(s): {', '.join(unknown)}")
 
     verify_pins(Path(args.data), Path(args.frozen_results), Path(args.timer))
+    guard_pins = verify_guard_source_pins()
     store = verify_px_store_binding(
         store_conf or args.storage_conf, expected_sha=PINS_V2["storage_conf"])
     shared = verify_shared_px_boundary(
@@ -939,6 +973,7 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         "qualified": False,
         "guard_status": "NO-GO pending independent reviewer approval and operator slot",
         "integration_base": INTEGRATION_BASE,
+        "reviewed_guard_pins": guard_pins,
         "candidate_source_commit": SOURCE_COMMIT,
         "candidate_image": args.image,
         "candidate_image_contract": contract,

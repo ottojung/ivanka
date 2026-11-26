@@ -36,7 +36,10 @@ WATCHDOG_MODULE = "fail_closed_guard.watchdog_cli"
 WATCHDOG_CLI_REL = Path("benchmarks/fail_closed_guard/watchdog_cli.py")
 # Code identity is derived from the DEPLOYED service run script, not from a
 # hardcoded path that goes stale when the operator cuts over a new namespace.
-WATCHDOG_SERVICE_HEAD = "f861f25b6e62e1266a498340e7d3cf9a09a9087f"
+# PROSPECTIVE pin: the reviewed, merged PR536 guard. The currently deployed
+# watchdog is still at PR530 f861f25b, so the probe MUST fail closed until the
+# operator deploys this reviewed head. This is a source pin, not a deployment.
+WATCHDOG_SERVICE_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
 # Exact watchdog_cli.py at that deployed head (unchanged PR527 implementation).
 WATCHDOG_CLI_SHA256 = "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369"
 # WATCHDOG_CODE is intentionally absent: it is read from the run script itself.

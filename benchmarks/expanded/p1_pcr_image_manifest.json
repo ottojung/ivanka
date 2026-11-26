@@ -1,0 +1,41 @@
+{
+  "binary": {
+    "container_path": "/usr/local/bin/ivanka",
+    "elf_magic": "7f454c46",
+    "path": "/workspace/ivanka-pcr-integration-950fe331-20261126/binaries/new-candidate",
+    "sha256": "ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563"
+  },
+  "build": {
+    "command": "podman build --pull=never --network=none --build-arg BINARY_SHA256=<pinned> -f benchmarks/expanded/Containerfile.p1-pcr-19386765-binary-only -t localhost/ivanka-p1-pcr-19386765:candidate .",
+    "containerfile": "benchmarks/expanded/Containerfile.p1-pcr-19386765-binary-only",
+    "executed": false,
+    "operator_note": "SEPARATE candidate: never overwrite or retag the 950fe331 pin; build only after reviewed guard deployment and exact slot grant."
+  },
+  "build_executed": false,
+  "candidate_source_branch": "documentation-only PCR integration on exact 950fe331",
+  "candidate_source_commit": "19386765b40a4d57dce15c0984a731486b69121e",
+  "expected_labels": {
+    "org.ottojung.ivanka.binary-sha256": "ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563",
+    "org.ottojung.ivanka.frozen-manifest-sha256": "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f",
+    "org.ottojung.ivanka.pilot-role": "bounded-prospective-p1-pcr-19386765",
+    "org.ottojung.ivanka.source-commit": "19386765b40a4d57dce15c0984a731486b69121e",
+    "org.ottojung.micall.frozen-image-id": "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad"
+  },
+  "frozen_manifest_sha256": "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f",
+  "integration_base_commit": "9f81086715cade9d383f4aec62e284873ab21ba0",
+  "large_image_imported": false,
+  "layer_contract": {
+    "kind": "one_layer_binary_only_overlay",
+    "no_source_or_truth_in_image": true,
+    "verify": "child.RootFS.Layers[:-1] == parent.RootFS.Layers and candidate layer contains only /usr/local/bin/ivanka with the pinned sha256"
+  },
+  "original_images_preserved": [
+    "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad",
+    "6fba70953664b95c3357c65d80fa56f0563962d0ff0112fa97e43ddd10a70971"
+  ],
+  "parent_image": "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad",
+  "prepared_only": true,
+  "schema": "ivanka.p1.candidate-image-manifest.v1",
+  "status": "ATTEMPTED_NOT_QUALIFIED",
+  "supersedes_or_overwrites": null
+}

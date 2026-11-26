@@ -189,6 +189,27 @@ a preflight is not permission to launch a container. Retire disposable
 transfer archives after verified import and preserve source-image identities.
 Never retire an archived store while a consumer references it.
 
+On an Antonina-managed host with the managed build-cache CLI installed, use
+an explicitly registered per-agent compiler cache for new Rust builds:
+
+```sh
+export CARGO_TARGET_DIR="$(antonina agent cache --id "$ANTONINA_AGENT_ID" --init)"
+export CARGO_INCREMENTAL=0
+export CARGO_PROFILE_DEV_DEBUG=0
+```
+
+Use this only for regenerable compiler intermediates. Copy necessary exact
+binaries and their hashes, test receipts, logs and scientific results to a
+separate evidence directory before the agent becomes terminal. Do not put
+source, immutable OCI data, or unique artifacts under the managed target.
+Do not claim or move another agent's existing target directory; only reuse
+an existing unregistered target if its owner and lifetime are established,
+and leave it to the owner or the audited terminal-cache retirement process.
+If the registration command is unavailable, use a small explicitly owned
+temporary target, preserve evidence, and retire it on completion. Never
+introduce host-wide launch caps or a PX-specific incremental storage limit.
+
+
 Keep inputs, image lineage, measurements and scoring authentic. Raw assembler FASTA-to-truth scores
 are **diagnostics only**; the mandatory seven-way synthetic alignment gate
 must score MiCall's **final dominant result** after each assembler is

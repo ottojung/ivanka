@@ -32,6 +32,7 @@ seven-way gate is not optional or deferred.
 | [014 — exact read coverage](014-exact-read-coverage.md) | Two distinct per-base exact-read-match coverage tracks, full-span and 70-base-end-trimmed; distributions, zero breadth and provenance | **Required; current sidecars expose only full-span counts** |
 | [015 — directed all-pairs Ψ](015-pairwise-psi-dominance.md) | Proof-backed all-r alignment/runtime/joint dominance matrix with incomplete, disproven, unresolved and self states | Public matrix available with incomplete/failure states; full seven-way proof cannot pass given genuine terminal failures |
 | [016 — dedicated assembler branches and images](016-dedicated-assembler-branches-and-containers.md) | One dedicated fork branch, tool-only image and unique digest per assembler with identical MiCall baseline and exact-commit provenance | **Seven dedicated remote branches and separately built images verified; first seven-way MiCall smoke passed; full expanded gate pending** |
+| [017 — reference-based MiCall remap](017-reference-based-remap-comparator.md) | Add ordinary reference-based reconstruction to both cohorts as a diagnostic comparison method, without any private acceptance effect | **Binding; execution and publication pending** |
 
 ## Rules for changes and claims
 

@@ -314,7 +314,14 @@ def merge_evidence(report, evidence):
             if isinstance(diagnostics, dict):
                 for tool in tools:
                     diagnostics.setdefault(tool, {})
-        _join_scores(run, [by_id[t] for t in declared if t in by_id], joined)
+        # Follow the declared roster rather than hash-randomized set order.
+        _join_scores(run, [by_id[t] for t in tools if t in declared], joined)
+        for sample in run.get("samples", []):
+            if "failures" in sample:
+                # Canonicalize previously published orders, without dropping
+                # unknown/duplicate entries that validation must still reject.
+                order = {tool: index for index, tool in enumerate(tools)}
+                sample["failures"].sort(key=lambda tool: (order.get(tool, len(order)), tool))
         for tool in tools:
             item = by_id.get(tool, {})
             cases = [case for case in item.get("cases", [])

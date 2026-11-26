@@ -449,7 +449,8 @@ class IntegrationTests(unittest.TestCase):
         text = script.read_text()
         self.assertIn("flock -n", text)
         self.assertIn("$STOP", text)
-        self.assertIn("--check-ready", text)
+        self.assertIn("--check-ready --check-admission", text)
+        self.assertIn('sleep 60\n        continue', text)
         self.assertIn("--supervise --armed", text)
         self.assertNotIn("--memory", text)
         # s6 runs from the PX data root: both package roots must be
@@ -516,6 +517,23 @@ class IntegrationTests(unittest.TestCase):
              "--registry", str(path), "--root", str(self.px), "--check-ready"],
             capture_output=True, text=True, env=env, check=False)
         self.assertEqual(result.returncode, 1)
+
+    def test_check_admission_requires_disk_headroom_before_handoffs(self):
+        registry = self.promoted_registry()
+        baseline = write_json(self.px / "budget-baseline.json", {"test": True})
+        argv = ["px_execution", "--registry", str(registry), "--root",
+                str(self.px), "--check-ready", "--check-admission"]
+        with (patch.object(sys, "argv", argv),
+              patch.object(exe.exploratory_policy, "checked", return_value={}),
+              patch.object(exe, "checked_baseline", return_value=baseline),
+              patch.object(sched, "admit_arm",
+                           side_effect=ValueError("workspace reserve")) as admit,
+              patch.object(sup, "verify_handoff") as handoff):
+            self.assertEqual(exe.main(), 1)
+            admit.assert_called_once_with(registry, {"test": True}, self.px,
+                                          exe.RESERVE_BYTES)
+            handoff.assert_not_called()
+            self.assertFalse((self.px / "receipts").exists())
 
     def test_private_paths_never_reach_receipts_or_results(self):
         plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)

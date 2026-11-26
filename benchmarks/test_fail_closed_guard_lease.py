@@ -161,19 +161,26 @@ class WatchTeardownTests(unittest.TestCase):
                   "baseline": {}, "root": ".", "image_store": ".",
                   "workspace": "."}
         stopped = []
+        proof = {"cid": CID, "container_removed": True,
+                 "fresh_absence_check": True}
         with patch.object(monitor.binding, "read_cid", return_value=CID), \
                 patch.object(monitor.binding, "inspect_pid", return_value=9), \
+                patch.object(monitor.binding, "inspect_pid_if_live",
+                             return_value=9), \
                 patch.object(monitor.proc, "snapshot", return_value={9: rec(9, 0, 1)}):
-            result = monitor.watch_pilot(
-                Stopped(), config, cidfile=Path("x.cid"), env={},
-                measure=lambda *a: {"incremental_bytes": 0},
-                stop=lambda cid: stopped.append(cid) or {
-                    "cid": cid, "container_removed": True,
-                    "fresh_absence_check": True},
-                sleep=lambda _: None, clock=lambda: 0.0)
+            # A launcher that exits while the exact CID is still live is a
+            # live identity loss: the container is still stopped by CID, but
+            # no natural-exit success may be claimed.
+            with self.assertRaises(GuardExceeded) as caught:
+                monitor.watch_pilot(
+                    Stopped(), config, cidfile=Path("x.cid"), env={},
+                    measure=lambda *a: {"incremental_bytes": 0},
+                    stop=lambda cid: stopped.append(cid) or proof,
+                    sleep=lambda _: None, clock=lambda: 0.0)
+        self.assertEqual(caught.exception.reason, "identity_lost")
         self.assertEqual(stopped, [CID])
-        self.assertEqual(result["teardown"]["cid"], CID)
-        self.assertTrue(result["teardown"]["container_removed"])
+        self.assertEqual(caught.exception.teardown, proof)
+        self.assertNotIn("natural_exit", caught.exception.guard_result)
 
     def test_transient_disk_measurement_failure_fails_closed(self):
         class Live:

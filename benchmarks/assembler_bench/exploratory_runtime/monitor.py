@@ -12,9 +12,13 @@ from assembler_bench.px_ram_semantics import (
     COMPARABLE_METHOD, COMPARABLE_METHOD_VERSION, COMPARABLE_SCOPE,
     METHOD_KEY, SCOPE_KEY, VERSION_KEY, sampler_fields)
 
-from fail_closed_guard import binding, build, proc, teardown
+from fail_closed_guard import binding, build, natural_exit, proc, teardown
 from fail_closed_guard.errors import GuardExceeded
 from fail_closed_guard.watch import watch_bound
+
+# A launcher poll can lag container exit. Bound the wait for a real result so
+# a stalled launcher cannot hold the guard loop open indefinitely.
+NATURAL_EXIT_CONFIRMATIONS = 32
 
 # Re-exported for legacy callers; one exception type makes the launcher's
 # fail-closed handler catch guard reasons from both the legacy sampler and the
@@ -142,11 +146,34 @@ def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
             return stop(cid)
         return teardown.stop_cid(env, cid)
 
+    def attest_natural():
+        """Attest completion from the exact CID, not from a lagging poll.
+
+        The launcher poll can still report a live process after the container
+        has exited. Confirm exact-CID absence while waiting for a real launcher
+        result, within the arm's own deadline. A still-live CID is a live
+        identity loss and an unusable inspection is never absence; both stay
+        fail-closed.
+        """
+        cid = bound["cid"]
+        deadline = start + config["wall_seconds"]
+        for _ in range(NATURAL_EXIT_CONFIRMATIONS):
+            if binding.inspect_pid_if_live(cid, env) is not None:
+                raise GuardExceeded("identity_lost")
+            result = proc_handle.poll()
+            if result is not None:
+                return natural_exit.attest(cid, env, result)
+            if clock() >= deadline:
+                break
+            sleep(interval)
+        raise GuardExceeded("natural_exit_unverified")
+
     return watch_bound(
         bound, limit=config["rss_bytes"], wall_seconds=config["wall_seconds"],
         running=(lambda: proc_handle.poll() is None), snapshot=take,
         measure=disk, stop=terminate, clock=clock, sleep=sleep, interval=interval,
-        attestation=BOUND_ATTESTATION, start=start, heartbeat=heartbeat)
+        attestation=BOUND_ATTESTATION, start=start, heartbeat=heartbeat,
+        attest_exit=attest_natural)
 
 
 def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,

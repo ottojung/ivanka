@@ -17,7 +17,7 @@ def audit_event(path, event):
 
 
 def _result(binding, peak, teardown, teardown_error=None, attestation=None,
-            identity_observation=None, disk_observation=None):
+            identity_observation=None, disk_observation=None, natural_exit=None):
     result = {"peak_rss": peak, "cid": binding.get("cid"), "teardown": teardown,
                "enforcement": "userspace_observed", "kernel_enforcement": False}
     # Only a caller that actually ran the bound whole-container sampler may
@@ -37,6 +37,8 @@ def _result(binding, peak, teardown, teardown_error=None, attestation=None,
         result["identity_observation"] = identity_observation
     if disk_observation is not None:
         result["disk_observation"] = disk_observation
+    if natural_exit is not None:
+        result["natural_exit"] = natural_exit
     return result
 
 
@@ -75,7 +77,8 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                 stop, clock=time.monotonic, sleep=time.sleep, audit=None,
                 interval=0.5, rss_fn=None, attestation=None, start=None,
                 heartbeat=None, disk_path=None, disk_reserve_bytes=None,
-                disk_usage=None, strict_proof=False, deadline_utc=None):
+                disk_usage=None, strict_proof=False, deadline_utc=None,
+                attest_exit=None):
     """Sample a bound container tree; fail closed on any unknown state.
 
     `stop(cid)` must be CID-only with teardown proof. The watcher never
@@ -88,6 +91,12 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
     loop (fail closed on shortfall or unreadable disk state). `strict_proof`
     requires an explicit fresh absence check on teardown; the P1 adapter
     enables it, while legacy injected stop doubles keep their older shape.
+
+    `attest_exit` is the only accepted evidence of natural completion for a
+    bound pilot: it must prove the exact CID absent and supply a real launcher
+    result. A missing ``/proc`` PID or a launcher poll that merely stopped
+    reporting liveness is never enough. Without it a caller keeps the legacy
+    exit behaviour.
     """
     if limit <= 0 or wall_seconds <= 0 or interval <= 0:
         raise GuardExceeded("invalid_config")
@@ -99,6 +108,7 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
     stopped = False
     stop_attempted = False
     last_identity = None
+    natural_exit = None
     disk_observation = None
     if disk_reserve_bytes is not None:
         disk_observation = {"path": str(disk_path),
@@ -112,7 +122,7 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
         exc.guard_result = _result(
             binding, peak, teardown, teardown_error=exc.teardown_error,
             attestation=attestation, identity_observation=last_identity,
-            disk_observation=disk_observation)
+            disk_observation=disk_observation, natural_exit=natural_exit)
         if teardown is not None:
             exc.teardown = teardown
         return exc
@@ -157,7 +167,11 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                     disk_path, disk_reserve_bytes, usage=disk_usage)
             table = snapshot()
             if binding.get("stable"):
-                last_identity = startup.observation(binding, table)
+                observation = startup.observation(binding, table)
+                # Keep the last *live* observation. A vanished PID is a
+                # sampling event, not an identity that can attest completion.
+                if observation["observed"]["present"]:
+                    last_identity = observation
             try:
                 if rss_fn is None:
                     if binding.get("stable"):
@@ -173,13 +187,18 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                     group = []
                     used = rss_fn(table, binding)
             except GuardExceeded as exc:
-                # A process that has already exited is a completed arm, not a
-                # breach. While it is still live, an unreadable or lost identity
-                # fails closed; a dead process cannot be measured, so preserve
-                # the last real peak and let the normal teardown proof complete.
-                if (exc.reason in ("identity_lost", "measurement_unavailable")
-                        and not running()):
-                    break
+                if exc.reason in ("identity_lost", "measurement_unavailable"):
+                    if attest_exit is not None:
+                        # An unreadable or vanished /proc record says nothing
+                        # about the bound container. Only exact-CID absence
+                        # plus a real launcher result may end the arm; a live
+                        # CID or an unusable inspection keeps this fail-closed.
+                        natural_exit = attest_exit()
+                        break
+                    # Legacy callers still accept a launcher that stopped
+                    # reporting liveness; pilots must use attest_exit.
+                    if not running():
+                        break
                 raise
             peak = used if peak is None else max(peak, used)
             if used > limit:
@@ -201,6 +220,10 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
             if heartbeat is not None:
                 heartbeat()
             sleep(interval)
+        # Falling out of the loop only means the launcher stopped reporting
+        # liveness. For a bound pilot the exact CID must still be attested.
+        if attest_exit is not None and natural_exit is None:
+            natural_exit = attest_exit()
     except GuardExceeded as exc:
         raise fail_close(exc)
     except Exception as exc:
@@ -214,4 +237,5 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
         raise collect(exc)
     return _result(binding, peak, teardown, attestation=attestation,
                    identity_observation=last_identity,
-                   disk_observation=disk_observation)
+                   disk_observation=disk_observation,
+                   natural_exit=natural_exit)

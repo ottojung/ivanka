@@ -86,6 +86,7 @@ class SharedDeadlineTests(unittest.TestCase):
                 self.cidfile.write_text(CID)
 
         with patch.object(binding, "inspect_pid", return_value=9), \
+                patch.object(binding, "inspect_pid_if_live", return_value=None), \
                 patch.object(monitor.proc, "snapshot",
                              return_value={9: rec(9, 0, rss)}):
             try:

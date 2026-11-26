@@ -51,6 +51,8 @@ INFRASTRUCTURE_FAILURE_REASONS = frozenset(
     ("disk_stop", "measurement_unavailable", "identity_lost",
      "binding_unavailable"))
 MAX_INFRA_ATTEMPTS = 2
+# One explicit, separately authorized attempt after the fixed budget is spent.
+AUTHORIZED_EXTRA_ATTEMPT = MAX_INFRA_ATTEMPTS + 1
 MAX_RESERVE = 4 * 1024**3
 MIN_RESERVE = 1024**3
 # MiCall's frozen final MAX consensus artifact, never a raw assembler contig.
@@ -356,7 +358,7 @@ def _verify_receipt_data(data, arm):
         raise ValueError("PX receipt is incomplete or not terminal")
     attempt = data.get("attempt", 1)
     if (not isinstance(attempt, int) or attempt < 1
-            or attempt > MAX_INFRA_ATTEMPTS):
+            or attempt > AUTHORIZED_EXTRA_ATTEMPT):
         raise ValueError("PX receipt attempt is invalid")
     if data["outcome"] == "success":
         if not SHA256.fullmatch(data.get("output_sha256") or ""):
@@ -381,14 +383,19 @@ def verify_receipt(root, arm):
         raise ValueError("PX case receipt is unindexed or changed")
     data = _verify_receipt_data(json.loads(blob), arm)
     attempt = data.get("attempt", 1)
-    if attempt > 1:
-        original = attempt_path(root, arm, 1)
-        if not original.is_file():
+    for prior_attempt in range(1, min(attempt, AUTHORIZED_EXTRA_ATTEMPT)):
+        preserved = attempt_path(root, arm, prior_attempt)
+        if not preserved.is_file():
             raise ValueError("versioned retry missing preserved original failure")
-        prior = _verify_receipt_data(json.loads(original.read_bytes()), arm)
-        if (prior.get("outcome") != "failure"
+        prior = _verify_receipt_data(json.loads(preserved.read_bytes()), arm)
+        if (prior.get("attempt") != prior_attempt
+                or prior.get("outcome") != "failure"
                 or prior.get("failure_reason") not in INFRASTRUCTURE_FAILURE_REASONS):
             raise ValueError("only infrastructure failures may be retried")
+    if attempt == AUTHORIZED_EXTRA_ATTEMPT:
+        from . import px_retry_authorization as authz
+        if authz.verify(root, arm) is None:
+            raise ValueError("extra PX attempt is not authorized")
     return data
 
 
@@ -411,13 +418,23 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
     existing = verify_receipt(root, arm)
     attempt = 1
     if existing is not None:
-        if (existing.get("outcome") == "failure"
-                and existing.get("failure_reason") in INFRASTRUCTURE_FAILURE_REASONS
-                and existing.get("attempt", 1) < MAX_INFRA_ATTEMPTS):
+        previous = existing.get("attempt", 1)
+        failed_infra = (existing.get("outcome") == "failure"
+                        and existing.get("failure_reason")
+                        in INFRASTRUCTURE_FAILURE_REASONS)
+        if failed_infra and previous < MAX_INFRA_ATTEMPTS:
             original = attempt_path(root, arm, 1)
             if not original.is_file():
                 _atomic_write(original, _json_bytes(existing))
-            attempt = existing.get("attempt", 1) + 1
+            attempt = previous + 1
+        elif failed_infra and previous == MAX_INFRA_ATTEMPTS:
+            from . import px_retry_authorization as authz
+            if authz.verify(root, arm) is None:
+                raise ValueError("exhausted PX arm may not be retried without authorization")
+            original = attempt_path(root, arm, previous)
+            if not original.is_file():
+                _atomic_write(original, _json_bytes(existing))
+            attempt = AUTHORIZED_EXTRA_ATTEMPT
         else:
             raise ValueError("terminal PX arm may not be recomputed or overwritten")
     if outcome not in TERMINAL_OUTCOMES:
@@ -461,7 +478,13 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
         raise ValueError("unclassified failure is never terminal")
     _assert_public(receipt)
     if attempt > 1:
-        _atomic_json(attempt_path(root, arm, attempt), receipt)
+        preserved = attempt_path(root, arm, attempt)
+        expected = _json_bytes(receipt)
+        if preserved.is_file():
+            if preserved.read_bytes() != expected:
+                raise ValueError("preserved attempt receipt changed")
+        else:
+            _atomic_write(preserved, expected)
     return _write_canonical_receipt(root, arm, receipt)
 
 
@@ -489,7 +512,8 @@ def build_plan(registry, source, root, *, provenance_root=None):
                            "source_commit", "adapter_commit", "image_sha256")}}
                 arms.append(arm)
                 receipt = verify_receipt(root, arm)
-                if _receipt_accepted(receipt):
+                if (_receipt_accepted(receipt)
+                        and not _authorized_retry_available(root, arm, receipt)):
                     accepted_ids.append(receipt_id(arm))
                 else:
                     pending.append(arm)
@@ -527,6 +551,18 @@ def _receipt_accepted(receipt):
         and receipt.get("attempt", 1) < MAX_INFRA_ATTEMPTS)
 
 
+def _authorized_retry_available(root, arm, receipt):
+    """An exhausted infrastructure arm stays pending only once authorized."""
+    if (not isinstance(receipt, dict)
+            or receipt.get("outcome") != "failure"
+            or receipt.get("failure_reason")
+            not in INFRASTRUCTURE_FAILURE_REASONS
+            or receipt.get("attempt") != MAX_INFRA_ATTEMPTS):
+        return False
+    from . import px_retry_authorization as authz
+    return authz.verify(root, arm) is not None
+
+
 def resume(plan, root):
     """Reconcile a checkpoint with receipts; receipts remain authoritative."""
     path = checkpoint_path(root)
@@ -543,7 +579,8 @@ def resume(plan, root):
     pending = []
     for arm in plan["pending"]:
         receipt = verify_receipt(root, arm)
-        if not _receipt_accepted(receipt):
+        if (not _receipt_accepted(receipt)
+                or _authorized_retry_available(root, arm, receipt)):
             pending.append(arm)
     return pending
 

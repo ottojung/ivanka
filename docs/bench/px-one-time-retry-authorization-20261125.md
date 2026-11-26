@@ -49,6 +49,21 @@ the current deployment and the original reserve fix. A change to any pinned
 guard source (including a watchdog relaunch from different bytes or a changed
 natural-exit decision path) invalidates an authorization.
 
+Production verification (`px_guard_source.verify()`) reads the **live service**
+root `/workspace/ivanka-guard-pr530-staged-20261126` and checks its git HEAD
+against `DEPLOYED_HEAD` before hashing bytes. It never reads whatever checkout
+happens to run a test: a CI merge tree can already contain not-yet-deployed
+guard code (PR #536 changed three pinned monitor paths after this pin was
+attested), which must not be mistaken for the deployed guard. The regression
+suite uses an explicit isolated fixture under
+`benchmarks/fixtures/px_guard_pins/` containing the exact attested bytes; it
+patches only the verification entry point in tests, never the pin constants,
+the production code path or the live service. A separate test recomputes the
+pins from the deployed tree itself when that tree is present. The transition to
+PR #536's staged root `/workspace/ivanka-guard-pr536-staged-20261126` is pending
+an operator-confirmed natural boundary; pins are deliberately NOT moved to it
+until that deployment is attested.
+
 ## Authorization contract
 
 `assembler_bench.px_retry_authorization` writes one canonical JSON file per arm

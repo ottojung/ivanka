@@ -20,6 +20,27 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "benchmarks/assembler_bench/exploratory_candidates.json"
 TOOLS = ("skesa", "minia")
 
+# Explicit isolated guard fixture. CI merges the branch into a main that may
+# already contain not-yet-deployed guard code (PR #536 changed three pinned
+# monitor paths), so tests must not read the checkout as if it were the live
+# service. Production verification still reads DEPLOYED_ROOT/DEPLOYED_HEAD.
+_REAL_GUARD_VERIFY = guard_source.verify
+_FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "px_guard_pins"
+
+
+def _fixture_verify(root=None):
+    return _REAL_GUARD_VERIFY(root=_FIXTURE_ROOT)
+
+
+def setUpModule():
+    global _guard_patch
+    _guard_patch = patch.object(guard_source, "verify", side_effect=_fixture_verify)
+    _guard_patch.start()
+
+
+def tearDownModule():
+    _guard_patch.stop()
+
 # Exact indexed receipts from the exhausted infrastructure run records. The
 # first pair are two IDBA-UD du-measurement timeouts; the second pair are a
 # Minia measurement timeout followed by a disk-stop failure.
@@ -480,7 +501,8 @@ class GuardPinAndDigestTests(unittest.TestCase):
         deployed = Path("/workspace/ivanka-guard-pr530-staged-20261126")
         if not deployed.is_dir():
             self.skipTest("deployed watchdog checkout not present")
-        guard = guard_source.verify()
+        guard = _REAL_GUARD_VERIFY(root=deployed)
+        self.assertEqual(guard, dict(guard_source.EXPECTED))
         for name, digest in guard.items():
             self.assertEqual(
                 hashlib.sha256((deployed / name).read_bytes()).hexdigest(),

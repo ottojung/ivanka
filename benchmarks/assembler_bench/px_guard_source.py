@@ -17,7 +17,14 @@ retained as the origin of the constant-time reserve so older evidence is never
 weakened or rewritten.
 """
 import hashlib
+import subprocess
 from pathlib import Path
+
+# Live service identity. Production verification is tied to these bytes and
+# this HEAD, never to whatever checkout happens to be running the tests: a CI
+# merge tree may contain newer, not-yet-deployed guard code (e.g. PR #536).
+DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr530-staged-20261126")
+DEPLOYED_HEAD = "f861f25b6e62e1266a498340e7d3cf9a09a9087f"
 
 # Origin of the constant-time shared disk reserve (PR #510). Retained evidence.
 RESERVE_COMMIT = "af1f10d19143fa7a00134a01b56a858ef8a09647"
@@ -86,12 +93,25 @@ def digest(path):
 
 
 def root():
+    """Source checkout root (fixtures live under it); not the live service."""
     return Path(__file__).resolve().parents[2]
 
 
-def verify():
-    """Return the deployed guard digests only when every pinned source matches."""
-    found = {name: digest(root() / name) for name in EXPECTED}
+def verify(root=None):
+    """Return deployed guard digests only for the exact live service identity.
+
+    With no argument this reads DEPLOYED_ROOT (the live watchdog/PX code) and
+    checks its git HEAD against DEPLOYED_HEAD before hashing bytes. An explicit
+    root is used only by the isolated test fixture, never by production code.
+    """
+    base = Path(root) if root is not None else DEPLOYED_ROOT
+    if base == DEPLOYED_ROOT and (base / ".git").exists():
+        head = subprocess.run(
+            ["git", "-C", str(base), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True).stdout.strip()
+        if head != DEPLOYED_HEAD:
+            raise ValueError("deployed PX guard HEAD drift")
+    found = {name: digest(base / name) for name in EXPECTED}
     if found != EXPECTED:
         raise ValueError("deployed PX guard source drift")
     return found

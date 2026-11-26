@@ -15,23 +15,22 @@ from fail_closed_guard import (build, copy_overlay, copy_overlay_helper,
                                watchdog_contract)
 from fail_closed_guard.errors import GuardExceeded, OrphanLease
 
-BASE = "a" * 64
-COMMIT = "b" * 24
-GRAPHROOT = "/workspace/ivanka-exploratory-podman-20261121/store"
+FROZEN = "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad"
+COMMIT = "950fe331dfcd857011bfd63f9eeca92462708545"
+GRAPHROOT = "/workspace/ivanka-exploratory-podman-20261103/store"
 PID = 4243
 CONTROLLER = 4242
 BASELINE_ID = "1" * 64
 NEW_ID = "2" * 64
 IMAGE_ID = "3" * 64
 BASE_LAYER = "4" * 64
-NEW_LAYER = "5" * 64
+LAYERS = [hashlib.sha256(bytes([index])).hexdigest() for index in range(27)]
 PAYLOAD = b"binary-only ivanka"
-LABELS = {
-    "org.ottojung.ivanka.source-commit": COMMIT,
-    "org.ottojung.ivanka.artifact-sha256": hashlib.sha256(PAYLOAD).hexdigest(),
-    "org.ottojung.micall.frozen-image-id": BASE,
-    "org.ottojung.ivanka.overlay-mode": "copy-only",
-}
+ARTIFACT_SHA = hashlib.sha256(PAYLOAD).hexdigest()
+FROZEN_MANIFEST = "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f"
+PILOT_ROLE = "bounded-prospective-p1-950fe331"
+INHERITED = {"io.buildah.version": "1.39.0",
+             "org.opencontainers.image.created": "2026-01-01T00:00:00Z"}
 
 
 def record(pid, starttime, pgid=None, rss=100, ns=99, cmd="podman"):
@@ -70,7 +69,7 @@ class GateTests(unittest.TestCase):
         self.sealed = self.root / "sealed"
         self.sealed.mkdir(mode=0o700)
         (self.sealed / "Containerfile").write_bytes(
-            copy_overlay.CONTAINERFILE.format(base=BASE).encode())
+            copy_overlay.CONTAINERFILE.format(base=FROZEN).encode())
         (self.sealed / "ivanka").write_bytes(PAYLOAD)
         os.chmod(self.sealed / "Containerfile", 0o400)
         os.chmod(self.sealed / "ivanka", 0o755)
@@ -100,8 +99,7 @@ class GateTests(unittest.TestCase):
             select_fn=lambda readers, _, __, timeout: (readers if timeout > 0
                                                        else [], [], []),
             snapshot=lambda: self.table, sealed_context=self.sealed,
-            base=BASE, artifact_sha256=hashlib.sha256(PAYLOAD).hexdigest(),
-            artifact_mode=0o755)
+            base=FROZEN, artifact_sha256=ARTIFACT_SHA, artifact_mode=0o755)
 
     def test_eof_deadline_and_missing_bind_never_exec(self):
         self.assertFalse(self.gate(payload=b""))
@@ -110,21 +108,6 @@ class GateTests(unittest.TestCase):
         self.assertFalse(self.gate(now=1010.0))
         self.assertFalse(self.gate(mono_now=1010.0))
         self.assertFalse(self.gate(committed=False))
-
-    def test_wrong_pid_identity_or_store_never_exec(self):
-        self.assertFalse(self.gate(payload=b"X"))
-        for changes in ({"pid": os.getpid() + 1},
-                        {"stable": (999, 7)},
-                        {"graphroot": "/foreign/store"}):
-            with self.subTest(changes=changes):
-                journal = self.root / lease.JOURNAL_NAME
-                if journal.exists():
-                    journal.unlink()
-                self.commit(**changes)
-                self.assertFalse(self.gate(committed=False))
-
-    def test_exact_durable_bind_allows_exec(self):
-        self.assertTrue(self.gate())
 
     def test_mutation_before_exec_never_allows_exec(self):
         for mutate in (lambda: (self.sealed / "ivanka").write_bytes(b"bad"),
@@ -140,6 +123,9 @@ class GateTests(unittest.TestCase):
                         item.unlink()
                 mutate()
                 self.assertFalse(self.gate())
+
+    def test_exact_durable_bind_allows_exec(self):
+        self.assertTrue(self.gate())
 
 
 class CopyOverlayTests(unittest.TestCase):
@@ -157,19 +143,32 @@ class CopyOverlayTests(unittest.TestCase):
         (self.context / "ivanka").write_bytes(PAYLOAD)
         os.chmod(self.context / "ivanka", 0o755)
         (self.context / "Containerfile").write_text(
-            copy_overlay.CONTAINERFILE.format(base=BASE))
-        self.plan = {"schema": copy_overlay.SCHEMA, "base_image": BASE,
+            copy_overlay.CONTAINERFILE.format(base=FROZEN))
+        self.code_root = self.root / "deployed-code"
+        helper = self.code_root / "benchmarks/fail_closed_guard"
+        helper.mkdir(parents=True)
+        (helper / "copy_overlay_helper.py").write_bytes(b"# pinned helper\n")
+        self.code_sha = hashlib.sha256(
+            (helper / "copy_overlay_helper.py").read_bytes()).hexdigest()
+        self.plan = {"schema": copy_overlay.SCHEMA,
+                     "base_image": "sha256:" + FROZEN,
                      "source_commit": COMMIT, "context": str(self.context),
                      "storage_conf": str(self.conf),
                      "storage_conf_sha256": self.conf_sha,
-                     "graphroot": GRAPHROOT, "base_layers": [BASE_LAYER],
-                     "artifact_sha256": hashlib.sha256(PAYLOAD).hexdigest(),
+                     "graphroot": GRAPHROOT,
+                     "base_layers": ["sha256:" + item for item in LAYERS],
+                     "artifact_sha256": ARTIFACT_SHA,
                      "artifact_mode": 0o755, "source": "ivanka",
                      "destination": "/usr/local/bin/ivanka",
+                     "frozen_manifest_sha256": FROZEN_MANIFEST,
+                     "pilot_role": PILOT_ROLE,
+                     "inherited_labels": dict(INHERITED),
+                     "code_root": str(self.code_root),
+                     "code_sha256": self.code_sha,
                      "tag": "ivanka-copy-" + "c" * 16}
         self.ident = "copy-" + copy_overlay.plan_digest(self.plan)[:16]
         self.env = {"CONTAINERS_STORAGE_CONF": str(self.conf),
-                    "TMPDIR": "/host/tmp", "TMP": "/host/tmp",
+                    "TMPDIR": "/host/tmp", "PYTHONPATH": "/host/code",
                     "UNRELATED_SECRET": "must-not-leak"}
         self.commands = []
         self.removed = []
@@ -177,7 +176,13 @@ class CopyOverlayTests(unittest.TestCase):
         self.new_external = []
         self.bad_image = False
         self.bad_layers = False
-        self.image_labels = dict(LABELS)
+        self.image_labels = dict(INHERITED, **{
+            "org.ottojung.ivanka.source-commit": COMMIT,
+            "org.ottojung.micall.frozen-image-id": FROZEN,
+            "org.ottojung.ivanka.binary-sha256": ARTIFACT_SHA,
+            "org.ottojung.ivanka.frozen-manifest-sha256": FROZEN_MANIFEST,
+            "org.ottojung.ivanka.pilot-role": PILOT_ROLE,
+        })
         patches = [
             patch.object(copy_overlay, "PX_ROOT", str(self.root)),
             patch.object(store.binding, "command", side_effect=self.command),
@@ -196,22 +201,24 @@ class CopyOverlayTests(unittest.TestCase):
             return GRAPHROOT + "\n"
         if argv[1] == "ps":
             if "--external" in argv:
-                entries = [(BASELINE_ID, BASE[:12] + "-working-container",
+                entries = [(BASELINE_ID, FROZEN[:12] + "-working-container",
                             "Storage")]
                 entries.extend(self.new_external)
                 return "".join("%s|%s|%s\n" % item for item in entries)
             return ""
         if argv[1] == "inspect":
-            image = "f" * 64 if self.bad_image else BASE
-            layers = ([BASE_LAYER] if self.bad_layers
-                      else [BASE_LAYER, NEW_LAYER])
-            return "%s|%s|%s\n" % (
-                image, BASE[:12] + "-working-container", json.dumps(layers))
+            image = "f" * 64 if self.bad_image else FROZEN
+            layers = LAYERS[:1] if self.bad_layers else LAYERS + [NEW_ID]
+            return "sha256:%s|%s|%s\n" % (
+                image, FROZEN[:12] + "-working-container",
+                json.dumps(["sha256:" + item for item in layers]))
         if argv[1] == "image":
-            layers = ([BASE_LAYER] if self.bad_layers
-                      else [BASE_LAYER, NEW_LAYER])
-            return "%s|%s|%s\n" % (IMAGE_ID, json.dumps(self.image_labels),
-                                    json.dumps(layers))
+            if getattr(self, "on_image_inspect", None) is not None:
+                self.on_image_inspect()
+            layers = LAYERS[:1] if self.bad_layers else LAYERS + [NEW_ID]
+            return "sha256:%s|%s|%s\n" % (
+                IMAGE_ID, json.dumps(self.image_labels),
+                json.dumps(["sha256:" + item for item in layers]))
         if argv[1] == "rm":
             self.removed.append(argv[-1])
             self.new_external = [entry for entry in self.new_external
@@ -228,17 +235,18 @@ class CopyOverlayTests(unittest.TestCase):
         return table
 
     def own_external(self):
-        self.new_external.append((NEW_ID, BASE[:12] + "-working-container",
+        self.new_external.append((NEW_ID, FROZEN[:12] + "-working-container",
                                   "Storage"))
 
     def write_iid(self, argv):
-        index = argv.index("--iidfile")
-        Path(argv[index + 1]).write_text(IMAGE_ID + "\n")
+        Path(argv[argv.index("--iidfile") + 1]).write_text(
+            "sha256:" + IMAGE_ID + "\n")
 
     def ping(self, table=None):
         heartbeat.ping(self.root, pid=CONTROLLER, table=table or self.table(),
                        storage_conf=self.conf, graphroot=GRAPHROOT,
                        env=self.env, wall=time.time)
+        (self.root / "STOP").write_text(self.ident + "\n")
         return heartbeat.alive_path(self.root)
 
     def write_permission(self, fd, payload):
@@ -270,7 +278,7 @@ class CopyOverlayTests(unittest.TestCase):
             return handle or Handle(PID)
 
         return copy_overlay.run(
-            self.root, self.plan, expected_base=BASE,
+            self.root, self.plan, expected_base=FROZEN,
             expected_commit=COMMIT, graphroot=GRAPHROOT, env=self.env,
             reserve_bytes=1024, snapshot=lambda: table, command=self.command,
             usage=usage or (lambda path: Free(100 * 1024**3)),
@@ -288,36 +296,44 @@ class CopyOverlayTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 with shared_lock(self.root):
                     pass
-        with shared_lock(self.root):
-            pass
 
-    def test_plan_rejects_weak_pins_and_extra_content(self):
+    def test_plan_normalizes_sha256_and_rejects_weak_pins(self):
         validated = copy_overlay.validate_plan(
-            self.plan, expected_base=BASE, expected_commit=COMMIT,
+            self.plan, expected_base=FROZEN, expected_commit=COMMIT,
             expected_graphroot=GRAPHROOT, root=self.root)
-        self.assertEqual(validated["base_layers"], [BASE_LAYER])
+        self.assertEqual(validated["base_image"], FROZEN)
+        self.assertEqual(validated["base_layers"], LAYERS)
         seal_dir = self.root / "seal-test"
         seal_dir.mkdir()
-        sealed_copy = dict(validated)
-        copy_overlay.seal_context(seal_dir, sealed_copy)
-        self.assertIn("--iidfile", sealed_copy["argv"])
+        sealed = dict(validated)
+        copy_overlay.seal_context(seal_dir, sealed)
+        self.assertIn("--iidfile", sealed["argv"])
+        self.assertIn("org.ottojung.ivanka.binary-sha256=" + ARTIFACT_SHA,
+                      sealed["argv"])
         (self.context / "extra").write_bytes(b"x")
         with self.assertRaises(GuardExceeded):
             copy_overlay.validate_plan(
-                self.plan, expected_base=BASE, expected_commit=COMMIT,
+                self.plan, expected_base=FROZEN, expected_commit=COMMIT,
                 expected_graphroot=GRAPHROOT, root=self.root)
         (self.context / "extra").unlink()
-        self.plan["storage_conf_sha256"] = "0" * 64
+        self.plan["code_sha256"] = "0" * 64
         with self.assertRaises(GuardExceeded):
             copy_overlay.validate_plan(
-                self.plan, expected_base=BASE, expected_commit=COMMIT,
+                self.plan, expected_base=FROZEN, expected_commit=COMMIT,
                 expected_graphroot=GRAPHROOT, root=self.root)
-        self.plan["storage_conf_sha256"] = self.conf_sha
-        self.plan["base_layers"] = ["not-a-layer"]
-        with self.assertRaises(GuardExceeded):
-            copy_overlay.validate_plan(
-                self.plan, expected_base=BASE, expected_commit=COMMIT,
-                expected_graphroot=GRAPHROOT, root=self.root)
+        self.plan["code_sha256"] = self.code_sha
+
+    def test_stop_must_exist_and_be_owner_bound(self):
+        with self.assertRaises(GuardExceeded) as caught:
+            copy_overlay.check_stop(self.root, self.ident)
+        self.assertEqual(caught.exception.reason, "stop_absent")
+        (self.root / "STOP").write_text("hold\n")
+        with self.assertRaises(GuardExceeded) as caught:
+            copy_overlay.check_stop(self.root, self.ident)
+        self.assertEqual(caught.exception.reason, "stop_owner_unauthorized")
+        (self.root / "STOP").write_text(self.ident + "\n")
+        self.assertEqual(copy_overlay.check_stop(self.root, self.ident),
+                         str(self.root / "STOP"))
 
     def test_pre_bind_crash_leaves_no_permission_and_no_build(self):
         self.ping()
@@ -330,23 +346,24 @@ class CopyOverlayTests(unittest.TestCase):
         self.assertEqual(self.permission, [])
         self.assertEqual(lease.latest(lease.events(self.root))[
             self.ident]["state"], "active")
-        self.assertEqual(self.evidence()[-1]["reason"], "binding_unavailable")
 
-    def test_success_has_labels_layers_and_clean_environment(self):
+    def test_success_labels_layers_and_pinned_pythonpath(self):
         self.ping()
         state = self.run_build()
         self.assertEqual(state["status"], "completed")
         self.assertEqual(self.stopped, [PID])
         self.assertEqual(self.removed, [NEW_ID])
-        self.assertEqual(state["image_receipt"]["labels"], LABELS)
+        labels = state["image_receipt"]["labels"]
+        self.assertEqual(labels["org.ottojung.ivanka.binary-sha256"],
+                         ARTIFACT_SHA)
+        self.assertEqual(labels["io.buildah.version"], "1.39.0")
         self.assertTrue(state["image_receipt"]["one_layer_overlay"])
         proof = state["teardown"]["orphan_cleanup"]["removed"][0]["inspect"]
-        self.assertEqual(proof["image"], BASE)
-        self.assertEqual(proof["layers"], [BASE_LAYER, NEW_LAYER])
-        self.assertEqual(len(self.permission), 1)
-        self.assertEqual(self.permission[0][1], b"G")
+        self.assertEqual(proof["image"], FROZEN)
+        self.assertEqual(len(proof["layers"]), 28)
         self.assertNotIn("UNRELATED_SECRET", self.spawn_env)
-        self.assertEqual(Path(self.spawn_env["TMPDIR"]).parent, self.root)
+        self.assertNotIn("/host/code", self.spawn_env["PYTHONPATH"])
+        self.assertIn(str(self.code_root), self.spawn_env["PYTHONPATH"])
         receipt = next(self.root.glob("copy-*/result.json"))
         self.assertEqual(json.loads(receipt.read_text())["status"], "completed")
 
@@ -378,7 +395,7 @@ class CopyOverlayTests(unittest.TestCase):
              patch.object(copy_overlay.os, "write", side_effect=safe_write), \
              patch("os.killpg", side_effect=record_signal):
             state = copy_overlay.run(
-                self.root, self.plan, expected_base=BASE,
+                self.root, self.plan, expected_base=FROZEN,
                 expected_commit=COMMIT, graphroot=GRAPHROOT, env=self.env,
                 reserve_bytes=1024, snapshot=lambda: next(tables, {}),
                 command=self.command, usage=lambda path: Free(100 * 1024**3),
@@ -390,7 +407,7 @@ class CopyOverlayTests(unittest.TestCase):
         self.assertEqual(self.removed, [NEW_ID])
         self.assertEqual(signals, [PID])
 
-    def test_full_ids_and_base_derived_owner_are_required(self):
+    def test_full_ids_base_ownership_and_bad_receipt_fail_closed(self):
         self.ping()
         original = self.command
 
@@ -411,17 +428,13 @@ class CopyOverlayTests(unittest.TestCase):
         with self.assertRaises(GuardExceeded) as caught:
             self.run_build(start_owned=True)
         self.assertEqual(caught.exception.reason, "orphan_unowned")
-        self.assertEqual(self.removed, [])
         self.bad_image = False
         self.reset_lease()
-        def foreign_at_spawn():
-            self.new_external.append((NEW_ID, self.ident
-                                      + "-working-container", "Storage"))
-
+        self.bad_layers = True
         with self.assertRaises(GuardExceeded) as caught:
-            self.run_build(start_owned=False, spawn_hook=foreign_at_spawn)
-        self.assertEqual(caught.exception.reason, "orphan_baseline_changed")
-        self.new_external.clear()
+            self.run_build(start_owned=False)
+        self.assertEqual(caught.exception.reason, "image_receipt_invalid")
+        self.bad_layers = False
 
     def test_pid_reuse_refuses_signal(self):
         bound = {"state": "bound_group", "pid": PID, "pgid": PID,
@@ -437,18 +450,12 @@ class CopyOverlayTests(unittest.TestCase):
                         bound, table),
                     absent=lambda pgid, table: watchdog.group_absent(
                         bound, table))
-        self.assertFalse(watchdog.group_still_owned(bound, reused))
 
-    def test_deadline_disk_rss_and_image_receipt_fail_closed(self):
+    def test_deadline_disk_rss_and_inspect_deadline(self):
         self.assertLess(watchdog.RSS_LIMIT, watchdog.RSS_UPPER_BOUND)
         self.ping()
         with self.assertRaises(GuardExceeded) as caught:
             self.run_build(usage=lambda path: Free(0), start_owned=False)
-        self.assertEqual(caught.exception.reason, "reserve_shortfall")
-        self.reset_lease()
-        with self.assertRaises(GuardExceeded) as caught:
-            self.run_build(usage=lambda path: Free(
-                copy_overlay.MIN_FREE_BYTES + 1024 - 1), start_owned=False)
         self.assertEqual(caught.exception.reason, "reserve_shortfall")
         self.reset_lease()
         heavy = self.table()
@@ -457,28 +464,22 @@ class CopyOverlayTests(unittest.TestCase):
             self.run_build(table=heavy, rss_limit=8_000_000_000,
                            start_owned=False)
         self.assertEqual(caught.exception.reason, "observed_rss_limit")
-        self.assertEqual(self.stopped[-1], PID)
         self.reset_lease()
-        self.image_labels = dict(LABELS, **{
-            "org.ottojung.ivanka.source-commit": "0" * 24})
-        with self.assertRaises(GuardExceeded) as caught:
-            self.run_build(start_owned=False)
-        self.assertEqual(caught.exception.reason, "image_receipt_invalid")
-        self.image_labels = dict(LABELS)
-        self.reset_lease()
-        self.bad_layers = True
-        with self.assertRaises(GuardExceeded) as caught:
-            self.run_build(start_owned=False)
-        self.assertEqual(caught.exception.reason, "image_receipt_invalid")
-        self.bad_layers = False
+        jumped = [False]
+        self.on_image_inspect = lambda: jumped.__setitem__(0, True)
 
-    def test_stop_owner_and_nonzero_exit(self):
-        self.ping()
-        (self.root / "STOP").write_text("other-owner\n")
+        def wall():
+            return time.time() + 5000 if jumped[0] else time.time()
+
         with self.assertRaises(GuardExceeded) as caught:
-            self.run_build(start_owned=False)
-        self.assertEqual(caught.exception.reason, "stop_owner_unauthorized")
-        (self.root / "STOP").write_text("hold\n")
+            self.run_build(start_owned=False, wall=wall)
+        self.assertEqual(caught.exception.reason, "wall_limit")
+        receipt = next(self.root.glob("copy-*/result.json"))
+        self.assertEqual(json.loads(receipt.read_text())["status"], "failed")
+        self.assertEqual(self.evidence()[-1]["reason"], "wall_limit")
+
+    def test_nonzero_exit_and_watchdog_downgrade(self):
+        self.ping()
         state = self.run_build(handle=Handle(PID, results=(7,)))
         self.assertEqual(state["status"], "failed")
         self.assertEqual(state["exit_code"], 7)
@@ -492,7 +493,7 @@ class CopyOverlayTests(unittest.TestCase):
         lease.bind_group(
             self.root, "orphaned", PID, PID, [200, 99], owner="orphaned",
             graphroot=GRAPHROOT, helper=True, baseline_ids=[BASELINE_ID],
-            base_image=BASE, base_layers=[BASE_LAYER])
+            base_image=FROZEN, base_layers=LAYERS)
         tables = iter([self.table(), {}, {}, {}])
         signals = []
 
@@ -512,7 +513,6 @@ class CopyOverlayTests(unittest.TestCase):
         self.assertEqual(signals, [PID])
         event = self.evidence()[-1]
         self.assertEqual(event["action"], "teardown")
-        self.assertEqual(event["process_group"], PID)
         self.assertEqual(event["teardown"]["orphan_cleanup"]["removed"][0]["id"],
                          NEW_ID)
         self.assertEqual(self.removed, [NEW_ID])

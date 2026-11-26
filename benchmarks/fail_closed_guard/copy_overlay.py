@@ -20,8 +20,8 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import (build, disk, heartbeat, lease, orphans, proc, store, watchdog,
-               watchdog_contract)
+from . import (build, disk, heartbeat, lease, orphans, p1_harness, proc,
+               store, watchdog, watchdog_contract)
 from .errors import GuardExceeded
 
 SCHEMA = "ivanka.copy-overlay-plan.v1"
@@ -56,20 +56,22 @@ def check_disk_floor(root, reserve_bytes, usage=None):
 
 
 def check_stop(root, owner):
-    """A STOP sentinel stays owner-bound and is never silently discarded."""
+    """Reuse the P1 STOP contract: it must exist and name this exact owner."""
     sentinel = Path(root) / "STOP"
-    if not sentinel.exists():
-        return None
-    if sentinel.is_symlink() or not sentinel.is_file():
-        raise GuardExceeded("stop_unavailable")
-    token = sentinel.read_text().strip()
-    if token and token not in ("hold", str(owner)):
-        raise GuardExceeded("stop_owner_unauthorized")
-    return token
+    return p1_harness.require_owned_stop(sentinel, owner)
 
 
 def plan_digest(plan):
     return hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
+
+
+def normalize_digest(value):
+    """Accept Podman's ``sha256:`` form and compare only the exact bare digest."""
+    if isinstance(value, str):
+        bare = value.strip().removeprefix("sha256:").lower()
+        if DIGEST.fullmatch(bare):
+            return bare
+    raise GuardExceeded("invalid_plan")
 
 
 def verify_sealed(context, *, base, artifact_sha256, artifact_mode):
@@ -124,9 +126,11 @@ def seal_context(temp, validated):
     iidfile = Path(temp) / "image.iid"
     labels = [
         "org.ottojung.ivanka.source-commit=" + validated["source_commit"],
-        "org.ottojung.ivanka.artifact-sha256=" + validated["artifact_sha256"],
         "org.ottojung.micall.frozen-image-id=" + validated["base_image"],
-        "org.ottojung.ivanka.overlay-mode=copy-only",
+        "org.ottojung.ivanka.binary-sha256=" + validated["artifact_sha256"],
+        "org.ottojung.ivanka.frozen-manifest-sha256="
+        + validated["frozen_manifest_sha256"],
+        "org.ottojung.ivanka.pilot-role=" + validated["pilot_role"],
     ]
     argv = ["podman", "build", "--network=none", "--pull=never",
             "--iidfile", str(iidfile)]
@@ -168,30 +172,38 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
     """Validate one flat artifact and exact Containerfile without TOCTOU."""
     if not isinstance(plan, dict) or plan.get("schema") != SCHEMA:
         raise GuardExceeded("invalid_plan")
-    base, commit = plan.get("base_image"), plan.get("source_commit")
-    if (not isinstance(base, str) or not DIGEST.fullmatch(base)
-            or base != expected_base
-            or not isinstance(commit, str) or not COMMIT.fullmatch(commit)
-            or commit != expected_commit):
+    base = normalize_digest(plan.get("base_image"))
+    if (base != normalize_digest(expected_base)
+            or not isinstance(plan.get("source_commit"), str)
+            or not COMMIT.fullmatch(plan["source_commit"])
+            or plan["source_commit"] != expected_commit):
         raise GuardExceeded("invalid_plan")
+    commit = plan["source_commit"]
+    artifact_sha = normalize_digest(plan.get("artifact_sha256"))
     if (plan.get("source") != SOURCE or plan.get("destination") != DESTINATION
-            or plan.get("artifact_mode") != 0o755
-            or not isinstance(plan.get("artifact_sha256"), str)
-            or not DIGEST.fullmatch(plan["artifact_sha256"])):
+            or plan.get("artifact_mode") != 0o755):
+        raise GuardExceeded("invalid_plan")
+    frozen_manifest = normalize_digest(plan.get("frozen_manifest_sha256"))
+    pilot_role = plan.get("pilot_role")
+    if not isinstance(pilot_role, str) or not pilot_role:
         raise GuardExceeded("invalid_plan")
     tag = plan.get("tag")
     if not isinstance(tag, str) or not TAG.fullmatch(tag):
         raise GuardExceeded("invalid_plan")
+    code_root = Path(plan.get("code_root", ""))
+    helper = code_root / "benchmarks/fail_closed_guard/copy_overlay_helper.py"
+    if (code_root.is_symlink() or not code_root.is_dir()
+            or helper.is_symlink() or not helper.is_file()
+            or hashlib.sha256(helper.read_bytes()).hexdigest()
+            != normalize_digest(plan.get("code_sha256"))):
+        raise GuardExceeded("invalid_plan")
     if plan.get("graphroot") != str(expected_graphroot):
         raise GuardExceeded("invalid_plan")
-    layers = plan.get("base_layers")
-    if (not isinstance(layers, list) or not layers
-            or not all(isinstance(item, str) and DIGEST.fullmatch(item)
-                       for item in layers)):
+    raw_layers = plan.get("base_layers")
+    if not isinstance(raw_layers, list) or not raw_layers:
         raise GuardExceeded("invalid_plan")
-    if (not isinstance(plan.get("storage_conf_sha256"), str)
-            or not DIGEST.fullmatch(plan["storage_conf_sha256"])):
-        raise GuardExceeded("invalid_plan")
+    layers = [normalize_digest(item) for item in raw_layers]
+    conf_sha = normalize_digest(plan.get("storage_conf_sha256"))
     context = _under(root, plan.get("context", ""))
     conf = _under(root, plan.get("storage_conf", ""))
     if context.is_symlink() or not context.is_dir():
@@ -208,7 +220,7 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
             conf_digest.update(chunk)
     finally:
         os.close(conf_fd)
-    if conf_digest.hexdigest() != plan["storage_conf_sha256"]:
+    if conf_digest.hexdigest() != conf_sha:
         raise GuardExceeded("invalid_plan")
     entries = sorted(entry.name for entry in os.scandir(context))
     if entries != sorted(("Containerfile", SOURCE)):
@@ -237,17 +249,20 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
             remaining -= len(chunk)
     finally:
         os.close(fd)
-    if digest.hexdigest() != plan["artifact_sha256"]:
+    if digest.hexdigest() != artifact_sha:
         raise GuardExceeded("invalid_plan")
     argv = ["podman", "build", "--network=none", "--pull=never",
             "-f", str(manifest), "-t", tag, str(context)]
     return {"schema": SCHEMA, "base_image": base, "source_commit": commit,
             "context": str(context), "containerfile": str(manifest),
             "source": SOURCE, "destination": DESTINATION,
-            "artifact_sha256": plan["artifact_sha256"],
+            "artifact_sha256": artifact_sha,
             "artifact_mode": plan["artifact_mode"],
+            "frozen_manifest_sha256": frozen_manifest,
+            "pilot_role": pilot_role, "code_root": str(code_root),
+            "inherited_labels": dict(plan.get("inherited_labels") or {}),
             "storage_conf": str(conf), "graphroot": str(expected_graphroot),
-            "storage_conf_sha256": plan["storage_conf_sha256"],
+            "storage_conf_sha256": conf_sha,
             "base_layers": list(layers),
             "tag": tag, "argv": argv, "plan_sha256": plan_digest(plan)}
 
@@ -305,10 +320,8 @@ IMAGE_FORMAT = "{{.Id}}|{{json .Config.Labels}}|{{json .RootFS.Layers}}"
 def verify_image_receipt(validated, env, command_fn=None):
     """Bind the built image to exact digest, reviewed labels and one new layer."""
     run = command_fn or orphans.command
-    identifier = Path(validated["iidfile"]).read_text().strip().removeprefix(
-        "sha256:")
-    if not DIGEST.fullmatch(identifier):
-        raise GuardExceeded("image_receipt_invalid")
+    identifier = normalize_digest(
+        Path(validated["iidfile"]).read_text().strip())
     fields = run(["podman", "image", "inspect", "--format",
                   IMAGE_FORMAT, identifier], env).split("|")
     if len(fields) != 3:
@@ -319,14 +332,20 @@ def verify_image_receipt(validated, env, command_fn=None):
     except ValueError as exc:
         raise GuardExceeded("image_receipt_invalid") from exc
     expected = dict(item.split("=", 1) for item in validated["labels"])
-    if (fields[0].strip().removeprefix("sha256:") != identifier
-            or not isinstance(labels, dict) or labels != expected
-            or not isinstance(layers, list)
-            or layers[:len(validated["base_layers"])] != validated["base_layers"]
-            or len(layers) != len(validated["base_layers"]) + 1):
+    expected.update(validated.get("inherited_labels") or {})
+    normalized_layers = [normalize_digest(item) for item in layers] \
+        if isinstance(layers, list) else []
+    if (normalize_digest(fields[0].strip()) != identifier
+            or not isinstance(labels, dict)
+            or any(labels.get(key) != value for key, value in expected.items())
+            or normalized_layers[:len(validated["base_layers"])]
+            != validated["base_layers"]
+            or len(normalized_layers) != len(validated["base_layers"]) + 1):
         raise GuardExceeded("image_receipt_invalid")
-    return {"image": identifier, "labels": labels,
-            "base_layers": validated["base_layers"], "layers": layers,
+    return {"image": identifier, "labels": {key: labels[key]
+                                            for key in expected},
+            "base_layers": validated["base_layers"],
+            "layers": normalized_layers,
             "one_layer_overlay": True, "kernel_enforcement": False}
 
 
@@ -395,6 +414,9 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                    if key in pinned}
         job_env.update({"TMPDIR": str(temp), "TMP": str(temp),
                         "TEMP": str(temp)})
+        code = Path(validated["code_root"])
+        job_env["PYTHONPATH"] = os.pathsep.join(
+            (str(code / "benchmarks"), str(code)))
         emitter = heartbeat.Emitter(root, ident)
         emitter.before_spawn()
         log = temp / "build.log"
@@ -457,19 +479,33 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
             if now() >= deadline or mono() >= deadline_mono:
                 raise GuardExceeded("wall_limit")
             image = verify_image_receipt(validated, job_env, command)
+            if now() >= deadline or mono() >= deadline_mono:
+                raise GuardExceeded("wall_limit")
             bound = watchdog.bound_from_lease(root, ident, pinned)
             proof = _teardown(
                 bound, pinned=pinned, graphroot=graphroot, snapshot=take,
                 sleep=nap, monotonic=mono, command=command, baseline=baseline,
                 stop=stop, cleanup=cleanup)
             exit_code = handle.poll()
+            expired = now() >= deadline or mono() >= deadline_mono
+            if expired:
+                # The budget ended during inspect/teardown: keep the proof but
+                # never publish a completed result after the deadline.
+                watchdog.append_group_evidence(
+                    root, ident, reason="wall_limit", result="fail_closed",
+                    proof=proof)
+            reason_value = ("wall_limit" if expired else
+                            None if exit_code == 0 else "build_exit_nonzero")
             state.update({
-                "status": "completed" if exit_code == 0 else "failed",
-                "reason": None if exit_code == 0 else "build_exit_nonzero",
-                "exit_code": exit_code, "teardown": proof,
-                "image_receipt": image,
+                "status": "completed" if reason_value is None else "failed",
+                "reason": reason_value, "exit_code": exit_code,
+                "teardown": proof, "image_receipt": image,
                 "orphan_baseline_ids": sorted(baseline)})
             lease.release(root, ident, owner=owner, proof=proof)
+            if expired:
+                state = _downgrade(root, ident, state)
+                _receipt(log.parent / "result.json", state)
+                return state
         except Exception as exc:
             reason = exc.reason if isinstance(exc, GuardExceeded) else "inspection_unavailable"
             state.update({"status": "failed", "reason": reason,

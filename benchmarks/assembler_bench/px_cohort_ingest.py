@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
 from .current_validation_v2 import V6_COHORT_SHA
 from .public_metrics import CATALOG
+from . import px_cohort_scheduler as sched
 from . import px_timing_semantics as timing
 from .public_view import (EVIDENCE_SCHEMA, PHYSICAL_SCORE, SYNTHETIC_SCORE,
                           assert_clean_object, merge_evidence, scrub)
@@ -41,6 +42,13 @@ def _load(path):
 
 def _digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _arm_of(receipt):
+    """Recover the canonical arm identity from an indexed receipt."""
+    return {key: receipt[key] for key in (
+        "tool_id", "cohort", "alias", "input_sha256", "source_commit",
+        "adapter_commit", "image_sha256")}
 
 
 def _read_index(root):
@@ -88,7 +96,6 @@ def _synthetic_alias(receipt, match):
     verifies it before emitting a score, and its source identity is checked
     against the result file during ingestion.
     """
-    from . import px_cohort_scheduler as sched
     if match.group(1) != "H":
         raise ValueError("PX synthetic alias must name a synthetic cohort case")
     manifest = Path(sched.SYNTHETIC_COHORT)
@@ -156,7 +163,6 @@ def _metrics(diagnostics):
 
 def _failed_case(root, name, receipt, provenance, cohort, alias):
     """Publish an accepted terminal failure without fabricating measurements."""
-    from . import px_cohort_scheduler as sched
     arm = {key: receipt[key] for key in (
         "tool_id", "cohort", "alias", "source_commit", "adapter_commit",
         "image_sha256", "input_sha256")}
@@ -197,6 +203,7 @@ def _failed_case(root, name, receipt, provenance, cohort, alias):
         "source_commit": provenance.get("source_commit"),
         "adapter_commit": provenance.get("adapter_commit"),
         "image_sha256": provenance.get("image_sha256"),
+        "attempt": receipt.get("attempt", 1),
         "binding_receipts": 3,
     })
     return fields
@@ -261,7 +268,6 @@ def _case(root, name, receipt, assembler, real_data):
     elif row.get("reference_panel_sha256") is not None:
         raise ValueError("PX synthetic score must not carry a physical reference panel")
     if cohort == "synthetic":
-        from . import px_cohort_scheduler as sched
         from . import px_posthoc
         for key in ("source_commit", "adapter_commit", "image_sha256"):
             if result.get(key) != receipt.get(key):
@@ -337,7 +343,64 @@ def _case(root, name, receipt, assembler, real_data):
     })
     if proof:
         fields.update(proof)
+    # A success beyond the fixed two-attempt budget is admitted only when its
+    # one-shot authorization was consumed before dispatch. Public evidence
+    # carries that digest so supersession can be re-checked without live state.
+    fields["attempt"] = receipt.get("attempt", 1)
+    if fields["attempt"] > sched.MAX_INFRA_ATTEMPTS:
+        from . import px_retry_authorization as authz
+        record = authz.verify_spent(root, _arm_of(receipt))
+        if record is None:
+            raise ValueError("PX retry success has no consumed authorization")
+        fields["retry_authorization_sha256"] = record["authorization_sha256"]
     return fields
+
+
+def _authorized_supersession(root, receipt, existing, case):
+    """Allow only a hash-authorized retry to replace an infrastructure failure.
+
+    Historical failures remain in evidence as ``superseded`` rows with every
+    original metric. Genuine scientific failures, terminal successes and
+    un-authorized extra attempts are never replaced.
+    """
+    if not (existing.get("outcome") == "failure"
+            and existing.get("failure_reason")
+            in sched.INFRASTRUCTURE_FAILURE_REASONS
+            and case.get("outcome") == "success"
+            and case.get("attempt") == sched.AUTHORIZED_EXTRA_ATTEMPT):
+        return False
+    from . import px_retry_authorization as authz
+    record = authz.verify_spent(root, _arm_of(receipt))
+    if (record is None
+            or case.get("retry_authorization_sha256")
+            != record["authorization_sha256"]):
+        return False
+    # Original metrics belong to the same canonical arm; never repoint them.
+    for key in ("source_commit", "adapter_commit", "image_sha256",
+                "input_sha256"):
+        if existing.get(key) is not None and existing.get(key) != case.get(key):
+            return False
+    return True
+
+
+def reconcile_case(cases, case, root, receipt):
+    """Append a case, or narrowly supersede a preserved infrastructure failure.
+
+    Return True only when evidence actually changed. The superseded row is kept
+    verbatim so its failure reason, RAM observation and diagnostics survive.
+    """
+    for index, existing in enumerate(cases):
+        if (existing.get("cohort") != case["cohort"]
+                or existing.get("canonical_alias") != case["canonical_alias"]):
+            continue
+        if not _authorized_supersession(root, receipt, existing, case):
+            return False
+        superseding = dict(case)
+        superseding["superseded"] = [json.loads(json.dumps(existing))]
+        cases[index] = superseding
+        return True
+    cases.append(case)
+    return True
 
 
 def assert_no_stale_scores(report, evidence, incoming=None):
@@ -530,11 +593,8 @@ def ingest(report, evidence, root, real_data, registry_path=None,
         if case is None:
             continue
         cases = assemblers[tool].setdefault("cases", [])
-        if any(item.get("cohort") == case["cohort"] and
-               item.get("canonical_alias") == case["canonical_alias"]
-               for item in cases):
+        if not reconcile_case(cases, case, root, receipt):
             continue
-        cases.append(case)
         added.append((tool, case["cohort"], case["canonical_alias"]))
     assert_clean_object(result)
     merged, joined = merge_evidence(report, result)

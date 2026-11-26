@@ -7,12 +7,13 @@ admission gaps that remain unresolved (see integration doc).
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fail_closed_guard import heartbeat, lease
-from fail_closed_guard.errors import GuardExceeded
+from fail_closed_guard.errors import GuardExceeded, OrphanLease
 
 sys.path.insert(0, str(Path(__file__).parent))
-from test_fail_closed_watchdog import CID, WatchdogTests  # noqa: E402
+from test_fail_closed_watchdog import CID, GRAPHROOT, WatchdogTests, rec  # noqa: E402
 
 
 class WatchdogRaceRegressions(WatchdogTests):
@@ -52,31 +53,43 @@ class WatchdogRaceRegressions(WatchdogTests):
         self.assertEqual(self.stopped, [CID])
         self.assertEqual(self.evidence()[-1]["action"], "teardown")
 
-    def test_build_admission_is_not_blocked_by_unsupported_mode(self):
-        """Unresolved: the observer refuses builds but admission still spawns."""
+    def test_unsupported_build_lease_blocks_armed_admission(self):
+        """The observer refuses builds and armed admission blocks them too."""
         lease.acquire(self.root, "builder", "build")
         lease.bind(self.root, "builder", 77, [1, 2, 3])
-        heartbeat.ping(self.root, wall=self.wall)
+        table = {4242: rec(4242, 1, 1000, start=100)}
+        heartbeat.ping(self.root, storage_conf=self.conf, graphroot=GRAPHROOT,
+                       env=self.env, wall=self.wall, pid=4242, table=table)
         with self.assertRaises(GuardExceeded) as caught:
             self.check("builder")
         self.assertEqual(caught.exception.reason, "unsupported_lease")
         self.assertEqual(self.evidence()[-1]["action"], "none")
-        result = lease.require_clear(
-            self.root, self.env, watchdog_path=heartbeat.alive_path(self.root),
-            wall=self.wall)
-        self.assertEqual(result["blocked"], [])
+        with patch.object(lease, "reconcile",
+                          return_value={"blocked": [], "closed": []}):
+            with self.assertRaises(OrphanLease) as blocked:
+                lease.require_clear(
+                    self.root, self.env,
+                    watchdog_path=heartbeat.alive_path(self.root),
+                    wall=self.wall, graphroot=GRAPHROOT)
+        self.assertEqual(blocked.exception.report["blocked"][0]["reason"],
+                         "watchdog_unsupported_mode")
 
-    def test_readiness_ignores_own_namespace_and_pid_identity(self):
-        """Unresolved: raw read_alive has no namespace/PID binding at admission."""
+    def test_armed_readiness_binds_namespace_and_pid_identity(self):
+        """A foreign-namespace record cannot unblock armed admission."""
         import json
         target = heartbeat.alive_path(self.root)
         target.write_text(json.dumps({
             "schema": heartbeat.ALIVE_SCHEMA, "at_utc": self.wall(),
             "pid": 999999, "fingerprint": [123, 456], "cmdline_sha": "x",
             "graphroot": "/foreign/store"}) + "\n")
-        result = lease.require_clear(
-            self.root, self.env, watchdog_path=target, wall=self.wall)
-        self.assertEqual(result["blocked"], [])
+        with patch.object(lease, "reconcile",
+                          return_value={"blocked": [], "closed": []}):
+            with self.assertRaises(OrphanLease) as blocked:
+                lease.require_clear(
+                    self.root, self.env, watchdog_path=target, wall=self.wall,
+                    graphroot=GRAPHROOT, snapshot=lambda: {})
+        self.assertEqual(blocked.exception.report["blocked"][0]["reason"],
+                         "watchdog_unbound")
 
 
 if __name__ == "__main__":

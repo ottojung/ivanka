@@ -16,6 +16,25 @@ from .errors import GuardExceeded
 SUPPORTED_MODES = ("pilot",)
 
 
+def is_bound(path, graphroot):
+    """True only when an ALIVE record names this exact watchdog store.
+
+    The launcher does not necessarily inherit the s6 service environment, so
+    the durable availability record is the authoritative signal that the
+    independent observer is armed for this project.
+    """
+    source = Path(path)
+    if source.is_symlink() or not source.is_file():
+        return False
+    try:
+        record = json.loads(source.read_text())
+    except (OSError, ValueError):
+        return False
+    return (isinstance(record, dict)
+            and record.get("schema") == heartbeat.ALIVE_SCHEMA
+            and record.get("graphroot") == str(graphroot))
+
+
 def require_watchdog_readiness(path, *, graphroot, wall=None, max_age=None,
                                snapshot=None):
     """Adapt a genuine watchdog ALIVE record to the PR505 readiness contract.

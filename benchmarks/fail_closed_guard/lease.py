@@ -296,16 +296,25 @@ def reconcile(root, env, *, command=None, snapshot=None):
 
 def require_clear(root, env, *, watchdog_path=None,
                   watchdog_max_age=heartbeat.ALIVE_MAX_AGE, wall=None,
-                  **kwargs):
+                  graphroot=None, snapshot=None, **kwargs):
     """Fail closed if a prior resource is alive or no watchdog is observing.
 
     An independent observer is a precondition for admission: without it a
-    crashed controller could leave an owned container alive unnoticed.
+    crashed controller could leave an owned container alive unnoticed. When
+    ``graphroot`` is supplied (the armed-watchdog contract) readiness is also
+    bound to the watchdog's own store namespace and to a live kernel task, so
+    a foreign-namespace or PID-reused record cannot unblock admission.
     """
     if watchdog_path is not None:
         try:
-            heartbeat.read_alive(root, wall=wall, max_age=watchdog_max_age,
-                                 target=watchdog_path)
+            if graphroot is not None:
+                from . import watchdog_contract
+                watchdog_contract.require_watchdog_readiness(
+                    watchdog_path, graphroot=graphroot, wall=wall,
+                    max_age=watchdog_max_age, snapshot=snapshot)
+            else:
+                heartbeat.read_alive(root, wall=wall, max_age=watchdog_max_age,
+                                     target=watchdog_path)
         except GuardExceeded as exc:
             from . import watchdog
             blocked = [{"reason": exc.reason,
@@ -314,6 +323,21 @@ def require_clear(root, env, *, watchdog_path=None,
                                       blocked[0]["detail"])
             raise OrphanLease(report(blocked, [], watchdog_required=True)) from exc
     result = reconcile(root, env, **kwargs)
+    # Modes the independent watchdog cannot supervise are unsafe to admit
+    # while it is armed: such a lease would be refused by the observer but
+    # could still outlive a crashed controller unattended.
+    if graphroot is not None:
+        from . import watchdog_contract
+        for worker, event in latest(events(root)).items():
+            if (event.get("state") == "active"
+                    and event.get("mode") not in watchdog_contract.SUPPORTED_MODES):
+                try:
+                    watchdog_contract.require_supported_mode(event.get("mode"))
+                except GuardExceeded as exc:
+                    blocked = [{"lease": worker, "reason": exc.reason,
+                                "detail": "unsupported lease under armed watchdog"}]
+                    raise OrphanLease(
+                        report(blocked, [], watchdog_required=True)) from exc
     if result["blocked"]:
         raise OrphanLease(result)
     return result

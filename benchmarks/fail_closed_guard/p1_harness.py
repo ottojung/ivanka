@@ -25,7 +25,7 @@ import secrets
 import time
 from pathlib import Path
 
-from . import binding, disk, lease, proc, stop, teardown, watch
+from . import binding, disk, lease, proc, stop, teardown, watch, watchdog_contract
 from .errors import GuardExceeded
 
 DEFAULT_RESERVE_BYTES = 32 * 1024 ** 3  # independent project filesystem reserve
@@ -82,13 +82,20 @@ def require_owned_stop(path, owner):
     return str(target)
 
 
-def require_watchdog_ready(*, checker=None, path=None):
+def require_watchdog_ready(*, checker=None, path=None, graphroot=None,
+                           wall=None, snapshot=None):
     """Require an explicit, currently-ready crash-independent watchdog.
 
     A readiness checker is injected by the operator/watchdog owner; a readiness
     file is a fallback contract. Absence of either fails closed -- a missing
-    watchdog is never treated as a deployed one.
+    watchdog is never treated as a deployed one. When a genuine watchdog
+    record is read from a path and its store namespace is known, the shared
+    contract also binds freshness, namespace and a live kernel identity;
+    injected checkers keep their explicit readiness declaration.
     """
+    if path is not None and graphroot is not None and checker is None:
+        return watchdog_contract.require_watchdog_readiness(
+            path, graphroot=graphroot, wall=wall, snapshot=snapshot)
     if checker is not None:
         try:
             record = checker()
@@ -178,6 +185,8 @@ def _audit(root, event):
 def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                     env=None, lock_path=None, lock=None,
                     watchdog_ready=None, watchdog_path=None,
+                    watchdog_graphroot=None, watchdog_snapshot=None,
+                    watchdog_wall=None,
                     disk_reserve_bytes=DEFAULT_RESERVE_BYTES, disk_usage=None,
                     limit=4_000_000_000, wall_seconds=2400, deadline_utc=None,
                     running=None, measure=None, snapshot=None, clock=None,
@@ -193,8 +202,6 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         raise GuardExceeded("invalid_config")
     # One absolute epoch deadline covers pre-spawn gates, bind and sampling;
     # a restarted harness cannot reset an injected monotonic clock to gain time.
-    if deadline_utc is None:
-        deadline_utc = time.time() + wall_seconds
     env = dict(env or {})
 
     # Gate 1: STOP must already be armed for this caller before any lease or
@@ -207,6 +214,11 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
     ident = "p1-%s-%s" % (str(owner), token)
     cidfile = pin_cidfile(lease_root, ident)
     lease.acquire(lease_root, ident, "pilot", owner=owner, cidfile=cidfile)
+    if deadline_utc is None:
+        # Derive the deadline from the durable lease start, not from a fresh
+        # clock reading, so a harness restart cannot grant itself more time.
+        deadline_utc = watchdog_contract.durable_deadline(
+            lease_root, ident, wall_seconds)
 
     ctx = lock if lock is not None else (
         ExclusiveLock(lock_path) if lock_path is not None else None)
@@ -218,7 +230,9 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         # and independent disk reserve BEFORE spawn.
         if time.time() >= deadline_utc:
             raise GuardExceeded("wall_limit")
-        require_watchdog_ready(checker=watchdog_ready, path=watchdog_path)
+        require_watchdog_ready(checker=watchdog_ready, path=watchdog_path,
+                               graphroot=watchdog_graphroot,
+                               wall=watchdog_wall, snapshot=watchdog_snapshot)
         disk.check_reserve(disk_path, disk_reserve_bytes, usage=disk_usage)
 
         try:

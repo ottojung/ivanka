@@ -5,10 +5,11 @@ import json
 import os
 import subprocess
 import time
+from pathlib import Path
 
 from assembler_bench.exploratory_space import admit_reserve
 
-from fail_closed_guard import heartbeat, identity, lease, teardown
+from fail_closed_guard import heartbeat, identity, lease, teardown, watchdog_contract
 from fail_closed_guard import proc as process_snapshot
 from fail_closed_guard.errors import GuardExceeded
 
@@ -30,8 +31,25 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         # is alive or its liveness cannot be proven.
         guard_env = {**os.environ,
                      "CONTAINERS_STORAGE_CONF": str(root / "storage.conf")}
-        lease.require_clear(root, guard_env,
-                            watchdog_path=heartbeat.alive_path(root))
+        # The strict watchdog contract applies once the independent observer
+        # is armed. The launcher cannot rely on inheriting the s6 environment,
+        # so the durable ALIVE record naming this exact store is authoritative
+        # (WATCHDOG_ARMED remains an explicit operator override). Under that
+        # contract readiness is namespace/PID bound and modes the watchdog
+        # cannot supervise (builds) are refused before any process spawns.
+        graphroot = str(Path(base["image_store"]).resolve() / "store")
+        alive = heartbeat.alive_path(root)
+        armed = (os.environ.get("WATCHDOG_ARMED") == "1"
+                 or watchdog_contract.is_bound(alive, graphroot))
+        if armed:
+            lease.require_clear(root, guard_env,
+                                watchdog_path=alive, graphroot=graphroot,
+                                snapshot=process_snapshot.snapshot,
+                                wall=time.time)
+            watchdog_contract.require_supported_mode(mode)
+        else:
+            lease.require_clear(root, guard_env,
+                                watchdog_path=heartbeat.alive_path(root))
         admit_reserve(reg, base, root, base["image_store"], base["workspace"], reserve_bytes)
         ident = tool + "-" + str(time.time_ns())
         argv, cidfile = bind_pilot(root, mode, argv, ident)
@@ -221,6 +239,16 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                                          or state.get("guard_result")))
                 else:
                     state["lease_state"] = "active_unreleased"
+                # A watchdog that fail-closed and tore down this arm must never
+                # leave a "finished" receipt, even if the launcher itself
+                # exited cleanly before the observer acted.
+                try:
+                    state = watchdog_contract.downgrade_on_watchdog_teardown(
+                        root, ident, state)
+                except GuardExceeded as exc:
+                    state["status"] = "failed"
+                    state["reason"] = "watchdog_evidence_unreadable"
+                    state["watchdog_error"] = exc.reason
                 state["recorded_utc"] = time.time()
                 output.flush()
                 os.fsync(output.fileno())

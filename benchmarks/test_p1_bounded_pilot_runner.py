@@ -194,8 +194,12 @@ class PinAndBindingTests(unittest.TestCase):
             }
             return 0, outputs[fmt]
 
+        # Synthetic env: the production gate compares the selector to the
+        # pinned store path string, without needing a private host file.
+        pinned_env = {"CONTAINERS_STORAGE_CONF":
+                      runner.SHARED_PX_BOUNDARY["storage_conf"]}
         result = runner.verify_image_contract(
-            IMAGE, runner.SOURCE_COMMIT, inspect=inspect,
+            IMAGE, runner.SOURCE_COMMIT, env=pinned_env, inspect=inspect,
             image_manifest=manifest)
         self.assertEqual(result["parent"], runner.PARENT_IMAGE)
 
@@ -212,13 +216,13 @@ class PinAndBindingTests(unittest.TestCase):
             return 0, outputs[fmt]
         with self.assertRaises(ValueError):
             runner.verify_image_contract(
-                IMAGE, runner.SOURCE_COMMIT, inspect=bad_inspect,
-                image_manifest=manifest)
+                IMAGE, runner.SOURCE_COMMIT, env=pinned_env,
+                inspect=bad_inspect, image_manifest=manifest)
 
         with self.assertRaises(ValueError):
             runner.verify_image_contract(
-                runner.PARENT_IMAGE, runner.SOURCE_COMMIT, inspect=inspect,
-                image_manifest=manifest)
+                runner.PARENT_IMAGE, runner.SOURCE_COMMIT, env=pinned_env,
+                inspect=inspect, image_manifest=manifest)
 
     def test_operator_slot_gate(self):
         with tempfile.TemporaryDirectory() as tmp:

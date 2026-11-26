@@ -265,16 +265,19 @@ AMBIENT_CONTAINER_SELECTORS = ("CONTAINERS_CONF", "CONTAINERS_STORAGE_CONF",
                                "CONTAINERS_STORAGE_DRIVER", "CONTAINERS_ROOTLESS")
 
 
-def pinned_podman_env(storage_conf=None):
+def pinned_podman_env(storage_conf=None, *, expected_sha=None):
     """Minimal env with ONLY the verified shared store selector set.
 
     Unlike the inherited podman_env(), this drops every ambient CONTAINERS_*
-    selector instead of copying os.environ into the arm.
+    selector instead of copying os.environ into the arm. Production callers
+    must use the default expected_sha (the durable shared-store pin); the
+    override exists solely so isolated CI fixtures can supply their own
+    synthetic conf/hash without depending on a private host path.
     """
     conf = Path(storage_conf or SHARED_PX_BOUNDARY["storage_conf"])
     if conf.is_symlink() or not conf.is_file():
         raise ValueError("pinned shared PX storage.conf missing or symlink")
-    if sha256(conf) != PINS_V2["storage_conf"]:
+    if sha256(conf) != (expected_sha or PINS_V2["storage_conf"]):
         raise ValueError("pinned shared PX storage.conf hash differs")
     env = {key: value for key, value in os.environ.items()
            if key not in AMBIENT_CONTAINER_SELECTORS

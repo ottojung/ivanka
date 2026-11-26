@@ -17,7 +17,7 @@ write a lease/STOP, invoke Podman, or touch a live arm.
 | supervisor | `<service dir>/supervise/status` |
 | existing PX service | `px-cohort-supervisor` → `/run/s6/legacy-services/px-cohort-supervisor`, **up** (live PX arm) |
 | retired legacy P1 service | `ivanka-p1-narrow-canary` (inert; source-pinned image absent; do not restart) |
-| watchdog service | **deployed and armed 18:18Z** — `/run/service/ivanka-watchdog` symlink active, `WATCHDOG_ARMED=1`, PID 1503395; ALIVE bound to the exact PX graphroot |
+| watchdog service | **deployed and armed; current cutover 19:16Z** — `/run/service/ivanka-watchdog` symlink active, `WATCHDOG_ARMED=1`, PID 1882045; ALIVE bound to the exact PX graphroot |
 
 The independent watchdog's run script is source-only at
 `scripts/px_watchdog_s6_service.sh` on exact PR527 `b185c7f2`. It discovers
@@ -30,7 +30,7 @@ plus complete pins before doing anything.
 | Export / artifact | Required value | Source |
 |---|---|---|
 | `WATCHDOG_ROOT` | `/workspace/ivanka-exploratory-ten-20261121` | actual PX worker root; hosts `.worker-lease.jsonl` and `.watchdog-alive.json` |
-| `WATCHDOG_CODE` | `/workspace/ivanka-oci-transfer-20261126` (deployed), CLI SHA256 `e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369`, git HEAD pinned to merged `3fb720c7fd74e08b77d453441c10fdfed3eb305f` | exact reviewed head `b185c7f2b95c84edce5f1323f93addd5be7ead2d`, now merged |
+| `WATCHDOG_CODE` | **derived at read time from the deployed run script** — never a stale hardcoded path. Currently `/workspace/ivanka-guard-pr530-staged-20261126`, git HEAD pinned to `f861f25b6e62e1266a498340e7d3cf9a09a9087f` (merged PR530), CLI SHA256 `e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369` | probe requires the exact HEAD-pin line in the run script and hashes the CLI from the derived path |
 | `WATCHDOG_STORAGE_CONF` | `/workspace/ivanka-exploratory-ten-20261121/storage.conf` (SHA `fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21`) | shared PX store |
 | `WATCHDOG_GRAPHROOT` | `/workspace/ivanka-exploratory-podman-20261121/store` | derived from the shared PX storage.conf |
 | `WATCHDOG_ARMED` | `0` until operator authorization at a natural PX boundary; `1` only after | operator gate |
@@ -49,12 +49,19 @@ PYTHONPATH=.:benchmarks python3 -m expanded.p1_watchdog_readiness --deployment-p
 # prints the exact source-only deployment plan (no execution)
 ```
 
-Real-host result after the 18:18Z operator cutover: **ready, rc=0** — all eight
-s6 layout/pin checks true, `armed=true`, ALIVE record fresh and graphroot-bound,
-and the LIVE PID 1503395 fingerprint `(starttime, pid_ns, cmdline_sha)` verified
-against `/proc` (not merely ALIVE text). No arm, lease, STOP or container was
-touched by this probe. The 17:52Z pre-deployment result was correctly
-fail-closed (`s6 activation symlink missing`, `watchdog_unavailable`).
+Real-host result after the 19:16Z operator cutover (merged PR530 `f861f25b`):
+**ready, rc=0** — all ten s6 layout/pin/head checks true, `armed=true`, ALIVE
+record fresh and graphroot-bound, code path derived from the run script
+(`/workspace/ivanka-guard-pr530-staged-20261126`), and the LIVE PID 1882045
+fingerprint `(starttime, pid_ns, cmdline_sha)` verified against `/proc` (not
+merely ALIVE text). No arm, lease, STOP or container was touched by this probe.
+Earlier pre-deployment probes correctly failed closed.
+
+**Explicit dependency (not integrated):** P1 natural-exit attestation branch
+PR536 `861d77bd6006e7eb0d0bf6e17d46ec43bc286fd4` received an independent
+**NO-GO** at 19:18Z (deadline expiry not fail-closed on a real launcher result).
+It is NOT merged into this pilot; no P1 arm may start until a corrected exact
+head is independently reviewed and pinned here.
 
 Tests: `PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_watchdog_readiness.py`
 (12 deterministic tests over a simulated s6 layout; no live service touched).

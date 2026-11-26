@@ -40,7 +40,7 @@ class WatchdogReadinessTests(unittest.TestCase):
         }
 
     def install(self, *, armed="1", graphroot=None, executable=True,
-                symlink=True):
+                symlink=True, head_pin=True):
         exports = [
             "export PATH=/usr/bin:/bin",
             "export WATCHDOG_ROOT=%s" % self.expected["WATCHDOG_ROOT"],
@@ -50,6 +50,8 @@ class WatchdogReadinessTests(unittest.TestCase):
                 graphroot or self.expected["WATCHDOG_GRAPHROOT"]),
             "export WATCHDOG_ARMED=%s" % armed,
         ]
+        if head_pin:
+            exports.append('test "$(git -C "$WATCHDOG_CODE" rev-parse HEAD)" = %s || exit 1' % w.WATCHDOG_SERVICE_HEAD)
         run = self.svc / "run"
         run.write_text("#!/bin/sh\n" + "\n".join(exports)
                        + "\nexec python3 -m %s --root x\n" % w.WATCHDOG_MODULE)
@@ -151,3 +153,57 @@ class WatchdogReadinessTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ServiceHeadPinTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.scan = root / "service"
+        self.services = root / "legacy"
+        self.scan.mkdir()
+        self.services.mkdir()
+        self.svc = self.services / w.SERVICE_NAME
+        self.svc.mkdir()
+        self.code = root / "code"
+        cli = self.code / w.WATCHDOG_CLI_REL
+        cli.parent.mkdir(parents=True)
+        cli.write_text("# reviewed cli\n")
+        exp = w.default_expected()
+        exp["watchdog_cli_sha256"] = w._sha256(cli)
+        exp["WATCHDOG_CODE"] = str(self.code)
+        exp["WATCHDOG_ROOT"] = str(root / "px")
+        (root / "px").mkdir()
+        self.exp = exp
+
+    def layout(self, head_pin=True):
+        exports = [
+            "export WATCHDOG_ROOT=%s" % self.exp["WATCHDOG_ROOT"],
+            "export WATCHDOG_CODE=%s" % self.exp["WATCHDOG_CODE"],
+            "export WATCHDOG_STORAGE_CONF=%s" % self.exp["WATCHDOG_STORAGE_CONF"],
+            "export WATCHDOG_GRAPHROOT=%s" % self.exp["WATCHDOG_GRAPHROOT"],
+            "export WATCHDOG_ARMED=1",
+            "-m %s" % w.WATCHDOG_MODULE,
+        ]
+        if head_pin:
+            exports.append('test "$(git -C "$WATCHDOG_CODE" rev-parse HEAD)" = %s || exit 1' % w.WATCHDOG_SERVICE_HEAD)
+        run = self.svc / "run"
+        run.write_text("#!/bin/sh\n" + "\n".join(exports) + "\n")
+        run.chmod(0o755)
+        (self.svc / "supervise").mkdir(exist_ok=True)
+        (self.svc / "supervise" / "status").write_bytes(b"x" * 35)
+        (self.scan / w.SERVICE_NAME).symlink_to(self.svc)
+        return w.probe_service_layout(scan_dir=self.scan,
+                                      services_dir=self.services,
+                                      expected=self.exp)
+
+    def test_head_pinned_layout_ready(self):
+        result = self.layout()
+        self.assertTrue(result["checks"]["service_head_pinned"])
+        self.assertTrue(result["ready"], result)
+
+    def test_missing_head_pin_fails_closed(self):
+        result = self.layout(head_pin=False)
+        self.assertFalse(result["checks"]["service_head_pinned"])
+        self.assertFalse(result["ready"])

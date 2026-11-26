@@ -34,10 +34,13 @@ S6_SERVICE_DIR = "/run/s6/legacy-services"
 SERVICE_NAME = "ivanka-watchdog"
 WATCHDOG_MODULE = "fail_closed_guard.watchdog_cli"
 WATCHDOG_CLI_REL = Path("benchmarks/fail_closed_guard/watchdog_cli.py")
-# Exact reviewed CLI at PR527 b185c7f2 (the base of this pilot branch).
+# Code identity is derived from the DEPLOYED service run script, not from a
+# hardcoded path that goes stale when the operator cuts over a new namespace.
+WATCHDOG_SERVICE_HEAD = "f861f25b6e62e1266a498340e7d3cf9a09a9087f"
+# Exact watchdog_cli.py at that deployed head (unchanged PR527 implementation).
 WATCHDOG_CLI_SHA256 = "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369"
-REQUIRED_EXPORTS = ("WATCHDOG_ROOT", "WATCHDOG_CODE",
-                    "WATCHDOG_STORAGE_CONF", "WATCHDOG_GRAPHROOT")
+# WATCHDOG_CODE is intentionally absent: it is read from the run script itself.
+REQUIRED_EXPORTS = ("WATCHDOG_ROOT", "WATCHDOG_STORAGE_CONF", "WATCHDOG_GRAPHROOT")
 SCHEMA = "ivanka.p1.watchdog-readiness.v1"
 
 
@@ -45,11 +48,10 @@ def default_expected():
     """Expected pins derived from the shared PX worker boundary."""
     return {
         "WATCHDOG_ROOT": SHARED_PX_BOUNDARY["worker_root"],
-        # Deployed 18:18Z at /workspace/ivanka-oci-transfer-20261126 (CLI sha pinned below).
-        "WATCHDOG_CODE": "/workspace/ivanka-oci-transfer-20261126",
         "WATCHDOG_STORAGE_CONF": SHARED_PX_BOUNDARY["storage_conf"],
         "WATCHDOG_GRAPHROOT": SHARED_PX_BOUNDARY["graphroot"],
         "watchdog_cli_sha256": WATCHDOG_CLI_SHA256,
+        "watchdog_service_head": WATCHDOG_SERVICE_HEAD,
         "armed": True,
     }
 
@@ -77,7 +79,9 @@ def probe_service_layout(*, scan_dir=S6_SCAN_DIR, services_dir=S6_SERVICE_DIR,
         "service_dir": False,
         "run_executable": False,
         "watchdog_module": False,
+        "service_head_pinned": False,
         "pins_match": False,
+        "code_dir_valid": False,
         "code_cli_pinned": False,
         "supervise_status": False,
         "armed": False,
@@ -109,6 +113,9 @@ def probe_service_layout(*, scan_dir=S6_SCAN_DIR, services_dir=S6_SERVICE_DIR,
 
     text = run.read_text()
     checks["watchdog_module"] = ("-m " + WATCHDOG_MODULE) in text
+    head_pattern = r'rev-parse HEAD\)"\s*=\s*%s\b' % re.escape(
+        str(exp.get("watchdog_service_head", WATCHDOG_SERVICE_HEAD)))
+    checks["service_head_pinned"] = bool(re.search(head_pattern, text))
     exports = parse_exports(text)
     detail["exports"] = {k: exports.get(k) for k in ("WATCHDOG_ROOT",
                                                       "WATCHDOG_CODE",
@@ -124,11 +131,15 @@ def probe_service_layout(*, scan_dir=S6_SCAN_DIR, services_dir=S6_SERVICE_DIR,
 
     code = exports.get("WATCHDOG_CODE")
     if code:
-        cli = Path(code) / WATCHDOG_CLI_REL
-        if (not cli.is_symlink() and cli.is_file()
+        code_path = Path(code)
+        checks["code_dir_valid"] = (not code_path.is_symlink()
+                                    and code_path.is_dir())
+        cli = code_path / WATCHDOG_CLI_REL
+        if (checks["code_dir_valid"] and not cli.is_symlink() and cli.is_file()
                 and _sha256(cli) == exp["watchdog_cli_sha256"]):
             checks["code_cli_pinned"] = True
             detail["watchdog_cli"] = str(cli)
+        detail["watchdog_code"] = str(code_path)
 
     status = target / "supervise" / "status"
     checks["supervise_status"] = (status.is_file() and not status.is_symlink())
@@ -198,7 +209,7 @@ def deployment_plan(*, expected=None):
         "run_script": {
             "exports": {
                 "WATCHDOG_ROOT": exp["WATCHDOG_ROOT"],
-                "WATCHDOG_CODE": "%s (CLI sha256 %s)" % (exp["WATCHDOG_CODE"], exp["watchdog_cli_sha256"]),
+                "WATCHDOG_CODE": "derived from the deployed run script; HEAD must be %s, CLI sha256 %s" % (exp["watchdog_service_head"], exp["watchdog_cli_sha256"]),
                 "WATCHDOG_STORAGE_CONF": exp["WATCHDOG_STORAGE_CONF"],
                 "WATCHDOG_GRAPHROOT": exp["WATCHDOG_GRAPHROOT"],
                 "WATCHDOG_ARMED": "0 until operator authorization at a natural PX boundary",

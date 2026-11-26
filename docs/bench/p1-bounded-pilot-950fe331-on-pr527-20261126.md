@@ -252,6 +252,15 @@ git rev-parse FETCH_HEAD   # exact tip SHA posted to the P1 board
 git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach b185c7f2…
 ```
 
+## 6b. Explicit external dependency — P1 natural-exit attestation
+PR536 `861d77bd6006e7eb0d0bf6e17d46ec43bc286fd4` (parent `cdbcb832`, PR530)
+wires exact-CID natural-exit attestation into `p1_helper.watch_p1` and
+`p1_harness.run_prospective`. Its 19:18Z independent review is **NO-GO**
+(deadline expiry not fail-closed on a real launcher result), so it is NOT
+integrated here and PR531 changed paths do not overlap it. Before any P1 arm,
+a corrected exact head must be independently reviewed and pinned into this
+runbook and the slot bindings. No arm is authorized by this source-only change.
+
 ## 7. Boundary / operator checklist
 
 - [ ] Independent reviewer approves this exact branch head.

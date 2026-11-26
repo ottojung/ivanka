@@ -136,9 +136,11 @@ class BinaryStageTests(unittest.TestCase):
 
 
 class LiveFingerprintTests(unittest.TestCase):
-    def test_default_expected_includes_watchdog_code(self):
+    def test_default_expected_has_no_stale_code_path(self):
         exp = w.default_expected()
-        self.assertEqual(exp["WATCHDOG_CODE"], "/workspace/ivanka-oci-transfer-20261126")
+        self.assertNotIn("WATCHDOG_CODE", exp)
+        self.assertEqual(exp["watchdog_service_head"],
+                         "f861f25b6e62e1266a498340e7d3cf9a09a9087f")
 
     def test_probe_alive_checks_live_fingerprint(self):
         tmp = tempfile.TemporaryDirectory()
@@ -261,18 +263,42 @@ class LayerEvidenceTests(unittest.TestCase):
 
 
 class AmbientEnvTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def synthetic_conf(self):
+        conf = Path(self.tmp.name) / "storage.conf"
+        conf.write_text("[storage]\ngraphroot = '/tmp/p1-fixture-store'\n")
+        return conf, r.sha256(conf)
+
     def test_ambient_container_selectors_are_stripped(self):
-        conf = r.SHARED_PX_BOUNDARY["storage_conf"]
+        conf, digest = self.synthetic_conf()
         with mock.patch.dict(os.environ, {
                 "CONTAINERS_CONF": "/ambient/containers.conf",
                 "CONTAINERS_STORAGE_CONF": "/ambient/storage.conf",
                 "CONTAINERS_IMAGEROOT": "/ambient/images",
                 "CONTAINERS_STORAGE_DRIVER": "vfs"}, clear=False):
-            env = r.pinned_podman_env(conf)
-        self.assertEqual(env["CONTAINERS_STORAGE_CONF"], str(Path(conf).resolve()))
+            env = r.pinned_podman_env(conf, expected_sha=digest)
+        self.assertEqual(env["CONTAINERS_STORAGE_CONF"], str(conf.resolve()))
         self.assertNotIn("CONTAINERS_CONF", env)
         self.assertNotIn("CONTAINERS_IMAGEROOT", env)
         self.assertNotIn("CONTAINERS_STORAGE_DRIVER", env)
+
+    def test_missing_and_symlink_conf_refused(self):
+        conf, digest = self.synthetic_conf()
+        missing = Path(self.tmp.name) / "absent.conf"
+        with self.assertRaises(ValueError):
+            r.pinned_podman_env(missing, expected_sha=digest)
+        link = Path(self.tmp.name) / "linked.conf"
+        link.symlink_to(conf)
+        with self.assertRaises(ValueError):
+            r.pinned_podman_env(link, expected_sha=digest)
+
+    def test_wrong_hash_refused(self):
+        conf, _digest = self.synthetic_conf()
+        with self.assertRaises(ValueError):
+            r.pinned_podman_env(conf, expected_sha="0" * 64)
 
     def test_wrong_store_conf_pin_fails_closed(self):
         tmp = tempfile.TemporaryDirectory()

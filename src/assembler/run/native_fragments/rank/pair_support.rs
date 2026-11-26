@@ -1,18 +1,11 @@
+use super::mates::identity;
 use super::{rolling_canonical_kmers, Reads};
 use std::collections::{HashMap, HashSet};
 
 type Counts<'a> = HashMap<&'a [u8], (&'a [u8], usize)>;
 
-fn identity<'a>(forward: &'a [u8], reverse: &'a [u8]) -> &'a [u8] {
-    if forward <= reverse {
-        forward
-    } else {
-        reverse
-    }
-}
-
 /// Count identities from distinct observed pairs; equal-mate pairs vote once.
-pub(super) fn counts(reads: &Reads) -> (Counts<'_>, usize) {
+pub(crate) fn counts(reads: &Reads) -> (Counts<'_>, usize) {
     let mut support = Counts::new();
     let mut pairs = HashSet::<(&[u8], &[u8])>::new();
     for observed in reads.seqs.chunks_exact(4) {
@@ -40,6 +33,6 @@ pub(super) fn counts(reads: &Reads) -> (Counts<'_>, usize) {
     (support, pairs.len())
 }
 
-pub(super) fn has_kmers(id: &[u8]) -> bool {
+pub(crate) fn has_kmers(id: &[u8]) -> bool {
     rolling_canonical_kmers(id).next().is_some()
 }

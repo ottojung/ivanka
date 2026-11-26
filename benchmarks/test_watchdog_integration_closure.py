@@ -4,6 +4,7 @@ Every probe is deterministic: synthetic /proc tables, temp journals and injected
 stop/spawn callables. No container, image, STOP sentinel, receipt or live arm is
 touched.
 """
+import fcntl
 import json
 import os
 import subprocess
@@ -263,6 +264,73 @@ class StartupRaceAndNaturalExitTests(WatchdogTests):
             self.check(max_age=30, wall_seconds=2400)
         self.assertEqual(caught.exception.reason, "heartbeat_stale")
         self.assertEqual(self.stopped, [CID])
+
+
+class P1HarnessReviewClosure(P1HarnessLifecycleTests):
+    """Follow-up review: lock-first ordering, heartbeat and capped policy."""
+
+    def _lease_id(self):
+        return next(iter(lease.latest(lease.events(self.root))))
+
+    def test_lock_failure_leaves_no_active_lease(self):
+        lock_path = self.root / "worker.lock"
+        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(lock_path=lock_path)
+            self.assertEqual(caught.exception.reason, "lock_unavailable")
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+        self.assertEqual(lease.events(self.root), [])
+        self.assertEqual(self.calls["spawn"], [])
+
+    def test_watchdog_unready_leaves_no_active_lease(self):
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(watchdog_ready=lambda: {"ready": False,
+                                              "identity_bound": True,
+                                              "pid_ns": 7, "starttime": 5})
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        self.assertEqual(lease.events(self.root), [])
+
+    def test_controller_heartbeat_bound_before_watch_and_refreshable(self):
+        captured = {}
+        original = watch.watch_bound
+        def spy(*args, **kwargs):
+            captured["heartbeat"] = kwargs.get("heartbeat")
+            captured["reserve"] = kwargs.get("disk_reserve_bytes")
+            captured["deadline"] = kwargs.get("deadline_utc")
+            return original(*args, **kwargs)
+        with patch.object(watch, "watch_bound", side_effect=spy):
+            outcome = self._run()
+        self.assertEqual(outcome["status"], "completed")
+        self.assertTrue(callable(captured["heartbeat"]))
+        self.assertGreaterEqual(captured["reserve"],
+                                p1_harness.DEFAULT_RESERVE_BYTES)
+        ident = self._lease_id()
+        record = watchdog.read_heartbeat(
+            heartbeat.path(self.root, ident), worker=ident)
+        self.assertEqual(record["cid"], CID)
+        captured["heartbeat"]()
+        refreshed = watchdog.read_heartbeat(
+            heartbeat.path(self.root, ident), worker=ident)
+        self.assertEqual(refreshed["cid"], CID)
+
+    def test_caller_deadline_cannot_extend_durable_cap(self):
+        outcome = self._run(deadline_utc=time.time() + 99999)
+        ident = self._lease_id()
+        start = lease.acquisition_start(self.root, ident)
+        self.assertLessEqual(outcome["deadline_utc"], start + 30)
+
+    def test_reinspect_pid_reuse_fails_closed_with_exact_teardown(self):
+        with patch("fail_closed_guard.binding.inspect_pid",
+                   side_effect=[100, 101]):
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run()
+        self.assertEqual(caught.exception.reason, "identity_lost")
+        self.assertEqual(self.calls["stop"], [CID])
+        self.assertTrue(self.stop_path.is_file())
 
 
 if __name__ == "__main__":

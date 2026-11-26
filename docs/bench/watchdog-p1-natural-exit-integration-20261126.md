@@ -99,3 +99,19 @@ No truth/reference input enters assembly. No MiCall, image, frozen 198/464,
 receipt, threshold, scoring or sealed state was touched. `kernel_enforcement`
 remains false everywhere: this is a userspace observation bound with an
 independent observer, not a kernel-enforced cap.
+
+## Follow-up review closure (P1 harness, source only)
+
+`p1_harness.run_prospective` now takes the exclusive worker lock before any
+durable lease exists, then re-checks STOP, lease clearance, watchdog readiness
+and the disk reserve under that lock. A gate failure therefore cannot leave a
+spurious active pending lease or pinned cidfile. A controller heartbeat is
+emitted before spawn, the exact CID is inspected/sampled/re-inspected and
+bound to the same lease, the heartbeat is refreshed by the watch loop, and a
+bind/heartbeat failure tears down the exact CID. Caller deadlines are capped
+by the durable lease cap and caller disk margins cannot shrink below the
+policy floor. Caller attestation remains descriptive only (method/version);
+`kernel_enforcement`, `enforcement` and RSS scope stay guard-owned.
+
+No live P1 arm was started; the adapter only gates and observes an injected
+spawn. Independent reviewer coordination remains open.

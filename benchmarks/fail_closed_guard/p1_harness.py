@@ -5,12 +5,15 @@ takes the PX shared lock, edits a receipt, or touches frozen MiCall / images /
 sealed evidence. The caller supplies the spawn callable and the bounded
 operation (``running`` / ``measure``); the adapter only gates and observes.
 
-Lifecycle ordering (PR505 review): a durable lease and a unique pinned cidfile
-are recorded BEFORE spawn; an owner-bound STOP, an exclusive lock, watchdog
-readiness and the disk reserve are all verified BEFORE spawn; only then does
-the caller spawn, and the exact CID read from that pinned cidfile is bound to
-the SAME lease. There is no foreign container-name acceptance path. A crash
-between spawn and bind leaves the lease open and admission blocked.
+Lifecycle ordering (PR505 + follow-up review): the exclusive lock is taken
+first; STOP, prior leases, watchdog readiness and the disk reserve are then
+re-checked under that lock; only then are a durable lease and a unique pinned
+cidfile recorded. A controller heartbeat is emitted before spawn, the exact
+CID is inspected/sampled/re-inspected and bound to the SAME lease, and the
+heartbeat is refreshed throughout the watch. A gate failure before lease
+acquisition leaves no spurious active pending lease; a crash between spawn
+and bind leaves the lease open and admission blocked. Caller deadlines and
+disk margins are capped by policy. There is no foreign-name acceptance path.
 
 Evidence honesty: earlier P1 peaks (~38 MB) sampled the Podman launcher process
 group and were mislabelled ``whole_container_process_tree``. They are RETAINED
@@ -20,12 +23,14 @@ Callers may describe method/version but can never override
 """
 import fcntl
 import json
+import math
 import os
 import secrets
 import time
 from pathlib import Path
 
-from . import binding, disk, lease, proc, stop, teardown, watch, watchdog_contract
+from . import (binding, disk, heartbeat, lease, proc, startup, stop,
+               teardown, watch, watchdog_contract)
 from .errors import GuardExceeded
 
 DEFAULT_RESERVE_BYTES = 32 * 1024 ** 3  # independent project filesystem reserve
@@ -182,6 +187,26 @@ def _audit(root, event):
     return record
 
 
+def _bounded_reserve(reserve_bytes):
+    """A caller may raise the disk margin but never shrink the policy floor."""
+    if (isinstance(reserve_bytes, bool)
+            or not isinstance(reserve_bytes, (int, float))
+            or not math.isfinite(reserve_bytes) or reserve_bytes <= 0):
+        raise GuardExceeded("invalid_config")
+    return max(int(reserve_bytes), DEFAULT_RESERVE_BYTES)
+
+
+def _bounded_deadline(caller_deadline, durable_cap):
+    """A caller may only shorten the durable absolute deadline."""
+    if caller_deadline is None:
+        return durable_cap
+    if (isinstance(caller_deadline, bool)
+            or not isinstance(caller_deadline, (int, float))
+            or not math.isfinite(caller_deadline)):
+        raise GuardExceeded("invalid_config")
+    return min(float(caller_deadline), durable_cap)
+
+
 def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                     env=None, lock_path=None, lock=None,
                     watchdog_ready=None, watchdog_path=None,
@@ -194,84 +219,121 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                     bind_container=None, stop_cid=None):
     """Run a caller-supplied spawn under the durable pre-spawn guard.
 
-    All pre-spawn gates are checked before ``spawn(cidfile, env)`` is called.
-    A failure before an exact-CID teardown proof leaves the lease OPEN and the
-    owner-bound STOP in place, so a later controller still fails closed.
+    Ordering (review): acquire the exclusive lock FIRST, then re-check STOP,
+    lease clearance, watchdog readiness and disk reserve; only then acquire a
+    durable lease and unique cidfile, emit a controller heartbeat before
+    spawn, and bind the exact inspected CID to that same lease. A failure
+    before the lease exists leaves no spurious active pending lease.
     """
     if not owner or running is None or measure is None:
         raise GuardExceeded("invalid_config")
-    # One absolute epoch deadline covers pre-spawn gates, bind and sampling;
-    # a restarted harness cannot reset an injected monotonic clock to gain time.
     env = dict(env or {})
+    reserve = _bounded_reserve(disk_reserve_bytes)
 
-    # Gate 1: STOP must already be armed for this caller before any lease or
-    # spawn. A foreign STOP is refused outright.
+    # Gate 1: STOP must already be armed for this caller.
     require_owned_stop(stop_path, owner)
-    lease.require_clear(lease_root, env)
-
-    # Gate 2: durable ownership and a unique pinned cidfile BEFORE spawn.
-    token = secrets.token_hex(12)
-    ident = "p1-%s-%s" % (str(owner), token)
-    cidfile = pin_cidfile(lease_root, ident)
-    lease.acquire(lease_root, ident, "pilot", owner=owner, cidfile=cidfile)
-    if deadline_utc is None:
-        # Derive the deadline from the durable lease start, not from a fresh
-        # clock reading, so a harness restart cannot grant itself more time.
-        deadline_utc = watchdog_contract.durable_deadline(
-            lease_root, ident, wall_seconds)
-
     ctx = lock if lock is not None else (
         ExclusiveLock(lock_path) if lock_path is not None else None)
     if ctx is None:
         raise GuardExceeded("lock_unavailable")
 
     with ctx:
-        # Gate 3: watchdog identity/namespace readiness, absolute deadline
-        # and independent disk reserve BEFORE spawn.
-        if time.time() >= deadline_utc:
-            raise GuardExceeded("wall_limit")
+        # Gate 2: re-check STOP, prior leases, watchdog readiness and the
+        # independent disk reserve while holding the lock. No lease exists
+        # yet, so a gate failure cannot leave an active pending lease.
+        require_owned_stop(stop_path, owner)
+        lease.require_clear(lease_root, env)
         require_watchdog_ready(checker=watchdog_ready, path=watchdog_path,
                                graphroot=watchdog_graphroot,
                                wall=watchdog_wall, snapshot=watchdog_snapshot)
-        disk.check_reserve(disk_path, disk_reserve_bytes, usage=disk_usage)
+        disk.check_reserve(disk_path, reserve, usage=disk_usage)
+
+        # Gate 3: durable ownership and a unique pinned cidfile BEFORE spawn.
+        token = secrets.token_hex(12)
+        ident = "p1-%s-%s" % (str(owner), token)
+        cidfile = pin_cidfile(lease_root, ident)
+        lease.acquire(lease_root, ident, "pilot", owner=owner, cidfile=cidfile)
+        # One absolute epoch deadline covers pre-spawn gates, bind and
+        # sampling. A caller may shorten it but never extend the durable cap.
+        durable_cap = watchdog_contract.durable_deadline(
+            lease_root, ident, wall_seconds)
+        deadline_utc = _bounded_deadline(deadline_utc, durable_cap)
+        if time.time() >= deadline_utc:
+            raise GuardExceeded("wall_limit")
+
+        # The independent watchdog must observe a live controller from before
+        # spawn through every sample; otherwise the arm is killed at first
+        # observation as an orphan.
+        emitter = heartbeat.Emitter(lease_root, ident)
+        try:
+            emitter.before_spawn()
+        except Exception as exc:
+            raise GuardExceeded("heartbeat_unavailable") from exc
 
         try:
             spawn(cidfile, env)
         except Exception as exc:
-            # Crash after spawn may have created the container; the pinned
-            # cidfile and active lease are the only durable evidence we have.
             _audit(lease_root, {"event": "spawn_failed", "lease_id": ident,
                                 "owner": str(owner), "cidfile": cidfile,
                                 "detail": str(exc)[:200]})
             raise GuardExceeded("spawn_failed") from exc
 
-        # Exact CID comes only from the cidfile pinned to THIS lease. No
-        # container name or caller-supplied CID can enter this path.
+        # Exact CID comes only from the cidfile pinned to THIS lease. Bind it
+        # after inspecting, snapshotting and re-inspecting the exact CID; a
+        # changed init PID is terminal identity_lost with exact-CID teardown.
         try:
             cid = binding.read_cid(cidfile)
         except GuardExceeded as exc:
             _audit(lease_root, {"event": "bind_unavailable", "lease_id": ident,
                                 "owner": str(owner), "cidfile": cidfile})
             raise exc
-        if not binding.CID.fullmatch(cid):
-            raise GuardExceeded("binding_unavailable")
+        stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))
+        try:
+            pid_before = binding.inspect_pid(cid, env)
+            table = snapshot() if callable(snapshot) else (
+                snapshot if snapshot is not None else proc.snapshot())
+            if binding.inspect_pid(cid, env) != pid_before:
+                raise GuardExceeded("identity_lost")
+            binder = bind_container or binding.bind_container
+            bound = binder(cid, env, snapshot=table)
+            if (not isinstance(bound, dict) or bound.get("cid") != cid
+                    or bound.get("pid") != pid_before):
+                raise GuardExceeded("identity_lost")
+            record = table.get(pid_before) if isinstance(table, dict) else None
+            if record is None:
+                raise GuardExceeded("identity_lost")
+            expected = list(startup.stable_fingerprint(record))
+            if list(bound.get("fingerprint") or []) != expected:
+                raise GuardExceeded("identity_lost")
+        except Exception as exc:
+            reason = exc.reason if isinstance(exc, GuardExceeded) \
+                else "measurement_unavailable"
+            try:
+                stopper(cid)
+            except Exception:
+                pass
+            _audit(lease_root, {"event": "bind_failed", "lease_id": ident,
+                                "owner": str(owner), "cid": cid,
+                                "reason": reason})
+            raise GuardExceeded(reason) from exc
 
-        table = snapshot() if callable(snapshot) else (
-            snapshot if snapshot is not None else proc.snapshot())
-        binder = bind_container or binding.bind_container
-        bound = binder(cid, env, snapshot=table)
-        if not isinstance(bound, dict) or bound.get("cid") != cid:
-            raise GuardExceeded("identity_lost")
         # The exact CID is now durably attached to the SAME pre-spawn lease.
         lease.bind_cid(lease_root, ident, cid, owner=owner, cidfile=cidfile,
                        pid=bound.get("pid"), fingerprint=bound.get("fingerprint"))
+        try:
+            emitter.bound(cid)
+        except Exception as exc:
+            try:
+                stopper(cid)
+            except Exception:
+                pass
+            raise GuardExceeded("heartbeat_unavailable") from exc
 
         kwargs = {}
         for key, value in (("clock", clock), ("sleep", sleep), ("audit", audit),
                            ("start", None)):
             if value is not None:
                 kwargs[key] = value
-        stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))
 
         proof = None
         outcome = None
@@ -282,9 +344,9 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                           else (snapshot if snapshot is not None
                                 else proc.snapshot())),
                 measure=measure, stop=stopper,
-                disk_path=disk_path, disk_reserve_bytes=disk_reserve_bytes,
+                disk_path=disk_path, disk_reserve_bytes=reserve,
                 disk_usage=disk_usage, strict_proof=True,
-                deadline_utc=deadline_utc,
+                deadline_utc=deadline_utc, heartbeat=emitter.refresh,
                 attestation=_attestation(attestation), **kwargs)
             proof = result.get("teardown")
             outcome = {"status": "completed", "result": result}
@@ -303,8 +365,6 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                                 "cid": cid})
             raise GuardExceeded("teardown_unverified")
 
-        # Only the owner of the open lease may retire its owned STOP, and only
-        # after an exact-CID fresh-absence proof. Retirement closes the lease.
         stop.retire_stop(stop_path, proof, owner=owner, lease_root=lease_root,
                          cid=cid)
         outcome["stop_retired_by"] = str(owner)

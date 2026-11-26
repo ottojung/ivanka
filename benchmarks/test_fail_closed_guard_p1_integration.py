@@ -278,6 +278,10 @@ class P1HarnessLifecycleTests(unittest.TestCase):
         self.calls = {"spawn": [], "bind": [], "stop": [], "watchdog": [],
                       "disk": []}
         self.stop_path.write_text("real-owner\n")
+        inspect = patch("fail_closed_guard.binding.inspect_pid",
+                        return_value=100)
+        inspect.start()
+        self.addCleanup(inspect.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -303,7 +307,7 @@ class P1HarnessLifecycleTests(unittest.TestCase):
 
     def _usage(self):
         return lambda _: (self.calls["disk"].append("checked") or
-                          DiskHelper(free=1_000_000))
+                          DiskHelper(free=40_000_000_000))
 
     def _run(self, *, owner="real-owner", spawn=None, attestation=None,
              disk_usage=None, lock=None, watchdog_ready=None, lock_path=None,
@@ -318,7 +322,7 @@ class P1HarnessLifecycleTests(unittest.TestCase):
             lock_path=lock_path,
             watchdog_ready=(self._checker if watchdog_ready is None
                             else watchdog_ready),
-            disk_reserve_bytes=100,
+            disk_reserve_bytes=p1_harness.DEFAULT_RESERVE_BYTES,
             disk_usage=disk_usage or self._usage(),
             limit=4_000_000, wall_seconds=30, deadline_utc=deadline_utc,
             running=lambda: next(ticks, None) is not None,
@@ -345,17 +349,15 @@ class P1HarnessLifecycleTests(unittest.TestCase):
         self.assertTrue(outcome["result"]["teardown"]["fresh_absence_check"])
         self.assertFalse(self.stop_path.exists())
 
-    def test_pre_spawn_disk_failure_never_spawns_and_keeps_stop(self):
+    def test_pre_spawn_disk_failure_leaves_no_spurious_lease(self):
         with self.assertRaises(GuardExceeded) as caught:
             self._run(disk_usage=lambda _: DiskHelper(free=99))
         self.assertEqual(caught.exception.reason, "reserve_shortfall")
         self.assertEqual(self.calls["spawn"], [])
         self.assertEqual(self.calls["bind"], [])
         self.assertTrue(self.stop_path.is_file())
-        self.assertEqual(
-            lease.latest(lease.events(self.root))[next(
-                e["lease"] for e in lease.events(self.root)
-                if e.get("state") == "active")]["state"], "active")
+        self.assertEqual(lease.events(self.root), [])
+        self.assertEqual(list((self.root / "cidfiles").glob("*.pinned")), [])
 
     def test_crash_after_spawn_before_bind_leaves_lease_open(self):
         def crash(cidfile, env):

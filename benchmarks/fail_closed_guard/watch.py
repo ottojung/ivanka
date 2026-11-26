@@ -38,7 +38,8 @@ def _result(binding, peak, teardown, teardown_error=None, attestation=None,
 
 def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                 stop, clock=time.monotonic, sleep=time.sleep, audit=None,
-                interval=0.5, rss_fn=None, attestation=None, start=None):
+                interval=0.5, rss_fn=None, attestation=None, start=None,
+                heartbeat=None):
     """Sample a bound container tree; fail closed on any unknown state.
 
     `stop(cid)` must be CID-only with teardown proof. The watcher never
@@ -122,6 +123,8 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                 # An unreadable overlay or vanished path is not a zero-byte
                 # disk reading; never continue the arm on that assumption.
                 raise GuardExceeded("measurement_unavailable") from exc
+            if heartbeat is not None:
+                heartbeat()
             sleep(interval)
     except GuardExceeded as exc:
         if not stopped:

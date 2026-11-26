@@ -12,7 +12,7 @@ import os
 import time
 from pathlib import Path
 
-from . import binding, proc
+from . import binding, heartbeat, proc
 from .errors import GuardExceeded, OrphanLease
 
 SCHEMA = "ivanka.worker-lease.v1"
@@ -70,12 +70,25 @@ def acquire(root, ident, mode, *, cidfile=None):
     return event
 
 
+def acquisition_start(root, ident):
+    """Return the durable start recorded before spawn, never a later bind time."""
+    start = None
+    for event in events(root):
+        if (event.get("lease") == str(ident)
+                and event.get("state") == "active"
+                and event.get("mode") in ("pilot", "build")
+                and event.get("at_utc") is not None):
+            start = event["at_utc"]
+    return start
+
+
 def bind(root, ident, pid, fingerprint=None):
     """Attach build-process identity after spawn; before spawn it is unknown."""
+    start = acquisition_start(root, ident)
     event = {"schema": SCHEMA, "lease": str(ident), "state": "active",
              "mode": "build", "cid": None, "cidfile": None, "pid": int(pid),
              "fingerprint": list(fingerprint) if fingerprint else None,
-             "at_utc": time.time()}
+             "at_utc": time.time() if start is None else start}
     append(root, event)
     return event
 
@@ -89,12 +102,13 @@ def bind_cid(root, ident, cid, *, cidfile=None, pid=None, fingerprint=None):
     """
     if not isinstance(cid, str) or not binding.CID.fullmatch(cid):
         raise GuardExceeded("invalid_lease")
+    start = acquisition_start(root, ident)
     event = {"schema": SCHEMA, "lease": str(ident), "state": "active",
              "mode": "pilot", "cid": cid,
              "cidfile": str(cidfile) if cidfile is not None else None,
              "pid": int(pid) if pid is not None else None,
              "fingerprint": list(fingerprint) if fingerprint else None,
-             "at_utc": time.time()}
+             "at_utc": time.time() if start is None else start}
     append(root, event)
     return event
 
@@ -217,8 +231,25 @@ def reconcile(root, env, *, command=None, snapshot=None):
     return report(blocked, closed)
 
 
-def require_clear(root, env, **kwargs):
-    """Fail closed before admission if any prior owned resource is alive."""
+def require_clear(root, env, *, watchdog_path=None,
+                  watchdog_max_age=heartbeat.ALIVE_MAX_AGE, wall=None,
+                  **kwargs):
+    """Fail closed if a prior resource is alive or no watchdog is observing.
+
+    An independent observer is a precondition for admission: without it a
+    crashed controller could leave an owned container alive unnoticed.
+    """
+    if watchdog_path is not None:
+        try:
+            heartbeat.read_alive(root, wall=wall, max_age=watchdog_max_age,
+                                 target=watchdog_path)
+        except GuardExceeded as exc:
+            from . import watchdog
+            blocked = [{"reason": exc.reason,
+                        "detail": "independent watchdog not observing"}]
+            watchdog.blocked_evidence(root, "admission", exc.reason,
+                                      blocked[0]["detail"])
+            raise OrphanLease(report(blocked, [], watchdog_required=True)) from exc
     result = reconcile(root, env, **kwargs)
     if result["blocked"]:
         raise OrphanLease(result)

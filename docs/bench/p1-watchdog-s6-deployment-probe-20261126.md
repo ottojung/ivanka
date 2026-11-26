@@ -30,7 +30,7 @@ plus complete pins before doing anything.
 | Export / artifact | Required value | Source |
 |---|---|---|
 | `WATCHDOG_ROOT` | `/workspace/ivanka-exploratory-ten-20261121` | actual PX worker root; hosts `.worker-lease.jsonl` and `.watchdog-alive.json` |
-| `WATCHDOG_CODE` | **derived at read time from the deployed run script** — never a stale hardcoded path. Currently `/workspace/ivanka-guard-pr530-staged-20261126`, git HEAD pinned to `f861f25b6e62e1266a498340e7d3cf9a09a9087f` (merged PR530), CLI SHA256 `e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369` | probe requires the exact HEAD-pin line in the run script and hashes the CLI from the derived path |
+| `WATCHDOG_CODE` | **derived at read time from the deployed run script** — never a stale hardcoded path. Currently `/workspace/ivanka-guard-pr536-staged-20261126`, git HEAD pinned to `091f56275ae823cb3291b81dbdf016fcf16c3ea0` (merged PR536, cutover 20:19Z), CLI SHA256 `e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369` | probe requires the exact HEAD-pin line in the run script and hashes the CLI from the derived path |
 | `WATCHDOG_STORAGE_CONF` | `/workspace/ivanka-exploratory-ten-20261121/storage.conf` (SHA `fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21`) | shared PX store |
 | `WATCHDOG_GRAPHROOT` | `/workspace/ivanka-exploratory-podman-20261121/store` | derived from the shared PX storage.conf |
 | `WATCHDOG_ARMED` | `0` until operator authorization at a natural PX boundary; `1` only after | operator gate |
@@ -52,18 +52,19 @@ PYTHONPATH=.:benchmarks python3 -m expanded.p1_watchdog_readiness --deployment-p
 Historical 19:16Z result at deployed PR530 `f861f25b` was **ready, rc=0** with
 all layout/pin checks true and a live PID fingerprint verified against `/proc`.
 That PID is intentionally NOT recorded here: it must be read from the current
-ALIVE record at admission time. With the **prospective pin** updated to the
-reviewed merged PR536 guard `091f56275ae823cb3291b81dbdf016fcf16c3ea0`, the
-probe now correctly **fails closed** while the deployed watchdog is still at
-`f861f25b`. Runtime refuses any arm until the operator deploys the reviewed
-head; this source change does not deploy or claim readiness.
+ALIVE record at admission time. The source pin was then updated prospectively
+to the reviewed merged PR536 guard `091f56275ae823cb3291b81dbdf016fcf16c3ea0`;
+while the older `f861f25b` head was still deployed the probe correctly failed
+closed. After the operator's 20:19Z cutover to that reviewed head, the probe is
+green again. The source pin is prospective (it attests the reviewed identity),
+deployment is an operator fact; neither implies an arm authorization.
 
-**Dependency status:** PR536 was reviewed GO at corrected head `6e6886a8` and
-merged at `091f5627`; it is integrated into this candidate's base `9f810867`
-but NOT DEPLOYED. PR535 (guard copy-only overlay admission, author `ottojung`,
-head `c7356b58`) remains open/draft and NO-GO; coordinate with its author and
-do not arm until it is resolved. PR531 is source GO at `bf3c1162` and staged
-only — no arm is claimed.
+**Dependency status:** PR536 was reviewed GO at corrected head `6e6886a8`,
+merged at `091f5627`, integrated into base `9f810867`, and deployed at 20:19Z.
+PR535 (guard copy-only overlay admission, author `ottojung`, head `c7356b58`)
+remains open/draft and NO-GO; coordinate with its author and do not arm until
+it is resolved. PR531 holds SCOPED-GO at `9872c1e1` and staged only — no arm is
+claimed.
 
 Tests: `PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_watchdog_readiness.py`
 (12 deterministic tests over a simulated s6 layout; no live service touched).

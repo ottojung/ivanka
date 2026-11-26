@@ -15,8 +15,8 @@ is gated on watchdog deployment plus an exact operator slot token.
 | Candidate binary | `8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786` | native release build, verified present; NOT rebuilt |
 | Previous hwe8M runner | `babc4dba90d7753a18458f284951c3452c26e8ef` | `fix/p1-bounded-pilot-runner-integration`, base `0e6969fd` |
 | Prior rebase (superseded) | `7567302af86593e9bff9ac69fc6d13162dd51d28` | was on exact PR520 `1b6e88c0`; bundle retained |
-| Rebase target | `b185c7f2b95c84edce5f1323f93addd5be7ead2d` | **final reviewed exact PR527 head** (`Require exact CID absence in Podman stderr, not command argv`); parent `aad9a2cd…`; independent GO; PR527 merged 18:18Z into main at integrated head `3fb720c7fd74e08b77d453441c10fdfed3eb305f` (the controller's `INTEGRATION_BASE`) |
-| Stale integration base (explicitly rejected) | `1b6e88c0…` / `aad9a2cd…` / `b185c7f2…` | earlier PR520/PR527 drafts and the pre-merge base; none is the current integrated head. `INTEGRATION_BASE` MUST be `3fb720c7fd74e08b77d453441c10fdfed3eb305f`; a regression test pins this value so it cannot silently drift again |
+| Rebase target | `9f81086715cade9d383f4aec62e284873ab21ba0` | **actual current integration base** (`Publish neutral cohort-owned Assembler Bench results`); contains reviewed+merged PR536 guard at `091f5627…`. This is the controller's `INTEGRATION_BASE`. Earlier target `b185c7f2…` was the reviewed PR527 head, now merged and superseded. |
+| Stale integration base (explicitly rejected) | `1b6e88c0…` / `aad9a2cd…` / `b185c7f2…` / `3fb720c7…` | earlier PR520/PR527 drafts and the pre-merge base; none is the actual rebase base. `INTEGRATION_BASE` MUST be `9f81086715cade9d383f4aec62e284873ab21ba0`; a regression test pins this value so it cannot silently drift again |
 | This branch | `science/p1-bounded-pilot-950fe331-on-pr527-20261126` | clean worktree, single commit rebased onto exact PR527 |
 | Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | linear chain whose parent chain reaches exactly `b185c7f2…`; no force-push / history rewrite |
 | Fallback bundle | `p1-pilot-7567302a.bundle` (prior base) — verify with prerequisite `1b6e88c0`; the current source is the rebased branch above | offline provenance only |
@@ -259,9 +259,13 @@ git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach b185c7f2…
   `091f56275ae823cb3291b81dbdf016fcf16c3ea0` (corrected head `6e6886a8` was
   independently GO'd). `verify_guard_source_pins()` pins those exact source
   digests and is prospective only: `deployed=false`.
-- PR536 guard is **NOT DEPLOYED** (live watchdog still at PR530 `f861f25b`).
-  The readiness probe therefore fails closed until the operator deploys the
-  reviewed head. No arm is authorized by this change.
+- Operator cutover at 20:19Z **deployed the reviewed guard** `091f5627` under
+  `/workspace/ivanka-guard-pr536-staged-20261126`; the read-only probe is green
+  with a live PID derived from the current ALIVE record. The source pin itself
+  remains prospective (`deployed=false` in the returned proof): it attests the
+  reviewed source identity, not a deployment act. Before that cutover the same
+  pin correctly failed closed against the older `f861f25b` head. No arm is
+  authorized by this change.
 - PR535 (copy-only overlay admission, author `ottojung`, head `c7356b58`)
   remains open/draft and NO-GO; coordinate with its author before any arm.
 - Separate staged candidate: PCR integration at exact source

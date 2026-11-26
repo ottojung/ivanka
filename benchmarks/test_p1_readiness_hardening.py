@@ -13,7 +13,7 @@ from unittest import mock
 from expanded import p1_bounded_pilot_runner as r
 from expanded import p1_watchdog_readiness as w
 
-MERGED_HEAD = "3fb720c7fd74e08b77d453441c10fdfed3eb305f"
+MERGED_HEAD = "9f81086715cade9d383f4aec62e284873ab21ba0"
 BINARY_SHA = "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786"
 IMAGE = "a" * 64
 

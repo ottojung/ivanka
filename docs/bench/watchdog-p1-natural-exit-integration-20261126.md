@@ -21,8 +21,9 @@ validation). No force-push, no history rewrite, no live artifact reused.
 
 ## Closure of the previously unresolved items
 
-The PR515 integration record listed seven open items. All source-side items are
-closed here:
+The PR515 integration record listed seven open items. Six source-side items are
+closed here; item 7 (Deployment) is deliberately still open behind the explicit
+operator gate:
 
 1. **Build admission** — `launch.operate` calls
    `watchdog_contract.require_supported_mode(mode)` before spawn when the

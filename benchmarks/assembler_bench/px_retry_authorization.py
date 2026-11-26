@@ -132,7 +132,9 @@ def binding(root, arm, prior_digest=None):
             "prior_receipt_sha256": digest,
             "preserved_attempt_sha256": preserved,
             "guard_commit": GUARD_COMMIT,
+            "reserve_origin_commit": guard_source.RESERVE_COMMIT,
             "guard_source_sha256": guard[guard_source.RESERVE_SOURCE],
+            "guard_stack_sha256": guard,
             "extra_attempt": EXTRA_ATTEMPT}
 
 

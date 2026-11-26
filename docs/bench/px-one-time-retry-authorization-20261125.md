@@ -18,13 +18,31 @@ byte-for-byte in `benchmarks/test_px_retry_authorization.py`.
 ## Deployed guard identity
 
 The fix that separated the constant-time shared disk reserve from the recursive
-usage audit is commit `af1f10d19143fa7a00134a01b56a858ef8a09647`. A commit
-string alone is not proof that the deployed guard is that revision, so
-`px_guard_source.verify()` re-derives the SHA-256 of the deployed guard source
-(`benchmarks/assembler_bench/exploratory_space.py`) and compares it with the
-reviewed pin on **every** authorization and verification. Source drift fails
-closed; the watchdog heartbeat integration changes the launcher and monitor, not
-the pinned reserve source, so the pin remains stable across that integration.
+usage audit is commit `af1f10d19143fa7a00134a01b56a858ef8a09647`. It is retained
+as `RESERVE_COMMIT` so the original evidence is never weakened or rewritten. A
+commit string alone is not proof that the deployed guard is that revision, so
+`px_guard_source.verify()` re-derives source digests on **every** authorization
+and verification and compares them with reviewed pins. Source drift fails closed.
+
+Since the retired-scratch retirement (PR #526) and the independent fail-closed
+watchdog (PR #527) were merged and deployed at 18:18Z, `GUARD_COMMIT` is the
+current deployed reviewed head `3fb720c7fd74e08b77d453441c10fdfed3eb305f`.
+Evidence: the running `ivanka-watchdog` service executes
+`PYTHONPATH=/workspace/ivanka-oci-transfer-20261126`, a clean checkout of that
+exact commit; every pinned digest below was recomputed both there and in the
+review checkout and matched byte-for-byte:
+
+- reserve source `benchmarks/assembler_bench/exploratory_space.py`
+  `bffdc90b703475aeb68f31c2df4334cb36a8912ebaba806cd7baee4d2bc18943`;
+- host fail-safe `benchmarks/memory_guard/{proc,guard,signals}.py`
+  `086ce9ac...` / `6e096ffb...` / `b5a4dc35...` (TRIP 3.7e9, LIMIT 4e9);
+- watchdog `benchmarks/fail_closed_guard/{proc,watchdog,watchdog_contract,binding,identity,startup}.py`
+  `e8b4c9eb...` / `a67bac26...` / `a2d198b3...` / `1e764c6a...` / `1feecc9e...` / `80b07ce3...`.
+
+The full digest map is bound into the authorization as `guard_stack_sha256`, and
+`guard_commit` plus `reserve_origin_commit` record both the current deployment
+and the original reserve fix. A change to any pinned guard source (including a
+watchdog relaunch from different bytes) invalidates an authorization.
 
 ## Authorization contract
 
@@ -37,7 +55,8 @@ under `authorizations/`. Its binding covers:
   terminal receipt digest when the authorization is first written;
 - the SHA-256 of **every** preserved prior infrastructure-failure receipt
   (attempts 1 and 2), so an earlier attempt cannot drift unnoticed;
-- the reviewed guard commit and the re-derived deployed guard source digest;
+- the current deployed guard commit, the retained reserve origin commit and
+  the re-derived full guard-stack digest map;
 - `extra_attempt = 3`, the only permitted dispatch beyond the unchanged
   `MAX_INFRA_ATTEMPTS = 2`;
 - a self-digest over the canonical binding.

@@ -439,14 +439,41 @@ class GuardPinAndDigestTests(unittest.TestCase):
         record = json.loads(path.read_bytes())
         guard = guard_source.verify()
         self.assertEqual(record["guard_commit"], guard_source.GUARD_COMMIT)
+        self.assertEqual(record["guard_commit"],
+                         "3fb720c7fd74e08b77d453441c10fdfed3eb305f")
+        self.assertEqual(record["reserve_origin_commit"],
+                         guard_source.RESERVE_COMMIT)
         self.assertEqual(record["guard_source_sha256"],
                          guard[guard_source.RESERVE_SOURCE])
+        self.assertEqual(record["guard_stack_sha256"], guard)
+        self.assertIn("benchmarks/fail_closed_guard/watchdog.py",
+                      record["guard_stack_sha256"])
+        self.assertEqual(len(record["guard_stack_sha256"]), 10)
         with patch.object(guard_source, "EXPECTED",
                           {guard_source.RESERVE_SOURCE: "0" * 64}):
             with self.assertRaisesRegex(ValueError, "guard source drift"):
                 authz.authorize(self.root, self.arm)
             with self.assertRaisesRegex(ValueError, "guard source drift"):
                 authz.verify(self.root, self.arm)
+
+    def test_watchdog_source_drift_fails_closed(self):
+        authz.authorize(self.root, self.arm)
+        watchdog = "benchmarks/fail_closed_guard/watchdog.py"
+        drifted = dict(guard_source.EXPECTED)
+        drifted[watchdog] = "0" * 64
+        with patch.object(guard_source, "EXPECTED", drifted):
+            with self.assertRaisesRegex(ValueError, "guard source drift"):
+                authz.verify(self.root, self.arm)
+
+    def test_guard_pins_match_deployed_watchdog_tree(self):
+        deployed = Path("/workspace/ivanka-oci-transfer-20261126")
+        if not deployed.is_dir():
+            self.skipTest("deployed watchdog checkout not present")
+        guard = guard_source.verify()
+        for name, digest in guard.items():
+            self.assertEqual(
+                hashlib.sha256((deployed / name).read_bytes()).hexdigest(),
+                digest, name)
 
     def test_every_preserved_attempt_digest_is_bound(self):
         authz.authorize(self.root, self.arm)

@@ -7,14 +7,17 @@ p1_harness, including the poll-lag shape of the 17:54Z PX-R035 race, and prove
 that live/unknown/unusable CID, a still-running launcher, an expired deadline
 and a wrong-CID teardown cannot produce a success receipt.
 """
+import time
+from types import SimpleNamespace
 import tempfile
 import unittest
 from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
-from fail_closed_guard import (binding, lease, p1_harness, p1_helper, startup,
-                               teardown)
+from assembler_bench.exploratory_runtime import monitor
+from fail_closed_guard import (binding, lease, natural_exit, p1_harness,
+                               p1_helper, startup, teardown)
 from fail_closed_guard.errors import GuardExceeded
 
 CID = "c" * 64
@@ -148,7 +151,30 @@ class HelperAttestationTests(unittest.TestCase):
         seq = iter([0.0, 0.0, 0.0, 0.0, 1000.0])
         with self.assertRaises(GuardExceeded) as caught:
             self.run_watch(launcher=Launcher([None]), clock=lambda: next(seq, 1000.0))
-        self.assertEqual(caught.exception.reason, "natural_exit_unverified")
+        self.assertEqual(caught.exception.reason, "wall_limit")
+        self.assertEqual(self.calls, [CID])
+
+    def test_already_expired_wall_with_real_result_never_completes(self):
+        ticks = iter([0.0, 0.0, 1000.0])
+        with self.assertRaises(GuardExceeded) as caught:
+            self.run_watch(launcher=Launcher([0]),
+                           clock=lambda: next(ticks, 1000.0))
+        self.assertEqual(caught.exception.reason, "wall_limit")
+        self.assertNotIn("natural_exit", caught.exception.guard_result or {})
+        self.assertEqual(self.calls, [CID])
+
+    def test_wall_crossing_during_inspect_never_completes(self):
+        now = [0.0]
+
+        def crossing(_cid, _env):
+            now[0] = 1000.0  # inspect is a blocking probe that burns the budget
+            return None
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self.run_watch(launcher=Launcher([0]), inspect=crossing,
+                           clock=lambda: now[0])
+        self.assertEqual(caught.exception.reason, "wall_limit")
+        self.assertNotIn("natural_exit", caught.exception.guard_result or {})
         self.assertEqual(self.calls, [CID])
 
     def test_wrong_cid_teardown_is_never_success(self):
@@ -263,12 +289,92 @@ class HarnessAttestationTests(unittest.TestCase):
         self.assertEqual(caught.exception.reason, "natural_exit_unverified")
         self.assertNotIn("natural_exit", caught.exception.guard_result or {})
 
+    def test_absolute_deadline_already_expired_with_real_result(self):
+        future = time.time() + 60
+        expired = time.time() + 120
+        fake = SimpleNamespace(time=lambda: expired, monotonic=time.monotonic)
+        with patch.object(natural_exit, "time", fake):
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(deadline_utc=future)
+        self.assertEqual(caught.exception.reason, "wall_limit")
+        self.assertNotIn("natural_exit", caught.exception.guard_result or {})
+        self.assertEqual(self.calls, [CID])
+
+    def test_absolute_deadline_crossing_during_inspect(self):
+        future = time.time() + 60
+        holder = {"t": time.time() - 10}
+
+        def crossing(_cid, _env):
+            holder["t"] = time.time() + 120  # inspect burns the absolute budget
+            return None
+
+        fake = SimpleNamespace(time=lambda: holder["t"], monotonic=time.monotonic)
+        with patch.object(natural_exit, "time", fake):
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(deadline_utc=future, inspect=crossing)
+        self.assertEqual(caught.exception.reason, "wall_limit")
+        self.assertNotIn("natural_exit", caught.exception.guard_result or {})
+        self.assertEqual(self.calls, [CID])
+
     def test_wrong_cid_teardown_is_never_completed(self):
         with self.assertRaises(GuardExceeded) as caught:
             self._run(stop=lambda cid: proof(OTHER))
         # No verified proof -> the harness refuses to retire STOP.
         self.assertEqual(caught.exception.reason, "teardown_unverified")
         self.assertTrue(self.stop_path.exists())
+
+
+class PilotMonitorDeadlineTests(unittest.TestCase):
+    """PX watch_pilot must not attest a natural exit past either deadline."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.cidfile = Path(self.tmp.name) / "pilot.cid"
+        self.cidfile.write_text(CID + "\n")
+        self.calls = []
+
+    def _run(self, *, clock, launcher, inspect=None, snaps=None):
+        tables = iter(snaps if snaps is not None else [{9: record(9)}])
+        with patch.object(binding, "inspect_pid", return_value=9), \
+                patch.object(binding, "inspect_pid_if_live",
+                             side_effect=(inspect or (lambda cid, env: None))), \
+                patch.object(teardown, "stop_cid",
+                             side_effect=lambda env, cid: (
+                                 self.calls.append(cid), proof(cid))[1]):
+            return monitor.watch_pilot(
+                launcher,
+                {"registry": "r", "baseline": "b", "root": "root",
+                 "image_store": "s", "workspace": "w",
+                 "rss_bytes": 10 ** 9, "wall_seconds": 100},
+                cidfile=self.cidfile, env=ENV, interval=0.25,
+                stop=lambda cid: (self.calls.append(cid), proof(cid))[1],
+                snapshot=lambda: next(tables),
+                measure=lambda *_a: {"incremental_bytes": 0},
+                clock=clock, sleep=lambda _s: None)
+
+    def test_expired_wall_with_real_result_is_failed_closed(self):
+        ticks = iter([0.0, 0.0, 1000.0])
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(clock=lambda: next(ticks, 1000.0), launcher=Launcher([0]))
+        self.assertEqual(caught.exception.reason, "wall_limit")
+        self.assertNotIn("natural_exit", caught.exception.guard_result or {})
+        self.assertEqual(self.calls, [CID])
+
+    def test_wall_crossing_during_attest_inspection(self):
+        now = [0.0]
+
+        def crossing(_cid, _env):
+            now[0] = 1000.0
+            return None
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(clock=lambda: now[0], inspect=crossing,
+                      launcher=Launcher([None, 0]),
+                      snaps=[{9: record(9)}, {9: record(9)}])
+        self.assertEqual(caught.exception.reason, "wall_limit")
+        self.assertNotIn("natural_exit", caught.exception.guard_result or {})
+        self.assertEqual(self.calls, [CID])
 
 
 if __name__ == "__main__":

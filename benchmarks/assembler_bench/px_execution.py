@@ -437,6 +437,8 @@ def main():
     parser.add_argument("--armed", action="store_true")
     parser.add_argument("--check-ready", action="store_true",
                         help="exit 0 only when certified tools and handoffs exist")
+    parser.add_argument("--check-admission", action="store_true",
+                        help="with --check-ready, also require current disk reserve")
     parser.add_argument("--audit-temp", action="store_true",
                         help="audit stale job temporaries at cohort end; no deletion")
     parser.add_argument("--apply-temp", action="store_true",
@@ -449,10 +451,19 @@ def main():
                                                       apply=args.apply_temp),
                          sort_keys=True))
         return 0
+    if args.check_admission and not args.check_ready:
+        parser.error("--check-admission requires --check-ready")
     if args.check_ready:
         data = exploratory_policy.checked(args.registry)
-        if checked_baseline(args.root, data) is None:
+        baseline = checked_baseline(args.root, data)
+        if baseline is None:
             return 1
+        if args.check_admission:
+            try:
+                sched.admit_arm(args.registry, json.loads(baseline.read_bytes()),
+                                args.root, RESERVE_BYTES)
+            except (OSError, ValueError):
+                return 1
         tools = [name for name in exploratory_policy.EXPERIMENTAL
                  if exploratory_policy.eligible(data, name)]
         if not tools or not all(sup.verify_handoff(args.root, args.registry, name)

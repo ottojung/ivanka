@@ -6,13 +6,18 @@ the container is still alive. This journal makes ownership durable: a lease is
 appended before spawn and closed only after teardown proof. Startup
 reconciliation never signals or removes a container; it refuses admission while
 any prior owned resource is alive, leaving teardown with its owner.
+
+Ownership is enforced, not merely recorded: older journals without an explicit
+``owner`` treat the lease identifier as the owner (backward compatible), and a
+foreign release (wrong owner or wrong CID) never closes a lease. This is what
+keeps a dead controller's lease open so admission still fails closed.
 """
 import json
 import os
 import time
 from pathlib import Path
 
-from . import binding, proc
+from . import binding, heartbeat, proc
 from .errors import GuardExceeded, OrphanLease
 
 SCHEMA = "ivanka.worker-lease.v1"
@@ -58,29 +63,90 @@ def events(root):
     return table
 
 
-def acquire(root, ident, mode, *, cidfile=None):
-    """Durably record ownership before any process or container is spawned."""
-    if mode not in ("pilot", "build") or (mode == "pilot" and cidfile is None):
+def _owner_of(event):
+    """Owner identity; legacy journals used the lease id as the owner."""
+    owner = event.get("owner")
+    return owner if owner is not None else event.get("lease")
+
+
+def _matches(close_event, active_event):
+    """A close is authorized only for the same owner and the same CID."""
+    if _owner_of(close_event) != _owner_of(active_event):
+        return False
+    close_cid = close_event.get("cid")
+    active_cid = active_event.get("cid")
+    if close_cid is not None and active_cid is not None:
+        return close_cid == active_cid
+    return True
+
+
+def latest(table):
+    """Last event per lease wins; the journal remains append-only evidence.
+
+    Close events from a foreign owner (or a foreign CID) are ignored, so a
+    cross-owner release can never close a lease it does not own.
+    """
+    result = {}
+    for event in table:
+        lease = event.get("lease")
+        if lease is None:
+            continue
+        if event.get("state") in CLOSED:
+            active = result.get(lease)
+            if active is None or active.get("state") in CLOSED:
+                continue
+            if not _matches(event, active):
+                continue
+        result[lease] = event
+    return result
+
+
+def acquire(root, ident, mode, *, owner=None, cidfile=None, cid=None):
+    """Durably record ownership before any process or container is spawned.
+
+    A caller that already knows the exact CID (the P1 harness binds it before
+    sampling) may record it at acquire time instead of supplying a transient
+    cidfile; reconciliation still uses only the append-only journal.
+    """
+    if mode not in ("pilot", "build") or (
+            mode == "pilot" and cidfile is None and cid is None):
         raise GuardExceeded("invalid_lease")
-    event = {"schema": SCHEMA, "lease": str(ident), "state": "active",
-             "mode": mode, "cid": None,
+    if cid is not None and (not isinstance(cid, str) or
+                            not binding.CID.fullmatch(cid)):
+        raise GuardExceeded("invalid_lease")
+    event = {"schema": SCHEMA, "lease": str(ident), "owner": str(owner or ident),
+             "state": "active", "mode": mode, "cid": cid,
              "cidfile": str(cidfile) if cidfile is not None else None,
              "pid": None, "fingerprint": None, "at_utc": time.time()}
     append(root, event)
     return event
 
 
-def bind(root, ident, pid, fingerprint=None):
+def acquisition_start(root, ident):
+    """Return the durable start recorded before spawn, never a later bind time."""
+    start = None
+    for event in events(root):
+        if (event.get("lease") == str(ident)
+                and event.get("state") == "active"
+                and event.get("mode") in ("pilot", "build")
+                and event.get("at_utc") is not None):
+            start = event["at_utc"]
+    return start
+
+
+def bind(root, ident, pid, fingerprint=None, *, owner=None):
     """Attach build-process identity after spawn; before spawn it is unknown."""
-    event = {"schema": SCHEMA, "lease": str(ident), "state": "active",
-             "mode": "build", "cid": None, "cidfile": None, "pid": int(pid),
-             "fingerprint": list(fingerprint) if fingerprint else None,
-             "at_utc": time.time()}
+    start = acquisition_start(root, ident)
+    event = {"schema": SCHEMA, "lease": str(ident), "owner": str(owner or ident),
+             "state": "active", "mode": "build", "cid": None, "cidfile": None,
+             "pid": int(pid), "fingerprint": list(fingerprint) if fingerprint else None,
+             "at_utc": time.time() if start is None else start}
     append(root, event)
     return event
 
 
-def bind_cid(root, ident, cid, *, cidfile=None, pid=None, fingerprint=None):
+def bind_cid(root, ident, cid, *, owner=None, cidfile=None, pid=None,
+             fingerprint=None):
     """Durably record the exact pilot CID at the moment it is bound.
 
     The cidfile is transient (--rm deletes it on natural completion), but the
@@ -89,27 +155,34 @@ def bind_cid(root, ident, cid, *, cidfile=None, pid=None, fingerprint=None):
     """
     if not isinstance(cid, str) or not binding.CID.fullmatch(cid):
         raise GuardExceeded("invalid_lease")
-    event = {"schema": SCHEMA, "lease": str(ident), "state": "active",
-             "mode": "pilot", "cid": cid,
+    start = acquisition_start(root, ident)
+    event = {"schema": SCHEMA, "lease": str(ident), "owner": str(owner or ident),
+             "state": "active", "mode": "pilot", "cid": cid,
              "cidfile": str(cidfile) if cidfile is not None else None,
              "pid": int(pid) if pid is not None else None,
              "fingerprint": list(fingerprint) if fingerprint else None,
-             "at_utc": time.time()}
+             "at_utc": time.time() if start is None else start}
     append(root, event)
     return event
 
 
-def release(root, ident, *, cid=None, proof=None):
-    """Close a lease only after verified teardown (or a proven-absent startup)."""
-    event = {"schema": SCHEMA, "lease": str(ident), "state": "released",
-             "cid": cid, "proof": proof, "at_utc": time.time()}
+def release(root, ident, *, owner=None, cid=None, proof=None):
+    """Close a lease only after authorized owner/CID match and teardown proof."""
+    active = latest(events(root)).get(str(ident))
+    if active is None or active.get("state") in CLOSED:
+        raise GuardExceeded("lease_not_active")
+    expected_owner = _owner_of(active)
+    caller_owner = str(owner or ident)
+    if caller_owner != expected_owner:
+        raise GuardExceeded("unauthorized_release")
+    active_cid = active.get("cid")
+    if cid is not None and active_cid is not None and cid != active_cid:
+        raise GuardExceeded("unauthorized_release")
+    event = {"schema": SCHEMA, "lease": str(ident), "owner": caller_owner,
+             "state": "released", "cid": cid if cid is not None else active_cid,
+             "proof": proof, "at_utc": time.time()}
     append(root, event)
     return event
-
-
-def latest(table):
-    """Last event per lease wins; the journal remains append-only evidence."""
-    return {event["lease"]: event for event in table if "lease" in event}
 
 
 def _cid_for(event):
@@ -134,7 +207,7 @@ def reconcile(root, env, *, command=None, snapshot=None):
 
     Read-only with respect to containers. Absent resources are recorded as
     closed only when no lease blocks admission, so a failed check never
-    silently mutates ownership state.
+    silently mutates ownership state. A foreign release is never honored.
     """
     command = command or _command
     snapshot = snapshot or proc.snapshot
@@ -172,6 +245,7 @@ def reconcile(root, env, *, command=None, snapshot=None):
                                 "reason": "orphan_container_alive"})
             else:
                 closed.append({"lease": lease_id, "cid": cid,
+                               "owner": _owner_of(event),
                                "reason": "proven_absent"})
             continue
         if event.get("mode") == "build":
@@ -193,11 +267,13 @@ def reconcile(root, env, *, command=None, snapshot=None):
                     blocked.append({"lease": lease_id, "pid": matches[0],
                                     "reason": "orphan_process_alive"})
                 else:
-                    closed.append({"lease": lease_id, "reason": "proven_absent"})
+                    closed.append({"lease": lease_id, "reason": "proven_absent",
+                                   "owner": _owner_of(event)})
             elif event.get("pid") is not None:
                 record = table.get(event["pid"])
                 if record is None:
-                    closed.append({"lease": lease_id, "reason": "proven_absent"})
+                    closed.append({"lease": lease_id, "reason": "proven_absent",
+                                   "owner": _owner_of(event)})
                 elif any(record.get(k) is None for k in
                          ("starttime", "pid_ns", "cmdline_sha")):
                     blocked.append({"lease": lease_id, "reason": "liveness_unknown"})
@@ -212,14 +288,56 @@ def reconcile(root, env, *, command=None, snapshot=None):
     if not blocked:
         for item in closed:
             append(root, {"schema": SCHEMA, "lease": item["lease"],
+                          "owner": item.get("owner", item["lease"]),
                           "state": "reconciled", "reason": item["reason"],
                           "at_utc": time.time()})
     return report(blocked, closed)
 
 
-def require_clear(root, env, **kwargs):
-    """Fail closed before admission if any prior owned resource is alive."""
+def require_clear(root, env, *, watchdog_path=None,
+                  watchdog_max_age=heartbeat.ALIVE_MAX_AGE, wall=None,
+                  graphroot=None, snapshot=None, **kwargs):
+    """Fail closed if a prior resource is alive or no watchdog is observing.
+
+    An independent observer is a precondition for admission: without it a
+    crashed controller could leave an owned container alive unnoticed. When
+    ``graphroot`` is supplied (the armed-watchdog contract) readiness is also
+    bound to the watchdog's own store namespace and to a live kernel task, so
+    a foreign-namespace or PID-reused record cannot unblock admission.
+    """
+    if watchdog_path is not None:
+        try:
+            if graphroot is not None:
+                from . import watchdog_contract
+                watchdog_contract.require_watchdog_readiness(
+                    watchdog_path, graphroot=graphroot, wall=wall,
+                    max_age=watchdog_max_age, snapshot=snapshot)
+            else:
+                heartbeat.read_alive(root, wall=wall, max_age=watchdog_max_age,
+                                     target=watchdog_path)
+        except GuardExceeded as exc:
+            from . import watchdog
+            blocked = [{"reason": exc.reason,
+                        "detail": "independent watchdog not observing"}]
+            watchdog.blocked_evidence(root, "admission", exc.reason,
+                                      blocked[0]["detail"])
+            raise OrphanLease(report(blocked, [], watchdog_required=True)) from exc
     result = reconcile(root, env, **kwargs)
+    # Modes the independent watchdog cannot supervise are unsafe to admit
+    # while it is armed: such a lease would be refused by the observer but
+    # could still outlive a crashed controller unattended.
+    if graphroot is not None:
+        from . import watchdog_contract
+        for worker, event in latest(events(root)).items():
+            if (event.get("state") == "active"
+                    and event.get("mode") not in watchdog_contract.SUPPORTED_MODES):
+                try:
+                    watchdog_contract.require_supported_mode(event.get("mode"))
+                except GuardExceeded as exc:
+                    blocked = [{"lease": worker, "reason": exc.reason,
+                                "detail": "unsupported lease under armed watchdog"}]
+                    raise OrphanLease(
+                        report(blocked, [], watchdog_required=True)) from exc
     if result["blocked"]:
         raise OrphanLease(result)
     return result

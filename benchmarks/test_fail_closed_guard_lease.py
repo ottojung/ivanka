@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from assembler_bench.exploratory_policy import checked
 from assembler_bench.exploratory_runtime import launch, monitor
-from fail_closed_guard import binding, identity, lease, proc, tree
+from fail_closed_guard import binding, heartbeat, identity, lease, proc, tree
 from fail_closed_guard.errors import GuardExceeded, OrphanLease
 from fail_closed_guard.watch import watch_bound
 
@@ -167,10 +167,13 @@ class WatchTeardownTests(unittest.TestCase):
             result = monitor.watch_pilot(
                 Stopped(), config, cidfile=Path("x.cid"), env={},
                 measure=lambda *a: {"incremental_bytes": 0},
-                stop=lambda cid: stopped.append(cid) or {"removed": True},
+                stop=lambda cid: stopped.append(cid) or {
+                    "cid": cid, "container_removed": True,
+                    "fresh_absence_check": True},
                 sleep=lambda _: None, clock=lambda: 0.0)
         self.assertEqual(stopped, [CID])
-        self.assertEqual(result["teardown"], {"removed": True})
+        self.assertEqual(result["teardown"]["cid"], CID)
+        self.assertTrue(result["teardown"]["container_removed"])
 
     def test_transient_disk_measurement_failure_fails_closed(self):
         class Live:
@@ -283,6 +286,7 @@ class LauncherAdmissionTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
 
     def operate(self):
+        heartbeat.ping(self.root)
         return launch.operate(REG, self.baseline, "skesa", "build",
                               [sys.executable, "-c", "print('hello')"], 1024**3)
 

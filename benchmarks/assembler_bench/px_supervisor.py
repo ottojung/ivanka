@@ -161,6 +161,10 @@ class BackgroundSupervisor:
             sched.admit_arm(self.registry, self.baseline, self.root,
                             self.reserve_bytes)
             case = self.source.case(arm["cohort"], arm["alias"])
+            if attempt > sched.MAX_INFRA_ATTEMPTS:
+                # Consume the one-shot durably before any child can spawn; an
+                # interrupted dispatch must not be dispatchable again.
+                authz.claim(self.root, arm)
             report = self.runner(arm, case)
             receipt = self._record(arm, report)
             # Publish observed RAM for EVERY terminal arm, including failures;

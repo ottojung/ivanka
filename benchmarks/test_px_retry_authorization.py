@@ -7,9 +7,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from assembler_bench import exploratory_policy
+from assembler_bench import px_cohort_ingest as ingest
 from assembler_bench import px_cohort_scheduler as sched
+from assembler_bench import px_guard_source as guard_source
 from assembler_bench import px_retry_authorization as authz
 from assembler_bench import px_supervisor as sup
+from assembler_bench.public_view import (EVIDENCE_SCHEMA, PANEL,
+                                         PHYSICAL_MANIFEST, PHYSICAL_SCORE,
+                                         merge_evidence)
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "benchmarks/assembler_bench/exploratory_candidates.json"
@@ -115,6 +120,11 @@ class AuthorizationTests(unittest.TestCase):
         self.assertEqual(record["prior_receipt_sha256"], self.prior_digest)
         self.assertEqual(len(self.prior_digest), 64)
         self.assertEqual(record["guard_commit"], authz.GUARD_COMMIT)
+        self.assertEqual(record["guard_source_sha256"],
+                         guard_source.verify()[guard_source.RESERVE_SOURCE])
+        self.assertEqual(record["preserved_attempt_sha256"], {
+            "1": hashlib.sha256(self.first_bytes).hexdigest(),
+            "2": hashlib.sha256(self.prior_bytes).hexdigest()})
         self.assertEqual(record["extra_attempt"], 3)
         self.assertEqual(record["authorization_sha256"], digest)
         self.assertEqual(hashlib.sha256(canonical_bytes({
@@ -418,6 +428,219 @@ class SupervisorRetryTests(unittest.TestCase):
             self.start(self.success_runner(calls))
         self.assertEqual(calls, [])
         self.assertEqual((archive / "conseq.csv").read_bytes(), b"preserved\n")
+
+
+class GuardPinAndDigestTests(unittest.TestCase):
+    def setUp(self):
+        AuthorizationTests.setUp(self)
+
+    def test_guard_pin_is_verified_against_deployed_source(self):
+        path, _ = authz.authorize(self.root, self.arm)
+        record = json.loads(path.read_bytes())
+        guard = guard_source.verify()
+        self.assertEqual(record["guard_commit"], guard_source.GUARD_COMMIT)
+        self.assertEqual(record["guard_source_sha256"],
+                         guard[guard_source.RESERVE_SOURCE])
+        with patch.object(guard_source, "EXPECTED",
+                          {guard_source.RESERVE_SOURCE: "0" * 64}):
+            with self.assertRaisesRegex(ValueError, "guard source drift"):
+                authz.authorize(self.root, self.arm)
+            with self.assertRaisesRegex(ValueError, "guard source drift"):
+                authz.verify(self.root, self.arm)
+
+    def test_every_preserved_attempt_digest_is_bound(self):
+        authz.authorize(self.root, self.arm)
+        record = authz.verify(self.root, self.arm)
+        self.assertEqual(set(record["preserved_attempt_sha256"]), {"1", "2"})
+        self.assertEqual(record["preserved_attempt_sha256"]["1"],
+                         hashlib.sha256(self.first_bytes).hexdigest())
+        self.assertEqual(record["preserved_attempt_sha256"]["2"],
+                         hashlib.sha256(self.prior_bytes).hexdigest())
+        first = sched.attempt_path(self.root, self.arm, 1)
+        drifted = json.loads(first.read_bytes())
+        drifted["seconds"] = 1.0
+        first.write_bytes(canonical_bytes(drifted))
+        with self.assertRaisesRegex(ValueError, "does not bind this arm"):
+            authz.verify(self.root, self.arm)
+
+    def test_one_shot_consumption_is_durable_and_exclusive(self):
+        authz.authorize(self.root, self.arm)
+        marker = authz.dispatch_path(self.root, self.arm)
+        self.assertFalse(marker.is_file())
+        self.assertEqual(authz.claim(self.root, self.arm), marker)
+        self.assertIsNone(authz.verify(self.root, self.arm))
+        self.assertIsNotNone(authz.verify_spent(self.root, self.arm))
+        with self.assertRaisesRegex(ValueError, "already consumed"):
+            authz.claim(self.root, self.arm)
+        sched.record_outcome(self.root, self.arm, None, "failure",
+                             failure_reason="disk_stop")
+        self.assertEqual(sched.verify_receipt(self.root, self.arm)["attempt"], 3)
+        record = json.loads(marker.read_bytes())
+        record["authorization_sha256"] = "0" * 64
+        marker.write_bytes(canonical_bytes(record))
+        with self.assertRaisesRegex(ValueError, "does not bind authorization"):
+            sched.verify_receipt(self.root, self.arm)
+
+
+class OneShotDispatchTests(unittest.TestCase):
+    make_registry = SupervisorRetryTests.make_registry
+    make_source = SupervisorRetryTests.make_source
+    supervisor = SupervisorRetryTests.supervisor
+    start = SupervisorRetryTests.start
+    exhausted = SupervisorRetryTests.exhausted
+    success_runner = SupervisorRetryTests.success_runner
+
+    def setUp(self):
+        SupervisorRetryTests.setUp(self)
+
+    def test_claim_is_durable_before_spawn_and_interrupted_dispatch_stays_spent(self):
+        self.exhausted()
+        authz.authorize(self.px, self.arm)
+        marker = authz.dispatch_path(self.px, self.arm)
+        calls = []
+
+        def interrupted(arm, case):
+            self.assertTrue(marker.is_file())
+            self.assertIsNone(authz.verify(self.px, arm))
+            calls.append(sched.receipt_id(arm))
+            raise RuntimeError("spawn interrupted")
+
+        with self.assertRaisesRegex(RuntimeError, "spawn interrupted"):
+            self.start(interrupted)
+        self.assertEqual(len(calls), 1)
+        self.assertIsNone(authz.verify(self.px, self.arm))
+        self.assertIsNotNone(authz.verify_spent(self.px, self.arm))
+        again = []
+        self.start(self.success_runner(again))
+        self.assertEqual(again, [])
+        self.assertEqual(sched.verify_receipt(self.px, self.arm)["attempt"], 2)
+
+
+class SupersessionTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.arm = arm_of(IDBA_ATTEMPT_2)
+        self.receipt = dict(IDBA_ATTEMPT_2)
+        write_preserved(self.root, self.arm, IDBA_ATTEMPT_1)
+        write_preserved(self.root, self.arm, IDBA_ATTEMPT_2)
+        write_receipt(self.root, self.arm, IDBA_ATTEMPT_2)
+        authz.authorize(self.root, self.arm)
+        authz.claim(self.root, self.arm)
+        self.record = authz.verify_spent(self.root, self.arm)
+        base = {key: self.arm[key] for key in (
+            "tool_id", "source_commit", "adapter_commit", "image_sha256")}
+        self.prior = dict(base, cohort="real", canonical_alias="R001",
+                          outcome="failure",
+                          failure_reason="measurement_unavailable",
+                          score=None, attempt=2,
+                          diagnostics={"peak_ram_observed_mib": 263.0,
+                                       "soft_clips_count": 12})
+        self.success = dict(
+            base, cohort="real", canonical_alias="R001",
+            outcome="success", score=9000.0, attempt=3,
+            retry_authorization_sha256=self.record["authorization_sha256"],
+            canonical_manifest_sha256=PHYSICAL_MANIFEST,
+            read_sha256=dict(self.arm["input_sha256"]),
+            score_origin=PHYSICAL_SCORE, reference_panel_sha256=PANEL,
+            binding_receipts=5,
+            diagnostics={"peak_ram_observed_mib": 270.0})
+
+    def report(self):
+        return {"runs": [{"id": "r", "cohort": "real", "tools": ["idba-ud"],
+                          "expected_sample_count": 1,
+                          "samples": [{"alias": "R001", "failures": ["idba-ud"],
+                                       "score": {"idba-ud": None},
+                                       "seconds": {"idba-ud": None},
+                                       "outcome": "failure"}]}]}
+
+    def evidence(self, case):
+        return {"schema": EVIDENCE_SCHEMA,
+                "cohorts": {"real": {"assemblers": ["idba-ud"]}},
+                "assemblers": [{"id": "idba-ud", "cases": [case]}]}
+
+    def test_supersession_preserves_history_and_is_idempotent(self):
+        cases = [json.loads(json.dumps(self.prior))]
+        self.assertTrue(ingest.reconcile_case(
+            cases, self.success, self.root, self.receipt))
+        self.assertEqual(len(cases), 1)
+        self.assertEqual(cases[0]["outcome"], "success")
+        self.assertEqual(cases[0]["superseded"], [self.prior])
+        self.assertEqual(cases[0]["superseded"][0]["diagnostics"],
+                         self.prior["diagnostics"])
+        self.assertFalse(ingest.reconcile_case(
+            cases, self.success, self.root, self.receipt))
+
+    def test_scientific_failure_and_success_are_never_superseded(self):
+        for prior in (dict(self.prior, failure_reason="error"),
+                      dict(self.prior, outcome="success", score=1.0,
+                           failure_reason=None)):
+            cases = [prior]
+            self.assertFalse(ingest.reconcile_case(
+                cases, self.success, self.root, self.receipt))
+            self.assertEqual(cases[0], prior)
+
+    def test_unauthorized_or_unconsumed_retry_never_supersedes(self):
+        for case in (dict(self.success, retry_authorization_sha256="0" * 64),
+                     {key: value for key, value in self.success.items()
+                      if key != "retry_authorization_sha256"}):
+            cases = [json.loads(json.dumps(self.prior))]
+            self.assertFalse(ingest.reconcile_case(
+                cases, case, self.root, self.receipt))
+        fresh = self.root / "fresh"
+        write_preserved(fresh, self.arm, IDBA_ATTEMPT_1)
+        write_preserved(fresh, self.arm, IDBA_ATTEMPT_2)
+        write_receipt(fresh, self.arm, IDBA_ATTEMPT_2)
+        _, digest = authz.authorize(fresh, self.arm)
+        cases = [json.loads(json.dumps(self.prior))]
+        self.assertFalse(ingest.reconcile_case(
+            cases, dict(self.success, retry_authorization_sha256=digest),
+            fresh, self.receipt))
+
+    def test_public_view_retires_failure_and_keeps_history(self):
+        cases = [json.loads(json.dumps(self.prior))]
+        ingest.reconcile_case(cases, self.success, self.root, self.receipt)
+        merged, joined = merge_evidence(self.report(), self.evidence(cases[0]))
+        sample = merged["runs"][0]["samples"][0]
+        self.assertEqual(sample["score"]["idba-ud"], 9000.0)
+        self.assertNotIn("idba-ud", sample["failures"])
+        self.assertEqual(sample["outcome"], "success")
+        row = sample["measurement_evidence"]["idba-ud"]
+        self.assertEqual(row["superseded"], [self.prior])
+        self.assertEqual(row["attempt"], 3)
+        self.assertEqual(joined, [("r", "idba-ud", "R001")])
+
+    def test_public_view_rejects_scientific_supersession(self):
+        case = dict(self.success,
+                    superseded=[dict(self.prior, failure_reason="error")])
+        with self.assertRaisesRegex(ValueError, "only infrastructure failures"):
+            merge_evidence(self.report(), self.evidence(case))
+
+
+class PublicationCoordinationTests(unittest.TestCase):
+    def test_failure_order_is_roster_order_and_idempotent(self):
+        tools = ["zeta", "alpha", "omega"]
+        case = {"cohort": "real", "canonical_alias": "R001",
+                "canonical_manifest_sha256": PHYSICAL_MANIFEST,
+                "read_sha256": {"R1": "a" * 64, "R2": "b" * 64},
+                "binding_receipts": 2, "score_origin": PHYSICAL_SCORE,
+                "reference_panel_sha256": PANEL, "outcome": "failure",
+                "failure_reason": "error", "score": None}
+        evidence = {"schema": EVIDENCE_SCHEMA,
+                    "cohorts": {"real": {"assemblers": tools}},
+                    "assemblers": [{"id": tool, "cases": [dict(case)]}
+                                   for tool in reversed(tools)]}
+        report = {"runs": [{"id": "test", "cohort": "real", "tools": tools,
+                            "expected_sample_count": 1,
+                            "samples": [{"alias": "R001",
+                                         "failures": ["omega", "alpha"],
+                                         "score": {}, "seconds": {}}]}]}
+        merged, _ = merge_evidence(report, evidence)
+        self.assertEqual(merged["runs"][0]["samples"][0]["failures"], tools)
+        repeated, joined = merge_evidence(merged, evidence)
+        self.assertEqual(repeated, merged)
+        self.assertEqual(joined, [])
 
 
 if __name__ == "__main__":

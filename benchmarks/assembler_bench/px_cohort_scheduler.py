@@ -394,8 +394,8 @@ def verify_receipt(root, arm):
             raise ValueError("only infrastructure failures may be retried")
     if attempt == AUTHORIZED_EXTRA_ATTEMPT:
         from . import px_retry_authorization as authz
-        if authz.verify(root, arm) is None:
-            raise ValueError("extra PX attempt is not authorized")
+        if authz.verify_spent(root, arm) is None:
+            raise ValueError("extra PX attempt is not authorized or consumed")
     return data
 
 
@@ -429,8 +429,8 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
             attempt = previous + 1
         elif failed_infra and previous == MAX_INFRA_ATTEMPTS:
             from . import px_retry_authorization as authz
-            if authz.verify(root, arm) is None:
-                raise ValueError("exhausted PX arm may not be retried without authorization")
+            if authz.verify_spent(root, arm) is None:
+                raise ValueError("exhausted PX arm may not be retried without consumed authorization")
             original = attempt_path(root, arm, previous)
             if not original.is_file():
                 _atomic_write(original, _json_bytes(existing))

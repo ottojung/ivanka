@@ -9,6 +9,7 @@ from pathlib import Path
 from assembler_bench import px_timing_semantics as timing
 from assembler_bench.exploratory_publication import publish_neutral
 from assembler_bench.public_validation import check_joined_measurements
+from assembler_bench.public_view import merge_evidence, EVIDENCE_SCHEMA, PHYSICAL_SCORE, PANEL, PHYSICAL_MANIFEST
 from assembler_bench.site_build import SITE
 
 
@@ -97,6 +98,29 @@ class JoinedMeasurementTests(unittest.TestCase):
 
 
 class RosterStatusTests(unittest.TestCase):
+    def test_failure_order_is_roster_order_and_idempotent(self):
+        tools = ["zeta", "alpha", "omega"]
+        def case(tool):
+            return {"cohort": "real", "canonical_alias": "R001",
+                    "canonical_manifest_sha256": PHYSICAL_MANIFEST,
+                    "read_sha256": {"R1": "a" * 64, "R2": "b" * 64},
+                    "binding_receipts": 2, "score_origin": PHYSICAL_SCORE,
+                    "reference_panel_sha256": PANEL, "outcome": "failure",
+                    "failure_reason": "error", "score": None}
+        evidence = {"schema": EVIDENCE_SCHEMA,
+                    "cohorts": {"real": {"assemblers": tools}},
+                    "assemblers": [{"id": t, "cases": [case(t)]}
+                                   for t in reversed(tools)]}
+        report = {"runs": [{"id": "test", "cohort": "real", "tools": tools,
+                             "sample_count": 1, "samples": [{
+                                 "alias": "R001", "failures": ["omega", "alpha"],
+                                 "score": {}, "seconds": {}}]}]}
+        merged, _ = merge_evidence(report, evidence)
+        self.assertEqual(merged["runs"][0]["samples"][0]["failures"], tools)
+        repeated, joined = merge_evidence(merged, evidence)
+        self.assertEqual(repeated, merged)
+        self.assertEqual(joined, [])
+
     def test_observation_status_never_uses_placeholder_cases(self):
         report = json.loads((SITE / "data/runs.json").read_text())
         for run in report["runs"]:

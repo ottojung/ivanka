@@ -280,6 +280,14 @@ section.dominance,section.diagnostics{margin-top:61px}
 }
 
 
+/* Method type travels with the tool name wherever a tool is displayed. */
+.method-badge{display:inline-block;font-size:10px;font-weight:500;line-height:1.3;
+  padding:1px 5px;border:1px solid var(--border);border-radius:999px;
+  color:var(--muted);white-space:normal;vertical-align:middle}
+.method-note{font-size:12px;line-height:1.55;color:var(--muted);
+  padding:8px 10px;margin:10px 0;border-left:2px solid var(--cyan);
+  background:var(--surface)}
+
 /* The top notice is the only execution-status region; overviews remain observational. */
 .global-notice[hidden]{display:none}
 .global-notice{font-size:12px;line-height:1.6}

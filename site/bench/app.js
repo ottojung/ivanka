@@ -25,6 +25,32 @@ function toolLabel(tool) {
   return DISPLAY_NAMES[id]||
     id.replace(/[_-]+/g," ").replace(/\b[a-z]/g,c=>c.toUpperCase());
 }
+// Method type is a property of the measurement, not a separate roster panel.
+// A reference-based method is displayed beside de novo tools but named as
+// such everywhere a tool name appears, including ranking and matrix headers.
+function toolMethod(tool) {
+  return state.run?.tool_modes?.[String(tool??"").toLowerCase()]||null;
+}
+function toolLabelHtml(tool) {
+  const mode=toolMethod(tool);
+  const badge=mode&&mode.kind
+    ?' <span class="method-badge" title="'+esc(mode.description||mode.kind)+
+      '">'+esc(mode.kind)+(mode.de_novo===false?' · not de novo':'')+'</span>'
+    :"";
+  return esc(toolLabel(tool))+badge;
+}
+// An unavailable measurement is shown as N/A. It is never rendered as zero
+// and never enters a mean, distribution or paired difference.
+function na(value,digits=5) {
+  return Number.isFinite(value)?fmt(value,digits):"N/A";
+}
+function methodNotes() {
+  const modes=state.run?.tool_modes||{};
+  return Object.entries(modes).map(([tool,mode])=>
+    '<p class="method-note"><strong>'+toolLabelHtml(tool)+'</strong>: '+
+    esc(mode.description||"Method type recorded with this cohort.")+
+    ' Metrics that require native or unstitched contigs are N/A.</p>').join("");
+}
 const state = {data:null,run:null,metric:"score",firstTool:null,tool:null,
   sort:"id",reverse:false,rows:[],diagnostics:null,
   direction:"higher",psiExponent:"all",psiMetric:"alignment",
@@ -188,7 +214,7 @@ function drawCompare() {
     esc(row.tool)+'" aria-label="Show '+esc(toolLabel(row.tool))+
     ' '+esc(info.label)+' distribution">'+
     '<span class="bar-name">'+row.rank+'. '+
-    esc(toolLabel(row.tool))+'</span>'+
+    toolLabelHtml(row.tool)+'</span>'+
     '<span class="bar-track"><span class="bar-fill '+
     (row.tool===state.firstTool?"":"other")+'" style="width:'+
     (row.mean===null?0:100*Math.abs(row.mean)/cap).toFixed(2)+'%"></span></span>'+
@@ -318,7 +344,8 @@ function drawDiagnostics() {
     '<dt>Denominator / basis</dt><dd>'+esc(info.denominator)+'</dd>'+
     '<dt>Observed cases</dt><dd>'+ranking.reduce((n,r)=>
       n+Number(r.observed>0),0)+' of '+ranking.length+
-    ' assemblers have measurements in this run</dd></dl>'+
+    ' methods have measurements in this run</dd></dl>'+
+    methodNotes()+
     (!BenchRanks.isCore(state.metric)?
       '<button type="button" id="addDiagnosticSubject" class="outline-button">'+
       'Include this metric in Ψ subjects</button>':'');
@@ -341,19 +368,19 @@ function drawTable() {
   const rows=currentRows();
   const info=metricInfo();
   const suffix=info?.unit==="seconds"?" s":"";
-  el("firstColumn").innerHTML=esc(toolLabel(state.firstTool))+' <span>↕</span>';
-  el("secondColumn").innerHTML=esc(toolLabel(state.tool))+' <span>↕</span>';
+  el("firstColumn").innerHTML=toolLabelHtml(state.firstTool)+' <span>↕</span>';
+  el("secondColumn").innerHTML=toolLabelHtml(state.tool)+' <span>↕</span>';
   el("resultRows").innerHTML=rows.map(row=>{
     const outcome=classify(row);
     const tone=outcome==="win"?"positive":
       outcome==="loss"?"negative":"neutral";
-    const delta=row.delta!==null?((row.delta>0?"+":"")+
-      fmt(row.delta,5)+suffix):"—";
+    const delta=Number.isFinite(row.delta)?((row.delta>0?"+":"")+
+      na(row.delta)+suffix):"N/A";
     return '<tr tabindex="0" role="button" data-alias="'+esc(row.id)+
       '" aria-label="Inspect '+esc(row.id)+'">'+
       '<td class="cell-title">'+esc(row.id)+'</td>'+
-      '<td class="number">'+fmt(row.first,5)+(row.first===null?"":suffix)+'</td>'+
-      '<td class="number">'+fmt(row.rival,5)+(row.rival===null?"":suffix)+'</td>'+
+      '<td class="number">'+na(row.first)+(Number.isFinite(row.first)?suffix:"")+'</td>'+
+      '<td class="number">'+na(row.rival)+(Number.isFinite(row.rival)?suffix:"")+'</td>'+
       '<td class="number '+tone+'">'+delta+'</td>'+
       '<td class="'+tone+'">'+esc(outcome)+'</td></tr>';
   }).join("")||'<tr><td colspan="5">No matching measurements.</td></tr>';
@@ -426,7 +453,7 @@ function drawProvenance() {
         (item.source_url?'<a target="_blank" rel="noopener noreferrer" href="'+
           esc(item.source_url)+'">'+esc(item.source_commit)+'</a>':
           esc(item.source_commit)):"—";
-      return '<tr><th scope="row">'+esc(toolLabel(name))+'</th>'+
+      return '<tr><th scope="row">'+toolLabelHtml(name)+'</th>'+
         '<td>'+esc(branch)+'</td><td>'+commit+
         '</td><td class="code-hash">'+(esc(item.image_sha256)||"Not recorded")+
         '</td></tr>';
@@ -600,9 +627,9 @@ function drawDominance() {
       ". Row dominates column when strict Ψ(r)>0 for every real r≥0 "+
       "on all selected metrics; missing measurements remain unresolved.";
   holder.innerHTML='<table class="psi-matrix" style="--matrix-columns:'+matrixTools.length+'"><thead><tr><th>ROW A ↓ / B →</th>'+
-    matrixTools.map(tool=>'<th scope="col">'+esc(toolLabel(tool))+'</th>').join("")+
+    matrixTools.map(tool=>'<th scope="col">'+toolLabelHtml(tool)+'</th>').join("")+
     '</tr></thead><tbody>'+
-    matrixTools.map(a=>'<tr><th scope="row">'+esc(toolLabel(a))+'</th>'+
+    matrixTools.map(a=>'<tr><th scope="row">'+toolLabelHtml(a)+'</th>'+
       matrixTools.map(b=>{
         if(a===b)return '<td class="dom-self">—</td>';
         const result=BenchSubjects.evaluate(report,a,b,selected,snapshot,state.run);
@@ -647,8 +674,8 @@ function drawDominance() {
         esc(chosen.label)+': <strong>'+esc(fmtPsi(number.value))+
         '</strong> · '+number.paired+'/'+number.expected+
         ' paired cases.</p>':'';
-      details.innerHTML='<h3>'+esc(toolLabel(a))+' versus '+
-        esc(toolLabel(b))+' · '+selected.length+
+      details.innerHTML='<h3>'+toolLabelHtml(a)+' versus '+
+        toolLabelHtml(b)+' · '+selected.length+
         ' selected subjects</h3>'+momentDetails+
         '<p>Observed paired-subset dominance: <strong>'+
         esc(verdict.label)+'</strong> — '+esc(verdict.explanation)+

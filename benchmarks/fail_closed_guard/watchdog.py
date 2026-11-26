@@ -29,6 +29,11 @@ DEFAULT_RESERVE = 1024 ** 3
 DEFAULT_WALL_SECONDS = 2400
 DEFAULT_INTERVAL = 0.5
 DEFAULT_HEARTBEAT_MAX_AGE = heartbeat.ALIVE_MAX_AGE
+# A cidfile can appear before the controller publishes the bound fingerprint
+# or even updates its heartbeat CID. This grace is bounded by durable
+# acquisition, a fresh live controller heartbeat, and exact-CID inspection in
+# the pinned store; it never extends the arm wall deadline.
+DEFAULT_STARTUP_BIND_GRACE = 120.0
 
 
 def evidence_path(root):
@@ -171,14 +176,17 @@ def bound_from_lease(root, worker, env):
     return bound
 
 
-def verify_bound(bound, env, table, *, heartbeat_record=None):
+def verify_bound(bound, env, table, *, heartbeat_record=None, wall=None,
+                 startup_bind_grace=DEFAULT_STARTUP_BIND_GRACE):
     """Re-inspect the exact CID in the pinned store and measure its tree.
 
-    A cidfile can appear before the controller publishes its bound fingerprint.
-    While the controller heartbeat is fresh and names this same CID, that is a
-    healthy bind in progress, not an orphan: observe it without teardown. A
-    dead/expired controller never reaches this branch (its heartbeat check
-    already failed closed), so pending_bind can never mask an orphan.
+    A cidfile can appear before the controller publishes the bound fingerprint
+    or updates its heartbeat CID from None. While the controller heartbeat is
+    fresh/live and the arm is within a bounded startup grace from durable
+    acquisition, that is a healthy bind in progress, not an orphan: observe it
+    without teardown. A dead/expired heartbeat never reaches this branch
+    (check_once fails closed first) and a heartbeat naming a different CID is
+    identity_lost, so pending_bind cannot mask an orphan.
     """
     cid = bound["cid"]
     pid = binding.inspect_pid(cid, env)
@@ -186,11 +194,23 @@ def verify_bound(bound, env, table, *, heartbeat_record=None):
         raise GuardExceeded("identity_lost")
     finger = bound.get("fingerprint")
     if not isinstance(finger, (list, tuple)) or len(finger) < 2:
-        if (heartbeat_record is not None
-                and heartbeat_record.get("cid") == cid
+        beat_cid = (heartbeat_record.get("cid")
+                    if heartbeat_record is not None else None)
+        cid_match = beat_cid == cid
+        cid_unpublished = (beat_cid is None and heartbeat_record is not None)
+        if cid_unpublished:
+            start = bound.get("durable_start")
+            clock = wall if wall is not None else time.time
+            if not (isinstance(start, (int, float)) and math.isfinite(start)
+                    and clock() - start <= startup_bind_grace):
+                cid_unpublished = False
+        if (heartbeat_record is not None and (cid_match or cid_unpublished)
                 and pid in table):
             return {"state": "pending_bind", "pid": pid, "rss": None,
-                    "members": 0, "identity": None}
+                    "members": 0, "identity": None,
+                    "pending_reason": ("heartbeat_cid_match"
+                                       if cid_match
+                                       else "startup_bind_grace")}
         raise GuardExceeded("binding_unavailable")
     if bound.get("stable"):
         anchor = {"pid": pid, "fingerprint": list(finger),
@@ -275,7 +295,8 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
                rss_limit=RSS_LIMIT, wall_seconds=DEFAULT_WALL_SECONDS,
                max_age=DEFAULT_HEARTBEAT_MAX_AGE, heartbeat_path=None,
                monotonic=None, wall_clock=None, snapshot=None, measure=None,
-               stop=None):
+               stop=None, namespace_cache=None,
+               startup_bind_grace=DEFAULT_STARTUP_BIND_GRACE):
     """One independent observation of one active lease.
 
     The wall deadline comes from the lease's durable start, so restarting the
@@ -300,9 +321,16 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
     action = {"action": "none", "cid": None, "teardown": None}
     result = "observing"
     try:
-        namespace_ok = bool(verify_namespace(pinned, graphroot))
+        if heartbeat._namespace_verified(namespace_cache, graphroot, wall()):
+            namespace_ok = True
+        else:
+            namespace_ok = bool(verify_namespace(pinned, graphroot))
+            if isinstance(namespace_cache, dict):
+                namespace_cache.clear()
+                namespace_cache.update({"graphroot": str(graphroot),
+                                        "verified_at": wall()})
         heartbeat.advertise(root, storage_conf=storage_conf, graphroot=graphroot,
-                            env=env, wall=wall)
+                            env=env, wall=wall, namespace_cache=namespace_cache)
         bound = bound_from_lease(root, worker, pinned)
         if bound["state"] == "unsupported":
             raise GuardExceeded("unsupported_lease")
@@ -325,7 +353,8 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
         if bound["state"] == "bound":
             try:
                 observations["bound"] = verify_bound(
-                    bound, pinned, table, heartbeat_record=beat)
+                    bound, pinned, table, heartbeat_record=beat, wall=wall,
+                    startup_bind_grace=startup_bind_grace)
             except GuardExceeded as exc:
                 if getattr(exc, "identity_observation", None) is not None:
                     observations["bound"] = {
@@ -390,27 +419,35 @@ def supervise(root, *, storage_conf, graphroot, env=None, stop_path=None,
     """Permanent service loop: discover and observe every active lease.
 
     STOP requests a boundary between arms. It never disables monitoring of a
-    live arm: the loop exits only once no active lease remains.
+    live arm; when no active lease remains, the watchdog keeps idling and
+    advertising readiness so restart churn cannot make readiness stale.
     """
     nap = sleep if sleep is not None else time.sleep
     wall = kwargs.get("wall_clock") or time.time
     count = 0
     workers = []
+    namespace_cache = kwargs.pop("namespace_cache", {})
     while ticks is None or count < ticks:
         heartbeat.advertise(root, storage_conf=storage_conf, graphroot=graphroot,
-                            env=env, wall=wall)
+                            env=env, wall=wall, namespace_cache=namespace_cache)
         workers = discover_workers(root)
         for worker in workers:
             try:
                 check_once(root, worker, storage_conf=storage_conf,
-                           graphroot=graphroot, env=env, **kwargs)
+                           graphroot=graphroot, env=env,
+                           namespace_cache=namespace_cache, **kwargs)
             except GuardExceeded:
                 pass
         count += 1
+        # Boundary requested: no new admissions should happen, but the service
+        # stays alive to preserve readiness and observe any unexpected lease.
         if stop_path and Path(stop_path).exists() and not discover_workers(root):
-            return {"result": "boundary", "ticks": count, "workers": []}
+            workers = []
         nap(interval)
-    return {"result": "observing", "ticks": count, "workers": workers}
+    boundary = bool(stop_path and Path(stop_path).exists()
+                   and not discover_workers(root))
+    return {"result": "boundary" if boundary else "observing",
+            "ticks": count, "workers": workers}
 
 
 # Re-exported so admission and the CLI use one availability contract.

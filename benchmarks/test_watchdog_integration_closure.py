@@ -5,8 +5,10 @@ stop/spawn callables. No container, image, STOP sentinel, receipt or live arm is
 touched.
 """
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from contextlib import nullcontext
@@ -162,13 +164,43 @@ class LaunchReceiptClosureTests(TestRunner):
         table = dict(process_snapshot.snapshot())
         table[4242] = {"pid": 4242, "ppid": 1, "rss": 1, "starttime": 7,
                        "pid_ns": 9, "cmdline_sha": "x", "cgroup": "0::/"}
-        # No env inheritance: the ALIVE record naming this store is enough.
-        with patch.object(process_snapshot, "snapshot", return_value=table):
+        with patch.dict(os.environ, {"WATCHDOG_ARMED": "1"}),                 patch.object(process_snapshot, "snapshot", return_value=table):
             with self.assertRaises(GuardExceeded) as caught:
                 launch.operate(REG, self.baseline, "skesa", "build",
                                [sys.executable, "-c", "print('hello')"], 1024**3)
         self.assertEqual(caught.exception.reason, "watchdog_unsupported_mode")
+
+    def test_armed_missing_alive_fails_closed_no_fallback(self):
+        from fail_closed_guard.errors import OrphanLease
+        with patch.dict(os.environ, {"WATCHDOG_ARMED": "1"}):
+            with self.assertRaises(OrphanLease) as caught:
+                launch.operate(REG, self.baseline, "skesa", "build",
+                               [sys.executable, "-c", "print('hello')"], 1024**3)
+        self.assertEqual(
+            caught.exception.report["blocked"][0]["reason"],
+            "watchdog_unavailable")
         self.assertEqual(list(self.root.glob("run-*.json")), [])
+
+
+class StoreNamespaceParsingTests(unittest.TestCase):
+    def test_quoted_toml_storage_conf_matches_real_podman_format(self):
+        from fail_closed_guard import store
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "storage.conf"
+            graphroot = "/workspace/ivanka-exploratory-podman-20261121/store"
+            conf.write_text(
+                '[storage]\n'
+                'driver = "overlay"\n'
+                'graphroot = "%s"\n'
+                'runroot = "%s/run"\n' % (graphroot, graphroot))
+            env = {"CONTAINERS_STORAGE_CONF": str(conf)}
+            seen = []
+            def fake(argv, env, timeout=15):
+                seen.append(list(argv))
+                return graphroot + "\n"
+            self.assertEqual(store.verify_namespace(env, graphroot, command=fake),
+                             graphroot)
+            self.assertEqual(seen[0][1], "info")
 
 
 class StartupRaceAndNaturalExitTests(WatchdogTests):
@@ -203,6 +235,34 @@ class StartupRaceAndNaturalExitTests(WatchdogTests):
         self.assertEqual(result["peak_rss"], 2000)
         self.assertEqual(result["cid"], CID)
         self.assertEqual(stopped, [CID])
+
+    def test_pending_bind_allows_unpublished_heartbeat_cid_within_grace(self):
+        self.issue(journal_cid=False, write_cidfile=True, start=1000.0)
+        # Controller is alive but has not yet published CID into heartbeat.
+        self.beat(cid=None)
+        result = self.check()
+        self.assertEqual(result["result"], "observing")
+        self.assertEqual(result["lease_state"], "bound")
+        self.assertEqual(self.stopped, [])
+        self.assertEqual(self.evidence(), [])
+
+    def test_pending_bind_unpublished_cid_outside_grace_fails_closed(self):
+        self.issue(journal_cid=False, write_cidfile=True, start=1000.0)
+        self.beat(cid=None)
+        self.clock.advance(121)
+        with self.assertRaises(GuardExceeded) as caught:
+            self.check()
+        self.assertEqual(caught.exception.reason, "binding_unavailable")
+        self.assertEqual(self.stopped, [CID])
+
+    def test_pending_bind_stale_heartbeat_still_tears_down(self):
+        self.issue(journal_cid=False, write_cidfile=True, start=1000.0)
+        self.beat(cid=None)
+        self.clock.advance(31)
+        with self.assertRaises(GuardExceeded) as caught:
+            self.check(max_age=30, wall_seconds=2400)
+        self.assertEqual(caught.exception.reason, "heartbeat_stale")
+        self.assertEqual(self.stopped, [CID])
 
 
 if __name__ == "__main__":

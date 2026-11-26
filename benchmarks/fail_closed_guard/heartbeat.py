@@ -98,18 +98,41 @@ class Emitter:
                     target=self.target)
 
 
+NAMESPACE_TTL_SECONDS = 20.0
+
+
+def _namespace_verified(cache, graphroot, now, ttl=NAMESPACE_TTL_SECONDS):
+    if not isinstance(cache, dict):
+        return False
+    at = cache.get("verified_at")
+    return (cache.get("graphroot") == str(graphroot)
+            and isinstance(at, (int, float)) and math.isfinite(at)
+            and 0 <= now - at <= ttl)
+
+
 def ping(root, *, storage_conf=None, graphroot=None, env=None, pid=None,
-         table=None, wall=None, target=None):
+         table=None, wall=None, target=None, namespace_cache=None,
+         namespace_ttl=NAMESPACE_TTL_SECONDS):
     """Advertise readiness only after store and own-identity checks pass.
 
     A watchdog that cannot see its pinned store or its own kernel identity is
-    not observing anything and must not unblock admissions.
+    not observing anything and must not unblock admissions. Namespace
+    verification may be cached for a bounded TTL to keep heartbeat refreshes
+    below the readiness max-age.
     """
+    clock = wall or time.time
+    now = clock()
     if storage_conf is not None or graphroot is not None:
-        pinned = store.pin_env(env, storage_conf=storage_conf)
-        store.verify_namespace(pinned, graphroot)
+        if not _namespace_verified(namespace_cache, graphroot, now,
+                                   ttl=namespace_ttl):
+            pinned = store.pin_env(env, storage_conf=storage_conf)
+            store.verify_namespace(pinned, graphroot)
+            if isinstance(namespace_cache, dict):
+                namespace_cache.clear()
+                namespace_cache.update({"graphroot": str(graphroot),
+                                        "verified_at": now})
     found = identity(os.getpid() if pid is None else pid, table)
-    event = {"schema": ALIVE_SCHEMA, "at_utc": (wall or time.time)(),
+    event = {"schema": ALIVE_SCHEMA, "at_utc": now,
              "pid": found["pid"], "fingerprint": found["fingerprint"],
              "cmdline_sha": found["cmdline_sha"], "graphroot": str(graphroot)}
     _write(target or alive_path(root), event)

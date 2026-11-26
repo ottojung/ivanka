@@ -31,17 +31,14 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         # is alive or its liveness cannot be proven.
         guard_env = {**os.environ,
                      "CONTAINERS_STORAGE_CONF": str(root / "storage.conf")}
-        # The strict watchdog contract applies once the independent observer
-        # is armed. The launcher cannot rely on inheriting the s6 environment,
-        # so the durable ALIVE record naming this exact store is authoritative
-        # (WATCHDOG_ARMED remains an explicit operator override). Under that
-        # contract readiness is namespace/PID bound and modes the watchdog
-        # cannot supervise (builds) are refused before any process spawns.
+        # The strict watchdog contract applies only when the operator has
+        # explicitly armed deployment (WATCHDOG_ARMED=1). There is no silent
+        # fallback: if armed but the watchdog ALIVE/readiness contract is not
+        # satisfied, admission fails closed. Unarmed operation keeps the
+        # legacy watchdog-path liveness check only.
         graphroot = str(Path(base["image_store"]).resolve() / "store")
         alive = heartbeat.alive_path(root)
-        armed = (os.environ.get("WATCHDOG_ARMED") == "1"
-                 or watchdog_contract.is_bound(alive, graphroot))
-        if armed:
+        if os.environ.get("WATCHDOG_ARMED") == "1":
             lease.require_clear(root, guard_env,
                                 watchdog_path=alive, graphroot=graphroot,
                                 snapshot=process_snapshot.snapshot,

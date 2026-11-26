@@ -121,7 +121,7 @@ class TestRunner(unittest.TestCase):
             self.run_job("pilot")
 
     def test_changed_store_is_rejected(self):
-        (self.root / "storage.conf").write_text("[storage]\ndriver = 'vfs'\n")
+        (self.root / "storage.conf").write_text('[storage]\ndriver = "vfs"\n')
         with self.assertRaises(ValueError):
             self.run_job()
 

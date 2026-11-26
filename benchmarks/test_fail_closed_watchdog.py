@@ -41,7 +41,7 @@ class WatchdogTests(unittest.TestCase):
         self.root = Path(tmp.name)
         self.conf = self.root / "storage.conf"
         self.conf.write_text(
-            "[storage]\ndriver = overlay\ngraphroot = %s\nrunroot = %s/run\n"
+            "[storage]\ndriver = \"overlay\"\ngraphroot = \"%s\"\nrunroot = \"%s/run\"\n"
             % (GRAPHROOT, GRAPHROOT))
         self.env = {"CONTAINERS_STORAGE_CONF": str(self.conf),
                     "CONTAINERS_CONF": "/host/other.conf"}

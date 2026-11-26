@@ -1,0 +1,230 @@
+{
+  "candidate_image_sha256": "73f29f0233da2ecd1ab126178cba4deb9e246bff5a6f770ab021a8f36d71081b",
+  "comparators": {
+    "abyss": {
+      "full_cohort_eligible": false,
+      "missing_or_failed_pairs": 92,
+      "original_successful_pairs": 106,
+      "runtime": {
+        "paired": 106,
+        "proof": {
+          "gains": 73,
+          "losses": 33,
+          "positive_all_nonnegative": true,
+          "psi0": 0.37735849056603776,
+          "psi1": 85.67086246943397,
+          "psi2": 90806.9154370991,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 0,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      },
+      "score": {
+        "paired": 106,
+        "proof": {
+          "gains": 27,
+          "losses": 5,
+          "positive_all_nonnegative": true,
+          "psi0": 0.20754716981132076,
+          "psi1": 8.339622641509434,
+          "psi2": 1617.0,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 74,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      }
+    },
+    "haploflow": {
+      "full_cohort_eligible": false,
+      "missing_or_failed_pairs": 27,
+      "original_successful_pairs": 171,
+      "runtime": {
+        "paired": 171,
+        "proof": {
+          "gains": 170,
+          "losses": 1,
+          "positive_all_nonnegative": true,
+          "psi0": 0.9883040935672515,
+          "psi1": 244.2521747750351,
+          "psi2": 116208.6166695349,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 0,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      },
+      "score": {
+        "paired": 171,
+        "proof": {
+          "gains": 40,
+          "losses": 30,
+          "positive_all_nonnegative": true,
+          "psi0": 0.05847953216374269,
+          "psi1": 16.251461988304094,
+          "psi2": 18274.3918128655,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 101,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      }
+    },
+    "iva": {
+      "full_cohort_eligible": true,
+      "missing_or_failed_pairs": 0,
+      "original_successful_pairs": 198,
+      "runtime": {
+        "paired": 198,
+        "proof": {
+          "gains": 188,
+          "losses": 10,
+          "positive_all_nonnegative": true,
+          "psi0": 0.898989898989899,
+          "psi1": 92.54624112734344,
+          "psi2": 15392.845739643762,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 0,
+          "zeros_nonnegative": []
+        },
+        "status": "full-cohort-dominates"
+      },
+      "score": {
+        "paired": 198,
+        "proof": {
+          "gains": 53,
+          "losses": 14,
+          "positive_all_nonnegative": true,
+          "psi0": 0.19696969696969696,
+          "psi1": 4.065656565656566,
+          "psi2": 211.76262626262627,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 131,
+          "zeros_nonnegative": []
+        },
+        "status": "full-cohort-dominates"
+      }
+    },
+    "megahit": {
+      "full_cohort_eligible": false,
+      "missing_or_failed_pairs": 10,
+      "original_successful_pairs": 188,
+      "runtime": {
+        "paired": 188,
+        "proof": {
+          "gains": 164,
+          "losses": 24,
+          "positive_all_nonnegative": true,
+          "psi0": 0.7446808510638298,
+          "psi1": 148.37509714472873,
+          "psi2": 92688.8454848028,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 0,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      },
+      "score": {
+        "paired": 188,
+        "proof": {
+          "gains": 55,
+          "losses": 23,
+          "positive_all_nonnegative": true,
+          "psi0": 0.1702127659574468,
+          "psi1": 28.0531914893617,
+          "psi2": 20536.22340425532,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 110,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      }
+    },
+    "spades": {
+      "full_cohort_eligible": false,
+      "missing_or_failed_pairs": 68,
+      "original_successful_pairs": 130,
+      "runtime": {
+        "paired": 130,
+        "proof": {
+          "gains": 129,
+          "losses": 1,
+          "positive_all_nonnegative": true,
+          "psi0": 0.9846153846153847,
+          "psi1": 388.3869149033923,
+          "psi2": 311729.35078068235,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 0,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      },
+      "score": {
+        "paired": 130,
+        "proof": {
+          "gains": 33,
+          "losses": 23,
+          "positive_all_nonnegative": true,
+          "psi0": 0.07692307692307693,
+          "psi1": 23.73076923076923,
+          "psi2": 25402.776923076923,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 74,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      }
+    },
+    "velvet": {
+      "full_cohort_eligible": false,
+      "missing_or_failed_pairs": 41,
+      "original_successful_pairs": 157,
+      "runtime": {
+        "paired": 157,
+        "proof": {
+          "gains": 141,
+          "losses": 16,
+          "positive_all_nonnegative": true,
+          "psi0": 0.7961783439490446,
+          "psi1": 127.22411115430573,
+          "psi2": 70524.0035354898,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 0,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      },
+      "score": {
+        "paired": 157,
+        "proof": {
+          "gains": 45,
+          "losses": 9,
+          "positive_all_nonnegative": true,
+          "psi0": 0.22929936305732485,
+          "psi1": 113.6687898089172,
+          "psi2": 193503.32484076434,
+          "psi_at_positive_infinity": "+inf",
+          "ties": 103,
+          "zeros_nonnegative": []
+        },
+        "status": "paired-subset-dominates-diagnostic"
+      }
+    }
+  },
+  "expected_physical_cases": 198,
+  "fixed_reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+  "frozen_manifest_sha256": "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f",
+  "ivanka_controlled_original_IVA_gate_pass": true,
+  "original_all_seven_full_cohort_eligibility": false,
+  "original_comparator_runs_recomputed": 0,
+  "original_seven_terminal_arms_overwritten": false,
+  "per_case_score_floor_failures": 0,
+  "qualification": false,
+  "schema": "ivanka.p0.original-common-frozen-rust-only-strict-all-r.v1",
+  "source_affected_expected": 128,
+  "source_attested_physical_cases": 198,
+  "source_unique_expected": 70,
+  "status": "ORIGINAL_SEVEN_FAILURES_BLOCK_COMPLETE_QUALIFICATION",
+  "utc": "2026-11-24T06:47:31.726423+00:00"
+}

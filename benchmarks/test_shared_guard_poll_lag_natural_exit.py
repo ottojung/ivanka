@@ -100,6 +100,7 @@ class PilotPollLagTests(unittest.TestCase):
 
     def setUp(self):
         self.calls = []
+        self.snapshots_used = 0
 
     def stop(self, cid):
         self.calls.append(cid)
@@ -110,6 +111,11 @@ class PilotPollLagTests(unittest.TestCase):
         launcher = launcher or LaggingLauncher(code=code)
         snapshots = snapshots or ([{9: record(9)}] * 2 + [{}])
         tables = iter(snapshots)
+
+        def take():
+            self.snapshots_used += 1
+            return next(tables)
+
         with tempfile.TemporaryDirectory() as folder:
             cidfile = Path(folder) / "pilot.cid"
             cidfile.write_text(CID)
@@ -118,14 +124,19 @@ class PilotPollLagTests(unittest.TestCase):
                                  side_effect=inspect_live or (lambda cid, env: None)):
                 return monitor.watch_pilot(
                     launcher, CONFIG, cidfile=cidfile, env={}, interval=0.25,
-                    stop=self.stop, snapshot=lambda: next(tables),
+                    stop=self.stop, snapshot=take,
                     measure=lambda *_args: {"incremental_bytes": 0},
                     clock=lambda: 0.0, sleep=lambda _seconds: None)
 
     def test_poll_lag_with_removed_cid_is_a_true_natural_exit(self):
         # PX-R035 shape: exit_code 0, exact CID already removed, and a final
         # /proc snapshot that lost the bound PID before the launcher caught up.
-        result = self.run_pilot(launcher=LaggingLauncher(lag=2, code=0))
+        # Three polls must still lag: the third /proc snapshot (missing bound
+        # PID) is consumed while the launcher result is not yet available, so
+        # the identity-loss exception branch is exercised, not just the
+        # post-loop attestation.
+        result = self.run_pilot(launcher=LaggingLauncher(lag=3, code=0))
+        self.assertEqual(self.snapshots_used, 3)
         self.assertEqual(result["cid"], CID)
         self.assertEqual(result["peak_rss"], 1000)
         self.assertEqual(self.calls, [CID])

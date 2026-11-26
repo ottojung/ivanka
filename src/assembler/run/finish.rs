@@ -13,6 +13,7 @@ pub(super) fn write(
     audit_path: Option<&str>,
     standard: bool,
     prepared: super::prepare::Prepared,
+    skip_matching_seeds: Option<&str>,
 ) -> Result<usize, Box<dyn Error>> {
     let super::prepare::Prepared {
         reads,
@@ -41,7 +42,7 @@ pub(super) fn write(
         // otherwise withhold the rescue to avoid losing distinct evidence.
         append_preserving_diversity(&mut contigs, rescue, max, protected_seed_count);
     }
-    let count = super::write_results::write(out, &contigs, &reads, standard)?;
+    let count = super::write_results::write(out, &contigs, &reads, standard, skip_matching_seeds)?;
     if let Some(path) = audit_path {
         let count = write_snv_audit(&path, &audit, &contigs, &reads.seed_counts, canonical_kmer)?;
         eprintln!(

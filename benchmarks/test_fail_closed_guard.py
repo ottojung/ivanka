@@ -70,7 +70,8 @@ class GuardTests(unittest.TestCase):
         snaps = [{100: rec(100, 0, 1_000_000_000),
                   101: rec(101, 100, 1_000_000_000, start=101),
                   102: rec(102, 1, 1_000_000_000, start=102)}]
-        total = self.watch(fingerprint(rec(100, 0, 1000)), snaps, lambda _: None)
+        total = self.watch(fingerprint(rec(100, 0, 1000)), snaps,
+                           lambda cid: {"cid": cid, "container_removed": True})
         self.assertEqual(total["peak_rss"], 3_000_000_000)
 
     def test_exceeded_limit_stops_only_exact_cid(self):
@@ -78,8 +79,12 @@ class GuardTests(unittest.TestCase):
         snaps = [{100: rec(100, 0, 3_000_000_000),
                   101: rec(101, 100, 1_500_000_000, start=101),
                   999: rec(999, 0, 9_000_000_000, ns=8, start=5, cmd="other")}]
+        def stop(cid):
+            stopped.append(cid)
+            return {"cid": cid, "container_removed": True}
+
         with self.assertRaises(GuardExceeded) as caught:
-            self.watch(fingerprint(rec(100, 0, 1000)), snaps, stopped.append)
+            self.watch(fingerprint(rec(100, 0, 1000)), snaps, stop)
         self.assertEqual(caught.exception.reason, "observed_rss_limit")
         self.assertEqual(stopped, [CID])
 
@@ -140,13 +145,18 @@ class GuardTests(unittest.TestCase):
         bound = {"cid": CID, "fingerprint": fingerprint(rec(9, 0, 1))}
         snaps = [{9: rec(9, 0, 5000)}, {9: rec(9, 0, 5000)}]
         stopped = []
+
+        def stop(cid):
+            stopped.append(cid)
+            return {"cid": cid, "container_removed": True}
+
         with patch.object(monitor.binding, "bind_container", return_value=bound), \
                 patch.object(monitor.binding, "read_cid", return_value=CID), \
                 patch.object(monitor.proc, "snapshot", side_effect=snaps):
             with self.assertRaises(GuardExceeded) as caught:
                 monitor.watch_pilot(DummyProc(), config, cidfile=Path("x.cid"),
                                     env={}, measure=lambda *a: {"incremental_bytes": 0},
-                                    stop=stopped.append, sleep=lambda _: None,
+                                    stop=stop, sleep=lambda _: None,
                                     clock=lambda: 0.0)
         self.assertEqual(caught.exception.reason, "observed_rss_limit")
         self.assertEqual(stopped, [CID])

@@ -1,0 +1,39 @@
+# Dedicated MiCall fork image for exactly one NONQUALIFYING exploratory assembler.
+# Nothing from the frozen seven-tool clinical image is copied or rebuilt here.
+ARG FORK_BASE_IMAGE
+FROM ${FORK_BASE_IMAGE}
+ARG FORK_BASE_IMAGE
+ARG MICALL_FORK_SOURCE_COMMIT
+ARG MICALL_FORK_BASE_COMMIT
+ARG TOOL_SOURCE_REPO
+ARG TOOL_SOURCE_COMMIT
+ARG TOOL_BINARY_SHA256
+RUN test "${#MICALL_FORK_SOURCE_COMMIT}" -eq 40 \
+    && test "${#MICALL_FORK_BASE_COMMIT}" -eq 40 \
+    && test "${#TOOL_SOURCE_COMMIT}" -eq 40 \
+    && test "${#TOOL_BINARY_SHA256}" -eq 64
+ENV MICALL_DENOVO_ASSEMBLER="penguin"
+RUN test "${MICALL_DENOVO_ASSEMBLER}" = "penguin"
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      g++ cmake make zlib1g-dev libbz2-dev git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+# Pinned PenguiN (plass): nucleotide-only nuclassemble from the paired FASTQs.
+# The external SRC/MERC catalogs of guided_nuclassemble are never fetched or used.
+RUN git clone --recursive --quiet ${TOOL_SOURCE_REPO} /src/plass \
+    && cd /src/plass && git checkout --quiet ${TOOL_SOURCE_COMMIT} \
+    && git submodule update --init --recursive \
+    && test "$(git rev-parse HEAD)" = "${TOOL_SOURCE_COMMIT}" \
+    && mkdir build && cd build \
+    && cmake -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_INSTALL_PREFIX=. .. \
+    && make -j 4 && make install \
+    && install -m 0755 bin/penguin /usr/local/bin/penguin \
+    && rm -rf /src/plass
+LABEL org.opencontainers.image.source="https://github.com/ottojung/MiCall"
+LABEL org.opencontainers.image.revision="${MICALL_FORK_SOURCE_COMMIT}"
+LABEL org.ottojung.micall.common-base="${FORK_BASE_IMAGE}"
+LABEL org.ottojung.micall.common-baseline-commit="${MICALL_FORK_BASE_COMMIT}"
+LABEL org.ottojung.micall.source-branch="bench/assembler-penguin"
+LABEL org.ottojung.micall.assembler="penguin"
+LABEL org.ottojung.exploratory.tool-source-repo="${TOOL_SOURCE_REPO}"
+LABEL org.ottojung.exploratory.tool-source-commit="${TOOL_SOURCE_COMMIT}"
+LABEL org.ottojung.exploratory.tool-binary-sha256="${TOOL_BINARY_SHA256}"

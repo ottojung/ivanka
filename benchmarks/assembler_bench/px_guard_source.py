@@ -3,24 +3,28 @@
 A retry authorization must bind to the guard source that is actually present,
 not to a self-declared commit string. The digests below are recomputed from the
 deployed tree on every authorization and verification; any drift in the reserve
-source, the host 4-GB fail-safe or the independent fail-closed watchdog fails
-closed until the pin is deliberately updated with a reviewed commit.
+source, the host 4-GB fail-safe, the independent fail-closed watchdog, or the
+PR530 natural-exit monitor path fails closed until the pin is deliberately
+updated with a reviewed commit.
 
-Evidence: the running watchdog (s6 `ivanka-watchdog`, PID 1503395 at review time)
-executes PYTHONPATH=/workspace/ivanka-oci-transfer-20261126, a clean checkout of
-main 3fb720c7fd74e08b77d453441c10fdfed3eb305f (PR #527 merge, deployed 18:18Z).
-Every digest below was recomputed there and in the review checkout and matched
-byte-for-byte. RESERVE_COMMIT is retained as the origin of the constant-time
-reserve so the older evidence is never weakened or rewritten.
+Evidence: the running watchdog (`ivanka-watchdog`, PID 1882043 at review time)
+executes PYTHONPATH=/workspace/ivanka-guard-pr530-staged-20261126, a clean
+checkout of f861f25b6e62e1266a498340e7d3cf9a09a9087f (merge of PR #530,
+"Attest pilot natural exit by exact CID, not a lagging poll", deployed after the
+earlier 3fb720c7 staging). Every digest below was recomputed in that deployed
+tree and in the review checkout and matched byte-for-byte. RESERVE_COMMIT is
+retained as the origin of the constant-time reserve so older evidence is never
+weakened or rewritten.
 """
 import hashlib
 from pathlib import Path
 
 # Origin of the constant-time shared disk reserve (PR #510). Retained evidence.
 RESERVE_COMMIT = "af1f10d19143fa7a00134a01b56a858ef8a09647"
-# Current deployed reviewed guard semantics: PR #526 retirement + PR #527
-# independent fail-closed watchdog, merged at 3fb720c7 and deployed 18:18Z.
-GUARD_COMMIT = "3fb720c7fd74e08b77d453441c10fdfed3eb305f"
+# Current deployed reviewed guard semantics: PR #526 retirement, PR #527
+# independent watchdog and PR #530 exact-CID natural-exit monitor, merged at
+# f861f25b6e62e1266a498340e7d3cf9a09a9087f.
+GUARD_COMMIT = "f861f25b6e62e1266a498340e7d3cf9a09a9087f"
 
 RESERVE_SOURCE = "benchmarks/assembler_bench/exploratory_space.py"
 MEMORY_GUARD = (
@@ -35,6 +39,14 @@ WATCHDOG = (
     "benchmarks/fail_closed_guard/binding.py",
     "benchmarks/fail_closed_guard/identity.py",
     "benchmarks/fail_closed_guard/startup.py",
+    "benchmarks/fail_closed_guard/watchdog_cli.py",
+)
+# PR #530 critical monitor path: natural exit attested by exact CID, not a
+# lagging poll. Changes to any of these invalidate an authorization.
+NATURAL_EXIT = (
+    "benchmarks/fail_closed_guard/natural_exit.py",
+    "benchmarks/fail_closed_guard/watch.py",
+    "benchmarks/assembler_bench/exploratory_runtime/monitor.py",
 )
 # Verified against the deployed source bytes; never trust a caller-supplied pin.
 EXPECTED = {
@@ -58,6 +70,14 @@ EXPECTED = {
         "1feecc9e75e71c4bf54b2dbd960cc92886fa00cd9a564c7d220e90f4163aa973",
     "benchmarks/fail_closed_guard/startup.py":
         "80b07ce334fa99691ed0a89baf9aa803d4e67631be72c022188963f094ae7b6d",
+    "benchmarks/fail_closed_guard/watchdog_cli.py":
+        "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369",
+    "benchmarks/fail_closed_guard/natural_exit.py":
+        "0d655667d8ad34f1842ea3d368603398f3d72641c953a37704d54fc525481048",
+    "benchmarks/fail_closed_guard/watch.py":
+        "a13839f3264770a48bc20e6b52f09d9f1dbea4cb8d0abc1a89dfdf99f44f76b2",
+    "benchmarks/assembler_bench/exploratory_runtime/monitor.py":
+        "bd88eb3d95c8b7296f49edc3d668589f1c58f7edac70dec1ba4f3f84c9fec4f1",
 }
 
 

@@ -440,7 +440,7 @@ class GuardPinAndDigestTests(unittest.TestCase):
         guard = guard_source.verify()
         self.assertEqual(record["guard_commit"], guard_source.GUARD_COMMIT)
         self.assertEqual(record["guard_commit"],
-                         "3fb720c7fd74e08b77d453441c10fdfed3eb305f")
+                         "f861f25b6e62e1266a498340e7d3cf9a09a9087f")
         self.assertEqual(record["reserve_origin_commit"],
                          guard_source.RESERVE_COMMIT)
         self.assertEqual(record["guard_source_sha256"],
@@ -448,7 +448,9 @@ class GuardPinAndDigestTests(unittest.TestCase):
         self.assertEqual(record["guard_stack_sha256"], guard)
         self.assertIn("benchmarks/fail_closed_guard/watchdog.py",
                       record["guard_stack_sha256"])
-        self.assertEqual(len(record["guard_stack_sha256"]), 10)
+        for path in guard_source.NATURAL_EXIT:
+            self.assertIn(path, record["guard_stack_sha256"])
+        self.assertEqual(len(record["guard_stack_sha256"]), 14)
         with patch.object(guard_source, "EXPECTED",
                           {guard_source.RESERVE_SOURCE: "0" * 64}):
             with self.assertRaisesRegex(ValueError, "guard source drift"):
@@ -465,8 +467,17 @@ class GuardPinAndDigestTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "guard source drift"):
                 authz.verify(self.root, self.arm)
 
+    def test_natural_exit_monitor_drift_fails_closed(self):
+        authz.authorize(self.root, self.arm)
+        for path in guard_source.NATURAL_EXIT:
+            drifted = dict(guard_source.EXPECTED)
+            drifted[path] = "0" * 64
+            with patch.object(guard_source, "EXPECTED", drifted):
+                with self.assertRaisesRegex(ValueError, "guard source drift"):
+                    authz.verify(self.root, self.arm)
+
     def test_guard_pins_match_deployed_watchdog_tree(self):
-        deployed = Path("/workspace/ivanka-oci-transfer-20261126")
+        deployed = Path("/workspace/ivanka-guard-pr530-staged-20261126")
         if not deployed.is_dir():
             self.skipTest("deployed watchdog checkout not present")
         guard = guard_source.verify()

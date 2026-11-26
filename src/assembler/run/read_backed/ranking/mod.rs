@@ -1,4 +1,13 @@
-use super::scoring::Statistics;
+mod independent;
+mod junction;
+mod private;
+mod rotate;
+mod spans;
+pub(super) mod unlinked;
+use super::{scoring::Statistics, K};
+pub(super) use independent::additional;
+pub(super) use junction::junction;
+pub(super) use rotate::native;
 use std::cmp::Ordering;
 
 /// Read-covered breadth squared, weighted by supporting original fragments.

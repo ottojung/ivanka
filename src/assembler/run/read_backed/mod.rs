@@ -15,31 +15,41 @@ use std::io;
 
 type Entry = (String, Vec<u8>);
 
+fn selection(native: usize, chosen: usize, stats: &scoring::Statistics) {
+    eprintln!("IVANKA_READ_BACKED_SELECTION native {native} selected [{chosen}] covered_31mers [{}] supporting_pairs [{}] read_support_products [{}]", stats.coverage[chosen], stats.pairs[chosen], stats.coverage[chosen] * stats.pairs[chosen]);
+}
+
 pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Result<usize> {
     if contigs.is_empty() {
         return output::write(path, &[]).map(|()| 0);
     }
+    debug_assert!(
+        contigs.len() <= 16,
+        "default pair masks hold at most sixteen candidates"
+    );
     let hits = index::build(contigs);
     let statistics = scoring::count(contigs, reads, &hits);
     let chosen = ranking::best(contigs, &statistics);
-    let repaired = circle::repair(&contigs[chosen], &statistics.depth[chosen], reads);
-    let (sequence, depth): (&[u8], &[u32]) = match &repaired {
-        Some((seq, depths)) => (seq, depths),
-        None => (&contigs[chosen], &statistics.depth[chosen]),
-    };
-    let header = format!(">ivanka_{} len={}", chosen + 1, sequence.len());
-    if repaired.is_some() {
-        eprintln!("IVANKA_READ_BACKED_REOPENED_CYCLE len={}", sequence.len());
+    selection(contigs.len(), chosen, &statistics);
+    let mut selected = output::component(contigs, reads, &statistics, chosen);
+    let mut indices = vec![chosen];
+    for candidate in ranking::additional(contigs, &statistics, chosen) {
+        selection(contigs.len(), candidate, &statistics);
+        selected.extend(output::component(contigs, reads, &statistics, candidate));
+        indices.push(candidate);
     }
-    let (start, end) = island::bounds(sequence, depth);
-    let clipped = &sequence[start..end];
-    let observed = &depth[start..end.saturating_sub(K - 1).max(start)];
-    let selected = tiling::partition(&header, clipped, observed);
-    eprintln!(
-        "IVANKA_READ_BACKED_SELECTION native {} selected [{}] covered_31mers [{}] supporting_pairs [{}] read_support_products [{}]",
-        contigs.len(), chosen, statistics.coverage[chosen], statistics.pairs[chosen],
-        statistics.coverage[chosen] * statistics.pairs[chosen]
-    );
+    if ranking::unlinked::flanks(contigs, &statistics, &indices) {
+        selected = vec![unite(selected)];
+    }
     output::write(path, &selected)?;
     Ok(selected.len())
+}
+
+/// Present disjoint read-backed flanks as one native, unbridged contig.
+fn unite(entries: Vec<Entry>) -> Entry {
+    let mut sequence = Vec::new();
+    for (_, piece) in entries {
+        sequence.extend(piece);
+    }
+    (format!(">ivanka_1 len={}", sequence.len()), sequence)
 }

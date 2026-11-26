@@ -28,16 +28,19 @@ and exact teardown is proven.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import math
 import os
+import re
 import stat
 import subprocess
 import time
 import tomllib
 from pathlib import Path
 
+from benchmarks.fail_closed_guard import proc, startup, watchdog_contract
 from benchmarks.fail_closed_guard import stop as guard_stop
 from benchmarks.fail_closed_guard import p1_harness
 from benchmarks.fail_closed_guard.errors import GuardExceeded
@@ -61,7 +64,6 @@ from .p1_full464_controller import (
     candidate_source_hashes,
     input_fingerprint,
     load_frozen,
-    podman_env,
     sha256,
     verify_case_hashes,
 )
@@ -118,6 +120,11 @@ DEFAULT_STOP = str(PILOT_ROOT / "p1-prospective.STOP")
 DEFAULT_STORAGE_CONF = SHARED_PX_BOUNDARY["storage_conf"]
 DEFAULT_EVIDENCE_ROOT = str(PILOT_ROOT / "evidence")
 SLOT_AUTH_PATH = PILOT_ROOT / "operator-slot.json"
+# Operator-owned, fixed authorization root. Slot consumption is GLOBAL here:
+# a caller cannot evade replay by pointing --out at a different evidence root.
+SLOT_AUTH_ROOT = Path("/workspace/ivanka-p1-operator-auth-20261126")
+SLOT_AUTH_LOCK = SLOT_AUTH_ROOT / "slot.lock"
+SLOT_LEDGER_NAME = "slot-consumption.jsonl"
 PENDING_SLOT = "NO-SLOT-GRANTED"
 
 
@@ -251,14 +258,34 @@ def verify_shared_px_boundary(*, lock, lease_root, watchdog_path,
     }
 
 
-def pinned_inspect_env(storage_conf=None):
-    """Build an inspect env pinned to the ACTUAL shared PX store (read-only)."""
+# Ambient container selectors must never leak into a guarded arm: they can
+# silently redirect Podman to a different store, imageroot or client config.
+AMBIENT_CONTAINER_SELECTORS = ("CONTAINERS_CONF", "CONTAINERS_STORAGE_CONF",
+                               "CONTAINERS_STORAGE_RUNROOT", "CONTAINERS_IMAGEROOT",
+                               "CONTAINERS_STORAGE_DRIVER", "CONTAINERS_ROOTLESS")
+
+
+def pinned_podman_env(storage_conf=None):
+    """Minimal env with ONLY the verified shared store selector set.
+
+    Unlike the inherited podman_env(), this drops every ambient CONTAINERS_*
+    selector instead of copying os.environ into the arm.
+    """
     conf = Path(storage_conf or SHARED_PX_BOUNDARY["storage_conf"])
     if conf.is_symlink() or not conf.is_file():
         raise ValueError("pinned shared PX storage.conf missing or symlink")
     if sha256(conf) != PINS_V2["storage_conf"]:
         raise ValueError("pinned shared PX storage.conf hash differs")
-    return podman_env(conf)
+    env = {key: value for key, value in os.environ.items()
+           if key not in AMBIENT_CONTAINER_SELECTORS
+           and not key.startswith("CONTAINERS_")}
+    env["CONTAINERS_STORAGE_CONF"] = str(conf.resolve())
+    return env
+
+
+def pinned_inspect_env(storage_conf=None):
+    """Build an inspect env pinned to the ACTUAL shared PX store (read-only)."""
+    return pinned_podman_env(storage_conf)
 
 
 def _default_inspect(image, fmt, *, env=None):
@@ -306,7 +333,8 @@ def verify_image_contract(image, commit, *, env=None, inspect=None,
     if child_layers[:-1] != parent_layers or len(child_layers) != len(parent_layers) + 1:
         raise ValueError("candidate is not a one-layer binary-only overlay")
     return {"labels": labels, "parent": PARENT_IMAGE,
-            "layer_contract": manifest["layer_contract"]}
+            "layer_contract": manifest["layer_contract"],
+            "image_digest": image}
 
 
 def verify_binary_stage(stage_dir, *, expected_sha=None):
@@ -346,8 +374,77 @@ def verify_binary_layer_entries(entries, *, expected_sha=None):
     return {"verified": True, "expected_entries": want}
 
 
+def acquire_added_layer_evidence(image, *, env=None, inspect=None, graphroot=None):
+    """Read-only ACQUISITION of the exact added layer from the pinned store.
+
+    No operator-supplied dictionary or placeholder is accepted: layer digests
+    come from Podman inspection of the exact image and its frozen parent under
+    the pinned storage env, the added digest is resolved through the store's
+    own overlay-layers/layers.json, and the layer diff tree is hashed on disk.
+    """
+    env = env or pinned_inspect_env()
+    run = inspect or (lambda i, f: _default_inspect(i, f, env=env))
+    rc, raw_child = run(image, "{{json .RootFS.Layers}}")
+    rc_parent, raw_parent = run(PARENT_IMAGE, "{{json .RootFS.Layers}}")
+    if rc != 0 or rc_parent != 0:
+        raise ValueError("image layer inspection unavailable in pinned store")
+    child, parent = json.loads(raw_child), json.loads(raw_parent)
+    if (not isinstance(child, list) or not isinstance(parent, list)
+            or child[:-1] != parent or len(child) != len(parent) + 1):
+        raise ValueError("candidate is not a one-layer binary-only overlay")
+    added = child[-1]
+    digest = added.removeprefix("sha256:") if isinstance(added, str) else ""
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("added layer digest is not a sha256 digest")
+    root = Path(graphroot or SHARED_PX_BOUNDARY["graphroot"])
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("pinned graphroot unavailable")
+    index = root / "overlay-layers" / "layers.json"
+    if index.is_symlink() or not index.is_file():
+        raise ValueError("pinned overlay layer index unavailable")
+    rows = json.loads(index.read_text())
+    layer_id = None
+    for row in rows:
+        if (row.get("diff-digest") in (added, "sha256:" + digest)
+                or row.get("compressed-diff-digest") in (added, "sha256:" + digest)):
+            layer_id = row.get("id")
+            break
+    if (not isinstance(layer_id, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", layer_id)):
+        raise ValueError("added layer digest not found in pinned store index")
+    diff = root / "overlay" / layer_id / "diff"
+    if diff.is_symlink() or not diff.is_dir():
+        raise ValueError("added layer diff tree unavailable")
+    entries = {}
+    for path in sorted(diff.rglob("*")):
+        if path.is_symlink():
+            raise ValueError("added layer contains a symlink")
+        if path.is_file():
+            entries["/" + str(path.relative_to(diff))] = sha256(path)
+    return {"image": image, "parent": PARENT_IMAGE, "added_digest": added,
+            "layer_id": layer_id, "entries": entries}
+
+
+def verify_image_layer_contract(image, *, env=None, inspect=None, graphroot=None,
+                                image_manifest=None, expected_sha=None):
+    """Acquire and verify the exact added layer evidence before any arm."""
+    if isinstance(image, dict):
+        raise ValueError("image must be a digest string, not a manifest")
+    evidence = acquire_added_layer_evidence(
+        image, env=env, inspect=inspect, graphroot=graphroot)
+    if evidence["image"] != image or evidence["parent"] != PARENT_IMAGE:
+        raise ValueError("layer evidence is not bound to this image and parent")
+    verified = verify_binary_layer_entries(
+        evidence["entries"], expected_sha=expected_sha or BINARY_SHA)
+    return {"verified": True, "image": image, "parent": PARENT_IMAGE,
+            "added_digest": evidence["added_digest"],
+            "layer_id": evidence["layer_id"],
+            "entries": evidence["entries"], "binary_contract": verified}
+
+
 # Exact fields an operator slot must bind before every arm.
-SLOT_BINDING_KEYS = ("source_commit", "image", "cases_sha256", "owner")
+SLOT_BINDING_KEYS = ("source_commit", "image", "cases_sha256", "owner",
+                     "evidence_root")
 
 
 def verify_operator_slot(slot, *, path=SLOT_AUTH_PATH, wall=None, **bindings):
@@ -386,24 +483,65 @@ def slot_bindings(manifest, explicit_cases_sha):
     return {"source_commit": manifest["candidate_source_commit"],
             "image": manifest["candidate_image"],
             "cases_sha256": explicit_cases_sha,
-            "owner": manifest["owner"]}
+            "owner": manifest["owner"],
+            "evidence_root": str(Path(manifest["paths"]["evidence_root"]).resolve())}
 
 
-def claim_slot(out, slot, *, owner, cases_sha256, wall=None):
-    """Atomically consume a slot once per evidence root; refuse any replay."""
+def claim_slot(out, slot, *, owner, cases_sha256, wall=None,
+               evidence_root=None, auth_root=None):
+    """Consume a slot GLOBALLY under the operator-owned auth root/lock.
+
+    A marker under the caller's evidence root can be bypassed with a different
+    ``--out``. Consumption therefore lives in the fixed operator auth root,
+    protected by a real non-blocking flock, and binds the canonical evidence
+    root and exact case list. The ledger and its parent directory are fsynced
+    before any arm may proceed.
+    """
+    auth = Path(auth_root or SLOT_AUTH_ROOT)
+    if auth.is_symlink():
+        raise ValueError("operator auth root is a symlink")
+    auth.mkdir(parents=True, exist_ok=True)
+    lock_path = auth / SLOT_AUTH_LOCK.name
+    if lock_path.is_symlink():
+        raise ValueError("operator slot lock is a symlink")
+    canonical_out = str(Path(out).resolve())
+    if evidence_root is not None and canonical_out != str(Path(evidence_root).resolve()):
+        raise ValueError("evidence root differs from the operator-bound slot root")
     digest = hashlib.sha256(slot.encode()).hexdigest()
-    marker = Path(out) / (".slot-" + digest + ".consumed")
-    if marker.exists() or marker.is_symlink():
-        raise ValueError("operator slot already consumed (replay refused)")
-    fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as stream:
-        json.dump({"schema": "ivanka.p1.slot-consumption.v1",
-                   "slot_sha256": digest, "owner": str(owner),
-                   "cases_sha256": cases_sha256,
-                   "at_utc": (wall or time.time)()}, stream, sort_keys=True)
-        stream.flush()
-        os.fsync(stream.fileno())
-    return marker
+    ledger = auth / SLOT_LEDGER_NAME
+    lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        if ledger.is_symlink():
+            raise ValueError("slot ledger is a symlink")
+        if ledger.is_file():
+            for line in ledger.read_text().splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError as exc:
+                    raise ValueError("corrupt slot ledger") from exc
+                if row.get("slot_sha256") == digest:
+                    raise ValueError("operator slot already consumed (replay refused)")
+        event = {"schema": "ivanka.p1.slot-consumption.v1",
+                 "slot_sha256": digest, "owner": str(owner),
+                 "cases_sha256": cases_sha256, "evidence_root": canonical_out,
+                 "at_utc": (wall or time.time)()}
+        with ledger.open("a", buffering=1) as stream:
+            stream.write(json.dumps(event, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        # fsync the parent directory so the ledger entry itself is durable.
+        dir_fd = os.open(auth, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+        return ledger
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
 
 
 def check_own_stop(stop_path, owner):
@@ -412,6 +550,30 @@ def check_own_stop(stop_path, owner):
     if target.is_symlink() or not target.is_file():
         return False
     return target.read_text().strip() == str(owner)
+
+
+def require_live_watchdog_ready(path, graphroot, *, wall=None, snapshot=None):
+    """Read-only LIVE watchdog readiness; a path alone is not readiness.
+
+    Uses the guard contract with a real /proc snapshot and independently
+    re-checks the immutable fingerprint of the live watchdog PID.
+    """
+    checker = snapshot or proc.snapshot
+    target = Path(path)
+    try:
+        readiness = watchdog_contract.require_watchdog_readiness(
+            target, graphroot=graphroot, wall=wall, snapshot=checker)
+    except GuardExceeded as exc:
+        raise ValueError(f"live watchdog readiness failed: {exc.reason}") from exc
+    try:
+        record = json.loads(target.read_text())
+        live = checker().get(int(record["pid"]))
+        if (live is None
+                or tuple(record["fingerprint"]) != startup.stable_fingerprint(live)):
+            raise ValueError("live watchdog identity mismatch")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise ValueError(f"live watchdog identity unavailable: {exc}") from exc
+    return readiness
 
 
 def build_command(case_dir, output_dir, image, timer, container_name, cidfile):
@@ -754,9 +916,13 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         watchdog_path=args.watchdog_path,
         storage_conf=store_conf or args.storage_conf,
         graphroot=store["graphroot"])
+    verified_env = pinned_podman_env(store["storage_conf"])
     contract = verify_image_contract(
-        args.image, args.commit, env=podman_env(store["storage_conf"]),
+        args.image, args.commit, env=verified_env,
         inspect=image_inspect, image_manifest=image_doc or image_manifest)
+    layer = verify_image_layer_contract(
+        args.image, env=verified_env,
+        inspect=image_inspect, graphroot=store["graphroot"])
 
     free = (disk_usage_fn or _disk_free)(args.disk_path)
     if free < PILOT_REQUIRED_FREE_BYTES:
@@ -773,6 +939,7 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         "candidate_source_commit": SOURCE_COMMIT,
         "candidate_image": args.image,
         "candidate_image_contract": contract,
+        "added_layer_evidence": layer,
         "cases_manifest_sha256": cases_sha,
         "image_manifest_sha256": image_sha,
         "storage": store,
@@ -845,12 +1012,27 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
         store_conf=None, watchdog_ready=None, watchdog_snapshot=None,
         snapshot=None, clock=None, sleep=None, audit=None, disk_usage=None,
         disk_usage_fn=None, bind_container=None, stop_cid_fn=None,
-        wall=None):
+        wall=None, live_watchdog_check=None):
     manifest = prepare(args, image_inspect=image_inspect,
                        image_manifest=image_manifest, store_conf=store_conf,
                        disk_usage_fn=disk_usage_fn, wall=wall)
+    # --check must prove a LIVE, identity-bound watchdog, not merely a path.
+    (live_watchdog_check or require_live_watchdog_ready)(
+        args.watchdog_path, manifest["storage"]["graphroot"], wall=wall)
     out = Path(args.out)
-    env = podman_env(args.storage_conf) if env is None else dict(env)
+    # Build the arm environment from the VERIFIED manifest path, never from
+    # args.storage_conf (which was not proven by the store pin) or ambient env.
+    if env is None:
+        env = pinned_podman_env(manifest["storage"]["storage_conf"])
+    else:
+        env = dict(env)
+        stray = [key for key in env if key.startswith("CONTAINERS_")
+                 and key != "CONTAINERS_STORAGE_CONF"]
+        if stray:
+            raise ValueError("ambient container selector in caller env: "
+                             + ", ".join(sorted(stray)))
+        if env.get("CONTAINERS_STORAGE_CONF") != manifest["storage"]["storage_conf"]:
+            raise ValueError("caller env store selector differs from verified manifest")
     summary = {
         "schema": SCHEMA, "status": STATUS, "qualified": False,
         "guard_status": manifest["guard_status"],
@@ -865,6 +1047,10 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
     explicit_cases_sha = hashlib.sha256(json.dumps(
         manifest["explicit_case_list"], sort_keys=True).encode()).hexdigest()
     bindings = slot_bindings(manifest, explicit_cases_sha)
+    # Bind the operator slot to the post-build identity that verification
+    # actually observed, never to a placeholder or an invented digest.
+    bindings["image"] = manifest["candidate_image_contract"].get(
+        "image_digest", manifest["candidate_image"])
     slot = verify_operator_slot(args.slot, wall=wall, **bindings)
     if not args.armed:
         raise ValueError("--armed required to spawn; source-only until slot granted")
@@ -877,7 +1063,8 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
         raise ValueError("pilot must use its own owner-bound STOP")
     summary["slot"] = slot["slot"]
     claim_slot(out, args.slot, owner=manifest["owner"],
-               cases_sha256=explicit_cases_sha, wall=wall)
+               cases_sha256=explicit_cases_sha, wall=wall,
+               evidence_root=bindings["evidence_root"])
 
     case_hashes, _frozen, frozen_hash = load_case_hashes(args.data,
                                                           args.frozen_results)

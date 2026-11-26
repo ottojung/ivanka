@@ -16,6 +16,7 @@ is gated on watchdog deployment plus an exact operator slot token.
 | Previous hwe8M runner | `babc4dba90d7753a18458f284951c3452c26e8ef` | `fix/p1-bounded-pilot-runner-integration`, base `0e6969fd` |
 | Prior rebase (superseded) | `7567302af86593e9bff9ac69fc6d13162dd51d28` | was on exact PR520 `1b6e88c0`; bundle retained |
 | Rebase target | `b185c7f2b95c84edce5f1323f93addd5be7ead2d` | **final reviewed exact PR527 head** (`Require exact CID absence in Podman stderr, not command argv`); parent `aad9a2cd…`; independent GO; PR527 merged 18:18Z into main at integrated head `3fb720c7fd74e08b77d453441c10fdfed3eb305f` (the controller's `INTEGRATION_BASE`) |
+| Stale integration base (explicitly rejected) | `1b6e88c0…` / `aad9a2cd…` / `b185c7f2…` | earlier PR520/PR527 drafts and the pre-merge base; none is the current integrated head. `INTEGRATION_BASE` MUST be `3fb720c7fd74e08b77d453441c10fdfed3eb305f`; a regression test pins this value so it cannot silently drift again |
 | This branch | `science/p1-bounded-pilot-950fe331-on-pr527-20261126` | clean worktree, single commit rebased onto exact PR527 |
 | Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | linear chain whose parent chain reaches exactly `b185c7f2…`; no force-push / history rewrite |
 | Fallback bundle | `p1-pilot-7567302a.bundle` (prior base) — verify with prerequisite `1b6e88c0`; the current source is the rebased branch above | offline provenance only |
@@ -86,11 +87,25 @@ Rebase was clean (2/2); parent chain reaches exactly the reviewed PR527 head.
 6. **Exact slot gate** — default is `--check` (read-only). Live execution requires
    `--armed` plus an exact token from `operator-slot.json` (schema
    `ivanka.p1.operator-slot.v1`). The token must bind the exact
-   `source_commit` (`950fe331…`), candidate `image` digest, `cases_sha256` of
-   the explicit case list and `owner`. Expiry and all bindings are re-checked
-   before EACH arm; the slot is atomically consumed once per evidence root and
-   any replay is refused. No token, no spawn. The shared boundary proof is
-   mandatory even for `--check`.
+   `source_commit` (`950fe331…`), post-build verified `image` digest,
+   `cases_sha256` of the explicit case list, `owner` and canonical
+   `evidence_root`. Expiry and all bindings are re-checked before EACH arm.
+   Consumption is GLOBAL under the operator-owned auth root
+   `/workspace/ivanka-p1-operator-auth-20261126` with a real flock and an fsynced
+   journal plus fsynced parent directory; replay from an alternate `--out` is
+   refused. No token, no spawn.
+7. **Ambient-free Podman env** — every inspect and spawn env is built from the
+   VERIFIED manifest store path with all ambient `CONTAINERS_*` selectors
+   stripped; `args.storage_conf` is never used to build the arm env.
+8. **Live watchdog in `--check`** — check mode requires a fresh, identity-bound
+   ALIVE record with a LIVE PID fingerprint, not merely a correct path.
+9. **Real added-layer evidence** — `acquire_added_layer_evidence()` obtains the
+   added layer digest from Podman inspection of the exact image and frozen
+   parent under the pinned store, resolves it via the store's own
+   `overlay-layers/layers.json`, hashes the read-only diff tree and calls
+   `verify_binary_layer_entries()`; no operator-supplied dictionary or
+   placeholder is accepted. No image ID is invented before build: arm binds the
+   post-build identity that verification actually observed.
 
 ## 3. Deliverable files / manifests
 
@@ -137,13 +152,15 @@ podman build --pull=never --network=none \
   -t localhost/ivanka-p1-pilot-950fe331:candidate "$STAGE"
 podman image inspect --format '{{.Id}} {{json .Config.Labels}}' \
   localhost/ivanka-p1-pilot-950fe331:candidate
-# MANDATORY independent layer-content verification before use: obtain a
-# read-only listing of the single added layer as {path: sha256} and require
-# exactly {"/usr/local/bin/ivanka": "8569290d…3786"}:
+# MANDATORY read-only independent layer verification before use. The controller
+# acquires the layer digest from inspect of THIS image + frozen parent under the
+# pinned store, resolves it via overlay-layers/layers.json, hashes the diff tree
+# on disk and verifies the exact single-binary contents. No operator dict/placeholder:
 PYTHONPATH=.:benchmarks python3 -c '
-from expanded.p1_bounded_pilot_runner import verify_binary_layer_entries
-print(verify_binary_layer_entries(<independent-layer-entries>))'
-# Use the resulting full 64-hex digest as --image below.
+from expanded.p1_bounded_pilot_runner import verify_image_layer_contract
+print(verify_image_layer_contract("<built-64-hex-image-digest>"))'
+# Only the post-build VERIFIED digest may be written into operator-slot.json and
+# passed as --image; never a placeholder or an invented ID.
 ```
 Original images are never retagged, overwritten, deleted or re-imported. No
 large image import is performed by this change. Disk must be >= 33 GiB free;
@@ -246,8 +263,10 @@ git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach b185c7f2…
       not merely ALIVE text.
 - [ ] `verify_binary_stage()` and `verify_binary_layer_entries()` both verified;
       Containerfile is COPY-ONLY (no RUN, no second layer).
-- [ ] Operator writes `operator-slot.json` with exact token, expiry and exact
-      source/image/cases/owner bindings; replay-consumption marker absent.
+- [ ] `operator-slot.json` binds exact source/post-build-image/cases/owner/
+      evidence_root with expiry; global auth-root ledger has no replay entry.
+- [ ] `--check` proves live watchdog readiness (fresh ALIVE + live PID
+      fingerprint), not just a correct path; Podman env is ambient-free.
 - [ ] Free space `>= 33 GiB` on shared `/workspace`; no competing worker holds
       the shared PX lock.
 - [ ] Binary-only image built from the prepared recipe; digest/labels/layer match.

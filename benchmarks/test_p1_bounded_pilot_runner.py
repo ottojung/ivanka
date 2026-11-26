@@ -226,7 +226,8 @@ class PinAndBindingTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.verify_operator_slot(runner.PENDING_SLOT, path=path)
             bindings = {"source_commit": runner.SOURCE_COMMIT, "image": "i" * 64,
-                        "cases_sha256": "c" * 64, "owner": "owner"}
+                        "cases_sha256": "c" * 64, "owner": "owner",
+                        "evidence_root": "/workspace/evidence"}
             path.write_text(json.dumps(dict({
                 "schema": "ivanka.p1.operator-slot.v1",
                 "slot": "slot-abc", "expires_utc": 9999999999,
@@ -494,6 +495,8 @@ class PrepareTests(unittest.TestCase):
         args = self.args()
         graphroot = "/workspace/px/store"
         with mock.patch.object(runner, "verify_pins", return_value=True), \
+             mock.patch.object(runner, "pinned_podman_env",
+                               return_value={"CONTAINERS_STORAGE_CONF": "/pinned"}), \
              mock.patch.object(runner, "verify_px_store_binding",
                                return_value={"storage_conf": str(args.storage_conf),
                                              "storage_conf_sha256": "f" * 64,
@@ -502,10 +505,13 @@ class PrepareTests(unittest.TestCase):
                                return_value={"shared": True}), \
              mock.patch.object(runner, "verify_image_contract",
                                return_value={"labels": {}, "parent": runner.PARENT_IMAGE}), \
+             mock.patch.object(runner, "verify_image_layer_contract",
+                               return_value={"verified": True, "entries": {}}), \
              mock.patch.object(runner, "_disk_free", return_value=33 * 1024 ** 3), \
              mock.patch.object(runner.subprocess, "Popen",
                                side_effect=AssertionError("spawn in check mode")):
-            summary = runner.run(args, disk_usage_fn=lambda p: 33 * 1024 ** 3)
+            summary = runner.run(args, disk_usage_fn=lambda p: 33 * 1024 ** 3,
+                                 live_watchdog_check=lambda *a, **k: {"ready": True})
         self.assertFalse(summary["spawned"])
         manifest = json.loads((self.out / "prepared_manifest.json").read_text())
         self.assertFalse(manifest["spawned"])
@@ -523,12 +529,16 @@ class PrepareTests(unittest.TestCase):
     def test_disk_shortfall_blocks_preparation(self):
         args = self.args()
         with mock.patch.object(runner, "verify_pins", return_value=True), \
+             mock.patch.object(runner, "pinned_podman_env",
+                               return_value={"CONTAINERS_STORAGE_CONF": "/pinned"}), \
              mock.patch.object(runner, "verify_px_store_binding",
                                return_value={"graphroot": "/workspace/px/store",
                                              "storage_conf": str(self.root / "storage.conf")}), \
              mock.patch.object(runner, "verify_shared_px_boundary",
                                return_value={"shared": True}), \
              mock.patch.object(runner, "verify_image_contract", return_value={}), \
+             mock.patch.object(runner, "verify_image_layer_contract",
+                               return_value={"verified": True}), \
              mock.patch.object(runner, "_disk_free", return_value=32 * 1024 ** 3):
             with self.assertRaises(ValueError):
                 runner.prepare(args, disk_usage_fn=lambda p: 32 * 1024 ** 3)

@@ -4,6 +4,7 @@ Source-only: temp files and injected callables; no build, OCI, Podman, arm,
 lease, STOP or live benchmark is touched.
 """
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -52,8 +53,10 @@ class SlotBindingTests(unittest.TestCase):
             "cases_sha256": "b" * 64,
             "owner": "p1-pilot:owner",
         }
+        self.record["evidence_root"] = "/workspace/evidence"
         self.bindings = {k: self.record[k] for k in
-                         ("source_commit", "image", "cases_sha256", "owner")}
+                         ("source_commit", "image", "cases_sha256", "owner",
+                          "evidence_root")}
 
     def write(self, **overrides):
         record = dict(self.record)
@@ -162,3 +165,157 @@ class LiveFingerprintTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GlobalSlotConsumptionTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.auth = Path(self.tmp.name) / "operator-auth"
+        self.auth.mkdir()
+        self.root_a = Path(self.tmp.name) / "evidence-a"
+        self.root_b = Path(self.tmp.name) / "evidence-b"
+        self.root_a.mkdir()
+        self.root_b.mkdir()
+        self.slot = "exact-slot"
+
+    def claim(self, out, **kw):
+        return r.claim_slot(out, self.slot, owner="owner",
+                            cases_sha256="c" * 64, auth_root=self.auth,
+                            wall=lambda: 1_900_000_000, **kw)
+
+    def test_replay_refused_across_alternate_output_roots(self):
+        self.claim(self.root_a)
+        with self.assertRaises(ValueError):
+            self.claim(self.root_b)
+
+    def test_evidence_root_binding_rejected(self):
+        # A distinct slot bound to root A cannot be consumed from root B.
+        with self.assertRaises(ValueError):
+            self.claim(self.root_b, evidence_root=str(self.root_a))
+
+    def test_same_root_replay_refused(self):
+        self.claim(self.root_a)
+        with self.assertRaises(ValueError):
+            self.claim(self.root_a)
+
+    def test_ledger_persists_globally(self):
+        marker = self.claim(self.root_a)
+        self.assertTrue((self.auth / "slot-consumption.jsonl").is_file())
+        self.assertIn("slot_sha256", json.loads(marker.read_text()))
+
+
+class LayerEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name)
+        self.graphroot = self.base / "store"
+        self.layer_id = "f" * 64
+        diff = self.graphroot / "overlay" / self.layer_id / "diff" / "usr" / "local" / "bin"
+        diff.mkdir(parents=True)
+        self.binary = diff / "ivanka"
+        self.binary.write_bytes(b"\x7fELF" + b"0" * 32)
+        self.sha = r.sha256(self.binary)
+        layers_dir = self.graphroot / "overlay-layers"
+        layers_dir.mkdir(parents=True)
+        (layers_dir / "layers.json").write_text(json.dumps([{
+            "id": self.layer_id,
+            "diff-digest": "sha256:" + self.layer_id,
+        }]))
+        self.env = {"CONTAINERS_STORAGE_CONF": "/pinned/storage.conf"}
+
+    def inspect(self, image, fmt):
+        if "{{json .RootFS.Layers}}" not in fmt:
+            return 0, "ignored"
+        layers = ["a" * 64, "b" * 64, self.layer_id] if image == "candidate" else ["a" * 64, "b" * 64]
+        return 0, json.dumps(layers)
+
+    def test_real_added_layer_evidence_verified(self):
+        entries = r.acquire_added_layer_evidence(
+            "candidate", env=self.env, inspect=self.inspect,
+            graphroot=self.graphroot)
+        proof = r.verify_image_layer_contract(
+            "candidate", env=self.env, inspect=self.inspect,
+            graphroot=self.graphroot, expected_sha=self.sha)
+        self.assertTrue(proof["verified"])
+        self.assertEqual(entries["entries"]["/usr/local/bin/ivanka"], self.sha)
+
+    def test_added_layer_evidence_rejects_extra_file(self):
+        (self.binary.parent / "extra").write_text("x")
+        with self.assertRaises(ValueError):
+            r.verify_image_layer_contract(
+                "candidate", env=self.env, inspect=self.inspect,
+                graphroot=self.graphroot, expected_sha=self.sha)
+
+    def test_added_layer_evidence_rejects_wrong_parent(self):
+        def bad_inspect(image, fmt):
+            if "{{json .RootFS.Layers}}" not in fmt:
+                return 0, "ignored"
+            layers = ["a" * 64] if image == "candidate" else ["z" * 64]
+            return 0, json.dumps(layers)
+        with self.assertRaises(ValueError):
+            r.verify_image_layer_contract(
+                "candidate", env=self.env, inspect=bad_inspect,
+                graphroot=self.graphroot)
+
+
+class AmbientEnvTests(unittest.TestCase):
+    def test_ambient_container_selectors_are_stripped(self):
+        conf = r.SHARED_PX_BOUNDARY["storage_conf"]
+        with mock.patch.dict(os.environ, {
+                "CONTAINERS_CONF": "/ambient/containers.conf",
+                "CONTAINERS_STORAGE_CONF": "/ambient/storage.conf",
+                "CONTAINERS_IMAGEROOT": "/ambient/images",
+                "CONTAINERS_STORAGE_DRIVER": "vfs"}, clear=False):
+            env = r.pinned_podman_env(conf)
+        self.assertEqual(env["CONTAINERS_STORAGE_CONF"], str(Path(conf).resolve()))
+        self.assertNotIn("CONTAINERS_CONF", env)
+        self.assertNotIn("CONTAINERS_IMAGEROOT", env)
+        self.assertNotIn("CONTAINERS_STORAGE_DRIVER", env)
+
+    def test_wrong_store_conf_pin_fails_closed(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        bad = Path(tmp.name) / "storage.conf"
+        bad.write_text("[storage]\ngraphroot = '/tmp/x'\n")
+        with self.assertRaises(ValueError):
+            r.pinned_podman_env(bad)
+
+
+class LiveWatchdogCheckTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / ".watchdog-alive.json").write_text(json.dumps({
+            "schema": "ivanka.watchdog-alive.v1", "at_utc": 1_900_000_000,
+            "pid": 1503395, "fingerprint": [447346729, 4026532737],
+            "cmdline_sha": "c" * 64,
+            "graphroot": "/workspace/ivanka-exploratory-podman-20261121/store"}))
+        self.table = {1503395: {"starttime": 447346729, "pid_ns": 4026532737,
+                                "cmdline_sha": "c" * 64}}
+
+    def test_live_ready_passes_with_fresh_snapshot(self):
+        got = r.require_live_watchdog_ready(
+            self.root / ".watchdog-alive.json",
+            "/workspace/ivanka-exploratory-podman-20261121/store",
+            wall=lambda: 1_900_000_001, snapshot=lambda: self.table)
+        self.assertTrue(got["ready"])
+
+    def test_missing_live_pid_fails_closed(self):
+        with self.assertRaises(ValueError):
+            r.require_live_watchdog_ready(
+                self.root / ".watchdog-alive.json",
+                "/workspace/ivanka-exploratory-podman-20261121/store",
+                wall=lambda: 1_900_000_001, snapshot=dict)
+
+    def test_slot_bindings_bind_evidence_root_and_image(self):
+        manifest = {"candidate_source_commit": r.SOURCE_COMMIT,
+                    "candidate_image": "i" * 64, "owner": "owner",
+                    "paths": {"evidence_root": "/workspace/evidence"}}
+        b = r.slot_bindings(manifest, "c" * 64)
+        self.assertEqual(b["evidence_root"], "/workspace/evidence")
+        self.assertEqual(b["image"], "i" * 64)
+        for key in ("source_commit", "image", "cases_sha256", "owner", "evidence_root"):
+            self.assertIn(key, b)

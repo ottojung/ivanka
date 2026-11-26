@@ -73,7 +73,7 @@ STATUS = "ATTEMPTED_NOT_QUALIFIED"
 SOURCE_COMMIT = "950fe331dfcd857011bfd63f9eeca92462708545"
 BINARY_SHA = "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786"
 PARENT_IMAGE = ORIGINAL_IVANKA_IMAGE
-INTEGRATION_BASE = "9f81086715cade9d383f4aec62e284873ab21ba0"
+INTEGRATION_BASE = "7c2bb512b67d06e9bb987688eed706f6d500f3d0"
 
 CASES_MANIFEST = Path(__file__).with_name("p1_pilot_cases.json")
 IMAGE_MANIFEST = Path(__file__).with_name("p1_pilot_image_manifest.json")
@@ -82,7 +82,7 @@ CONTAINERFILE = Path(__file__).with_name(
 
 PINS_V2 = {
     "cases_manifest": "fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de",
-    "image_manifest": "29f48843d74f41b107495ae003ee65787653d9d22599dd3b3e9f7a4a2cdef13b",
+    "image_manifest": "087241b77d39b27df2588c28d8dcf96ce2191e32d4e767d4621f5ebb640539b5",
     "storage_conf": "fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21",
     "physical_spec": "478c1b7b68943ac5e1ef565c257fd96ba6871184425ace80b026dd2b18cf8f87",
 }

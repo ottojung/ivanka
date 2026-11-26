@@ -15,23 +15,23 @@ is gated on watchdog deployment plus an exact operator slot token.
 | Candidate binary | `8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786` | native release build, verified present; NOT rebuilt |
 | Previous hwe8M runner | `babc4dba90d7753a18458f284951c3452c26e8ef` | `fix/p1-bounded-pilot-runner-integration`, base `0e6969fd` |
 | Prior rebase (superseded) | `7567302af86593e9bff9ac69fc6d13162dd51d28` | was on exact PR520 `1b6e88c0`; bundle retained |
-| Rebase target | `9f81086715cade9d383f4aec62e284873ab21ba0` | **actual current integration base** (`Publish neutral cohort-owned Assembler Bench results`); contains reviewed+merged PR536 guard at `091f5627…`. This is the controller's `INTEGRATION_BASE`. Earlier target `b185c7f2…` was the reviewed PR527 head, now merged and superseded. |
-| Stale integration base (explicitly rejected) | `1b6e88c0…` / `aad9a2cd…` / `b185c7f2…` / `3fb720c7…` | earlier PR520/PR527 drafts and the pre-merge base; none is the actual rebase base. `INTEGRATION_BASE` MUST be `9f81086715cade9d383f4aec62e284873ab21ba0`; a regression test pins this value so it cannot silently drift again |
-| This branch | `science/p1-bounded-pilot-950fe331-on-pr527-20261126` | clean worktree, single commit rebased onto exact PR527 |
-| Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | linear chain whose parent chain reaches exactly `b185c7f2…`; no force-push / history rewrite |
+| Rebase target | `7c2bb512b67d06e9bb987688eed706f6d500f3d0` | **actual current integration base** (current `main` tip at reconciliation time); includes merged PR535 copy-overlay admission (`165a86b38c`, head `39317f021f`) and merged PR536 guard (`091f56275ae823cb3291b81dbdf016fcf16c3ea0`, corrected head `6e6886a8`). This is the controller's `INTEGRATION_BASE`. |
+| Stale integration base (explicitly rejected) | `1b6e88c0…` / `aad9a2cd…` / `b185c7f2…` / `3fb720c7…` / `9f810867…` | earlier PR520/PR527/pre-merge bases; none is the actual rebase base. `INTEGRATION_BASE` MUST be `7c2bb512b67d06e9bb987688eed706f6d500f3d0`; regression tests pin this value so it cannot silently drift again. |
+| This branch | `science/p1-bounded-pilot-950fe331-on-pr527-20261126` | clean worktree, additive P1 pilot controller files rebased onto current main |
+| Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | linear chain on top of current main; no force-push / history rewrite except explicit force-with-lease by operator |
 | Fallback bundle | `p1-pilot-7567302a.bundle` (prior base) — verify with prerequisite `1b6e88c0`; the current source is the rebased branch above | offline provenance only |
-| Integration base diff | additive: runner + tests + watchdog readiness probe + 2 manifests + Containerfile + 2 runbooks; **zero** guard/frozen/source changes at PR527 | additive only |
+| Integration base diff | additive: runner + tests + watchdog readiness probe + manifests + Containerfiles + runbooks; **zero** guard/frozen/source changes | additive only |
 
-The stale `63becaa4…` / `7567302a…` / `8bcc47b8…` (base `aad9a2cd…`) / PR520
-references are superseded by this final reviewed PR527 `b185c7f2…` rebase.
-Rebase recipe (performed in the existing worktree):
+The stale `63becaa4…` / `7567302a…` / `8bcc47b8…` (base `aad9a2cd…`) / PR520 /
+`b185c7f2…` / `9f810867…` rebase references are superseded by this current-main
+rebase. Rebase recipe (performed in the existing worktree):
 ```sh
-git fetch origin b185c7f2b95c84edce5f1323f93addd5be7ead2d
-git rebase b185c7f2b95c84edce5f1323f93addd5be7ead2d
-# port only the runner + tests from babc4dba; do NOT carry babc4dba's 4-line
-# p1_harness.py heartbeat patch: PR527 already owns a REAL durable heartbeat.
+git fetch origin main
+git rebase origin/main
+# keep only the additive P1 pilot controller files; do NOT carry stale base pins.
 ```
-Rebase was clean (2/2); parent chain reaches exactly the reviewed PR527 head.
+Rebase was clean onto current main; resolve any future conflicts by preserving
+reviewed guard pins, exact 950fe331/PCR candidate artifacts, and frozen truth.
 
 ### Why the hwe8M patch was adapted, not copied
 - PR527 `p1_harness.run_prospective` already calls `heartbeat.Emitter(lease_root,
@@ -114,7 +114,7 @@ Rebase was clean (2/2); parent chain reaches exactly the reviewed PR527 head.
 | `benchmarks/expanded/p1_bounded_pilot_runner.py` | runnable controller (`python -m expanded.p1_bounded_pilot_runner`), `--check` / `--armed --slot` |
 | `benchmarks/test_p1_bounded_pilot_runner.py` | 26 deterministic injected tests, no live podman; 8 assert shared-boundary fail-closed |
 | `benchmarks/expanded/p1_pilot_cases.json` | source-pinned case manifest (SHA256 `fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de`) |
-| `benchmarks/expanded/p1_pilot_image_manifest.json` | source-pinned image manifest (SHA256 `29f48843d74f41b107495ae003ee65787653d9d22599dd3b3e9f7a4a2cdef13b`) — source `950fe331…`, binary `8569290d…` verified on disk; integration fields now name PR527 `b185c7f2…` |
+| `benchmarks/expanded/p1_pilot_image_manifest.json` | source-pinned image manifest (SHA256 `087241b77d39b27df2588c28d8dcf96ce2191e32d4e767d4621f5ebb640539b5`) — source `950fe331…`, binary `8569290d…` verified on disk; integration fields track current main integration base `7c2bb512…` |
 | `benchmarks/expanded/p1_watchdog_readiness.py` | read-only s6-service + ALIVE readiness probe; no arm/install/write |
 | `benchmarks/test_p1_watchdog_readiness.py` | 12 deterministic tests over a simulated s6 layout |
 | `benchmarks/expanded/Containerfile.p1-pilot-950fe331-binary-only` | prepared, **not built** |
@@ -243,18 +243,18 @@ PYTHONPATH=.:benchmarks python3 -m pytest -q \
 python3 -m ruff check --select E4,E9,F,B006,B018,B023 \
   benchmarks/expanded/p1_bounded_pilot_runner.py \
   benchmarks/test_p1_bounded_pilot_runner.py   # All checks passed
-git diff --check b185c7f2b95c84edce5f1323f93addd5be7ead2d -- .   # clean
+git diff --check 7c2bb512b67d06e9bb987688eed706f6d500f3d0 -- .   # clean
 ```
 
 To inspect the exact source in a clean clone:
 ```sh
 git fetch origin science/p1-bounded-pilot-950fe331-on-pr527-20261126
 git rev-parse FETCH_HEAD   # exact tip SHA posted to the P1 board
-git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach b185c7f2…
+git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach 7c2bb512…
 ```
 
 ## 6b. Dependency status and prospective guard pin
-- This candidate is integrated on `9f81086715cade9d383f4aec62e284873ab21ba0`,
+- This candidate is integrated on current main `7c2bb512b67d06e9bb987688eed706f6d500f3d0`,
   which already contains the reviewed+merged PR536 guard at merge commit
   `091f56275ae823cb3291b81dbdf016fcf16c3ea0` (corrected head `6e6886a8` was
   independently GO'd). `verify_guard_source_pins()` pins those exact source
@@ -266,8 +266,10 @@ git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach b185c7f2…
   reviewed source identity, not a deployment act. Before that cutover the same
   pin correctly failed closed against the older `f861f25b` head. No arm is
   authorized by this change.
-- PR535 (copy-only overlay admission, author `ottojung`, head `c7356b58`)
-  remains open/draft and NO-GO; coordinate with its author before any arm.
+- PR535 (copy-only overlay admission, #535) is merged at `165a86b38c` (PR head
+  `39317f021f`). PR531 must preserve the copy-only build-admission contract: no
+  RUN/second layer, pinned labels/digests/CID/timing evidence, and no guarded
+  build while disk is below 32 GiB or operator gates are unsatisfied.
 - Separate staged candidate: PCR integration at exact source
   `19386765b40a4d57dce15c0984a731486b69121e` has its OWN binary-only recipe
   and manifest; it does NOT overwrite the `950fe331` pin. No build performed.

@@ -13,7 +13,7 @@ from unittest import mock
 from expanded import p1_bounded_pilot_runner as r
 from expanded import p1_watchdog_readiness as w
 
-MERGED_HEAD = "9f81086715cade9d383f4aec62e284873ab21ba0"
+MERGED_HEAD = "7c2bb512b67d06e9bb987688eed706f6d500f3d0"
 BINARY_SHA = "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786"
 IMAGE = "a" * 64
 
@@ -373,7 +373,7 @@ class SeparatePcrCandidateTests(unittest.TestCase):
     def test_existing_950fe331_pin_untouched(self):
         path = Path(r.__file__).with_name("p1_pilot_image_manifest.json")
         self.assertEqual(r.sha256(path),
-                         "29f48843d74f41b107495ae003ee65787653d9d22599dd3b3e9f7a4a2cdef13b")
+                         "087241b77d39b27df2588c28d8dcf96ce2191e32d4e767d4621f5ebb640539b5")
         doc = json.loads(path.read_text())
         self.assertEqual(doc["candidate_source_commit"], r.SOURCE_COMMIT)
 

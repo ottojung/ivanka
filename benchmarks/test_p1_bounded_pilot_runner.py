@@ -120,7 +120,7 @@ class DesignAndSourceTests(unittest.TestCase):
         self.assertEqual(runner.PINS_V2["storage_conf"],
                          runner.SHARED_PX_BOUNDARY["storage_conf_sha256"])
         self.assertEqual(runner.INTEGRATION_BASE,
-                         "9f81086715cade9d383f4aec62e284873ab21ba0")
+                         "7c2bb512b67d06e9bb987688eed706f6d500f3d0")
         # STOP stays owner-bound; exclusion primitives must be shared with PX.
         self.assertEqual(runner.DEFAULT_STOP,
                          str(runner.PILOT_ROOT / "p1-prospective.STOP"))

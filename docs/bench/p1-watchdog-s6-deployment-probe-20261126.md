@@ -20,7 +20,7 @@ write a lease/STOP, invoke Podman, or touch a live arm.
 | watchdog service | **deployed and armed; cutover 19:16Z** — `/run/service/ivanka-watchdog` symlink active, `WATCHDOG_ARMED=1`; live PID is DERIVED from the current `.watchdog-alive.json` (never hardcoded here); ALIVE bound to the exact PX graphroot |
 
 The independent watchdog's run script is source-only at
-`scripts/px_watchdog_s6_service.sh` on exact PR527 `b185c7f2`. It discovers
+`scripts/px_watchdog_s6_service.sh` on the deployed PR527/PR536 guard line. It discovers
 active leases from the shared durable journal, never holds the PX worker lock,
 writes only an append-only evidence journal, and requires `WATCHDOG_ARMED=1`
 plus complete pins before doing anything.
@@ -59,12 +59,12 @@ closed. After the operator's 20:19Z cutover to that reviewed head, the probe is
 green again. The source pin is prospective (it attests the reviewed identity),
 deployment is an operator fact; neither implies an arm authorization.
 
-**Dependency status:** PR536 was reviewed GO at corrected head `6e6886a8`,
-merged at `091f5627`, integrated into base `9f810867`, and deployed at 20:19Z.
-PR535 (guard copy-only overlay admission, author `ottojung`, head `c7356b58`)
-remains open/draft and NO-GO; coordinate with its author and do not arm until
-it is resolved. PR531 holds SCOPED-GO at `9872c1e1` and staged only — no arm is
-claimed.
+**Dependency status:** PR536 was reviewed GO at corrected head `6e6886a8` and
+merged at `091f56275ae823cb3291b81dbdf016fcf16c3ea0` (deployed by operator as a
+separate action; deployment is not claimed here). PR535 copy-only overlay
+admission merged at `165a86b38c` (PR head `39317f021f`); PR531 must treat the
+copy-only Buildah/Podman layer/labels/CID/timing contract as a real guard
+dependency, not a bypass. PR531 remains source-only/staged — no arm is claimed.
 
 Tests: `PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_watchdog_readiness.py`
 (12 deterministic tests over a simulated s6 layout; no live service touched).
@@ -101,7 +101,7 @@ benchmark touched:
 - `podman container inspect ... <absent-full-CID>` → rc125,
   `no such container "<full CID>"`.
 Both match the strict optional-colon full-CID matcher at reviewed PR527 head
-`b185c7f2` (`binding.absent_evidence` now matches stderr only, never argv/
+PR527 `b185c7f2` (`binding.absent_evidence` now matches stderr only, never argv/
 `str(exc)`). Do not weaken this matcher; a bare no-CID diagnostic fails closed.
 
 ## 6. Boundaries

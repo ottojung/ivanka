@@ -25,7 +25,8 @@ def stable_self(table=None):
 
 
 def gate(stream, root, ident, *, graphroot, deadline, clock=None,
-         select_fn=None, snapshot=None):
+         select_fn=None, snapshot=None, sealed_context=None, base=None,
+         artifact_sha256=None, artifact_mode=None):
     """Wait for permission, then re-prove the exact committed bind."""
     now = clock if clock is not None else time.time
     choose = select_fn if select_fn is not None else select.select
@@ -40,12 +41,23 @@ def gate(stream, root, ident, *, graphroot, deadline, clock=None,
     except GuardExceeded:
         return False
     finger = event.get("fingerprint") if event else None
-    return bool(event and event.get("state") == "active"
-                and event.get("mode") == "copy_overlay"
-                and event.get("pid") == pid and event.get("pgid") == pid
-                and event.get("graphroot") == str(graphroot)
-                and isinstance(finger, (list, tuple)) and len(finger) >= 2
-                and tuple(finger[:2]) == stable)
+    bound = bool(event and event.get("state") == "active"
+                 and event.get("mode") == "copy_overlay"
+                 and event.get("pid") == pid and event.get("pgid") == pid
+                 and event.get("graphroot") == str(graphroot)
+                 and isinstance(finger, (list, tuple)) and len(finger) >= 2
+                 and tuple(finger[:2]) == stable)
+    if not bound:
+        return False
+    if sealed_context is not None:
+        from . import copy_overlay
+        try:
+            copy_overlay.verify_sealed(
+                sealed_context, base=base, artifact_sha256=artifact_sha256,
+                artifact_mode=artifact_mode)
+        except GuardExceeded:
+            return False
+    return True
 
 
 def main(argv=None):
@@ -55,11 +67,17 @@ def main(argv=None):
     parser.add_argument("--ident", required=True)
     parser.add_argument("--graphroot", required=True)
     parser.add_argument("--deadline", type=float, required=True)
+    parser.add_argument("--context", default=None)
+    parser.add_argument("--base", default=None)
+    parser.add_argument("--artifact-sha256", default=None)
+    parser.add_argument("--artifact-mode", type=int, default=None)
     parser.add_argument("--argv", nargs=argparse.REMAINDER, required=True)
     args = parser.parse_args(argv)
     with os.fdopen(args.read_fd, "rb", buffering=0) as stream:
         if not gate(stream, args.root, args.ident, graphroot=args.graphroot,
-                    deadline=args.deadline):
+                    deadline=args.deadline, sealed_context=args.context,
+                    base=args.base, artifact_sha256=args.artifact_sha256,
+                    artifact_mode=args.artifact_mode):
             return 2
     os.execvpe(args.argv[0], args.argv, os.environ.copy())
     return 127

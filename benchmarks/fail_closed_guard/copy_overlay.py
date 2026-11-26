@@ -8,7 +8,10 @@ and no successful receipt without real group and owner-scoped storage proof.
 import fcntl
 import hashlib
 import json
+import math
 import os
+import shutil
+import stat
 import re
 import subprocess
 import sys
@@ -29,11 +32,99 @@ SOURCE = "ivanka"
 DESTINATION = "/usr/local/bin/ivanka"
 CONTAINERFILE = "FROM {base}\nCOPY ivanka /usr/local/bin/ivanka\n"
 MAX_ARTIFACT = 256 * 1024 * 1024
+# Binding to the one shared PX root also binds to its shared worker lock.
+PX_ROOT = "/workspace/ivanka-exploratory-ten-20261121"
+MIN_FREE_BYTES = 34_359_738_368
 INTERVAL = 0.5
+
+
+def require_px_root(root):
+    """Only the shared PX project root may host a bounded overlay build."""
+    if Path(root).resolve() != Path(PX_ROOT).resolve():
+        raise GuardExceeded("wrong_project_root")
+
+
+def check_disk_floor(root, reserve_bytes, usage=None):
+    """Hard 32 GiB free floor plus the per-job reservation, in one reading."""
+    space = (usage or (lambda path: shutil.disk_usage(str(path))))(str(root))
+    free = getattr(space, "free", None)
+    if (not isinstance(free, (int, float)) or not math.isfinite(free)
+            or free - reserve_bytes < MIN_FREE_BYTES):
+        raise GuardExceeded("reserve_shortfall")
+    disk.check_reserve(root, reserve_bytes, usage=lambda _path: space)
+    return free
+
+
+def check_stop(root, owner):
+    """A STOP sentinel stays owner-bound and is never silently discarded."""
+    sentinel = Path(root) / "STOP"
+    if not sentinel.exists():
+        return None
+    if sentinel.is_symlink() or not sentinel.is_file():
+        raise GuardExceeded("stop_unavailable")
+    token = sentinel.read_text().strip()
+    if token and token not in ("hold", str(owner)):
+        raise GuardExceeded("stop_owner_unauthorized")
+    return token
 
 
 def plan_digest(plan):
     return hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
+
+
+def verify_sealed(context, *, base, artifact_sha256, artifact_mode):
+    """Re-prove an immutable private context immediately before exec."""
+    directory = Path(context)
+    if (directory.is_symlink() or not directory.is_dir()
+            or stat.S_IMODE(directory.stat().st_mode) != 0o500):
+        raise GuardExceeded("context_unsealed")
+    entries = sorted(entry.name for entry in os.scandir(directory))
+    if entries != sorted(("Containerfile", SOURCE)):
+        raise GuardExceeded("context_unsealed")
+    manifest, artifact = directory / "Containerfile", directory / SOURCE
+    if (manifest.is_symlink() or artifact.is_symlink()
+            or manifest.read_bytes() != CONTAINERFILE.format(base=base).encode()
+            or stat.S_IMODE(manifest.stat().st_mode) != 0o400):
+        raise GuardExceeded("context_unsealed")
+    fd = os.open(str(artifact), os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if stat.S_IMODE(info.st_mode) != artifact_mode:
+            raise GuardExceeded("context_unsealed")
+        digest = hashlib.sha256()
+        remaining = info.st_size
+        while remaining:
+            chunk = os.read(fd, min(1 << 20, remaining))
+            if not chunk:
+                raise GuardExceeded("context_unsealed")
+            digest.update(chunk)
+            remaining -= len(chunk)
+    finally:
+        os.close(fd)
+    if digest.hexdigest() != artifact_sha256:
+        raise GuardExceeded("context_unsealed")
+    return str(directory)
+
+
+def seal_context(temp, validated):
+    """Copy the reviewed plan into a private, then read-only, build context."""
+    sealed = Path(temp) / "context"
+    sealed.mkdir(mode=0o700)
+    source_dir = Path(validated["context"])
+    shutil.copyfile(source_dir / "Containerfile", sealed / "Containerfile")
+    shutil.copyfile(source_dir / SOURCE, sealed / SOURCE)
+    os.chmod(sealed / "Containerfile", 0o400)
+    os.chmod(sealed / SOURCE, validated["artifact_mode"])
+    os.chmod(sealed, 0o500)
+    verify_sealed(sealed, base=validated["base_image"],
+                  artifact_sha256=validated["artifact_sha256"],
+                  artifact_mode=validated["artifact_mode"])
+    validated["containerfile"] = str(sealed / "Containerfile")
+    validated["context"] = str(sealed)
+    validated["argv"] = ["podman", "build", "--network=none", "--pull=never",
+                         "-f", validated["containerfile"], "-t",
+                         validated["tag"], str(sealed)]
+    return str(sealed)
 
 
 @contextmanager
@@ -126,11 +217,14 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
             "tag": tag, "argv": argv, "plan_sha256": plan_digest(plan)}
 
 
-def helper_argv(root, ident, graphroot, deadline, read_fd, command):
+def helper_argv(root, ident, graphroot, deadline, read_fd, command, *,
+                context, base, artifact_sha256, artifact_mode):
     return [sys.executable, "-m", "fail_closed_guard.copy_overlay_helper",
             "--read-fd", str(read_fd), "--root", str(root),
             "--ident", str(ident), "--graphroot", str(graphroot),
-            "--deadline", str(deadline), "--argv"] + list(command)
+            "--deadline", str(deadline), "--context", str(context),
+            "--base", str(base), "--artifact-sha256", str(artifact_sha256),
+            "--artifact-mode", str(artifact_mode), "--argv"] + list(command)
 
 
 def default_spawn(root, argv, env, pass_fds, log):
@@ -153,19 +247,31 @@ def _owned(bound):
 
 def _teardown(bound, *, pinned, graphroot, snapshot, sleep, monotonic,
               command, baseline, expected_name, stop=None, cleanup=None):
-    verify, absent = _owned(bound)
+    verify, absent = watchdog.group_callbacks(bound)
     pgid = bound["pgid"]
     terminate = stop if stop is not None else (
         lambda value: build.stop_group_by_id(value, snapshot=snapshot,
                                               sleep=sleep, clock=monotonic,
                                               verify=verify, absent=absent))
     reclaim = cleanup if cleanup is not None else (
-        lambda: orphans.reclaim_owned(pinned, graphroot, baseline,
-                                      expected_name=expected_name,
-                                      command_fn=command))
+        lambda: orphans.reclaim_owned(
+            pinned, graphroot, baseline, expected_name=expected_name,
+            expected_base=bound.get("base_image"), command_fn=command))
     proof = terminate(pgid)
     proof["orphan_cleanup"] = reclaim()
     return proof
+
+
+def _downgrade(root, ident, state):
+    """A watchdog fail-closed teardown can never leave a finished receipt."""
+    try:
+        return watchdog_contract.downgrade_on_watchdog_teardown(
+            root, ident, state)
+    except GuardExceeded:
+        updated = dict(state)
+        updated["status"] = "failed"
+        updated["reason"] = "watchdog_evidence_unreadable"
+        return updated
 
 
 def _receipt(path, state):
@@ -188,6 +294,7 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
     command = command or orphans.command
     root = Path(root)
     with shared_lock(root):
+        require_px_root(root)
         validated = validate_plan(
             plan, expected_base=expected_base, expected_commit=expected_commit,
             expected_graphroot=graphroot, root=root)
@@ -201,10 +308,11 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
         lease.require_clear(root, pinned, watchdog_path=alive,
                             graphroot=graphroot, snapshot=take, wall=now,
                             command=command)
-        disk.check_reserve(root, reserve_bytes, usage=usage)
+        check_disk_floor(root, reserve_bytes, usage)
+        ident = "copy-" + validated["plan_sha256"][:16]
+        check_stop(root, ident)
         baseline = orphans.capture_baseline(pinned, graphroot,
                                             command_fn=command)
-        ident = "copy-" + validated["plan_sha256"][:16]
         owner = ident
         lease.acquire(root, ident, "copy_overlay", owner=owner)
         start = lease.acquisition_start(root, ident)
@@ -225,8 +333,12 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                  "status": "unknown", "exit_code": None, "peak_rss": None,
                  "enforcement": "userspace_observed", "kernel_enforcement": False}
         try:
-            gate = helper_argv(root, ident, graphroot, deadline, read_fd,
-                               validated["argv"])
+            sealed = seal_context(temp, validated)
+            gate = helper_argv(
+                root, ident, graphroot, deadline, read_fd, validated["argv"],
+                context=sealed, base=validated["base_image"],
+                artifact_sha256=validated["artifact_sha256"],
+                artifact_mode=validated["artifact_mode"])
             maker = spawn or (lambda argv, env_value, pass_fds:
                               default_spawn(root, argv, env_value, pass_fds, log))
             handle = maker(gate, job_env, (read_fd,))
@@ -240,9 +352,12 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
             stable = [record["starttime"], record["pid_ns"]]
             if record.get("pgid") != handle.pid:
                 raise GuardExceeded("identity_lost")
-            lease.bind_group(root, ident, handle.pid, handle.pid, stable,
-                             owner=owner, plan_sha256=validated["plan_sha256"],
-                             graphroot=graphroot, helper=True)
+            lease.bind_group(
+                root, ident, handle.pid, handle.pid, stable, owner=owner,
+                plan_sha256=validated["plan_sha256"], graphroot=graphroot,
+                helper=True, baseline_ids=sorted(baseline),
+                expected_name=ident + "-working-container",
+                base_image=validated["base_image"])
             bound = watchdog.bound_from_lease(root, ident, pinned)
             observed = watchdog.verify_group_bound(bound, table)
             state["peak_rss"] = observed["rss"]
@@ -255,7 +370,7 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
             while handle.poll() is None:
                 if now() >= deadline:
                     raise GuardExceeded("wall_limit")
-                disk.check_reserve(root, reserve_bytes, usage=usage)
+                check_disk_floor(root, reserve_bytes, usage)
                 emitter.refresh()
                 nap(INTERVAL)
                 table = take()
@@ -271,9 +386,12 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                 sleep=nap, monotonic=mono, command=command, baseline=baseline,
                 expected_name=ident + "-working-container", stop=stop,
                 cleanup=cleanup)
-            state.update({"status": "completed", "exit_code": handle.poll(),
-                          "teardown": proof,
-                          "orphan_baseline_ids": sorted(baseline)})
+            exit_code = handle.poll()
+            state.update({
+                "status": "completed" if exit_code == 0 else "failed",
+                "reason": None if exit_code == 0 else "build_exit_nonzero",
+                "exit_code": exit_code, "teardown": proof,
+                "orphan_baseline_ids": sorted(baseline)})
             lease.release(root, ident, owner=owner, proof=proof)
         except Exception as exc:
             reason = exc.reason if isinstance(exc, GuardExceeded) else "inspection_unavailable"
@@ -300,7 +418,7 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                                               str(stop_exc)[:200])
             else:
                 watchdog.blocked_evidence(root, ident, reason, "pre_bind_crash")
-            _receipt(log.parent / "result.json", state)
+            _receipt(log.parent / "result.json", _downgrade(root, ident, state))
             if isinstance(exc, GuardExceeded):
                 raise
             raise GuardExceeded(reason) from exc
@@ -311,5 +429,6 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                         os.close(descriptor)
                     except OSError:
                         pass
+        state = _downgrade(root, ident, state)
         _receipt(log.parent / "result.json", state)
         return state

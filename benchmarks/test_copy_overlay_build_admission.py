@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import os
+import stat
 import tempfile
 import time
 import unittest
@@ -57,6 +58,14 @@ class GateTests(unittest.TestCase):
         self.table = {os.getpid(): record(os.getpid(), self.stable[0],
                                            pgid=os.getpid(),
                                            ns=self.stable[1], cmd="helper")}
+        self.sealed = self.root / "sealed"
+        self.sealed.mkdir(mode=0o700)
+        (self.sealed / "Containerfile").write_bytes(
+            copy_overlay.CONTAINERFILE.format(base=BASE).encode())
+        (self.sealed / "ivanka").write_bytes(PAYLOAD)
+        os.chmod(self.sealed / "Containerfile", 0o400)
+        os.chmod(self.sealed / "ivanka", 0o755)
+        os.chmod(self.sealed, 0o500)
 
     def commit(self, *, pid=None, stable=None, graphroot=GRAPHROOT):
         lease.append(self.root, {"schema": lease.SCHEMA, "lease": self.ident,
@@ -79,7 +88,9 @@ class GateTests(unittest.TestCase):
             deadline=deadline, clock=lambda: now,
             select_fn=lambda readers, _, __, timeout: (readers if timeout > 0
                                                        else [], [], []),
-            snapshot=lambda: self.table)
+            snapshot=lambda: self.table, sealed_context=self.sealed,
+            base=BASE, artifact_sha256=hashlib.sha256(PAYLOAD).hexdigest(),
+            artifact_mode=0o755)
 
     def test_eof_deadline_and_missing_bind_never_exec(self):
         self.assertFalse(self.gate(payload=b""))
@@ -100,6 +111,22 @@ class GateTests(unittest.TestCase):
 
     def test_exact_durable_bind_allows_exec(self):
         self.assertTrue(self.gate())
+
+    def test_mutation_before_exec_never_allows_exec(self):
+        for mutate in (lambda: (self.sealed / "ivanka").write_bytes(b"bad"),
+                       lambda: os.chmod(self.sealed / "Containerfile", 0o600),
+                       lambda: (os.chmod(self.sealed, 0o700),
+                                (self.sealed / "extra").write_bytes(b"x"),
+                                os.chmod(self.sealed, 0o500))):
+            with self.subTest():
+                artifact = self.sealed / "ivanka"
+                artifact.write_bytes(PAYLOAD)
+                os.chmod(self.sealed / "Containerfile", 0o400)
+                for item in self.sealed.iterdir():
+                    if item.name not in ("Containerfile", "ivanka"):
+                        item.unlink()
+                mutate()
+                self.assertFalse(self.gate())
 
 
 class CopyOverlayTests(unittest.TestCase):
@@ -134,6 +161,7 @@ class CopyOverlayTests(unittest.TestCase):
         self.new_external = []
         self.permission = []
         patches = [
+            patch.object(copy_overlay, "PX_ROOT", str(self.root)),
             patch.object(store.binding, "command", side_effect=self.command),
             patch.object(heartbeat.Emitter, "before_spawn",
                          lambda self: {"schema": heartbeat.SCHEMA}),
@@ -154,6 +182,8 @@ class CopyOverlayTests(unittest.TestCase):
                 entries.extend(self.new_external)
                 return "".join("%s|%s|%s\n" % item for item in entries)
             return ""
+        if argv[1] == "inspect":
+            return BASE + "\n"
         if argv[1] == "rm":
             self.removed.append(argv[-1])
             self.new_external = [entry for entry in self.new_external
@@ -370,6 +400,111 @@ class CopyOverlayTests(unittest.TestCase):
                                 watchdog_path=self.root / "absent",
                                 graphroot=GRAPHROOT, snapshot=lambda: {},
                                 wall=time.time, command=self.command)
+
+
+    def test_stop_sentinel_owner_is_not_bypassed(self):
+        self.ping()
+        (self.root / "STOP").write_text("other-owner\n")
+        with self.assertRaises(GuardExceeded) as caught:
+            self.run_build(start_owned=False)
+        self.assertEqual(caught.exception.reason, "stop_owner_unauthorized")
+        (self.root / "STOP").write_text("hold\n")
+        state = self.run_build()
+        self.assertEqual(state["status"], "completed")
+
+    def test_default_run_path_without_live_build(self):
+        self.ping()
+        seen = {}
+        real_write = os.write
+
+        def fake_spawn(root, argv, env_value, pass_fds, log):
+            self.own_external()
+            seen["argv"] = argv
+            seen["env"] = env_value
+            seen["pass_fds"] = pass_fds
+            return Handle(PID)
+
+        def safe_write(fd, payload):
+            if payload == b"G":
+                seen["permission"] = payload
+                return len(payload)
+            return real_write(fd, payload)
+
+        tables = iter([self.table(), self.table(), self.table(),
+                       self.table(), {}, {}, {}])
+        signals = []
+
+        def record_signal(pgid, _signal):
+            signals.append(pgid)
+
+        with patch.object(copy_overlay, "default_spawn", side_effect=fake_spawn), \
+             patch.object(copy_overlay.os, "write", side_effect=safe_write), \
+             patch("os.killpg", side_effect=record_signal):
+            state = copy_overlay.run(
+                self.root, self.plan, expected_base=BASE,
+                expected_commit=COMMIT, graphroot=GRAPHROOT, env=self.env,
+                reserve_bytes=1024, snapshot=lambda: next(tables, {}),
+                command=self.command, usage=lambda path: Free(100 * 1024**3),
+                wall=time.time, monotonic=lambda: 0.0, sleep=lambda _: None)
+        self.assertEqual(state["status"], "completed")
+        self.assertEqual(seen["permission"], b"G")
+        self.assertIn("--context", seen["argv"])
+        sealed = Path(seen["argv"][seen["argv"].index("--context") + 1])
+        self.assertEqual(stat.S_IMODE(sealed.stat().st_mode), 0o500)
+        self.assertEqual(self.removed, [NEW_ID])
+        self.assertEqual(signals, [PID])
+
+    def test_nonzero_exit_is_failed_with_proof(self):
+        self.ping()
+        state = self.run_build(handle=Handle(PID, results=(7,)))
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(state["exit_code"], 7)
+        self.assertEqual(state["reason"], "build_exit_nonzero")
+        self.assertIn("teardown", state)
+        self.assertEqual(lease.latest(lease.events(self.root))[
+            self.ident]["state"], "released")
+
+    def test_hard_32gib_floor_is_enforced(self):
+        self.ping()
+        with self.assertRaises(GuardExceeded) as caught:
+            self.run_build(usage=lambda path: Free(
+                copy_overlay.MIN_FREE_BYTES + 1024 - 1), start_owned=False)
+        self.assertEqual(caught.exception.reason, "reserve_shortfall")
+
+    def test_watchdog_default_group_teardown_is_verified_and_exact(self):
+        from fail_closed_guard import teardown as teardown_module
+        self.ping()
+        self.own_external()
+        lease.acquire(self.root, "orphaned", "copy_overlay", owner="orphaned")
+        lease.bind_group(
+            self.root, "orphaned", PID, PID, [200, 99], owner="orphaned",
+            graphroot=GRAPHROOT, helper=True, baseline_ids=[BASELINE_ID],
+            expected_name=self.ident + "-working-container", base_image=BASE)
+        live = self.table()
+        tables = iter([live, {}, {}, {}])
+        signals = []
+
+        def killpg(pgid, _signal):
+            signals.append(pgid)
+
+        with patch("os.killpg", side_effect=killpg), \
+             patch.object(teardown_module, "command", side_effect=self.command):
+            with self.assertRaises(GuardExceeded) as caught:
+                watchdog.check_once(
+                    self.root, "orphaned", storage_conf=self.conf,
+                    graphroot=GRAPHROOT, env=self.env,
+                    heartbeat_path=self.root / "none",
+                    monotonic=lambda: 0.0, wall_clock=time.time,
+                    snapshot=lambda: next(tables, {}),
+                    measure=lambda: 100 * 1024**3, wall_seconds=2400)
+        self.assertEqual(caught.exception.reason, "heartbeat_missing")
+        self.assertEqual(signals, [PID])
+        event = self.evidence()[-1]
+        self.assertEqual(event["action"], "teardown")
+        self.assertEqual(event["process_group"], PID)
+        self.assertEqual(event["teardown"]["orphan_cleanup"]["removed"][0]["image"],
+                         BASE)
+        self.assertEqual(self.removed, [NEW_ID])
 
 
 if __name__ == "__main__":

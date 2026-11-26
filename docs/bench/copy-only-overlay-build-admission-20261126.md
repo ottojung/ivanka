@@ -1,73 +1,57 @@
 # Gated COPY-only overlay build admission (source only)
 
-## Blocker and revision
+## Exact-head NO-GO closure
 
-PR535's first draft was refused at source inspection: pending-group crashes
-could leave an unbounded build, a bare/reused PGID could be signalled after
-identity loss, a non-`None` token stood in for the shared lock, and the plan
-and orphan rules were too loose. This revision replaces that draft on the same
-branch. Generic `build` remains refused by `watchdog_contract`; only one
-reviewed binary-only COPY overlay is admitted.
+This revision rebases PR535 onto current main `119cfacec` and closes the
+exact-head review blockers raised at `433e4ea`. Generic `build` remains refused
+by `watchdog_contract`; only one reviewed binary-only COPY overlay is admitted.
+
+- **Default watchdog teardown** now works without injected callbacks: it
+  re-verifies the exact bound group identity before any signal, proves absence
+  from fresh process snapshots, and reclaims only the lease-owned external IDs
+  recorded at bind. `stop_group_by_id` refuses if `verify`/`absent` are absent.
+- **Base-derived ownership** is proved with `podman inspect {{.Image}}` for
+  every new external container: it must equal the pinned frozen base digest in
+  addition to the exact owned name and `Storage` status. Baseline IDs must be
+  unchanged and only those exact new IDs are removed.
+- **Sealed context**: the reviewed context is copied into a private `0700` job
+  directory, then made read-only `0500`; files are `0400` (Containerfile) and
+  the pinned artifact mode. The helper re-verifies digest, mode, exact entries
+  and Containerfile after permission and before `exec`; tests mutate content,
+  mode and add extra files before exec and are refused.
+- **Shared PX binding**: the worker lock is the real `.global-worker.lock` and
+  the root must equal the shared PX project root. `STOP` is owner-bound; a
+  foreign owner refuses admission and is never removed.
+- **Hard reserve**: 32 GiB free (`34,359,738,368`) plus the per-job reservation
+  is enforced on every sample, not merely the small reservation.
+- **Receipts**: nonzero build exit is `failed/build_exit_nonzero`, and every
+  result passes through `downgrade_on_watchdog_teardown` before being written.
 
 ## Gated helper
 
-`copy_overlay_helper.py` is spawned in its own session with a private read
-pipe. It waits until the controller has committed an exact durable bind
-(PID, PGID, `starttime`, `pid_ns`, pinned graphroot) to the append-only lease
-journal, re-reads and verifies that bind, and only then `exec`s the fixed build
-command. Pipe EOF, deadline, wrong token, missing/mismatched journal or an
-unreadable identity exits without building. The helper keeps the same kernel
-task across `exec`, so its stable identity survives into the build. The
-controller writes the permission byte only after `lease.bind_group` succeeds;
-crashes before that leave an active pending lease that blocks all admission.
+`copy_overlay_helper.py` waits on a private pipe until the controller commits
+an exact durable bind (PID, PGID, `starttime`, `pid_ns`, pinned graphroot) to
+the lease journal, re-reads and verifies that bind and the sealed context, then
+execs the fixed build command. EOF, deadline, wrong token, missing/mismatched
+bind or unreadable context exits without building. The stable kernel identity
+survives `exec`. Permission is written only after `lease.bind_group`.
 
-## Strict plan
+## Validation
 
-The context must contain exactly `Containerfile` and a flat `ivanka` file. The
-Containerfile must be exactly `FROM <pinned base>\nCOPY ivanka
-/usr/local/bin/ivanka\n`. The artifact is opened once with `O_NOFOLLOW`; its
-mode, size and SHA-256 are taken from that same descriptor, so no path can be
-swapped between check and use. Extra files, nested directories, symlinks,
-globs, a different destination, wrong mode or wrong digest fail before spawn.
-The storage config and graphroot are explicit in the reviewed plan and checked
-against the pinned store. Temp files are created inside the project root and
-inherited `TMPDIR`/`TMP`/`TEMP` are removed.
-
-## Verified-only teardown and exact orphan proof
-
-The watchdog never signals a reused or unverified group. `stop_group_by_id`
-requires `verify` and `absent` callbacks and refuses if either is missing; the
-leader's immutable identity must still match before a signal, and absence is
-proved from fresh process snapshots instead of a `killpg(pgid, 0)` probe on a
-possibly reused ID. Group descendants are measured only when their identities
-are readable.
-
-Buildah external containers are captured before spawn. After the build only
-IDs that did not exist beforehand may be considered, and only when their name
-is exactly the lease-owned name and status is `Storage`. The baseline must be
-unchanged; only those exact IDs are removed and their absence is rechecked.
-There is no broad sweep and no foreign container is touched.
-
-A full real receipt records exit code, peak RSS, teardown proof, baseline and
-removed IDs, evidence path and lease state. A `finished` claim requires the
-proof; failures append evidence before teardown and leave the lease active.
-
-## Deterministic validation
-
-`test_copy_overlay_build_admission.py` uses injected spawn, pipe writes,
-process tables, clocks and Podman commands. It covers gate EOF/deadline/mismatch,
-pre-bind crash with no permission, successful post-bind gating, PID reuse
-refusing any signal, exact owned-orphan proof, no broad sweep, actual `flock`
-exclusion, strict plan rejection, job temp containment, durable deadline,
-disk, RSS and receipt contents. 551 targeted guard/watchdog/launcher tests pass;
+`test_copy_overlay_build_admission.py` (17 deterministic tests) covers gate
+EOF/deadline/mismatch, mutation before exec, pre-bind crash with no permission,
+the real default run path with a fake spawned process, PID reuse refusing any
+signal, exact base-derived orphan proof, no broad sweep, actual `flock`
+exclusion, shared root/STOP, strict plan rejection, job-temp containment,
+32 GiB reserve, durable deadline, RSS, nonzero exit and watchdog downgrade.
+557 targeted guard/watchdog/launcher tests pass;
 `ruff check --select E4,E9,F,B006,B018,B023` and `git diff --check` pass.
 
 ## Coordination and boundary
 
-Independent exact-head review by agent `k16K...` was requested concurrently;
-no review artifact was available locally at this source head, so this revision
-addresses the operator's listed blockers and remains open to that review.
-Coordinate P1 `950fe331` integration and the missing PX image builds with the
-P1 owner and related PRs before any use. No live build, container, image,
-network, s6 install, arming, STOP change, frozen write or receipt publication
-was performed.
+No live build, container, image, network, s6 install/arming, STOP change,
+frozen write or receipt publication was performed. The k16K independent review
+session was live and its board text was not available in this head's workspace;
+the explicit NO-GO items are addressed here and fresh review is requested at
+this exact head. P1 `950fe331` integration and missing PX image builds still
+require the P1 owner and related PRs before any use.

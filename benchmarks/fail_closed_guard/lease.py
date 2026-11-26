@@ -146,7 +146,8 @@ def bind(root, ident, pid, fingerprint=None, *, owner=None):
 
 
 def bind_group(root, ident, pid, pgid, fingerprint, *, owner=None,
-               plan_sha256=None, graphroot=None, helper=False):
+               plan_sha256=None, graphroot=None, helper=False,
+               baseline_ids=None, expected_name=None, base_image=None):
     """Bind the exact session leader and process group of a COPY-only build."""
     pid, pgid = int(pid), int(pgid)
     if pid <= 0 or pgid != pid or not isinstance(fingerprint, (list, tuple)) \
@@ -159,6 +160,8 @@ def bind_group(root, ident, pid, pgid, fingerprint, *, owner=None,
              "pid": pid, "pgid": pgid, "fingerprint": list(fingerprint),
              "plan_sha256": plan_sha256, "graphroot": str(graphroot),
              "helper": bool(helper),
+             "baseline_ids": sorted(baseline_ids or []),
+             "expected_name": expected_name, "base_image": base_image,
              "at_utc": time.time() if start is None else start}
     append(root, event)
     return event

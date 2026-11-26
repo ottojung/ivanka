@@ -166,6 +166,9 @@ def bound_from_lease(root, worker, env):
                     "stable": len(finger) == 2,
                     "plan_sha256": current.get("plan_sha256"),
                     "graphroot": current.get("graphroot"),
+                    "baseline_ids": current.get("baseline_ids") or [],
+                    "expected_name": current.get("expected_name"),
+                    "base_image": current.get("base_image"),
                     "durable_start": start}
         # A crash before the post-spawn group bind owns no process yet; the
         # active lease still blocks admission until an owner reconciles it.
@@ -354,8 +357,15 @@ def teardown_if_owned(root, worker, cid, env, *, stop=None,
     return {"action": "teardown", "cid": cid, "teardown": proof}
 
 
+def group_callbacks(bound):
+    """Conservative proof callbacks for an exact bound process group."""
+    return (lambda _pgid, table: group_still_owned(bound, table),
+            lambda _pgid, table: group_absent(bound, table))
+
+
 def teardown_group_if_owned(root, worker, bound, env, *, stop=None,
-                            cleanup=None, before_teardown=None):
+                            cleanup=None, before_teardown=None,
+                            snapshot=None):
     """Re-resolve group ownership before stopping it and reclaiming orphans."""
     current = bound_from_lease(root, worker, env)
     pgid = bound.get("pgid")
@@ -365,10 +375,18 @@ def teardown_group_if_owned(root, worker, bound, env, *, stop=None,
         return {"action": "release_raced", "cid": None, "teardown": None}
     if before_teardown is not None:
         before_teardown()
+    verify, absent = group_callbacks(bound)
+    take = snapshot if snapshot is not None else proc.snapshot
     terminate = stop if stop is not None else (
-        lambda value: build.stop_group_by_id(value))
+        lambda value: build.stop_group_by_id(value, snapshot=take,
+                                              verify=verify, absent=absent))
     reclaim = cleanup if cleanup is not None else (
-        lambda: orphans.clean_pinned_storage(env, graphroot_of(bound)))
+        lambda: orphans.reclaim_owned(
+            env, graphroot_of(bound), bound.get("baseline_ids") or {},
+            expected_name=bound.get("expected_name")
+            or str(worker) + "-working-container",
+            expected_base=bound.get("base_image"),
+            command_fn=binding.command))
     try:
         proof = terminate(pgid)
         if reclaim is not None:
@@ -545,7 +563,7 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
         elif namespace_ok and bound.get("state") == "bound_group":
             action = teardown_group_if_owned(
                 root, worker, bound, pinned, stop=stop,
-                cleanup=group_cleanup,
+                cleanup=group_cleanup, snapshot=take,
                 before_teardown=lambda: persist(
                     {"action": "teardown", "cid": None,
                      "process_group": bound["pgid"], "teardown": None}))

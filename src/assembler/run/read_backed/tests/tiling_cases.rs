@@ -39,3 +39,14 @@ fn dense_but_disconnected_regions_are_still_tiled() {
     depths[2600..2770].fill(0);
     assert_eq!(tiling::partition(">sample", &sequence, &depths).len(), 3);
 }
+
+#[test]
+fn offset_presentation_matches_direct_slice() {
+    let sequence = vec![b'A'; 6000];
+    let mut depth = vec![8; 5970];
+    depth[3200..3350].fill(0);
+    let direct = tiling::partition(">off", &sequence[1200..5200], &depth[1200..5170]);
+    let shown = tiling::present(&sequence, &depth, (1200, 5200), ">off");
+    assert_eq!(shown, direct);
+    assert_eq!(shown.len(), 2);
+}

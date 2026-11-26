@@ -1,11 +1,8 @@
+mod spans;
+mod statistics;
 use super::{index::Hits, Reads, K};
+pub(super) use statistics::Statistics;
 use std::collections::{HashMap, HashSet};
-
-pub(super) struct Statistics {
-    pub(super) depth: Vec<Vec<u32>>,
-    pub(super) pairs: Vec<usize>,
-    pub(super) coverage: Vec<usize>,
-}
 
 /// Count each original read pair once per contig, irrespective of hit count.
 pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statistics {
@@ -13,7 +10,8 @@ pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statisti
         .iter()
         .map(|seq| vec![0; seq.len().saturating_sub(K - 1)])
         .collect::<Vec<_>>();
-    let mut pairs = vec![0usize; contigs.len()];
+    let (mut pairs, mut spans) = (vec![0usize; contigs.len()], vec![Vec::new(); contigs.len()]);
+    let mut pair_masks = Vec::new();
     for oriented in reads.seqs.chunks_exact(4).take(80_000) {
         let mut matched = HashMap::<usize, HashSet<usize>>::new();
         for read in [&oriented[0], &oriented[2]] {
@@ -28,23 +26,26 @@ pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statisti
                 }
             }
         }
+        let mut mask = 0u16;
         for (candidate, loci) in matched {
             if loci.len() < 2 {
                 continue;
             }
+            mask |= 1 << candidate;
             pairs[candidate] += 1;
+            spans[candidate].push(spans::extremes(&loci));
             for locus in loci {
                 depth[candidate][locus] += 1;
             }
         }
+        pair_masks.push(mask);
     }
-    let coverage = depth
-        .iter()
-        .map(|d| d.iter().filter(|&&v| v >= 3).count())
-        .collect();
+    let coverage = spans::coverage(&depth);
     Statistics {
         depth,
         pairs,
         coverage,
+        pair_masks,
+        spans,
     }
 }

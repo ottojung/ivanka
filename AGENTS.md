@@ -182,6 +182,13 @@ other assemblers (≥90% of the best rival per sample, both strict all-r Ψ
 gates separately per competitor and cohort). Partial, missing, failed or
 unrun comparisons never qualify. Do not silently change acceptance criteria
 or turn separate exploratory diagnostics into additional requirements.
+**Storage discipline:** reuse existing immutable image layers instead of
+creating duplicate full OCI stores and transfer archives. For prospective
+namespaces, see [read-only image reuse](docs/bench/readonly-image-reuse.md);
+a preflight is not permission to launch a container. Retire disposable
+transfer archives after verified import and preserve source-image identities.
+Never retire an archived store while a consumer references it.
+
 Keep inputs, image lineage, measurements and scoring authentic. Raw assembler FASTA-to-truth scores
 are **diagnostics only**; the mandatory seven-way synthetic alignment gate
 must score MiCall's **final dominant result** after each assembler is

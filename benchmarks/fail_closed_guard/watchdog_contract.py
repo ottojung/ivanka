@@ -1,9 +1,13 @@
 """Minimal integration contract between the watchdog, PX admission and P1.
 
-SOURCE-ONLY helpers preserved from deterministic review. They are intentionally
-not wired into live launch/admission paths: build-mode refusal and receipt
-downgrade are owner policy decisions recorded as unresolved in
-docs/bench/watchdog-505-510-integration-20261125.md.
+These helpers are wired into the live launch, admission and receipt paths:
+``launch.operate`` calls ``require_supported_mode`` before spawn, armed
+admission uses ``require_watchdog_readiness`` to bind the watchdog's store and
+a live kernel identity, and every final state passes through
+``downgrade_on_watchdog_teardown`` before a receipt is written. The remaining
+open item is deployment (s6 install, ``WATCHDOG_ARMED`` and operator arming),
+which stays an explicit operator action; see
+docs/bench/watchdog-p1-natural-exit-integration-20261126.md.
 """
 import json
 import math

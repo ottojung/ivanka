@@ -1,5 +1,5 @@
 {
-  "published_at": "2026-11-26T02:40:28.092694+00:00",
+  "published_at": "2026-11-26T02:46:24.544960+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -261550,6 +261550,39 @@
               "score": 298.0,
               "score_origin": "micall_final_max_reference_panel_v1",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            {
+              "adapter_commit": "7947c2a201cf942ca11e76faf0f3a23a900c0d5c",
+              "binding_receipts": 3,
+              "canonical_alias": "R001",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 1177.84375,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "wall_limit",
+              "image_sha256": "3cfc23c8b1bd7311d8bdc7c4c615092a7bdcc075e55541290bbee418fda6006e",
+              "input_sha256": {
+                "R1": "680e9daf815205f166731de6b986bce3a67a1f4a83fee5dffce6b0bb7dd41862",
+                "R2": "95717103a1462813a1e05bda79b75e82f165976c62b8fd7d178cb69ca39f468f"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 1177.84375,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 1235058688,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "85f159e5a2e15a4c4fb41cdfce91ba0c9b68d2e1"
             }
           ],
           "id": "fermi-lite",
@@ -261596,7 +261629,12 @@
             "abyss": {
               "peak_ram_observed_mib": 3532.890625
             },
-            "fermi-lite": {},
+            "fermi-lite": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 1177.84375,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "haploflow": {
               "peak_ram_observed_mib": 3737.3203125
             },
@@ -261752,13 +261790,38 @@
             "haploflow",
             "spades",
             "velvet",
-            "minia",
-            "ray",
             "soapdenovo2",
-            "idba-ud"
+            "minia",
+            "fermi-lite",
+            "idba-ud",
+            "ray"
           ],
           "floor_ok": null,
           "measurement_evidence": {
+            "fermi-lite": {
+              "adapter_commit": "7947c2a201cf942ca11e76faf0f3a23a900c0d5c",
+              "canonical_alias": "R001",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "wall_limit",
+              "image_sha256": "3cfc23c8b1bd7311d8bdc7c4c615092a7bdcc075e55541290bbee418fda6006e",
+              "input_sha256": {
+                "R1": "680e9daf815205f166731de6b986bce3a67a1f4a83fee5dffce6b0bb7dd41862",
+                "R2": "95717103a1462813a1e05bda79b75e82f165976c62b8fd7d178cb69ca39f468f"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 1177.84375,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 1235058688,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "85f159e5a2e15a4c4fb41cdfce91ba0c9b68d2e1"
+            },
             "idba-ud": {
               "adapter_commit": "ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9",
               "canonical_alias": "R001",
@@ -315672,8 +315735,8 @@
         },
         "fermi-lite": {
           "expected": 198,
-          "failed": 0,
-          "finished": 1
+          "failed": 1,
+          "finished": 2
         },
         "haploflow": {
           "expected": 198,
@@ -344638,6 +344701,39 @@
               "score": 9937.752878929348,
               "score_origin": "micall_final_max_abundant_truths_balanced_v2",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            {
+              "adapter_commit": "7947c2a201cf942ca11e76faf0f3a23a900c0d5c",
+              "binding_receipts": 3,
+              "canonical_alias": "R001",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 1177.84375,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "wall_limit",
+              "image_sha256": "3cfc23c8b1bd7311d8bdc7c4c615092a7bdcc075e55541290bbee418fda6006e",
+              "input_sha256": {
+                "R1": "680e9daf815205f166731de6b986bce3a67a1f4a83fee5dffce6b0bb7dd41862",
+                "R2": "95717103a1462813a1e05bda79b75e82f165976c62b8fd7d178cb69ca39f468f"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 1177.84375,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 1235058688,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "85f159e5a2e15a4c4fb41cdfce91ba0c9b68d2e1"
             }
           ],
           "id": "fermi-lite",
@@ -344684,7 +344780,12 @@
             "abyss": {
               "peak_ram_observed_mib": 3532.890625
             },
-            "fermi-lite": {},
+            "fermi-lite": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 1177.84375,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "haploflow": {
               "peak_ram_observed_mib": 3737.3203125
             },
@@ -344840,14 +344941,39 @@
             "haploflow",
             "spades",
             "velvet",
-            "minia",
-            "ray",
             "soapdenovo2",
-            "idba-ud"
+            "minia",
+            "fermi-lite",
+            "idba-ud",
+            "ray"
           ],
           "family": "physical",
           "floor_ok": null,
           "measurement_evidence": {
+            "fermi-lite": {
+              "adapter_commit": "7947c2a201cf942ca11e76faf0f3a23a900c0d5c",
+              "canonical_alias": "R001",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "wall_limit",
+              "image_sha256": "3cfc23c8b1bd7311d8bdc7c4c615092a7bdcc075e55541290bbee418fda6006e",
+              "input_sha256": {
+                "R1": "680e9daf815205f166731de6b986bce3a67a1f4a83fee5dffce6b0bb7dd41862",
+                "R2": "95717103a1462813a1e05bda79b75e82f165976c62b8fd7d178cb69ca39f468f"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 1177.84375,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 1235058688,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "85f159e5a2e15a4c4fb41cdfce91ba0c9b68d2e1"
+            },
             "idba-ud": {
               "adapter_commit": "ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9",
               "canonical_alias": "R001",
@@ -610349,8 +610475,8 @@
         },
         "fermi-lite": {
           "expected": 662,
-          "failed": 0,
-          "finished": 2
+          "failed": 1,
+          "finished": 3
         },
         "haploflow": {
           "expected": 662,

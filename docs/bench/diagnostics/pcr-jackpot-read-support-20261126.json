@@ -1,0 +1,315 @@
+{
+  "cases": [
+    {
+      "best_rival": "haploflow",
+      "candidate_raw_supported": 850,
+      "candidate_score": 406.1755258522433,
+      "case": "pcr_jackpot-s000",
+      "input_sha256": {
+        "candidate_contigs": "47acec28acfdaff519baf3e132ae202d6831c96d4b7fa3c9f004e0f2179728df",
+        "r1": "ff4079c9e7135c10e644715af6180400d35e6e47140da16bdc450b0902a0dd0f",
+        "r2": "4d25fa68a9e45376709fb19d00461e9414833e5187df6e3593c7ac10958ea4a8",
+        "rival_contigs": "e6190e2348b51809340499a27eabb41815a971f81a607fc2b468280f03e0909a",
+        "truth": "19e27f04d39b3a96106e3cc236e6a34ed474a885b2713295a7ba81c7b9b9f97a"
+      },
+      "relative_floor_miss": false,
+      "rival_only_supported_by_3_distinct_read_strings": 0,
+      "rival_only_supported_by_reads": 0,
+      "rival_raw_supported": 368,
+      "rival_score": 412.3924981867164,
+      "truth_kmers_in_reads": 2650
+    },
+    {
+      "best_rival": "spades",
+      "candidate_raw_supported": 1060,
+      "candidate_score": 402.5947281713344,
+      "case": "pcr_jackpot-s001",
+      "input_sha256": {
+        "candidate_contigs": "8c5e756011f06cb888b554c0f3a0e1509dc328aa08d45e7008a640354ca4587c",
+        "r1": "e8cae2c96188299df66f8c8d4a0c26bbd2146b4640284b5bc48a0f39f90b77f9",
+        "r2": "49c6dad89a47bff4bd7b4fb85b1d1a1d027180f44c5b7f4e5c7d247117b81461",
+        "rival_contigs": "3bae260ec53e24f36d0bdd4f5eff420887ea948f00b07dfd38897432fc5888ed",
+        "truth": "ecdb947e08a091453f6920f9bd3264c33c646eab9219c92abbdd7e12015c8ee3"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1721,
+      "rival_only_supported_by_reads": 1721,
+      "rival_raw_supported": 2781,
+      "rival_score": 809.3080724876442,
+      "truth_kmers_in_reads": 2781
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 1425,
+      "candidate_score": 383.7425211471013,
+      "case": "pcr_jackpot-s002",
+      "input_sha256": {
+        "candidate_contigs": "d8eb687f59aee5fc18980dba1b76b61d46203a44a1035e224f72f2edec19bcb9",
+        "r1": "c223912e8df40b4f15562f8e38b70183c930e8a1396bebb417748604a349a32e",
+        "r2": "d9c2f8b71081b06deb1221678480ea096c992242438e91572231284929c025e9",
+        "rival_contigs": "a129b12c479e5ed8ec7b535afa42424c3b6000c200e8abec11423bf33db3b3a3",
+        "truth": "67d21ac2f110d8e44ad0d2b108473b5e8852ca2a3ecc461a3b55f73ebdd0f8bd"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1681,
+      "rival_only_supported_by_reads": 1681,
+      "rival_raw_supported": 3106,
+      "rival_score": 515.7829585310501,
+      "truth_kmers_in_reads": 3106
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 1058,
+      "candidate_score": 383.8572466023447,
+      "case": "pcr_jackpot-s003",
+      "input_sha256": {
+        "candidate_contigs": "1a7e542bb1e389719b17c1e80925ed3105658f23bff086e3387562016a1477ea",
+        "r1": "6558a0ecb93476b620ed1bcb621084c41e65e460bc2aa6c3620f64265c482e3a",
+        "r2": "fd627edea538330d3756d39e9149c0f5b73191e138221222b628d06fbddae4b9",
+        "rival_contigs": "57b6b6860b7b891d9b0ad3924f1b321cb1501629092ec502badc140f90c7e928",
+        "truth": "2b7367e460295edb90c3339f7b1ab51222d3daaded8c1d569244425b3ef0c7c3"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 2032,
+      "rival_only_supported_by_reads": 2032,
+      "rival_raw_supported": 3090,
+      "rival_score": 668.1190994916485,
+      "truth_kmers_in_reads": 3098
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 1264,
+      "candidate_score": 593.422554206868,
+      "case": "pcr_jackpot-s004",
+      "input_sha256": {
+        "candidate_contigs": "a0407678fc44967e9c46f9de5fc1241ffa1988a3046d678521fa067c6916ce5d",
+        "r1": "b1c10180abaa9dc7242ff45dde42626da8d29d065d30be0b187f960e7b9f0dcf",
+        "r2": "9d0d37f0d396a6571b54632a7f3feed87afb19e661cdcb6bce69bc9193d3bec9",
+        "rival_contigs": "82494eb8d3ee8c28514d197cc0cd8e03622d743e58707861837cd7ad72a22e9a",
+        "truth": "4e971b19937f00e6ec1cf3cc3b5a14860821163e4f224185db24790e8afdf0a2"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1627,
+      "rival_only_supported_by_reads": 1627,
+      "rival_raw_supported": 2891,
+      "rival_score": 865.2349828820418,
+      "truth_kmers_in_reads": 2912
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 936,
+      "candidate_score": 496.9395165473597,
+      "case": "pcr_jackpot-s005",
+      "input_sha256": {
+        "candidate_contigs": "bd1b3203be8d14cf6f5e971c4ee1f9baa029c0b746cc685b9f8a3e8d6b8bfc5c",
+        "r1": "c798b0fbfaecaef15b6fe6feeecde8842a5841e08f547f53211f7a4b9efe59ff",
+        "r2": "14373a77e84699c9c06e73064f9ffcdd4e28dc6f796d33c74ec4686b85218aa2",
+        "rival_contigs": "53b45cfba063f0c52fd462a984c1c51d7ba4d48bc9393ad23d35c938645c25a7",
+        "truth": "3beb02307042ffd656f22255659cf1d10824a8d462602843317a840f1fe36976"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1796,
+      "rival_only_supported_by_reads": 1796,
+      "rival_raw_supported": 2732,
+      "rival_score": 1015.6655254694471,
+      "truth_kmers_in_reads": 2736
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 865,
+      "candidate_score": 470.3688354745131,
+      "case": "pcr_jackpot-s006",
+      "input_sha256": {
+        "candidate_contigs": "b29827e0f3ff82c0e03345535b68fe94037c872d8ccd4301b312b1ac318d768d",
+        "r1": "0061bf593d5e1158189a6aaa3d3a4fc890cb7508396084c639a570a6f3eb23c1",
+        "r2": "a566754d3a6352232158182b24edbffaa75433edea1aacb0022459a4e1e3965b",
+        "rival_contigs": "aae7cc0a7b479042b6b53919ae22a9d8d13eb464f28de9665429350d9b6219db",
+        "truth": "f0a8ce222562fd913c454a08ab710bdb59a73de2d0b3b1158e128c78c437ffb8"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1560,
+      "rival_only_supported_by_reads": 1560,
+      "rival_raw_supported": 2425,
+      "rival_score": 712.8056361375882,
+      "truth_kmers_in_reads": 2425
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 1705,
+      "candidate_score": 491.87118152635395,
+      "case": "pcr_jackpot-s007",
+      "input_sha256": {
+        "candidate_contigs": "1db27e784e983181891bb80dea6560c793b28c9aee2be6a280ec922346d2cd95",
+        "r1": "71dd373363db0a9dfc977363c22012fa01729c8287f9b8e2baa25e58d931904f",
+        "r2": "ee34008200e2d8e0c08993a765e00c53de98c38ba359f94f1aac5cc1a88d2546",
+        "rival_contigs": "94cbff79aea7d375648b1320ec61f5448401ce66e927a79c80f0df9a22b2643d",
+        "truth": "c0cfd8616dbaf639b2670ab26ad2a277748f64fd04bf406f558155a1f598b2d2"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 836,
+      "rival_only_supported_by_reads": 836,
+      "rival_raw_supported": 2540,
+      "rival_score": 868.7998343170757,
+      "truth_kmers_in_reads": 2545
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 563,
+      "candidate_score": 368.4866099231887,
+      "case": "pcr_jackpot-s008",
+      "input_sha256": {
+        "candidate_contigs": "b1a6c31f90758ac9f3e10c4410f907a9c916a3401752ec3f3e81138bebbb56ff",
+        "r1": "240bdc6168ded69d5fe2f22daea3c08395eeafe4fa0fc9a6b75e9e75cb707fd0",
+        "r2": "6961460d147c861943392a9e544f180a5bbfcb67c63fdb934e871a0949766983",
+        "rival_contigs": "cf8fc2e52dc5e60e31e739697c603bb3aa38dbe207b96614f22fbf9049214fc8",
+        "truth": "3ccd9b150d79d654d2c3aa4cb1c57a62db42c6ea1e221e6e06733ad23ed66bdc"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 2028,
+      "rival_only_supported_by_reads": 2028,
+      "rival_raw_supported": 2591,
+      "rival_score": 910.3176250778492,
+      "truth_kmers_in_reads": 2623
+    },
+    {
+      "best_rival": "spades",
+      "candidate_raw_supported": 1205,
+      "candidate_score": 505.1652892561984,
+      "case": "pcr_jackpot-s009",
+      "input_sha256": {
+        "candidate_contigs": "79e326ce829f56fdfb8469e811fd50a69045a3aa12d1986f76bb52b86651b91a",
+        "r1": "f03fcced5fbaf2e026072957e864a07f8a39285016ec35cc3b0d043b962f6b9d",
+        "r2": "f60a44265420555d3c4bffff998367caec053ab99a4ad39e6424372fed3b464e",
+        "rival_contigs": "3e34944f89bf1e9373a3fe43ffa4e3f9b3af9547ec2f29977ebb43c58b3030e7",
+        "truth": "3e8ed78672b089f35433424cee78b6eb52b1ecfae63d4f2bfbdd614fa8fda06d"
+      },
+      "relative_floor_miss": false,
+      "rival_only_supported_by_3_distinct_read_strings": 1560,
+      "rival_only_supported_by_reads": 1560,
+      "rival_raw_supported": 2765,
+      "rival_score": 558.8842975206611,
+      "truth_kmers_in_reads": 2765
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 1267,
+      "candidate_score": 483.0368225072404,
+      "case": "pcr_jackpot-s010",
+      "input_sha256": {
+        "candidate_contigs": "03a194108307aa1816c762d71b7b2e227e5c75ea474175a9a7603267eba762c3",
+        "r1": "ba56f3fea7a67d8e3b67c93bf64f1d464f40bba2e3d57c57e2bb3eba6567dda5",
+        "r2": "bfd017921de720943b38343b72db18aa7d251b490ec7501d4bae9eff72cc6b50",
+        "rival_contigs": "af9795ffad0a5ffaa62a47fc78a5fc673720775e0c9c97f051065d65b2f3b7a0",
+        "truth": "1c9d64ad00f3d308c16d7b6d51760e5837373c886b416184e3e3c194f599e8d1"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1197,
+      "rival_only_supported_by_reads": 1197,
+      "rival_raw_supported": 2464,
+      "rival_score": 815.0599917252794,
+      "truth_kmers_in_reads": 2466
+    },
+    {
+      "best_rival": "spades",
+      "candidate_raw_supported": 987,
+      "candidate_score": 472.8474086310138,
+      "case": "pcr_jackpot-s011",
+      "input_sha256": {
+        "candidate_contigs": "2a575bf66747f93f92e7b56e4f62ba910393c59f465b185871ff5494e8ca1f8a",
+        "r1": "a33bf3adf3dde648a05fd86b3df641325fbfd75a64ab1f798fcfb857adfa1647",
+        "r2": "901e21328e1bea403524bd158d3627d0406fe89b550c1ca7d3eb16e6b6668e1d",
+        "rival_contigs": "4a3f71cc66e0e4f999a59f3005b7c2e531dcb40c103fe0ebf9619674986217dc",
+        "truth": "ac6eff2a8eb99ae0d3cab0af24845e4729f9c288971f0c308957c77a340d6201"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1722,
+      "rival_only_supported_by_reads": 1722,
+      "rival_raw_supported": 2709,
+      "rival_score": 1035.5151765434648,
+      "truth_kmers_in_reads": 2709
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 1324,
+      "candidate_score": 431.76641126527227,
+      "case": "pcr_jackpot-s012",
+      "input_sha256": {
+        "candidate_contigs": "0c47addb8f942efbe174bd4653b789d0cdf3a3c08fad8893430a5492a734eb47",
+        "r1": "e0d202f770850b97d3adce4dd91b8e66ee00a43500e019471243d6254d2a4736",
+        "r2": "a6044287e74adfafc36ad6b82d81d66991412892c167ca73f000b4d9a46b703c",
+        "rival_contigs": "6a1095ba8c9b478efb1116fcfa632c0b1168ac6e744e64bb034f80fc9fa3a36d",
+        "truth": "1b1c08ebcd35a9999f3e89844f31f79e46da06e87be83d1d3e4c1df4b9501dc3"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1440,
+      "rival_only_supported_by_reads": 1440,
+      "rival_raw_supported": 2762,
+      "rival_score": 1056.1192793539035,
+      "truth_kmers_in_reads": 2785
+    },
+    {
+      "best_rival": "spades",
+      "candidate_raw_supported": 945,
+      "candidate_score": 480.68936877076413,
+      "case": "pcr_jackpot-s013",
+      "input_sha256": {
+        "candidate_contigs": "a4bc42470270781f70be5690a4176077fbae1bab91b7330657561bd4f17c1867",
+        "r1": "a0083ddae31bf5d4722367603792542df5374cc29ae625308c44b3d95b06e7b1",
+        "r2": "615dd8f3074165d7b3204ac36976654766e74485114b9e15629ec109ac6835fa",
+        "rival_contigs": "c3b1d60597cd1c71c36ff50460cc16d2abcc56153a60baf42081a86b837c47ea",
+        "truth": "c535f8a74c80e9788744b81efb1364a37e4b788569f055c8898bf9047f812cc5"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1599,
+      "rival_only_supported_by_reads": 1599,
+      "rival_raw_supported": 2544,
+      "rival_score": 704.9418604651163,
+      "truth_kmers_in_reads": 2544
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 1778,
+      "candidate_score": 477.2727272727273,
+      "case": "pcr_jackpot-s014",
+      "input_sha256": {
+        "candidate_contigs": "679bdbc0ec6b2187d415887dfc75d69c1b384880822a9d0ee7f8fc63517e272b",
+        "r1": "5ad58f486c19911e8b57ca1382358eb4293ac74c027648738fcdc2d6ed6c75bf",
+        "r2": "2478d60b79513ac82979bdb10a892d946e94f7a6f81a428533130013c1ad7fc8",
+        "rival_contigs": "c3c61fcd47f222944ee52b3d814c2ccc020b048d3da66ff6eb86dc5403400c49",
+        "truth": "c37dab23326ff6caab4bdcb63dbd378f6a6125adbbd2dbf8e6de26d301b08fa1"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 720,
+      "rival_only_supported_by_reads": 720,
+      "rival_raw_supported": 2487,
+      "rival_score": 599.1735537190083,
+      "truth_kmers_in_reads": 2498
+    },
+    {
+      "best_rival": "megahit",
+      "candidate_raw_supported": 1145,
+      "candidate_score": 395.6611570247934,
+      "case": "pcr_jackpot-s015",
+      "input_sha256": {
+        "candidate_contigs": "f3ef19e401ac1e8e04f8df4b6d55208f5bd124c4e35552358fd1a9d312e2e9ad",
+        "r1": "2f2f7addf1eb4188b0c3bf2373194ebb6d6cbf60dcce49dff92d6e82e9f50982",
+        "r2": "4bfc990476a8259d9bdceeffd06bb4c80e94a6dbdf6e18eb4f5c926d644d6ff9",
+        "rival_contigs": "00335913d0d934d178ce91b19430b9577444182ea539d9f62b8ec25c8c769c4d",
+        "truth": "17926553d8f72b838cdeefc10da09d5261c2f9692e797283efed03bff1954f25"
+      },
+      "relative_floor_miss": true,
+      "rival_only_supported_by_3_distinct_read_strings": 1560,
+      "rival_only_supported_by_reads": 1560,
+      "rival_raw_supported": 2702,
+      "rival_score": 523.7603305785124,
+      "truth_kmers_in_reads": 2705
+    }
+  ],
+  "k": 31,
+  "median_candidate_recovery_on_misses": 0.402224030106592,
+  "median_rival_recovery_on_misses": 0.9987144771973062,
+  "not_qualification": true,
+  "relative_floor_misses": 14,
+  "results_sha256": "903ff012e4e35b0bc7b83c147c56f8ff3c5adc017d188a4679438c7e16eea10d",
+  "schema": "pcr-jackpot-read-support-diagnostic-v1"
+}

@@ -16,9 +16,11 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
+from .current_validation_v2 import V6_COHORT_SHA
 from .public_metrics import CATALOG
-from .public_view import (EVIDENCE_SCHEMA, assert_clean_object,
-                          merge_evidence, scrub)
+from . import px_timing_semantics as timing
+from .public_view import (EVIDENCE_SCHEMA, PHYSICAL_SCORE, SYNTHETIC_SCORE,
+                          assert_clean_object, merge_evidence, scrub)
 from .px_ram_semantics import (COMPARABLE_KEY, RAW_BYTES_KEY, classify,
                                normalize_case, observed_mib,
                                validate_publication)
@@ -56,11 +58,10 @@ def _read_index(root):
     return index
 
 
-def _canonical_alias(receipt, real_data):
-    """Bind a public alias to the original read-pair bytes of a cohort case."""
-    match = ALIAS.fullmatch(receipt.get("alias", ""))
-    if not match or receipt.get("cohort") != "physical":
-        return None
+def _physical_alias(receipt, real_data, match):
+    """Bind a physical alias to the original read-pair bytes of a cohort case."""
+    if match.group(1) != "R":
+        raise ValueError("PX physical alias must name a real cohort case")
     alias = match.group(1) + match.group(2)
     from .real_public import sample_aliases
     samples = sample_aliases(Path(real_data))
@@ -76,6 +77,69 @@ def _canonical_alias(receipt, real_data):
                 or _digest(path) != inputs[mate]):
             raise ValueError("PX input hash differs from original source pair")
     return ("real", alias)
+
+
+def _synthetic_alias(receipt, match):
+    """Bind a synthetic alias to the frozen v6 read and truth hashes.
+
+    The hash-pinned 464-case cohort is the only authority for which source
+    case a public alias names and for its read/truth digests. The truth digest
+    is never published or supplied to an assembler; the pinned posthoc scorer
+    verifies it before emitting a score, and its source identity is checked
+    against the result file during ingestion.
+    """
+    from . import px_cohort_scheduler as sched
+    if match.group(1) != "H":
+        raise ValueError("PX synthetic alias must name a synthetic cohort case")
+    manifest = Path(sched.SYNTHETIC_COHORT)
+    if sched.sha256_file(manifest) != sched.SYNTHETIC_COHORT_SHA256:
+        raise ValueError("frozen synthetic cohort manifest changed")
+    cases = json.loads(manifest.read_bytes())["cases"]
+    if (len(cases) != sched.SYNTHETIC_COUNT
+            or len({case["id"] for case in cases}) != sched.SYNTHETIC_COUNT):
+        raise ValueError("frozen synthetic cohort is not the 464-case cohort")
+    aliases = sched.canonical_aliases((case["id"] for case in cases),
+                                      "synthetic")
+    source_id = next((item for item, alias in aliases.items()
+                      if alias == receipt.get("alias")), None)
+    if source_id is None:
+        raise ValueError("PX alias is not a canonical synthetic cohort case")
+    digests = next(case["sha256"] for case in cases
+                   if case["id"] == source_id)
+    expected = {mate: digests["reads/" + mate + ".fastq.gz"]
+                for mate in ("R1", "R2")}
+    truth = digests.get("hidden-truth/haplotypes.fasta")
+    if not SHA64.fullmatch(truth or ""):
+        raise ValueError("frozen synthetic cohort lacks a truth hash")
+    inputs = receipt.get("input_sha256")
+    if (not isinstance(inputs, dict) or set(inputs) != set(expected)
+            or any(not SHA64.fullmatch(inputs.get(mate, ""))
+                   or inputs[mate] != expected[mate] for mate in expected)):
+        raise ValueError("PX input hash differs from frozen synthetic cohort")
+    return truth
+
+
+def _canonical_alias(receipt, real_data):
+    """Bind a public alias to the original read-pair bytes of a cohort case."""
+    match = ALIAS.fullmatch(receipt.get("alias", ""))
+    if not match:
+        return None
+    cohort = receipt.get("cohort")
+    if cohort == "physical":
+        return _physical_alias(receipt, real_data, match)
+    if cohort == "synthetic":
+        _synthetic_alias(receipt, match)
+        return ("synthetic", match.group(1) + match.group(2))
+    return None
+
+
+def _cohort_fields(cohort):
+    """Return the manifest, score unit, method and panel of a public cohort."""
+    if cohort == "real":
+        return PHYSICAL_MANIFEST, PHYSICAL_SCORE, SCORE_METHOD, PANEL
+    if cohort == "synthetic":
+        return V6_COHORT_SHA, SYNTHETIC_SCORE, SYNTHETIC_SCORE, None
+    raise ValueError("unknown PX publication cohort")
 
 
 def _metrics(diagnostics):
@@ -120,13 +184,15 @@ def _failed_case(root, name, receipt, provenance, cohort, alias):
     if raw is not None and observed_mib(raw) is None:
         raise ValueError("PX failure has invalid RAM observation")
     fields, diagnostics = classify(raw, receipt)
+    manifest, origin, method, panel = _cohort_fields(cohort)
     fields.update({
         "cohort": cohort, "canonical_alias": alias,
         "outcome": "failure", "failure_reason": receipt["failure_reason"],
-        "score": None, "canonical_manifest_sha256": PHYSICAL_MANIFEST,
-        "score_origin": "micall_final_max_reference_panel_v1",
-        "reference_panel_sha256": PANEL, "method": SCORE_METHOD,
-        "launcher_seconds": None, "input_sha256": receipt["input_sha256"],
+        "score": None, "canonical_manifest_sha256": manifest,
+        "score_origin": origin,
+        "reference_panel_sha256": panel, "method": method,
+        "launcher_seconds": None, timing.RUNTIME_KEY: None,
+        "input_sha256": receipt["input_sha256"],
         "output_sha256": None, "diagnostics": diagnostics,
         "source_commit": provenance.get("source_commit"),
         "adapter_commit": provenance.get("adapter_commit"),
@@ -147,10 +213,13 @@ def _case(root, name, receipt, assembler, real_data):
             raise ValueError("PX case provenance differs from registry")
     if receipt.get("schema") != CASE_SCHEMA or receipt.get("terminal") is not True:
         raise ValueError("PX case is not a terminal receipt")
+    if timing.has_proof_keys(receipt) and not timing.attested(receipt):
+        raise ValueError("PX timing proof is incomplete or unpinned")
     bound = _canonical_alias(receipt, real_data)
     if bound is None:
         return None
     cohort, alias = bound
+    manifest, origin, method, panel = _cohort_fields(cohort)
     if receipt.get("outcome") == "failure":
         return _failed_case(root, name, receipt, provenance, cohort, alias)
     if receipt.get("outcome") != "success":
@@ -174,11 +243,45 @@ def _case(root, name, receipt, assembler, real_data):
             or diagnostics.get("runner_receipt_sha256") != receipt[
                 "runner_receipt_sha256"]):
         raise ValueError("PX diagnostic evidence is not receipt-bound")
-    row = result["samples"][0]
+    samples = result.get("samples")
+    if not isinstance(samples, list) or len(samples) != 1:
+        raise ValueError("PX result must carry exactly one receipt-bound sample")
+    row = samples[0]
+    if row.get("method") != method and cohort == "synthetic":
+        raise ValueError(
+            "PX synthetic score method is incompatible with the public "
+            "synthetic metric; correct the prospective posthoc to emit " +
+            SYNTHETIC_SCORE)
     if (row.get("alias") != receipt["alias"] or row.get("outcome") != receipt["outcome"]
-            or row.get("method") != SCORE_METHOD
-            or row.get("reference_panel_sha256") != PANEL):
+            or row.get("method") != method):
         raise ValueError("PX score method or alias mismatched")
+    if panel is not None:
+        if row.get("reference_panel_sha256") != panel:
+            raise ValueError("PX physical score differs from the reference panel")
+    elif row.get("reference_panel_sha256") is not None:
+        raise ValueError("PX synthetic score must not carry a physical reference panel")
+    if cohort == "synthetic":
+        from . import px_cohort_scheduler as sched
+        from . import px_posthoc
+        for key in ("source_commit", "adapter_commit", "image_sha256"):
+            if result.get(key) != receipt.get(key):
+                raise ValueError("PX result provenance differs from receipt")
+        for key in ("output_sha256", "runner_receipt_sha256"):
+            if row.get(key) != receipt.get(key):
+                raise ValueError("PX result " + key + " differs from receipt")
+        # The frozen truth digest is opened only by the pinned scorer. Bind
+        # that exact source identity before admitting a synthetic score.
+        if result.get("scorer_source_sha256") != px_posthoc.source_sha256():
+            raise ValueError(
+                "PX synthetic scorer does not verify the frozen truth hash")
+        truth_claim = row.get("truth_sha256") or result.get("truth_sha256")
+        truth = _synthetic_alias(receipt, ALIAS.fullmatch(receipt["alias"]))
+        if not SHA64.fullmatch(truth_claim or "") or truth_claim != truth:
+            raise ValueError(
+                "PX synthetic truth hash differs from the frozen cohort")
+        if result.get("expected_sample_count") != sched.SYNTHETIC_COUNT:
+            raise ValueError(
+                "PX synthetic result is not bound to the frozen 464-case cohort")
     failure = receipt.get("failure_reason")
     if receipt["outcome"] == "success":
         score = row.get("score")
@@ -187,9 +290,9 @@ def _case(root, name, receipt, assembler, real_data):
     else:
         score = None
     raw = receipt.get(RAW_BYTES_KEY)
-    if (isinstance(raw, bool) or not isinstance(raw, (int, float))
-            or not math.isfinite(raw) or raw < 0
-            or resource.get(RAW_BYTES_KEY) != raw):
+    if (raw is not None and (isinstance(raw, bool)
+            or not isinstance(raw, (int, float)) or not math.isfinite(raw)
+            or raw < 0) or resource.get(RAW_BYTES_KEY) != raw):
         raise ValueError("PX observed peak RAM is not reconciled")
     # Only the index-bound receipt can attest comparable scope. Resource and
     # result side files are post-hoc and never promote a legacy reading.
@@ -201,16 +304,25 @@ def _case(root, name, receipt, assembler, real_data):
     coverage = diagnostics["metrics"].get("exact_coverage", {})
     metrics = _metrics(diagnostics)
     metrics.update(ram_diagnostics)
+    # A comparable runtime exists only when the index-bound receipt carries
+    # the complete, pinned timer proof. Legacy seconds stay unlabeled and are
+    # never published as a measured runtime.
+    proof = timing.timing_fields(receipt)
+    runtime = timing.comparable_seconds(receipt) if proof else None
+    if proof and runtime is None:
+        raise ValueError("attested PX receipt has no valid runtime")
     fields.update({
         "cohort": cohort, "canonical_alias": alias,
         "outcome": receipt["outcome"],
-        "canonical_manifest_sha256": PHYSICAL_MANIFEST,
+        "canonical_manifest_sha256": manifest,
         "failure_reason": failure, "score": score,
-        "score_origin": "micall_final_max_reference_panel_v1",
-        "reference_panel_sha256": PANEL, "method": SCORE_METHOD,
+        "score_origin": origin,
+        "reference_panel_sha256": panel, "method": method,
         "scorer_source_sha256": result.get("scorer_source_sha256"),
-        "launcher_seconds": receipt.get("seconds"),
-        "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1",
+        timing.LAUNCHER_KEY: None if proof else receipt.get("seconds"),
+        timing.RUNTIME_KEY: runtime,
+        timing.ORIGIN_KEY: proof[timing.ORIGIN_KEY] if proof
+        else timing.LEGACY_ORIGIN,
         "input_sha256": receipt["input_sha256"],
         "output_sha256": receipt["output_sha256"],
         "source_commit": provenance.get("source_commit"),
@@ -223,6 +335,8 @@ def _case(root, name, receipt, assembler, real_data):
         },
         "binding_receipts": 5,
     })
+    if proof:
+        fields.update(proof)
     return fields
 
 
@@ -407,6 +521,7 @@ def ingest(report, evidence, root, real_data, registry_path=None,
         for case in item.get("cases", []):
             key = (item["id"], case.get("cohort"), case.get("canonical_alias"))
             normalize_case(case, bound_receipts.get(key))
+            timing.normalize_case(case, bound_receipts.get(key))
     for name, receipt in receipts.items():
         tool = receipt.get("tool_id")
         if tool not in assemblers:

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from assembler_bench import px_timing_semantics as timing
 from assembler_bench.exploratory_publication import publish_neutral
 from assembler_bench.public_validation import check_joined_measurements
 from assembler_bench.site_build import SITE
@@ -68,6 +69,31 @@ class JoinedMeasurementTests(unittest.TestCase):
         corrupted["samples"][0]["seconds"]["arbitrary_a"] = 121.5
         with self.assertRaisesRegex(ValueError, "launcher wall time"):
             check_joined_measurements(corrupted, self.evidence)
+
+    def test_attested_runtime_joins_only_with_its_complete_proof(self):
+        proof = {
+            timing.ORIGIN_KEY: timing.ORIGIN,
+            timing.VERSION_KEY: timing.METHOD_VERSION,
+            timing.TIMER_KEY: timing.TIMER_SOURCE_SHA256,
+            timing.FILE_KEY: "a" * 64,
+        }
+        evidence = copy.deepcopy(self.evidence)
+        evidence["assemblers"][0]["cases"][0].update({
+            timing.RUNTIME_KEY: 12.5, **proof})
+        run = copy.deepcopy(self.run)
+        run["samples"][0]["seconds"]["arbitrary_a"] = 12.5
+        run["samples"][0]["measurement_evidence"]["arbitrary_a"].update({
+            timing.RUNTIME_KEY: 12.5, **proof})
+        check_joined_measurements(run, evidence)
+        tampered = copy.deepcopy(run)
+        tampered["samples"][0]["measurement_evidence"]["arbitrary_a"][
+            timing.FILE_KEY] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "joined timing proof"):
+            check_joined_measurements(tampered, evidence)
+        altered = copy.deepcopy(run)
+        altered["samples"][0]["seconds"]["arbitrary_a"] = 99.0
+        with self.assertRaisesRegex(ValueError, "joined runtime"):
+            check_joined_measurements(altered, evidence)
 
 
 class RosterStatusTests(unittest.TestCase):

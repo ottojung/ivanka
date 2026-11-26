@@ -15,6 +15,7 @@ import re
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
 from .current_validation_v2 import V6_COHORT_SHA
 from .public_psi import public_matrix
+from . import px_timing_semantics as timing
 from .public_vocabulary import find_tokens
 from .px_ram_semantics import (COMPARABLE_KEY, LAUNCHER_DIAGNOSTIC, METHOD_KEY,
                                RAW_BYTES_KEY, SCOPE_KEY, UNAVAILABLE_KEY,
@@ -121,6 +122,12 @@ def validate_case_evidence(case, cohort, score_origin):
             raise ValueError("failed case must not invent a score or omit its reason")
     elif type(score) not in (int, float) or score < 0:
         raise ValueError("case evidence has no genuine score")
+    if case.get(timing.RUNTIME_KEY) is not None or timing.has_proof_keys(case):
+        if not timing.attested(case):
+            raise ValueError("case runtime lacks complete timing proof")
+        runtime = timing.comparable_seconds(case)
+        if runtime is None or case.get(timing.RUNTIME_KEY) != runtime:
+            raise ValueError("case runtime differs from its timing proof")
     return _canonical_alias(case)
 
 
@@ -230,6 +237,15 @@ def _join_scores(run, assemblers, joined):
             elif existing is None:
                 sample.setdefault("score", {})[tool] = float(case["score"])
                 joined.append((run["id"], tool, alias))
+            runtime = timing.comparable_seconds(case)
+            if runtime is not None:
+                prior = sample.get("seconds", {}).get(tool)
+                if prior is not None:
+                    if prior != runtime:
+                        raise ValueError("runtime measurement would overwrite "
+                                         "an existing value")
+                else:
+                    sample.setdefault("seconds", {})[tool] = float(runtime)
             evidence_row = sample.setdefault("measurement_evidence", {}).setdefault(tool, {
                 key: case[key] for key in (
                     "canonical_alias", "canonical_manifest_sha256",
@@ -246,13 +262,22 @@ def _join_scores(run, assemblers, joined):
             # Withdraw any comparable peak published before the launcher-group
             # scope was known; only attested whole-container readings remain.
             if COMPARABLE_KEY in case:
+                # A scope downgrade must remove old method metadata, not
+                # merely overwrite the comparable value with null.
+                for key in (METHOD_KEY, VERSION_KEY, SCOPE_KEY,
+                            UNAVAILABLE_KEY, LAUNCHER_DIAGNOSTIC):
+                    if key not in case.get("diagnostics", {}):
+                        arm.pop(key, None)
+                    if key not in case:
+                        evidence_row.pop(key, None)
                 arm[COMPARABLE_KEY] = case[COMPARABLE_KEY]
             for key in (COMPARABLE_KEY, RAW_BYTES_KEY, METHOD_KEY, VERSION_KEY,
                         SCOPE_KEY, UNAVAILABLE_KEY, LAUNCHER_DIAGNOSTIC,
                         "input_sha256", "output_sha256", "exact_coverage",
                         "method", "scorer_source_sha256", "source_commit",
                         "adapter_commit", "image_sha256", "outcome",
-                        "failure_reason"):
+                        "failure_reason", timing.RUNTIME_KEY,
+                        timing.LAUNCHER_KEY, *timing.PROOF_KEYS):
                 if key in case:
                     evidence_row[key] = case[key]
 

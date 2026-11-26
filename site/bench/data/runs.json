@@ -1,5 +1,5 @@
 {
-  "published_at": "2026-11-26T01:30:41.566099+00:00",
+  "published_at": "2026-11-26T01:37:22.460441+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -261478,7 +261478,41 @@
           "status": "measured"
         },
         {
-          "cases": [],
+          "cases": [
+            {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "binding_receipts": 3,
+              "canonical_alias": "R001",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 3539.257812,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "error",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "680e9daf815205f166731de6b986bce3a67a1f4a83fee5dffce6b0bb7dd41862",
+                "R2": "95717103a1462813a1e05bda79b75e82f165976c62b8fd7d178cb69ca39f468f"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3539.257812,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 3711180800,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
+            }
+          ],
           "id": "soapdenovo2",
           "name": "SOAPdenovo2",
           "provenance": {
@@ -261488,7 +261522,7 @@
             "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11",
             "source_url": "https://github.com/ottojung/MiCall/tree/39cfa22fad92157680382d1ea124b70b2e8515b3"
           },
-          "status": "unavailable"
+          "status": "failed"
         },
         {
           "cases": [
@@ -261678,7 +261712,12 @@
               "peak_ram_unavailable_reason": "Legacy launcher-process-group RSS excludes container MiCall processes; comparable whole-container peak is unavailable for this arm",
               "unstitched_contig_count": 131
             },
-            "soapdenovo2": {},
+            "soapdenovo2": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3539.257812,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "spades": {
               "peak_ram_observed_mib": 3541.89453125
             },
@@ -261713,8 +261752,9 @@
             "haploflow",
             "spades",
             "velvet",
-            "ray",
             "idba-ud",
+            "soapdenovo2",
+            "ray",
             "minia"
           ],
           "floor_ok": null,
@@ -261816,6 +261856,30 @@
               "scorer_source_sha256": "1da4219b5297faf4fd30f6c691139a628e12b09175ac3a5e02a640a80e114229",
               "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            "soapdenovo2": {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "canonical_alias": "R001",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "error",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "680e9daf815205f166731de6b986bce3a67a1f4a83fee5dffce6b0bb7dd41862",
+                "R2": "95717103a1462813a1e05bda79b75e82f165976c62b8fd7d178cb69ca39f468f"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3539.257812,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 3711180800,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             },
             "tadpole": {
               "adapter_commit": "3fd7f695c378875fd7b3b80ca263601a66476c2f",
@@ -315663,8 +315727,8 @@
         },
         "soapdenovo2": {
           "expected": 198,
-          "failed": 0,
-          "finished": 0
+          "failed": 1,
+          "finished": 1
         },
         "spades": {
           "expected": 198,
@@ -344478,7 +344542,41 @@
           "status": "measured"
         },
         {
-          "cases": [],
+          "cases": [
+            {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "binding_receipts": 3,
+              "canonical_alias": "R001",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 3539.257812,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "error",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "680e9daf815205f166731de6b986bce3a67a1f4a83fee5dffce6b0bb7dd41862",
+                "R2": "95717103a1462813a1e05bda79b75e82f165976c62b8fd7d178cb69ca39f468f"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3539.257812,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 3711180800,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
+            }
+          ],
           "id": "soapdenovo2",
           "name": "SOAPdenovo2",
           "provenance": {
@@ -344488,7 +344586,7 @@
             "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11",
             "source_url": "https://github.com/ottojung/MiCall/tree/39cfa22fad92157680382d1ea124b70b2e8515b3"
           },
-          "status": "unavailable"
+          "status": "failed"
         },
         {
           "cases": [
@@ -344702,7 +344800,12 @@
               "peak_ram_unavailable_reason": "Legacy launcher-process-group RSS excludes container MiCall processes; comparable whole-container peak is unavailable for this arm",
               "unstitched_contig_count": 131
             },
-            "soapdenovo2": {},
+            "soapdenovo2": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3539.257812,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "spades": {
               "peak_ram_observed_mib": 3541.89453125
             },
@@ -344737,8 +344840,9 @@
             "haploflow",
             "spades",
             "velvet",
-            "ray",
             "idba-ud",
+            "soapdenovo2",
+            "ray",
             "minia"
           ],
           "family": "physical",
@@ -344841,6 +344945,30 @@
               "scorer_source_sha256": "1da4219b5297faf4fd30f6c691139a628e12b09175ac3a5e02a640a80e114229",
               "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            "soapdenovo2": {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "canonical_alias": "R001",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "error",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "680e9daf815205f166731de6b986bce3a67a1f4a83fee5dffce6b0bb7dd41862",
+                "R2": "95717103a1462813a1e05bda79b75e82f165976c62b8fd7d178cb69ca39f468f"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3539.257812,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 3711180800,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             },
             "tadpole": {
               "adapter_commit": "3fd7f695c378875fd7b3b80ca263601a66476c2f",
@@ -610276,8 +610404,8 @@
         },
         "soapdenovo2": {
           "expected": 662,
-          "failed": 0,
-          "finished": 0
+          "failed": 1,
+          "finished": 1
         },
         "spades": {
           "expected": 662,

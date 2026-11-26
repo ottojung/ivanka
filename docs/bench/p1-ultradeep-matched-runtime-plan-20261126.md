@@ -54,14 +54,22 @@ hard-cap claim.
 ### Deployment identity gate
 
 `readiness()` requires an **explicit deployed-guard attestation**, not a merge
-record. PR536 `6e6886a…` merged into main `091f5627…`, but PR530 `f861f25b…`
-remained the deployed PX/watchdog guard while PX-R037 was active. A merged-only
-attestation therefore stays blocked. An attestation must name both exact
-deployed dependency heads, the exact deployed guard head, a clean target tree,
-the five reviewed guard-file digests (natural_exit, watch, monitor, p1_helper,
-p1_harness), matching PX and watchdog service HEAD pins, a fresh watchdog ALIVE
-record, a clear shared lease and an attested idle boundary, plus attestor and
-UTC timestamp. This describes eligibility only; it cannot authorize an arm.
+record. PR536 `6e6886a…` merged at `091f5627…` and was genuinely deployed on
+marceline-dev at the 20:19Z cutover: both persistent and runtime s6 run scripts
+pin `/workspace/ivanka-guard-pr536-staged-20261126`, watchdog identity readiness
+passed with a fresh ALIVE record (the live PID is derived from that record at
+admission, never hardcoded), and PX was restarted active with no lease,
+supervisor or container at that boundary. The earlier merged-but-PR530-deployed
+state made a merged-only attestation unsafe; it still stays blocked. An
+attestation must name both exact deployed dependency heads, the exact deployed
+guard head, a clean target tree, the five reviewed guard-file digests
+(natural_exit, watch, monitor, p1_helper, p1_harness), matching PX and watchdog
+service HEAD pins, a fresh watchdog ALIVE record, a clear shared lease and an
+attested idle boundary, plus attestor and UTC timestamp. It must be re-derived
+for the then-current deployment at admission; this cutover note is historical,
+not a runtime check. PR535 remains open/NO-GO (`c7356b58…`), so readiness stays
+blocked on that dependency. This describes eligibility only; it cannot authorize
+an arm.
 
 ### Contention abort plan
 
@@ -80,9 +88,12 @@ The plan refuses a non-fresh output root, a root at `/`, any overlap with the
 frozen MiCall / candidate result / read roots, a mutated receipt, a read/timer
 pin mismatch (with `--verify-files`), an incomplete deployment attestation and
 any outcome-dependent schedule change. It launches no subprocess and writes
-nothing unless `--emit-plan` is given a fresh scratch root. Future execution
-additionally requires the operator's shared PX slot and STOP boundary under the
-**deployed** reviewed guard; this module deliberately has no `--execute` mode.
+nothing unless `--emit-plan` is given a fresh scratch root. A ready `readiness`
+block never changes `execution` from `"blocked"`: the module has no `--execute`
+mode and grants no authority to arm, deploy, run, score or qualify anything.
+Any future guarded run still requires a fresh operator attestation, the shared
+PX slot and STOP boundary under the actually running reviewed guard, and a
+clear lease at that later boundary.
 
 ## Tests and limitations
 
@@ -96,6 +107,8 @@ plan emission.
 Limitations: this is a plan, not a measurement. No host-contention causal
 claim is made; plan-time loadavg was about 21 with host `cpu.max = max 100000`
 and `cpuset.cpus.effective = 0-31`, so container-level CPU allocation must be
-verified per arm in a future guarded run. The plan does not reuse or replace
-any historical timing, does not prove RSS enforcement on this host, and does
-not change the Ivanka scientific gates.
+verified per arm in a future guarded run. PX was active at the 20:19Z guard
+cutover with no lease or arm at that boundary; the plan does not claim the
+shared slot, start an arm or alter any live state. The plan does not reuse or
+replace any historical timing, does not prove RSS enforcement on this host, and
+does not change the Ivanka scientific gates.

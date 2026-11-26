@@ -1,0 +1,29 @@
+# Source-pinned, binary-only candidate image over the FROZEN baseline.
+# PREPARED ONLY -- this change does NOT build an image, import a large image,
+# retag, delete or overwrite any original image. Build only after the shared
+# watchdog is deployed and the operator grants the exact named slot.
+#
+# Build context must be a staging directory containing exactly one staged file:
+#   combined-950fe331  (SHA256 8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786)
+# staged from /workspace/ivanka-combined-candidate-20261126/binaries/combined-950fe331.
+# No source tree, truth, cohort or frozen result enters the build context.
+
+FROM da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad
+
+ARG SOURCE_COMMIT=950fe331dfcd857011bfd63f9eeca92462708545
+ARG BINARY_SHA256=8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786
+ARG FROZEN_MANIFEST_SHA256=9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f
+
+# The single added layer replaces only the assembler binary; MiCall, the timer
+# contract and the frozen seven-image manifest stay byte-identical to the base.
+COPY combined-950fe331 /usr/local/bin/ivanka
+RUN set -eu; \
+    test "$(sha256sum /usr/local/bin/ivanka | cut -d' ' -f1)" = "${BINARY_SHA256}"; \
+    test "$(head -c 4 /usr/local/bin/ivanka | od -An -tx1 | tr -d ' \n')" = "7f454c46"; \
+    chmod 0755 /usr/local/bin/ivanka
+
+LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.micall.frozen-image-id="da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad"
+LABEL org.ottojung.ivanka.frozen-manifest-sha256="${FROZEN_MANIFEST_SHA256}"
+LABEL org.ottojung.ivanka.binary-sha256="${BINARY_SHA256}"
+LABEL org.ottojung.ivanka.pilot-role="bounded-prospective-p1-950fe331"

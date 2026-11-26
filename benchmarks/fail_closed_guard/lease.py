@@ -108,7 +108,7 @@ def acquire(root, ident, mode, *, owner=None, cidfile=None, cid=None):
     sampling) may record it at acquire time instead of supplying a transient
     cidfile; reconciliation still uses only the append-only journal.
     """
-    if mode not in ("pilot", "build") or (
+    if mode not in ("pilot", "build", "copy_overlay") or (
             mode == "pilot" and cidfile is None and cid is None):
         raise GuardExceeded("invalid_lease")
     if cid is not None and (not isinstance(cid, str) or
@@ -128,7 +128,7 @@ def acquisition_start(root, ident):
     for event in events(root):
         if (event.get("lease") == str(ident)
                 and event.get("state") == "active"
-                and event.get("mode") in ("pilot", "build")
+                and event.get("mode") in ("pilot", "build", "copy_overlay")
                 and event.get("at_utc") is not None):
             start = event["at_utc"]
     return start
@@ -140,6 +140,24 @@ def bind(root, ident, pid, fingerprint=None, *, owner=None):
     event = {"schema": SCHEMA, "lease": str(ident), "owner": str(owner or ident),
              "state": "active", "mode": "build", "cid": None, "cidfile": None,
              "pid": int(pid), "fingerprint": list(fingerprint) if fingerprint else None,
+             "at_utc": time.time() if start is None else start}
+    append(root, event)
+    return event
+
+
+def bind_group(root, ident, pid, pgid, fingerprint, *, owner=None,
+               plan_sha256=None, graphroot=None):
+    """Bind the exact session leader and process group of a COPY-only build."""
+    pid, pgid = int(pid), int(pgid)
+    if pid <= 0 or pgid != pid or not isinstance(fingerprint, (list, tuple)) \
+            or len(fingerprint) < 3:
+        raise GuardExceeded("invalid_lease")
+    start = acquisition_start(root, ident)
+    event = {"schema": SCHEMA, "lease": str(ident),
+             "owner": str(owner or ident), "state": "active",
+             "mode": "copy_overlay", "cid": None, "cidfile": None,
+             "pid": pid, "pgid": pgid, "fingerprint": list(fingerprint),
+             "plan_sha256": plan_sha256, "graphroot": str(graphroot),
              "at_utc": time.time() if start is None else start}
     append(root, event)
     return event
@@ -247,6 +265,45 @@ def reconcile(root, env, *, command=None, snapshot=None):
                 closed.append({"lease": lease_id, "cid": cid,
                                "owner": _owner_of(event),
                                "reason": "proven_absent"})
+            continue
+        if event.get("mode") == "copy_overlay":
+            try:
+                table = snapshot()
+            except Exception as exc:
+                blocked.append({"lease": lease_id, "reason": "liveness_unknown",
+                                "detail": str(exc)[:200]})
+                continue
+            finger = event.get("fingerprint")
+            pgid = event.get("pgid")
+            if (not isinstance(finger, (list, tuple)) or len(finger) < 3
+                    or not isinstance(pgid, int) or pgid <= 0
+                    or pgid != event.get("pid")):
+                blocked.append({"lease": lease_id, "reason": "ambiguous_lease"})
+                continue
+            matches = [pid for pid, record in table.items()
+                       if (record.get("starttime"), record.get("pid_ns"),
+                           record.get("cmdline_sha")) == tuple(finger)]
+            if len(matches) > 1:
+                blocked.append({"lease": lease_id,
+                                "reason": "ambiguous_identity"})
+            elif len(matches) == 1:
+                record = table[matches[0]]
+                if record.get("pgid") != pgid:
+                    blocked.append({"lease": lease_id,
+                                    "reason": "orphan_process_alive",
+                                    "detail": "process group changed"})
+                else:
+                    blocked.append({"lease": lease_id, "pid": matches[0],
+                                    "pgid": pgid,
+                                    "reason": "orphan_process_alive"})
+            elif event.get("pid") in table:
+                # The bound PID still exists but its kernel identity changed:
+                # PID reuse is never equivalent to a proven-absent resource.
+                blocked.append({"lease": lease_id, "pid": event["pid"],
+                                "reason": "identity_lost"})
+            else:
+                closed.append({"lease": lease_id, "reason": "proven_absent",
+                               "owner": _owner_of(event)})
             continue
         if event.get("mode") == "build":
             try:

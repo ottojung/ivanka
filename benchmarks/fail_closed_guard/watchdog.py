@@ -13,7 +13,8 @@ import os
 import time
 from pathlib import Path
 
-from . import binding, heartbeat, identity, lease, proc, startup, store, teardown, tree
+from . import (binding, build, heartbeat, identity, lease, orphans, proc,
+               startup, store, teardown, tree)
 from .errors import GuardExceeded
 
 SCHEMA = "ivanka.watchdog-evidence.v1"
@@ -152,6 +153,23 @@ def bound_from_lease(root, worker, env):
     state = current.get("state")
     if state in lease.CLOSED:
         return {"state": "released", "cid": current.get("cid")}
+    if state == "active" and current.get("mode") == "copy_overlay":
+        start = current.get("at_utc")
+        if not isinstance(start, (int, float)) or not math.isfinite(start):
+            raise GuardExceeded("invalid_lease")
+        pid, pgid = current.get("pid"), current.get("pgid")
+        finger = current.get("fingerprint")
+        if (isinstance(pid, int) and pid > 0 and pgid == pid
+                and isinstance(finger, (list, tuple)) and len(finger) >= 3):
+            return {"state": "bound_group", "mode": "copy_overlay",
+                    "pid": pid, "pgid": pgid, "fingerprint": finger,
+                    "plan_sha256": current.get("plan_sha256"),
+                    "graphroot": current.get("graphroot"),
+                    "durable_start": start}
+        # A crash before the post-spawn group bind owns no process yet; the
+        # active lease still blocks admission until an owner reconciles it.
+        return {"state": "pending_group", "mode": "copy_overlay",
+                "durable_start": start}
     if state != "active" or current.get("mode") != "pilot":
         return {"state": "unsupported"}
     start = current.get("at_utc")
@@ -179,6 +197,27 @@ def bound_from_lease(root, worker, env):
     return bound
 
 
+def verify_group_bound(bound, table):
+    """Verify the exact session leader and its process group, never a reused PID."""
+    finger = bound["fingerprint"]
+    pid = identity.locate(tuple(finger), table, bound_pid=bound["pid"])
+    record = table[pid]
+    pgid = record.get("pgid")
+    if pgid is None:
+        raise GuardExceeded("measurement_unavailable")
+    if pgid != bound["pgid"] or bound["pgid"] != bound["pid"]:
+        raise GuardExceeded("identity_lost")
+    members = {member for member, item in table.items()
+               if item.get("pgid") == pgid}
+    members.update(tree.descendants(table, pid))
+    anchor = {"pid": pid, "fingerprint": list(finger),
+              "starttime": finger[0], "pid_ns": finger[1],
+              "cmdline_sha": finger[2], "stable": False}
+    return {"pid": pid, "pgid": pgid,
+            "rss": tree.rss_bytes(table, members), "members": len(members),
+            "identity": startup.observation(anchor, table)}
+
+
 def verify_bound(bound, env, table, *, heartbeat_record=None, wall=None,
                  startup_bind_grace=DEFAULT_STARTUP_BIND_GRACE,
                  controller_live=False):
@@ -199,6 +238,8 @@ def verify_bound(bound, env, table, *, heartbeat_record=None, wall=None,
     is a verification failure, never an absence, and a dead controller with an
     absent CID still fails closed.
     """
+    if bound.get("state") == "bound_group":
+        return verify_group_bound(bound, table)
     cid = bound["cid"]
     pid = binding.inspect_pid_if_live(cid, env)
     if pid is None:
@@ -284,6 +325,39 @@ def teardown_if_owned(root, worker, cid, env, *, stop=None,
     return {"action": "teardown", "cid": cid, "teardown": proof}
 
 
+def teardown_group_if_owned(root, worker, bound, env, *, stop=None,
+                            cleanup=None, before_teardown=None):
+    """Re-resolve group ownership before stopping it and reclaiming orphans."""
+    current = bound_from_lease(root, worker, env)
+    pgid = bound.get("pgid")
+    if (current.get("state") != "bound_group"
+            or current.get("pgid") != pgid
+            or current.get("fingerprint") != bound.get("fingerprint")):
+        return {"action": "release_raced", "cid": None, "teardown": None}
+    if before_teardown is not None:
+        before_teardown()
+    terminate = stop if stop is not None else (
+        lambda value: build.stop_group_by_id(value))
+    reclaim = cleanup if cleanup is not None else (
+        lambda: orphans.clean_pinned_storage(env, graphroot_of(bound)))
+    try:
+        proof = terminate(pgid)
+        if reclaim is not None:
+            proof["orphan_cleanup"] = reclaim()
+    except Exception as exc:
+        return {"action": "teardown_failed", "cid": None, "teardown": None,
+                "teardown_error": str(exc)[:320]}
+    return {"action": "teardown", "cid": None, "teardown": proof}
+
+
+def graphroot_of(bound):
+    """Pinned graphroot carried by a group lease, never inferred."""
+    value = bound.get("graphroot")
+    if not isinstance(value, str) or not value:
+        raise GuardExceeded("binding_unavailable")
+    return value
+
+
 def _evidence(root, worker, *, reason, result, bound, observations, action,
               rss_limit):
     return {
@@ -292,6 +366,7 @@ def _evidence(root, worker, *, reason, result, bound, observations, action,
         "worker": str(worker),
         "lease_state": bound.get("state"),
         "cid": bound.get("cid"),
+        "process_group": bound.get("pgid"),
         "cid_source": bound.get("cid_source"),
         "durable_start": bound.get("durable_start"),
         "reason": reason,
@@ -305,6 +380,18 @@ def _evidence(root, worker, *, reason, result, bound, observations, action,
         "enforcement": "userspace_observed",
         "kernel_enforcement": False,
     }
+
+
+def append_group_evidence(root, worker, *, reason, result, proof, observations=None):
+    """Record a process-group teardown decision before any lease is closed."""
+    event = _evidence(
+        root, worker, reason=reason, result=result,
+        bound={"state": "bound_group", "pgid": proof.get("process_group")},
+        observations=observations or {},
+        action={"action": "teardown", "cid": None, "teardown": proof},
+        rss_limit=RSS_LIMIT)
+    append_evidence(root, event)
+    return event
 
 
 def blocked_evidence(root, worker, reason, detail=None):
@@ -323,7 +410,7 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
                rss_limit=RSS_LIMIT, wall_seconds=DEFAULT_WALL_SECONDS,
                max_age=DEFAULT_HEARTBEAT_MAX_AGE, heartbeat_path=None,
                monotonic=None, wall_clock=None, snapshot=None, measure=None,
-               stop=None, namespace_cache=None,
+               stop=None, group_cleanup=None, namespace_cache=None,
                startup_bind_grace=DEFAULT_STARTUP_BIND_GRACE):
     """One independent observation of one active lease.
 
@@ -377,7 +464,7 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
         table = take()
         observations["controller"] = observe_controller(beat, table)
         controller_live = observations["controller"].get("pid") is not None
-        if bound["state"] == "bound":
+        if bound["state"] in ("bound", "bound_group"):
             try:
                 observations["bound"] = verify_bound(
                     bound, pinned, table, heartbeat_record=beat, wall=wall,
@@ -426,16 +513,30 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
                 before_teardown=lambda: persist(
                     {"action": "teardown", "cid": bound["cid"],
                      "teardown": None}))
-            if action["action"] == "teardown_failed":
-                # Append-only follow-up: the decision above already blocks a
-                # success claim, this records why no proof was produced.
-                append_evidence(root, _evidence(
-                    root, worker, reason=reason, result=result, bound=bound,
-                    observations=observations, action=action,
-                    rss_limit=rss_limit))
+        elif namespace_ok and bound.get("state") == "bound_group":
+            action = teardown_group_if_owned(
+                root, worker, bound, pinned, stop=stop,
+                cleanup=group_cleanup,
+                before_teardown=lambda: persist(
+                    {"action": "teardown", "cid": None,
+                     "process_group": bound["pgid"], "teardown": None}))
         else:
             action = {"action": "none", "cid": bound.get("cid"),
                       "teardown": None}
+        if action["action"] == "teardown_failed":
+            # Append-only follow-up: the decision above already blocks a
+            # success claim, this records why no proof was produced.
+            append_evidence(root, _evidence(
+                root, worker, reason=reason, result=result, bound=bound,
+                observations=observations, action=action,
+                rss_limit=rss_limit))
+        elif action["action"] == "teardown" and bound.get("state") == "bound_group":
+            # A group teardown has no client receipt to carry its proof, so the
+            # independent journal records the actual group + orphan evidence.
+            append_evidence(root, _evidence(
+                root, worker, reason=reason, result=result, bound=bound,
+                observations=observations, action=action,
+                rss_limit=rss_limit))
         if decision_event is None:
             persist(action)
         # A failed observation withdraws readiness: a watchdog that just
@@ -451,6 +552,7 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
         failure.watchdog_result = {
             "schema": SCHEMA, "result": result, "reason": reason,
             "worker": str(worker), "cid": bound.get("cid"),
+            "process_group": bound.get("pgid"),
             "action": action["action"], "teardown": action.get("teardown"),
             "evidence": str(evidence_path(root)),
             "enforcement": "userspace_observed", "kernel_enforcement": False}

@@ -308,11 +308,11 @@ class WatchdogTests(unittest.TestCase):
     def test_verified_cid_teardown_leaves_unrelated_containers_alone(self):
         self.podman_calls.clear()
         rm = []
-        responses = iter([CID + " 100\n",
-                          subprocess.CalledProcessError(
-                              1, ["podman", "inspect"], stderr="no such object"),
-                          subprocess.CalledProcessError(
-                              1, ["podman", "inspect"], stderr="no such object")])
+        # Real podman names the exact CID it cannot find; a generic message
+        # for another object is never proof that this CID is absent.
+        absent = subprocess.CalledProcessError(
+            1, ["podman", "inspect"], stderr=f'Error: no such object: "{CID}"')
+        responses = iter([CID + " 100\n", absent, absent])
 
         def command(argv, env, timeout=15):
             self.podman_calls.append(list(argv))

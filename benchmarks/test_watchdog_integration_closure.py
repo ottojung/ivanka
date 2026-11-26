@@ -99,7 +99,7 @@ class ProofAlignmentTests(unittest.TestCase):
 
     def test_stop_verified_cid_emits_authoritative_absence(self):
         absent = subprocess.CalledProcessError(
-            1, "podman inspect", stderr="no such object")
+            1, "podman inspect", stderr=f'Error: no such object: "{CID}"')
         # The watchdog removed the container first; the controller's scoped
         # inspect sees it already absent and must still emit a valid proof.
         with patch.object(teardown, "command", side_effect=[absent, absent]), \

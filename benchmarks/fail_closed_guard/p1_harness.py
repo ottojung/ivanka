@@ -329,6 +329,18 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                 pass
             raise GuardExceeded("heartbeat_unavailable") from exc
 
+        def refresh_ready():
+            # The controller keeps its own heartbeat fresh and re-checks that
+            # the independent observer is still ready on every sample. A
+            # watchdog that became stale/failed mid-arm must fail this arm
+            # closed rather than supervise it unobserved.
+            emitted = emitter.refresh()
+            require_watchdog_ready(checker=watchdog_ready, path=watchdog_path,
+                                   graphroot=watchdog_graphroot,
+                                   wall=watchdog_wall,
+                                   snapshot=watchdog_snapshot)
+            return emitted
+
         kwargs = {}
         for key, value in (("clock", clock), ("sleep", sleep), ("audit", audit),
                            ("start", None)):
@@ -346,7 +358,7 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                 measure=measure, stop=stopper,
                 disk_path=disk_path, disk_reserve_bytes=reserve,
                 disk_usage=disk_usage, strict_proof=True,
-                deadline_utc=deadline_utc, heartbeat=emitter.refresh,
+                deadline_utc=deadline_utc, heartbeat=refresh_ready,
                 attestation=_attestation(attestation), **kwargs)
             proof = result.get("teardown")
             outcome = {"status": "completed", "result": result}

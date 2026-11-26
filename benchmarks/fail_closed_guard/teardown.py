@@ -2,7 +2,7 @@
 import subprocess
 import time
 
-from .binding import CID, command
+from .binding import CID, absent_evidence, command
 from .errors import GuardExceeded, TeardownError
 
 
@@ -58,18 +58,25 @@ def stop_cid(env, cid, timeout=45):
 
 
 def _inspected(env, cid):
-    """True only when inspection in the pinned store names this exact CID."""
+    """True only when the pinned store inspects this exact CID to a live PID.
+
+    False means *proven* absence: podman named this exact CID as not existing.
+    A wrong field count, a mismatched CID, a non-numeric PID or an unrelated
+    tool error is a broken observation and must raise, never be read as an
+    absent container that would let a lease retire on a false proof.
+    """
     try:
         fields = command(["podman", "inspect", "--format",
                           "{{.Id}} {{.State.Pid}}", cid], env).split()
     except subprocess.CalledProcessError as exc:
-        detail = (exc.stderr or "").lower()
-        if "no such object" in detail or "no such container" in detail:
+        if absent_evidence(exc, cid):
             return False
         raise TeardownError("verification_unavailable") from exc
     except (OSError, ValueError) as exc:
         raise TeardownError("verification_unavailable") from exc
-    return len(fields) == 2 and fields[0] == cid
+    if len(fields) != 2 or fields[0] != cid or not fields[1].isdigit():
+        raise TeardownError("verification_unavailable")
+    return True
 
 
 def stop_verified_cid(env, cid, timeout=45):

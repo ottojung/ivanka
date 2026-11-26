@@ -51,6 +51,10 @@ def require_watchdog_readiness(path, *, graphroot, wall=None, max_age=None,
         record = json.loads(source.read_text())
     except (OSError, ValueError) as exc:
         raise GuardExceeded("watchdog_unavailable") from exc
+    if isinstance(record, dict) and record.get("schema") == heartbeat.WITHDRAWN_SCHEMA:
+        # The watchdog observed its own failed state; admission stays blocked
+        # until a clean observation replaces this marker with a live record.
+        raise GuardExceeded("watchdog_failed")
     if (not isinstance(record, dict)
             or record.get("schema") != heartbeat.ALIVE_SCHEMA
             or record.get("graphroot") != str(graphroot)):

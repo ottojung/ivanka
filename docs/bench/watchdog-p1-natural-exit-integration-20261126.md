@@ -115,3 +115,22 @@ policy floor. Caller attestation remains descriptive only (method/version);
 
 No live P1 arm was started; the adapter only gates and observes an injected
 spawn. Independent reviewer coordination remains open.
+
+## Follow-up: natural-exit / receipt-race closure (source only)
+
+A watchdog observation of an already exited/absent CID must not become a
+fail-closed teardown when the controller is still live and finalizing that
+natural completion. `verify_bound` now treats a proven absent or PID-0 CID as a
+benign `natural_exit` only after a fresh live-controller observation and a
+second exact-CID inspection; a dead controller with an absent CID still fails
+closed. Inspect parsing distinguishes proven absence (podman names the exact
+CID) from malformed or mismatched output, which raises instead of being misread
+as absence. Every genuine limit/failure decision is journaled before CID teardown,
+so a receipt finalized during teardown cannot outrun the evidence that must
+downgrade it. A failed observation withdraws readiness until a clean one
+re-advertises, and the active controller re-checks readiness on every sample.
+
+Deterministic interleavings are covered by
+`benchmarks/test_watchdog_teardown_receipt_race.py`; no container, image, STOP
+sentinel, receipt, arm or PID signal is used. Still source-only: no arm, no
+s6 install and no cutover is performed here — the operator owns cutover.

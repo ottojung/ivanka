@@ -337,7 +337,9 @@ class P1HarnessLifecycleTests(unittest.TestCase):
         acquired = [event for event in lease.events(self.root)
                     if event.get("state") == "active"]
         self.assertTrue(acquired)
-        self.assertEqual(self.calls["watchdog"], ["ready"])
+        # Readiness is checked at admission and again on every watched sample.
+        self.assertGreaterEqual(len(self.calls["watchdog"]), 1)
+        self.assertEqual(self.calls["watchdog"][0], "ready")
         # Pre-spawn reservation check happens first; the watcher re-checks it.
         self.assertEqual(self.calls["disk"][0], "checked")
         self.assertEqual(len(self.calls["spawn"]), 1)

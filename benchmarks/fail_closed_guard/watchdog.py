@@ -34,6 +34,9 @@ DEFAULT_HEARTBEAT_MAX_AGE = heartbeat.ALIVE_MAX_AGE
 # acquisition, a fresh live controller heartbeat, and exact-CID inspection in
 # the pinned store; it never extends the arm wall deadline.
 DEFAULT_STARTUP_BIND_GRACE = 120.0
+# A clean refusal of an unsupported lease is not a failure of the observer.
+# Keeping readiness intact lets admission name the unsupported mode itself.
+READINESS_PRESERVING_REASONS = frozenset({"unsupported_lease"})
 
 
 def evidence_path(root):
@@ -177,7 +180,8 @@ def bound_from_lease(root, worker, env):
 
 
 def verify_bound(bound, env, table, *, heartbeat_record=None, wall=None,
-                 startup_bind_grace=DEFAULT_STARTUP_BIND_GRACE):
+                 startup_bind_grace=DEFAULT_STARTUP_BIND_GRACE,
+                 controller_live=False):
     """Re-inspect the exact CID in the pinned store and measure its tree.
 
     A cidfile can appear before the controller publishes the bound fingerprint
@@ -187,9 +191,25 @@ def verify_bound(bound, env, table, *, heartbeat_record=None, wall=None,
     without teardown. A dead/expired heartbeat never reaches this branch
     (check_once fails closed first) and a heartbeat naming a different CID is
     identity_lost, so pending_bind cannot mask an orphan.
+
+    A naturally exited or already removed CID is not a breach: a live controller
+    is allowed to finalize its own natural completion. Such absence is accepted
+    only when a freshly verified live controller is present and a second exact
+    CID inspection still proves absence. Malformed or mismatched inspect output
+    is a verification failure, never an absence, and a dead controller with an
+    absent CID still fails closed.
     """
     cid = bound["cid"]
-    pid = binding.inspect_pid(cid, env)
+    pid = binding.inspect_pid_if_live(cid, env)
+    if pid is None:
+        if not controller_live:
+            raise GuardExceeded("binding_unavailable")
+        if binding.inspect_pid_if_live(cid, env) is not None:
+            raise GuardExceeded("binding_unavailable")
+        return {"state": "natural_exit", "pid": None, "rss": None,
+                "members": 0, "identity": None,
+                "absence_proof": {"observed_absent": True,
+                                  "method": "exact_cid_inspect"}}
     if bound.get("pid") is not None and int(bound["pid"]) != pid:
         raise GuardExceeded("identity_lost")
     finger = bound.get("fingerprint")
@@ -241,11 +261,19 @@ def check_disk(free, *, min_free, reserve):
     return value
 
 
-def teardown_if_owned(root, worker, cid, env, *, stop=None):
-    """Re-resolve ownership immediately before CID-only teardown."""
+def teardown_if_owned(root, worker, cid, env, *, stop=None,
+                      before_teardown=None):
+    """Re-resolve ownership immediately before CID-only teardown.
+
+    ``before_teardown`` persists the already-made fail-closed decision while
+    ownership is still held, so a teardown/receipt race cannot erase it. It is
+    called only after ownership is re-proven and before the destructive action.
+    """
     current = bound_from_lease(root, worker, env)
     if current.get("state") != "bound" or current.get("cid") != cid:
         return {"action": "release_raced", "cid": cid, "teardown": None}
+    if before_teardown is not None:
+        before_teardown()
     terminate = stop if stop is not None else (
         lambda value: teardown.stop_verified_cid(env, value))
     try:
@@ -329,8 +357,6 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
                 namespace_cache.clear()
                 namespace_cache.update({"graphroot": str(graphroot),
                                         "verified_at": wall()})
-        heartbeat.advertise(root, storage_conf=storage_conf, graphroot=graphroot,
-                            env=env, wall=wall, namespace_cache=namespace_cache)
         bound = bound_from_lease(root, worker, pinned)
         if bound["state"] == "unsupported":
             raise GuardExceeded("unsupported_lease")
@@ -350,11 +376,13 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
             "age_seconds": beat["age_seconds"]}
         table = take()
         observations["controller"] = observe_controller(beat, table)
+        controller_live = observations["controller"].get("pid") is not None
         if bound["state"] == "bound":
             try:
                 observations["bound"] = verify_bound(
                     bound, pinned, table, heartbeat_record=beat, wall=wall,
-                    startup_bind_grace=startup_bind_grace)
+                    startup_bind_grace=startup_bind_grace,
+                    controller_live=controller_live)
             except GuardExceeded as exc:
                 if getattr(exc, "identity_observation", None) is not None:
                     observations["bound"] = {
@@ -372,26 +400,54 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
         failure = exc
         reason = exc.reason
         result = "fail_closed"
-        if namespace_ok and bound.get("state") == "bound":
-            action = teardown_if_owned(root, worker, bound["cid"], pinned,
-                                       stop=stop)
     except Exception as exc:
         # Inspection, journal or fsync failures are not clean observations.
         failure = GuardExceeded("inspection_unavailable")
         failure.__cause__ = exc
         reason = failure.reason
         result = "fail_closed"
-        if namespace_ok and bound.get("state") == "bound":
-            action = teardown_if_owned(root, worker, bound["cid"], pinned,
-                                       stop=stop)
     if failure is not None:
-        event = _evidence(root, worker, reason=reason, result=result,
-                          bound=bound, observations=observations, action=action,
-                          rss_limit=rss_limit)
-        append_evidence(root, event)
+        # Persist the real limit/failure decision while ownership is still
+        # held and BEFORE the destructive action. A controller writing its
+        # receipt during teardown then always finds this evidence; it cannot
+        # race ahead of a decision made only after the container was removed.
+        decision_event = None
+
+        def persist(hint):
+            nonlocal decision_event
+            decision_event = _evidence(root, worker, reason=reason, result=result,
+                                       bound=bound, observations=observations,
+                                       action=hint, rss_limit=rss_limit)
+            append_evidence(root, decision_event)
+
+        if namespace_ok and bound.get("state") == "bound":
+            action = teardown_if_owned(
+                root, worker, bound["cid"], pinned, stop=stop,
+                before_teardown=lambda: persist(
+                    {"action": "teardown", "cid": bound["cid"],
+                     "teardown": None}))
+            if action["action"] == "teardown_failed":
+                # Append-only follow-up: the decision above already blocks a
+                # success claim, this records why no proof was produced.
+                append_evidence(root, _evidence(
+                    root, worker, reason=reason, result=result, bound=bound,
+                    observations=observations, action=action,
+                    rss_limit=rss_limit))
+        else:
+            action = {"action": "none", "cid": bound.get("cid"),
+                      "teardown": None}
+        if decision_event is None:
+            persist(action)
+        # A failed observation withdraws readiness: a watchdog that just
+        # failed closed must not unblock a future admission. A clean refusal
+        # of an unsupported lease is the one exception; the observer is still
+        # healthy and admission names the mode itself.
+        if reason not in READINESS_PRESERVING_REASONS:
+            heartbeat.withdraw(root, target=heartbeat.alive_path(root), wall=wall,
+                               reason=reason)
         failure.identity_observation = observations.get("bound", {}).get("identity")
         failure.teardown = action.get("teardown")
-        failure.evidence = event
+        failure.evidence = decision_event
         failure.watchdog_result = {
             "schema": SCHEMA, "result": result, "reason": reason,
             "worker": str(worker), "cid": bound.get("cid"),
@@ -399,6 +455,10 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
             "evidence": str(evidence_path(root)),
             "enforcement": "userspace_observed", "kernel_enforcement": False}
         raise failure
+    # Only a clean observation may advertise readiness. A stale or failed
+    # watchdog that observes its own failure must never unblock admission.
+    heartbeat.advertise(root, storage_conf=storage_conf, graphroot=graphroot,
+                        env=env, wall=wall, namespace_cache=namespace_cache)
     return {"schema": SCHEMA, "result": result, "reason": reason,
             "worker": str(worker), "cid": bound.get("cid"),
             "lease_state": bound["state"], "enforcement": "userspace_observed",
@@ -428,16 +488,22 @@ def supervise(root, *, storage_conf, graphroot, env=None, stop_path=None,
     workers = []
     namespace_cache = kwargs.pop("namespace_cache", {})
     while ticks is None or count < ticks:
-        heartbeat.advertise(root, storage_conf=storage_conf, graphroot=graphroot,
-                            env=env, wall=wall, namespace_cache=namespace_cache)
         workers = discover_workers(root)
+        failed = False
         for worker in workers:
             try:
                 check_once(root, worker, storage_conf=storage_conf,
                            graphroot=graphroot, env=env,
                            namespace_cache=namespace_cache, **kwargs)
             except GuardExceeded:
-                pass
+                failed = True
+        if not workers and not failed:
+            # Idle watchdogs keep advertising readiness so restart churn
+            # cannot make the record stale. An observer that just failed
+            # closed never re-advertises until a clean observation does.
+            heartbeat.advertise(root, storage_conf=storage_conf,
+                                graphroot=graphroot, env=env, wall=wall,
+                                namespace_cache=namespace_cache)
         count += 1
         # Boundary requested: no new admissions should happen, but the service
         # stays alive to preserve readiness and observe any unexpected lease.

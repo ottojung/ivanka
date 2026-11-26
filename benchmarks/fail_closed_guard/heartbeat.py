@@ -18,6 +18,7 @@ from .errors import GuardExceeded
 
 SCHEMA = "ivanka.watchdog-heartbeat.v1"
 ALIVE_SCHEMA = "ivanka.watchdog-alive.v1"
+WITHDRAWN_SCHEMA = "ivanka.watchdog-withdrawn.v1"
 ALIVE_MAX_AGE = 30.0
 
 
@@ -145,6 +146,21 @@ def advertise(root, *, storage_conf, graphroot, env=None, **kwargs):
         raise GuardExceeded("watchdog_unready")
     return ping(root, storage_conf=storage_conf, graphroot=graphroot,
                 env=env, **kwargs)
+
+
+def withdraw(root, *, target=None, wall=None, reason=None):
+    """Replace the ALIVE record with an explicit failed-state marker.
+
+    An observation that failed closed leaves the watchdog unable to certify a
+    future admission until a clean observation advertises again. The marker is
+    written atomically, carries the reason, and is never mistaken for a live
+    readiness record by any consumer of the ALIVE schema.
+    """
+    event = {"schema": WITHDRAWN_SCHEMA,
+             "at_utc": (wall or time.time)(),
+             "reason": str(reason or "watchdog_failed")}
+    _write(target or alive_path(root), event)
+    return event
 
 
 def read_alive(root, *, wall=None, max_age=ALIVE_MAX_AGE, target=None,

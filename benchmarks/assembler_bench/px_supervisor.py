@@ -6,6 +6,7 @@ image-agent handoff is attested and tests have passed, so importing this module
 can never start a competing benchmark worker.
 """
 import json
+import logging
 import time
 from collections import deque
 from pathlib import Path
@@ -167,9 +168,24 @@ class BackgroundSupervisor:
                 retire_finished_arm(self.root, arm, receipt, report)
             completed.append(sched.receipt_id(arm))
             sched.write_checkpoint(self.root, plan, completed)
+            self._retire_superseded(arm, receipt)
             return
         completed.append(sched.receipt_id(arm))
         sched.write_checkpoint(self.root, plan, completed)
+
+    def _retire_superseded(self, arm, receipt):
+        if receipt.get("attempt") != 2:
+            return
+        from .px_attempt_retention import retire
+        name = f"{arm['tool_id']}-{arm['alias']}.attempt-001"
+        try:
+            result = retire(self.root, apply=True, only=name)
+            if result["skipped"]:
+                logging.warning("PX attempt retention deferred: %s", result["skipped"])
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
+            # A cleanup refusal must not invalidate a terminal scientific
+            # receipt or block subsequent arms. The operator can retry it.
+            logging.warning("PX attempt retention deferred: %s", exc)
 
     def _preserve_attempt(self, arm, attempt):
         output = self.root / "outputs" / (arm["tool_id"] + "-" + arm["alias"])

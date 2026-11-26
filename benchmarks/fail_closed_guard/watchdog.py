@@ -160,9 +160,10 @@ def bound_from_lease(root, worker, env):
         pid, pgid = current.get("pid"), current.get("pgid")
         finger = current.get("fingerprint")
         if (isinstance(pid, int) and pid > 0 and pgid == pid
-                and isinstance(finger, (list, tuple)) and len(finger) >= 3):
+                and isinstance(finger, (list, tuple)) and len(finger) >= 2):
             return {"state": "bound_group", "mode": "copy_overlay",
                     "pid": pid, "pgid": pgid, "fingerprint": finger,
+                    "stable": len(finger) == 2,
                     "plan_sha256": current.get("plan_sha256"),
                     "graphroot": current.get("graphroot"),
                     "durable_start": start}
@@ -197,10 +198,41 @@ def bound_from_lease(root, worker, env):
     return bound
 
 
+def _group_anchor(bound, pid):
+    finger = bound["fingerprint"]
+    return {"pid": pid, "fingerprint": list(finger),
+            "starttime": finger[0], "pid_ns": finger[1],
+            "cmdline_sha": finger[2] if len(finger) > 2 else None,
+            "stable": bound.get("stable", len(finger) == 2)}
+
+
+def group_still_owned(bound, table):
+    """True only when the exact bound leader and group are still live."""
+    try:
+        verify_group_bound(bound, table)
+        return True
+    except GuardExceeded:
+        return False
+
+
+def group_absent(bound, table):
+    """True when neither the bound kernel identity nor its PGID remain."""
+    identity_keys = tuple(bound["fingerprint"][:2])
+    for record in table.values():
+        if ((record.get("starttime"), record.get("pid_ns")) == identity_keys
+                or record.get("pgid") == bound.get("pgid")):
+            return False
+    return True
+
+
 def verify_group_bound(bound, table):
     """Verify the exact session leader and its process group, never a reused PID."""
     finger = bound["fingerprint"]
-    pid = identity.locate(tuple(finger), table, bound_pid=bound["pid"])
+    anchor = _group_anchor(bound, bound["pid"])
+    if anchor["stable"]:
+        pid = startup.locate(anchor, table, bound_pid=bound["pid"])
+    else:
+        pid = identity.locate(tuple(finger), table, bound_pid=bound["pid"])
     record = table[pid]
     pgid = record.get("pgid")
     if pgid is None:
@@ -210,9 +242,6 @@ def verify_group_bound(bound, table):
     members = {member for member, item in table.items()
                if item.get("pgid") == pgid}
     members.update(tree.descendants(table, pid))
-    anchor = {"pid": pid, "fingerprint": list(finger),
-              "starttime": finger[0], "pid_ns": finger[1],
-              "cmdline_sha": finger[2], "stable": False}
     return {"pid": pid, "pgid": pgid,
             "rss": tree.rss_bytes(table, members), "members": len(members),
             "identity": startup.observation(anchor, table)}

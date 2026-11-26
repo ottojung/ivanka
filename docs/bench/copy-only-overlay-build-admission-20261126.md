@@ -1,66 +1,73 @@
-# Bounded COPY-only overlay build admission (source only)
+# Gated COPY-only overlay build admission (source only)
 
-## Blocker addressed
+## Blocker and revision
 
-After PR527, `watchdog_contract.require_supported_mode` rejects every build
-while the watchdog contract is active. The generic `build` mode has no exact
-container CID and was never given crash-independent supervision, so it remains
-refused. This change adds one narrow, reviewable mode for the P1 `950fe331`
-binary-only COPY overlay and for missing PX image builds: `copy_overlay`. It
-does not make `build` supported and it is not a live build path.
+PR535's first draft was refused at source inspection: pending-group crashes
+could leave an unbounded build, a bare/reused PGID could be signalled after
+identity loss, a non-`None` token stood in for the shared lock, and the plan
+and orphan rules were too loose. This revision replaces that draft on the same
+branch. Generic `build` remains refused by `watchdog_contract`; only one
+reviewed binary-only COPY overlay is admitted.
 
-## Contract
+## Gated helper
 
-`benchmarks/fail_closed_guard/copy_overlay.py` admits only a declarative plan:
+`copy_overlay_helper.py` is spawned in its own session with a private read
+pipe. It waits until the controller has committed an exact durable bind
+(PID, PGID, `starttime`, `pid_ns`, pinned graphroot) to the append-only lease
+journal, re-reads and verifies that bind, and only then `exec`s the fixed build
+command. Pipe EOF, deadline, wrong token, missing/mismatched journal or an
+unreadable identity exits without building. The helper keeps the same kernel
+task across `exec`, so its stable identity survives into the build. The
+controller writes the permission byte only after `lease.bind_group` succeeds;
+crashes before that leave an active pending lease that blocks all admission.
 
-- frozen base image digest and reviewed source commit must match the caller's
-  pins;
-- the Containerfile starts with exactly `FROM <base>` and contains only
-  `COPY` lines; `RUN`, `ADD`, remote contexts, absolute/traversing sources and
-  destinations outside `/opt/ivanka/bin/` are refused before spawn;
-- every COPY source is a real non-symlink file inside the project context and
-  its SHA-256 must match the plan;
-- the generated argv is a fixed `podman build --network=none --pull=never -f
-  ... -t ... <context>`; no network, volume, userns override, inherited store
-  or extra argument is accepted.
+## Strict plan
 
-Under the shared `.global-worker.lock` it rechecks store namespace, watchdog
-readiness, lease clearance and disk reserve. Readiness and supported-mode
-checks do not consult `WATCHDOG_ARMED`: setting it to 0 cannot bypass them.
+The context must contain exactly `Containerfile` and a flat `ivanka` file. The
+Containerfile must be exactly `FROM <pinned base>\nCOPY ivanka
+/usr/local/bin/ivanka\n`. The artifact is opened once with `O_NOFOLLOW`; its
+mode, size and SHA-256 are taken from that same descriptor, so no path can be
+swapped between check and use. Extra files, nested directories, symlinks,
+globs, a different destination, wrong mode or wrong digest fail before spawn.
+The storage config and graphroot are explicit in the reviewed plan and checked
+against the pinned store. Temp files are created inside the project root and
+inherited `TMPDIR`/`TMP`/`TEMP` are removed.
 
-## Crash independence
+## Verified-only teardown and exact orphan proof
 
-A lease is appended under a unique owner before spawn. After spawn the exact
-session leader is bound by PID, PGID and immutable `(starttime, pid_ns,
-cmdline_sha)`; ambiguity, PID reuse or a changed PGID fail closed. The
-watchdog now supervises `copy_overlay` leases by that exact process group and
-its descendants, with the existing 4,000,000,000-byte RSS limit, 2400-second
-durable wall deadline and disk reserve. When the controller disappears it
-signals only the verified PGID, then reclaims recognised Buildah `--external`
-storage orphans in the pinned graphroot and proves their absence before any
-lease is closed. A crash before the group bind leaves a pending lease that
-blocks all further admission; a crash after it leaves a group the watchdog can
-stop. Evidence is appended before teardown and again with the real group and
-orphan proof; no event claims benchmark success.
+The watchdog never signals a reused or unverified group. `stop_group_by_id`
+requires `verify` and `absent` callbacks and refuses if either is missing; the
+leader's immutable identity must still match before a signal, and absence is
+proved from fresh process snapshots instead of a `killpg(pgid, 0)` probe on a
+possibly reused ID. Group descendants are measured only when their identities
+are readable.
 
-`benchmarks/fail_closed_guard/orphans.py` verifies the graphroot, refuses any
-regular or unrecognised external container, removes only exact named storage
-orphans and re-lists to prove absence. It never chooses a container by listing
-order and never touches another store.
+Buildah external containers are captured before spawn. After the build only
+IDs that did not exist beforehand may be considered, and only when their name
+is exactly the lease-owned name and status is `Storage`. The baseline must be
+unchanged; only those exact IDs are removed and their absence is rechecked.
+There is no broad sweep and no foreign container is touched.
+
+A full real receipt records exit code, peak RSS, teardown proof, baseline and
+removed IDs, evidence path and lease state. A `finished` claim requires the
+proof; failures append evidence before teardown and leave the lease active.
 
 ## Deterministic validation
 
-`benchmarks/test_copy_overlay_build_admission.py` uses injected spawn, process
-tables, clocks and Podman commands; no build, container, image, network or
-frozen artifact is used. It covers plan rejection, no-bypass, pre/post-spawn
-crash, exact PGID and orphan proof, PID reuse, ambiguity, durable deadline,
-disk, RSS and orphan-store safety. The existing 540 guard/watchdog/launcher
-tests still pass on this source head.
+`test_copy_overlay_build_admission.py` uses injected spawn, pipe writes,
+process tables, clocks and Podman commands. It covers gate EOF/deadline/mismatch,
+pre-bind crash with no permission, successful post-bind gating, PID reuse
+refusing any signal, exact owned-orphan proof, no broad sweep, actual `flock`
+exclusion, strict plan rejection, job temp containment, durable deadline,
+disk, RSS and receipt contents. 551 targeted guard/watchdog/launcher tests pass;
+`ruff check --select E4,E9,F,B006,B018,B023` and `git diff --check` pass.
 
 ## Coordination and boundary
 
-No live build, container, s6 install, arming, STOP change, receipt or frozen
-MiCall change is performed. Coordinate the P1 `950fe331` overlay and the
-missing PX image builds with the P1 owner and the open image-build PRs before
-any integration: this is a source-only safe path, not authorization to run it.
-The generic `build` mode stays unsupported under the armed contract.
+Independent exact-head review by agent `k16K...` was requested concurrently;
+no review artifact was available locally at this source head, so this revision
+addresses the operator's listed blockers and remains open to that review.
+Coordinate P1 `950fe331` integration and the missing PX image builds with the
+P1 owner and related PRs before any use. No live build, container, image,
+network, s6 install, arming, STOP change, frozen write or receipt publication
+was performed.

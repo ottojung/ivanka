@@ -146,11 +146,11 @@ def bind(root, ident, pid, fingerprint=None, *, owner=None):
 
 
 def bind_group(root, ident, pid, pgid, fingerprint, *, owner=None,
-               plan_sha256=None, graphroot=None):
+               plan_sha256=None, graphroot=None, helper=False):
     """Bind the exact session leader and process group of a COPY-only build."""
     pid, pgid = int(pid), int(pgid)
     if pid <= 0 or pgid != pid or not isinstance(fingerprint, (list, tuple)) \
-            or len(fingerprint) < 3:
+            or len(fingerprint) < 2:
         raise GuardExceeded("invalid_lease")
     start = acquisition_start(root, ident)
     event = {"schema": SCHEMA, "lease": str(ident),
@@ -158,6 +158,7 @@ def bind_group(root, ident, pid, pgid, fingerprint, *, owner=None,
              "mode": "copy_overlay", "cid": None, "cidfile": None,
              "pid": pid, "pgid": pgid, "fingerprint": list(fingerprint),
              "plan_sha256": plan_sha256, "graphroot": str(graphroot),
+             "helper": bool(helper),
              "at_utc": time.time() if start is None else start}
     append(root, event)
     return event

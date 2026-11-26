@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # the cached donor archive (SPAdes 896694ce / v3.15.5), never an unversioned
 # apt package. Shared-layer reuse of the archived frozen SPAdes image
 # (sha256:a0e7e98d..., Debian 3.15.5+dfsg-2) is a SEPARATE, operator-policy-
-# gated option documented in PX_ADMISSION_READINESS_20261126.md; it is not
+# gated option documented in PX_SOURCE_READINESS_20261126.md; it is not
 # performed here because that package is not provenance-equivalent to 896694ce.
 RUN git clone --quiet ${SPADES_SOURCE_REPO} /opt/spades-src \
     && cd /opt/spades-src \

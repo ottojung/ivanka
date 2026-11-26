@@ -18,7 +18,7 @@
     "yanked": false
   },
   "independent_verification": {
-    "method": "fresh curl download of the official archive into a temporary directory, then local sha256sum/md5sum and in-archive PKG-INFO inspection; NO archive retained in the donor cache or any workspace store",
+    "method": "fresh curl download of the official archive into a temporary directory, then local sha256sum/md5sum and in-archive PKG-INFO inspection; the resulting hash/md5/size matched the official metadata recorded verbatim in numpy_1_16_6_pypi_metadata.json (retained, 25 KB). The archive itself was NOT retained in the donor cache or any workspace store, so this is a metadata/pin attestation plus a one-time recomputation, not a claim of a retained independently verifiable artifact.",
     "temp_path": "/tmp/opencode/numpy-1.16.6-attest-20261126/numpy-1.16.6.zip",
     "computed_sha256": "e5cf3fdf13401885e8eea8170624ec96225e2174eb0c611c6f26dd33b489e3ff",
     "computed_md5": "3dc21c84a295fe77eadf8f872685a7de",
@@ -29,7 +29,10 @@
       "License": "BSD",
       "Requires-Python": ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*"
     },
-    "metadata_match": true
+    "metadata_match": true,
+    "retained_official_metadata": "numpy_1_16_6_pypi_metadata.json",
+    "reproduce_offline_check": "python3 -c \"import json; d=json.load(open('numpy_1_16_6_pypi_metadata.json')); u=[x for x in d['urls'] if x['filename']=='numpy-1.16.6.zip'][0]; print(u['digests']['sha256'], u['digests']['md5'], u['size'])\"",
+    "honest_limitation": "The external metadata artifact is retained; the downloaded archive is not, so recomputation cannot be repeated offline without re-downloading from the official URL."
   },
   "donor_cache_state": {
     "path": "/workspace/ivanka-exploratory-ten-20261121/dependency-evidence-cache-20261125",

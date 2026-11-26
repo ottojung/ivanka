@@ -50,10 +50,14 @@ Analysis:
    layer, store or frozen MiCall file is copied or modified. If the operator
    accepts the Debian package, that decision must be recorded separately and the
    image receipt must disclose the package provenance honestly.
-4. **Uncertain pin — operator action requested.** No policy acceptance exists on
-   the board at the time of writing. The PX handoff asks the operator to rule
-   explicitly; until then the corrected source-compile recipe is the only
-   readiness artifact and the build remains gated on an attested `spades-core`.
+4. **Operator ruling received: keep the exact upstream source pin. Debian
+   version equivalence is NOT accepted.** The governing decision is to retain
+   `896694ce…` (tag `v3.15.5`) as the only SPAdes provenance basis; the
+   Debian `3.15.5+dfsg-2` package in `a0e7e98d…` is not substituted, copied,
+   or treated as equivalent. No image build is admitted until an independently
+   reviewed armed build guard admits it. The corrected source-compile recipe is
+   the only readiness artifact; its separate `SPADES_CORE_SHA256` must be
+   attested by that guarded build (never inferred from the donor package).
 
 ## Non-claims
 

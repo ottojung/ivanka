@@ -16,7 +16,15 @@ ARG TOOL_BINARY_SHA256
 ARG PYTHON27_ARCHIVE_SHA256=da3080e3b488f648a3d7a4560ddee895284c3380b11d6de75edb986526b9a814
 ARG NUMPY_ARCHIVE_SHA256=e5cf3fdf13401885e8eea8170624ec96225e2174eb0c611c6f26dd33b489e3ff
 ARG SCIPY_ARCHIVE_SHA256=ecbe6413ca90b8e19f8475bfa303ac001e81b04ec600d17fa7f816271f7cca57
-ARG VIRAL_QUASISPECIES_SHA256=199d97b7330df213f0adf99aaebb8f74d59806dfe90379f15dea28f0aa0c6590
+ARG QUICKCLIQUES_SOURCE_TREE_SHA256=4b41a2badc29877c28a0e903fe7df29a6666a220
+# 199d97b7... is the DONOR HOST-BUILT prebuilt binary. It is deliberately NOT
+# asserted against a fresh in-container rebuild (different compiler/path yields
+# different bytes). A rebuild must receive its own hash from an independently
+# reviewed armed build guard; empty values fail closed. No fake pin.
+# TOOL_BINARY_SHA256 (= that donor prebuilt digest) is retained only as a
+# provenance label; it is NOT checked against any freshly compiled artifact.
+ARG VIRAL_QUASISPECIES_BUILD_SHA256
+ARG QC_BINARIES_BUILD_SHA256
 RUN test "${#MICALL_FORK_SOURCE_COMMIT}" -eq 40 \
     && test "${#MICALL_FORK_BASE_COMMIT}" -eq 40 \
     && test "${#TOOL_SOURCE_COMMIT}" -eq 40 \
@@ -24,7 +32,7 @@ RUN test "${#MICALL_FORK_SOURCE_COMMIT}" -eq 40 \
     && test "${#PYTHON27_ARCHIVE_SHA256}" -eq 64 \
     && test "${#NUMPY_ARCHIVE_SHA256}" -eq 64 \
     && test "${#SCIPY_ARCHIVE_SHA256}" -eq 64 \
-    && test "${#VIRAL_QUASISPECIES_SHA256}" -eq 64
+    && test "${#QUICKCLIQUES_SOURCE_TREE_SHA256}" -eq 40
 ENV MICALL_DENOVO_ASSEMBLER="savage"
 RUN test "${MICALL_DENOVO_ASSEMBLER}" = "savage"
 
@@ -73,9 +81,17 @@ RUN git clone --quiet ${TOOL_SOURCE_REPO} /src/haploconduct \
     && cd /src/haploconduct \
     && git checkout --quiet ${TOOL_SOURCE_COMMIT} \
     && test "$(git rev-parse HEAD)" = "${TOOL_SOURCE_COMMIT}" \
+    && test "$(git rev-parse HEAD:quick-cliques)" = "${QUICKCLIQUES_SOURCE_TREE_SHA256}" \
     && make -j4 \
     && test -x /src/haploconduct/bin/ViralQuasispecies \
-    && echo "${VIRAL_QUASISPECIES_SHA256}  /src/haploconduct/bin/ViralQuasispecies" | sha256sum -c - \
+    && test -x /src/haploconduct/quick-cliques/bin/qc \
+    && test -x /src/haploconduct/quick-cliques/bin/printnm \
+    && test -x /src/haploconduct/quick-cliques/bin/compdegen \
+    && test -n "${VIRAL_QUASISPECIES_BUILD_SHA256}" \
+    && echo "${VIRAL_QUASISPECIES_BUILD_SHA256}  /src/haploconduct/bin/ViralQuasispecies" | sha256sum -c - \
+    && (cd /src/haploconduct/quick-cliques/bin \
+        && sha256sum qc printnm compdegen > /src/haploconduct/quick-cliques/bin/SHA256SUMS) \
+    && echo "${QC_BINARIES_BUILD_SHA256}  /src/haploconduct/quick-cliques/bin/SHA256SUMS" | sha256sum -c - \
     && mkdir -p /opt/savage \
     && cp -a /src/haploconduct/. /opt/savage/ \
     && printf '#!/bin/sh\nexec /opt/python27/bin/python2.7 /opt/savage/haploconduct savage "$@"\n' > /usr/local/bin/savage \
@@ -94,5 +110,8 @@ LABEL org.ottojung.exploratory.tool-binary-sha256="${TOOL_BINARY_SHA256}"
 LABEL org.ottojung.exploratory.python27-archive-sha256="${PYTHON27_ARCHIVE_SHA256}"
 LABEL org.ottojung.exploratory.numpy-archive-sha256="${NUMPY_ARCHIVE_SHA256}"
 LABEL org.ottojung.exploratory.scipy-archive-sha256="${SCIPY_ARCHIVE_SHA256}"
-LABEL org.ottojung.exploratory.viral-quasispecies-sha256="${VIRAL_QUASISPECIES_SHA256}"
+LABEL org.ottojung.exploratory.quick-cliques-source-tree="${QUICKCLIQUES_SOURCE_TREE_SHA256}"
+LABEL org.ottojung.exploratory.viral-quasispecies-build-sha256="${VIRAL_QUASISPECIES_BUILD_SHA256}"
+LABEL org.ottojung.exploratory.qc-binaries-build-sha256="${QC_BINARIES_BUILD_SHA256}"
+# Donor host-built prebuilt (199d97b7...) is documented, never asserted against a rebuild.
 LABEL org.ottojung.exploratory.nonqualifying="true"

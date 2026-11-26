@@ -99,7 +99,7 @@ class Readiness(unittest.TestCase):
         for needle in (DONOR_HASHES["Python-2.7.18.tgz"],
                        DONOR_HASHES["scipy-1.2.3.tar.gz"],
                        "e5cf3fdf13401885e8eea8170624ec96225e2174eb0c611c6f26dd33b489e3ff",
-                       "199d97b7330df213f0adf99aaebb8f74d59806dfe90379f15dea28f0aa0c6590"):
+                       "4b41a2badc29877c28a0e903fe7df29a6666a220"):
             with self.subTest(needle=needle[:16]):
                 self.assertIn(needle, text)
         self.assertIn("numpy-1.16.6.zip", text)
@@ -108,6 +108,13 @@ class Readiness(unittest.TestCase):
         self.assertIn("import numpy; assert numpy.__version__ == '1.16.6'", text)
         self.assertIn("import scipy; assert scipy.__version__ == '1.2.3'", text)
         self.assertIn("bin/ViralQuasispecies", text)
+        # The donor host-built binary hash must NOT be asserted on a rebuild.
+        self.assertNotIn('echo "${VIRAL_QUASISPECIES_SHA256}', text)
+        self.assertIn('echo "${VIRAL_QUASISPECIES_BUILD_SHA256}', text)
+        self.assertIn('echo "${QC_BINARIES_BUILD_SHA256}', text)
+        self.assertIn('test -n "${VIRAL_QUASISPECIES_BUILD_SHA256}"', text)
+        self.assertIn("git rev-parse HEAD:quick-cliques", text)
+        self.assertIn("quick-cliques/bin/qc", text)
 
     def test_10_numpy_attestation_official_and_independent(self):
         data = json.loads((HERE / "numpy_1_16_6_attestation.json").read_text())
@@ -119,6 +126,16 @@ class Readiness(unittest.TestCase):
         self.assertEqual(independent["computed_md5"], official["md5"])
         self.assertEqual(independent["computed_size_bytes"], data["artifact_size_bytes"])
         self.assertTrue(independent["metadata_match"])
+        # Compare against the retained external PyPI metadata artifact, not
+        # merely against hardcoded constants in this file.
+        ext = json.loads((HERE / "numpy_1_16_6_pypi_metadata.json").read_text())
+        sdist = next(x for x in ext["urls"] if x["filename"] == "numpy-1.16.6.zip")
+        self.assertEqual(sdist["digests"]["sha256"], official["sha256"])
+        self.assertEqual(sdist["digests"]["md5"], official["md5"])
+        self.assertEqual(sdist["size"], data["artifact_size_bytes"])
+        self.assertEqual(independent["computed_sha256"], sdist["digests"]["sha256"])
+        self.assertEqual(independent["retained_official_metadata"],
+                         "numpy_1_16_6_pypi_metadata.json")
         self.assertIn("2.7", data["compatibility"]["cpython"])
         self.assertIn("numpy (>=1.8.2)", data["compatibility"]["scipy"])
         self.assertTrue(data["compatibility"]["numpy_1_16_6_satisfies_scipy_requirement"])
@@ -194,6 +211,54 @@ class Readiness(unittest.TestCase):
         fields = out.stdout.strip().split()
         self.assertEqual(fields[0], PENGUIN_ID)
         self.assertEqual(int(fields[1]), 3348166951)
+
+    def test_12_quick_cliques_source_provenance(self):
+        src = Path("/workspace/ivanka-px-runtime-an0RVJXx-20261124/src-haploconduct")
+        tree = subprocess.run(
+            ["git", "-C", str(src), "rev-parse", "HEAD:quick-cliques"],
+            capture_output=True, text=True, check=True).stdout.strip()
+        self.assertEqual(tree, "4b41a2badc29877c28a0e903fe7df29a6666a220")
+        # Recompute a content digest of the pinned source tree from git blobs;
+        # this is real source provenance, not an invented binary hash.
+        names = subprocess.run(
+            ["git", "-C", str(src), "ls-tree", "-r", "--name-only", "HEAD:quick-cliques"],
+            capture_output=True, text=True, check=True).stdout.splitlines()
+        self.assertEqual(len(names), 35)
+        h = hashlib.sha256()
+        for name in names:
+            blob = subprocess.run(
+                ["git", "-C", str(src), "show", "HEAD:quick-cliques/" + name],
+                capture_output=True, check=True).stdout
+            h.update(name.encode() + b"\0" + blob + b"\0")
+        self.assertEqual(len(h.hexdigest()), 64)
+        makefile = (src / "quick-cliques/makefile").read_text()
+        for exe in ("printnm", "compdegen", "qc"):
+            self.assertIn("$(BIN_DIR)/" + exe, makefile)
+        recipe = noncomment((HERE / "Dockerfile.assembler-bench.savage.donor-pinned.corrected").read_text())
+        for exe in ("printnm", "compdegen", "qc"):
+            self.assertIn("quick-cliques/bin/" + exe, recipe)
+        self.assertIn("sha256sum qc printnm compdegen >", recipe)
+
+    def test_13_cli_and_mount_input_contract(self):
+        repo = Path("/workspace/px-source-readiness-20261126")
+        execution = (repo / "benchmarks/assembler_bench/px_execution.py").read_text()
+        pilot = (repo / "benchmarks/assembler_bench/exploratory_runtime/pilot.py").read_text()
+        self.assertIn('{_reads_mount(case)}:/reads:ro', execution)
+        self.assertIn("assert_reference_blind(argv)", execution)
+        self.assertIn('"--network=none"', pilot)
+        self.assertIn('RAM_LIMIT = 4_000_000_000', pilot)
+        argv_src = execution.split("def micall_argv", 1)[1].split("def assert_reference_blind", 1)[0]
+        for flag in ("--ref", "--count_strains", "truth"):
+            self.assertNotIn(flag, argv_src)
+        adapter = git_show(FORK, "0919ffa97f609b6f0b650ce834f0fc79822f18e5:"
+                                 "micall/core/benchmark_assembler.py")
+        self.assertIn('OUTPUT_NAME = "contigs_stage_c.fasta"', adapter)
+        self.assertIn('"-p1", str(first), "-p2", str(second)', adapter)
+        adapter_argv = next(l for l in adapter.splitlines() if l.strip().startswith("argv = ["))
+        for flag in ("--ref", "--count_strains", "truth", "seed"):
+            self.assertNotIn(flag, adapter_argv)
+        recipe = noncomment((HERE / "Dockerfile.assembler-bench.savage.donor-pinned.corrected").read_text())
+        self.assertIn('exec /opt/python27/bin/python2.7 /opt/savage/haploconduct savage "$@"', recipe)
 
 
 if __name__ == "__main__":

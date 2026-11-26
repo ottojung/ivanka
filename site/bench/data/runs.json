@@ -1,5 +1,5 @@
 {
-  "published_at": "2026-11-26T12:40:43.512534+00:00",
+  "published_at": "2026-11-26T12:46:51.876066+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -271603,6 +271603,39 @@
               "score": null,
               "score_origin": "micall_final_max_reference_panel_v1",
               "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
+            },
+            {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "binding_receipts": 3,
+              "canonical_alias": "R031",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 3481.148438,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "error",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "cf0011258d92f00c07e3d6ec6cb187ad876d2696a839083a17b666ba7fe38610",
+                "R2": "5775f0a5448524be4ff452f3de7a62ff51c54641fa3a9be4de992d89a7ecc6d7"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3481.148438,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 3650248704,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             }
           ],
           "id": "soapdenovo2",
@@ -273704,11 +273737,11 @@
             "haploflow",
             "spades",
             "velvet",
-            "minia",
-            "ray",
             "idba-ud",
             "soapdenovo2",
-            "fermi-lite"
+            "fermi-lite",
+            "minia",
+            "ray"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -274867,8 +274900,8 @@
           "failures": [
             "haploflow",
             "velvet",
-            "ray",
-            "soapdenovo2"
+            "soapdenovo2",
+            "ray"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -289513,8 +289546,8 @@
           "exact_profiles": {},
           "failures": [
             "abyss",
-            "tadpole",
-            "soapdenovo2"
+            "soapdenovo2",
+            "tadpole"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -292454,7 +292487,12 @@
               "unique_aligned_fragments": 27761,
               "unstitched_contig_count": 3
             },
-            "soapdenovo2": {},
+            "soapdenovo2": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3481.148438,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "spades": {
               "average_concordance": 0.9251771263997599,
               "average_read_depth": 7139.392825112108,
@@ -292544,7 +292582,8 @@
           },
           "exact_profiles": {},
           "failures": [
-            "abyss"
+            "abyss",
+            "soapdenovo2"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -292665,6 +292704,30 @@
               "scorer_source_sha256": "6745f660d08a61278f9dc90882a7ad9b6d3bb51eac0f6f3b1d84a667424fc6c9",
               "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            "soapdenovo2": {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "canonical_alias": "R031",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "error",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "cf0011258d92f00c07e3d6ec6cb187ad876d2696a839083a17b666ba7fe38610",
+                "R2": "5775f0a5448524be4ff452f3de7a62ff51c54641fa3a9be4de992d89a7ecc6d7"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3481.148438,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 3650248704,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             },
             "tadpole": {
               "adapter_commit": "3fd7f695c378875fd7b3b80ca263601a66476c2f",
@@ -337546,8 +337609,8 @@
         },
         "soapdenovo2": {
           "expected": 198,
-          "failed": 9,
-          "finished": 30
+          "failed": 10,
+          "finished": 31
         },
         "spades": {
           "expected": 198,
@@ -376366,6 +376429,39 @@
               "score": null,
               "score_origin": "micall_final_max_reference_panel_v1",
               "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
+            },
+            {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "binding_receipts": 3,
+              "canonical_alias": "R031",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 3481.148438,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "error",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "cf0011258d92f00c07e3d6ec6cb187ad876d2696a839083a17b666ba7fe38610",
+                "R2": "5775f0a5448524be4ff452f3de7a62ff51c54641fa3a9be4de992d89a7ecc6d7"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3481.148438,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 3650248704,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             }
           ],
           "id": "soapdenovo2",
@@ -378491,11 +378587,11 @@
             "haploflow",
             "spades",
             "velvet",
-            "minia",
-            "ray",
             "idba-ud",
             "soapdenovo2",
-            "fermi-lite"
+            "fermi-lite",
+            "minia",
+            "ray"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -379656,8 +379752,8 @@
           "failures": [
             "haploflow",
             "velvet",
-            "ray",
-            "soapdenovo2"
+            "soapdenovo2",
+            "ray"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -394325,8 +394421,8 @@
           "exact_profiles": {},
           "failures": [
             "abyss",
-            "tadpole",
-            "soapdenovo2"
+            "soapdenovo2",
+            "tadpole"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -397271,7 +397367,12 @@
               "unique_aligned_fragments": 27761,
               "unstitched_contig_count": 3
             },
-            "soapdenovo2": {},
+            "soapdenovo2": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3481.148438,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "spades": {
               "average_concordance": 0.9251771263997599,
               "average_read_depth": 7139.392825112108,
@@ -397361,7 +397462,8 @@
           },
           "exact_profiles": {},
           "failures": [
-            "abyss"
+            "abyss",
+            "soapdenovo2"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -397483,6 +397585,30 @@
               "scorer_source_sha256": "6745f660d08a61278f9dc90882a7ad9b6d3bb51eac0f6f3b1d84a667424fc6c9",
               "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            "soapdenovo2": {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "canonical_alias": "R031",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "error",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "cf0011258d92f00c07e3d6ec6cb187ad876d2696a839083a17b666ba7fe38610",
+                "R2": "5775f0a5448524be4ff452f3de7a62ff51c54641fa3a9be4de992d89a7ecc6d7"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 3481.148438,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 3650248704,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             },
             "tadpole": {
               "adapter_commit": "3fd7f695c378875fd7b3b80ca263601a66476c2f",
@@ -653922,8 +654048,8 @@
         },
         "soapdenovo2": {
           "expected": 662,
-          "failed": 9,
-          "finished": 30
+          "failed": 10,
+          "finished": 31
         },
         "spades": {
           "expected": 662,

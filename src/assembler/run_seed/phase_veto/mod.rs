@@ -1,10 +1,10 @@
 mod evidence;
+mod verdict;
 mod calls;
 mod detect;
 mod pairscan;
 #[cfg(test)] mod test_basic;
 #[cfg(test)] mod test_vet_rescue;
-use std::collections::HashMap;
 use evidence::Prep;
 // Read-derived evidence is computed once per invocation and shared by the
 // contig veto and the rescue veto; neither step mutates it.
@@ -16,14 +16,12 @@ pub(crate) fn prepare(reads:&[Vec<u8>],quals:&[Vec<u8>])->Evidence{
     let ev=prepare(reads,quals); reject_with(&ev,seqs,counts,reads,protected)
 }
 pub(crate) fn reject_with(ev:&Evidence,seqs:Vec<Vec<u8>>,counts:Vec<usize>,reads:&[Vec<u8>],protected:usize)->(Vec<Vec<u8>>,Vec<usize>){
+    let verdicts=verdict::evaluate(ev,&seqs,reads,protected);
     let mut kept_s=Vec::new(); let mut kept_c=Vec::new(); let mut dropped=0usize;
-    // The verdict is a pure function of (sequence, original read pairs), so
-    // repeated candidate sequences are evaluated only once.
-    let mut cache=HashMap::<Vec<u8>,bool>::new();
     for (index,(seq,count)) in seqs.into_iter().zip(counts).enumerate(){
         // MiCall-supplied seeds stay protected: their admission belongs to the
         // original-pair-preserving MiCall front, not to this de novo veto.
-        let bad=seq.len()>=200&&index>=protected&&*cache.entry(seq.clone()).or_insert_with(||detect::incompatible(&seq,reads,&ev.preps,&ev.sigs));
+        let bad=verdicts[index];
         if bad{
             dropped+=1; eprintln!("IVANKA_PHASE_GUARD withheld unsupported recombinant candidate ({} nt, support {})",seq.len(),count);
         } else { kept_s.push(seq); kept_c.push(count); }

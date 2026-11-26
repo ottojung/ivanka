@@ -4,17 +4,15 @@ A retry authorization must bind to the guard source that is actually present,
 not to a self-declared commit string. The digests below are recomputed from the
 deployed tree on every authorization and verification; any drift in the reserve
 source, the host 4-GB fail-safe, the independent fail-closed watchdog, or the
-PR530 natural-exit monitor path fails closed until the pin is deliberately
+natural-exit monitor path fails closed until the pin is deliberately
 updated with a reviewed commit.
 
-Evidence: the running watchdog (`ivanka-watchdog`, PID 1882043 at review time)
-executes PYTHONPATH=/workspace/ivanka-guard-pr530-staged-20261126, a clean
-checkout of f861f25b6e62e1266a498340e7d3cf9a09a9087f (merge of PR #530,
-"Attest pilot natural exit by exact CID, not a lagging poll", deployed after the
-earlier 3fb720c7 staging). Every digest below was recomputed in that deployed
-tree and in the review checkout and matched byte-for-byte. RESERVE_COMMIT is
-retained as the origin of the constant-time reserve so older evidence is never
-weakened or rewritten.
+Evidence: the running watchdog (`ivanka-watchdog`) executes
+PYTHONPATH=/workspace/ivanka-guard-pr536-staged-20261126, a clean checkout of
+091f56275ae823cb3291b81dbdf016fcf16c3ea0. Every digest below was recomputed in
+that deployed tree and in the review checkout and matched byte-for-byte.
+RESERVE_COMMIT is retained as the origin of the constant-time reserve so older
+evidence is never weakened or rewritten.
 """
 import hashlib
 import subprocess
@@ -22,16 +20,16 @@ from pathlib import Path
 
 # Live service identity. Production verification is tied to these bytes and
 # this HEAD, never to whatever checkout happens to be running the tests: a CI
-# merge tree may contain newer, not-yet-deployed guard code (e.g. PR #536).
-DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr530-staged-20261126")
-DEPLOYED_HEAD = "f861f25b6e62e1266a498340e7d3cf9a09a9087f"
+# merge tree may contain newer, not-yet-deployed guard code.
+DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr536-staged-20261126")
+DEPLOYED_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
 
 # Origin of the constant-time shared disk reserve (PR #510). Retained evidence.
 RESERVE_COMMIT = "af1f10d19143fa7a00134a01b56a858ef8a09647"
-# Current deployed reviewed guard semantics: PR #526 retirement, PR #527
-# independent watchdog and PR #530 exact-CID natural-exit monitor, merged at
-# f861f25b6e62e1266a498340e7d3cf9a09a9087f.
-GUARD_COMMIT = "f861f25b6e62e1266a498340e7d3cf9a09a9087f"
+# Current deployed reviewed guard semantics: independent fail-closed watchdog
+# and natural exit attested by exact CID rather than a lagging poll, merged at
+# the deployed head above.
+GUARD_COMMIT = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
 
 RESERVE_SOURCE = "benchmarks/assembler_bench/exploratory_space.py"
 MEMORY_GUARD = (
@@ -48,8 +46,8 @@ WATCHDOG = (
     "benchmarks/fail_closed_guard/startup.py",
     "benchmarks/fail_closed_guard/watchdog_cli.py",
 )
-# PR #530 critical monitor path: natural exit attested by exact CID, not a
-# lagging poll. Changes to any of these invalidate an authorization.
+# Critical natural-exit/monitor path: natural exit attested by exact CID, not
+# a lagging poll. Changes to any of these invalidate an authorization.
 NATURAL_EXIT = (
     "benchmarks/fail_closed_guard/natural_exit.py",
     "benchmarks/fail_closed_guard/watch.py",
@@ -80,11 +78,11 @@ EXPECTED = {
     "benchmarks/fail_closed_guard/watchdog_cli.py":
         "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369",
     "benchmarks/fail_closed_guard/natural_exit.py":
-        "0d655667d8ad34f1842ea3d368603398f3d72641c953a37704d54fc525481048",
+        "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
     "benchmarks/fail_closed_guard/watch.py":
-        "a13839f3264770a48bc20e6b52f09d9f1dbea4cb8d0abc1a89dfdf99f44f76b2",
+        "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96",
     "benchmarks/assembler_bench/exploratory_runtime/monitor.py":
-        "bd88eb3d95c8b7296f49edc3d668589f1c58f7edac70dec1ba4f3f84c9fec4f1",
+        "b0bbefa221ff092acf33021b0203f2b07a912c250fc0893e8fdd59dad642293c",
 }
 
 

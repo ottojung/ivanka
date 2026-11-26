@@ -21,9 +21,9 @@ REGISTRY = ROOT / "benchmarks/assembler_bench/exploratory_candidates.json"
 TOOLS = ("skesa", "minia")
 
 # Explicit isolated guard fixture. CI merges the branch into a main that may
-# already contain not-yet-deployed guard code (PR #536 changed three pinned
-# monitor paths), so tests must not read the checkout as if it were the live
-# service. Production verification still reads DEPLOYED_ROOT/DEPLOYED_HEAD.
+# already contain not-yet-deployed guard code, so tests must not read the
+# checkout as if it were the live service. Production verification still reads
+# DEPLOYED_ROOT/DEPLOYED_HEAD.
 _REAL_GUARD_VERIFY = guard_source.verify
 _FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "px_guard_pins"
 
@@ -461,7 +461,7 @@ class GuardPinAndDigestTests(unittest.TestCase):
         guard = guard_source.verify()
         self.assertEqual(record["guard_commit"], guard_source.GUARD_COMMIT)
         self.assertEqual(record["guard_commit"],
-                         "f861f25b6e62e1266a498340e7d3cf9a09a9087f")
+                         "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
         self.assertEqual(record["reserve_origin_commit"],
                          guard_source.RESERVE_COMMIT)
         self.assertEqual(record["guard_source_sha256"],
@@ -498,7 +498,7 @@ class GuardPinAndDigestTests(unittest.TestCase):
                     authz.verify(self.root, self.arm)
 
     def test_guard_pins_match_deployed_watchdog_tree(self):
-        deployed = Path("/workspace/ivanka-guard-pr530-staged-20261126")
+        deployed = Path("/workspace/ivanka-guard-pr536-staged-20261126")
         if not deployed.is_dir():
             self.skipTest("deployed watchdog checkout not present")
         guard = _REAL_GUARD_VERIFY(root=deployed)

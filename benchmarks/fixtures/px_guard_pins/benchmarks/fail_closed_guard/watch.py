@@ -115,6 +115,22 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                             "reserve_bytes": int(disk_reserve_bytes)}
     cid = binding.get("cid")
 
+    def deadline_expired():
+        if clock() - start >= wall_seconds:
+            return True
+        return deadline_utc is not None and time.time() >= deadline_utc
+
+    def attest_before_success():
+        # The watcher's own budget also governs natural-exit attestation,
+        # including the post-loop path where the arm's loop already ended.
+        # A probe that crosses the deadline must fail closed, never complete.
+        if deadline_expired():
+            raise GuardExceeded("wall_limit")
+        evidence = attest_exit()
+        if deadline_expired():
+            raise GuardExceeded("wall_limit")
+        return evidence
+
     def collect(exc):
         """Attach evidence to a fail-closed exception before it escapes."""
         exc.peak_rss = peak
@@ -193,7 +209,7 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
                         # about the bound container. Only exact-CID absence
                         # plus a real launcher result may end the arm; a live
                         # CID or an unusable inspection keeps this fail-closed.
-                        natural_exit = attest_exit()
+                        natural_exit = attest_before_success()
                         break
                     # Legacy callers still accept a launcher that stopped
                     # reporting liveness; pilots must use attest_exit.
@@ -223,7 +239,7 @@ def watch_bound(binding, *, limit, wall_seconds, running, snapshot, measure,
         # Falling out of the loop only means the launcher stopped reporting
         # liveness. For a bound pilot the exact CID must still be attested.
         if attest_exit is not None and natural_exit is None:
-            natural_exit = attest_exit()
+            natural_exit = attest_before_success()
     except GuardExceeded as exc:
         raise fail_close(exc)
     except Exception as exc:

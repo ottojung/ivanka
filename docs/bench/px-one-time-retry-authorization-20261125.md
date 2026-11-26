@@ -24,13 +24,12 @@ commit string alone is not proof that the deployed guard is that revision, so
 `px_guard_source.verify()` re-derives source digests on **every** authorization
 and verification and compares them with reviewed pins. Source drift fails closed.
 
-`GUARD_COMMIT` is now the current deployed reviewed head
-`f861f25b6e62e1266a498340e7d3cf9a09a9087f` (merge of PR #530, natural exit
-attested by exact CID instead of a lagging poll). Evidence: the running
-`ivanka-watchdog` service executes
-`PYTHONPATH=/workspace/ivanka-guard-pr530-staged-20261126`, a clean checkout of
-that exact commit; every pinned digest below was recomputed both there and in
-the review checkout and matched byte-for-byte:
+`GUARD_COMMIT` is the deployed reviewed head
+`091f56275ae823cb3291b81dbdf016fcf16c3ea0`, whose natural-exit path attests an
+exact CID instead of a lagging poll. Evidence: the running `ivanka-watchdog`
+service executes `PYTHONPATH=/workspace/ivanka-guard-pr536-staged-20261126`, a
+clean checkout of that exact commit; every pinned digest below was recomputed
+from that deployed tree and in the review checkout and matched byte-for-byte:
 
 - reserve source `benchmarks/assembler_bench/exploratory_space.py`
   `bffdc90b703475aeb68f31c2df4334cb36a8912ebaba806cd7baee4d2bc18943`;
@@ -38,10 +37,10 @@ the review checkout and matched byte-for-byte:
   `086ce9ac...` / `6e096ffb...` / `b5a4dc35...` (TRIP 3.7e9, LIMIT 4e9);
 - watchdog `benchmarks/fail_closed_guard/{proc,watchdog,watchdog_contract,binding,identity,startup,watchdog_cli}.py`
   `e8b4c9eb...` / `a67bac26...` / `a2d198b3...` / `1e764c6a...` / `1feecc9e...` / `80b07ce3...` / `e00b83ad...`;
-- PR #530 critical natural-exit/monitor path:
-  `benchmarks/fail_closed_guard/natural_exit.py` `0d655667...`,
-  `benchmarks/fail_closed_guard/watch.py` `a13839f3...`,
-  `benchmarks/assembler_bench/exploratory_runtime/monitor.py` `bd88eb3d...`.
+- critical natural-exit/monitor path:
+  `benchmarks/fail_closed_guard/natural_exit.py` `f7f60282...`,
+  `benchmarks/fail_closed_guard/watch.py` `07356fc4...`,
+  `benchmarks/assembler_bench/exploratory_runtime/monitor.py` `b0bbefa2...`.
 
 The full 14-file digest map is bound into the authorization as
 `guard_stack_sha256`, and `guard_commit` plus `reserve_origin_commit` record both
@@ -50,19 +49,19 @@ guard source (including a watchdog relaunch from different bytes or a changed
 natural-exit decision path) invalidates an authorization.
 
 Production verification (`px_guard_source.verify()`) reads the **live service**
-root `/workspace/ivanka-guard-pr530-staged-20261126` and checks its git HEAD
+root `/workspace/ivanka-guard-pr536-staged-20261126` and checks its git HEAD
 against `DEPLOYED_HEAD` before hashing bytes. It never reads whatever checkout
 happens to run a test: a CI merge tree can already contain not-yet-deployed
-guard code (PR #536 changed three pinned monitor paths after this pin was
-attested), which must not be mistaken for the deployed guard. The regression
+guard code, which must not be mistaken for the deployed guard. The regression
 suite uses an explicit isolated fixture under
 `benchmarks/fixtures/px_guard_pins/` containing the exact attested bytes; it
 patches only the verification entry point in tests, never the pin constants,
 the production code path or the live service. A separate test recomputes the
-pins from the deployed tree itself when that tree is present. The transition to
-PR #536's staged root `/workspace/ivanka-guard-pr536-staged-20261126` is pending
-an operator-confirmed natural boundary; pins are deliberately NOT moved to it
-until that deployment is attested.
+pins from the deployed tree itself when that tree is present. `DEPLOYED_ROOT`
+and `DEPLOYED_HEAD` are re-derived from the live watchdog and PX supervisor
+service pins; both persistent and runtime scripts bind the same root and head.
+A stale or different root fails closed on either the HEAD check or the byte
+digests.
 
 ## Authorization contract
 

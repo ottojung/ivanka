@@ -15,21 +15,22 @@ is gated on watchdog deployment plus an exact operator slot token.
 | Candidate binary | `8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786` | native release build, verified present; NOT rebuilt |
 | Previous hwe8M runner | `babc4dba90d7753a18458f284951c3452c26e8ef` | `fix/p1-bounded-pilot-runner-integration`, base `0e6969fd` |
 | Prior rebase (superseded) | `7567302af86593e9bff9ac69fc6d13162dd51d28` | was on exact PR520 `1b6e88c0`; bundle retained |
-| Rebase target | `aad9a2cde61d7e8b12b44268f0135ee5060911ef` | **exact PR527 head** (`docs(watchdog): reconcile safety-status to wired implementation`); PR527 = `p1/reconciled-watchdog-current-main-20261126`, base main `bc98e05` |
+| Rebase target | `b185c7f2b95c84edce5f1323f93addd5be7ead2d` | **final reviewed exact PR527 head** (`Require exact CID absence in Podman stderr, not command argv`); parent `aad9a2cd…`; independent GO at this head; PR527 = `p1/reconciled-watchdog-current-main-20261126`, base main `bc98e05` |
 | This branch | `science/p1-bounded-pilot-950fe331-on-pr527-20261126` | clean worktree, single commit rebased onto exact PR527 |
-| Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | single commit whose parent is exactly `aad9a2cd…`; no force-push / history rewrite |
+| Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | linear chain whose parent chain reaches exactly `b185c7f2…`; no force-push / history rewrite |
 | Fallback bundle | `p1-pilot-7567302a.bundle` (prior base) — verify with prerequisite `1b6e88c0`; the current source is the rebased branch above | offline provenance only |
-| Integration base diff | 6 changed paths (runner, tests, 2 manifests, Containerfile, this runbook); **zero** guard/frozen/source changes | additive only |
+| Integration base diff | additive: runner + tests + watchdog readiness probe + 2 manifests + Containerfile + 2 runbooks; **zero** guard/frozen/source changes at PR527 | additive only |
 
-The stale `63becaa4…` / `7567302a…` / PR520 references are superseded by this
-PR527 rebase. Rebase recipe (performed in the existing worktree):
+The stale `63becaa4…` / `7567302a…` / `8bcc47b8…` (base `aad9a2cd…`) / PR520
+references are superseded by this final reviewed PR527 `b185c7f2…` rebase.
+Rebase recipe (performed in the existing worktree):
 ```sh
-git fetch origin aad9a2cde61d7e8b12b44268f0135ee5060911ef
-git rebase aad9a2cde61d7e8b12b44268f0135ee5060911ef
+git fetch origin b185c7f2b95c84edce5f1323f93addd5be7ead2d
+git rebase b185c7f2b95c84edce5f1323f93addd5be7ead2d
 # port only the runner + tests from babc4dba; do NOT carry babc4dba's 4-line
 # p1_harness.py heartbeat patch: PR527 already owns a REAL durable heartbeat.
 ```
-Rebase was clean (1/1); parent is exactly the PR527 head.
+Rebase was clean (2/2); parent chain reaches exactly the reviewed PR527 head.
 
 ### Why the hwe8M patch was adapted, not copied
 - PR527 `p1_harness.run_prospective` already calls `heartbeat.Emitter(lease_root,
@@ -94,9 +95,12 @@ Rebase was clean (1/1); parent is exactly the PR527 head.
 | `benchmarks/expanded/p1_bounded_pilot_runner.py` | runnable controller (`python -m expanded.p1_bounded_pilot_runner`), `--check` / `--armed --slot` |
 | `benchmarks/test_p1_bounded_pilot_runner.py` | 26 deterministic injected tests, no live podman; 8 assert shared-boundary fail-closed |
 | `benchmarks/expanded/p1_pilot_cases.json` | source-pinned case manifest (SHA256 `fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de`) |
-| `benchmarks/expanded/p1_pilot_image_manifest.json` | source-pinned image manifest (SHA256 `95264bf23e5a1a263a26e1b29473552002be0b631632acad12e4f88f6d580263`) |
+| `benchmarks/expanded/p1_pilot_image_manifest.json` | source-pinned image manifest (SHA256 `29f48843d74f41b107495ae003ee65787653d9d22599dd3b3e9f7a4a2cdef13b`) — source `950fe331…`, binary `8569290d…` verified on disk; integration fields now name PR527 `b185c7f2…` |
+| `benchmarks/expanded/p1_watchdog_readiness.py` | read-only s6-service + ALIVE readiness probe; no arm/install/write |
+| `benchmarks/test_p1_watchdog_readiness.py` | 12 deterministic tests over a simulated s6 layout |
 | `benchmarks/expanded/Containerfile.p1-pilot-950fe331-binary-only` | prepared, **not built** |
 | `docs/bench/p1-bounded-pilot-950fe331-on-pr527-20261126.md` | this runbook |
+| `docs/bench/p1-watchdog-s6-deployment-probe-20261126.md` | actual s6 layout, pins, operator-only deployment + guarded-slot procedure |
 
 Both manifests are self-verified by SHA before use. The image manifest pins:
 parent `da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad`
@@ -177,6 +181,10 @@ cd /workspace/ivanka-p1-pilot-950fe331-20261126
 PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_bounded_pilot_runner.py
 # 26 passed (no live podman, no build, no frozen mutation)
 
+PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_watchdog_readiness.py
+# 12 passed (simulated s6 layout; no live service, ALIVE record or PX touch)
+# Real-host probe: python3 -m expanded.p1_watchdog_readiness --check  (rc=1, fail closed until deployed)
+
 PYTHONPATH=.:benchmarks python3 -m pytest -q \
   benchmarks/test_p1_bounded_pilot_runner.py \
   benchmarks/test_fail_closed_watchdog.py \
@@ -199,14 +207,14 @@ PYTHONPATH=.:benchmarks python3 -m pytest -q \
 python3 -m ruff check --select E4,E9,F,B006,B018,B023 \
   benchmarks/expanded/p1_bounded_pilot_runner.py \
   benchmarks/test_p1_bounded_pilot_runner.py   # All checks passed
-git diff --check aad9a2cde61d7e8b12b44268f0135ee5060911ef -- .   # clean
+git diff --check b185c7f2b95c84edce5f1323f93addd5be7ead2d -- .   # clean
 ```
 
 To inspect the exact source in a clean clone:
 ```sh
 git fetch origin science/p1-bounded-pilot-950fe331-on-pr527-20261126
 git rev-parse FETCH_HEAD   # exact tip SHA posted to the P1 board
-git log --format='%H %P' -1 FETCH_HEAD   # parent MUST be aad9a2cd…
+git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach b185c7f2…
 ```
 
 ## 7. Boundary / operator checklist

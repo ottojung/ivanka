@@ -78,7 +78,7 @@ CONTAINERFILE = Path(__file__).with_name(
 
 PINS_V2 = {
     "cases_manifest": "fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de",
-    "image_manifest": "95264bf23e5a1a263a26e1b29473552002be0b631632acad12e4f88f6d580263",
+    "image_manifest": "29f48843d74f41b107495ae003ee65787653d9d22599dd3b3e9f7a4a2cdef13b",
     "storage_conf": "fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21",
     "physical_spec": "478c1b7b68943ac5e1ef565c257fd96ba6871184425ace80b026dd2b18cf8f87",
 }

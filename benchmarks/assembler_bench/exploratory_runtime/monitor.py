@@ -155,15 +155,33 @@ def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
     """Launcher-tree guard for builds: no CID, exact process-group teardown."""
     if interval <= 0 or interval > 1 or margin < 1024**3:
         raise ValueError("unsafe polling interval or disk safety margin")
+    start = clock()
     table = proc.snapshot() if snapshot is None else snapshot()
-    if proc_handle.pid not in table:
-        # A short build can finish before the monitor attaches. There is no
-        # container to reap; prove the exact process group is gone instead of
-        # failing closed on an identity that no longer exists.
-        proof = build.stop_group(
-            {"pid": proc_handle.pid, "pgid": proc_handle.pid}, proc_handle)
-        return {"peak_rss": None, "cid": None, "teardown": proof,
-                "enforcement": "userspace_observed", "kernel_enforcement": False}
+    record = table.get(proc_handle.pid)
+    missing = record is None or any(record.get(key) is None
+                                    for key in ("starttime", "pid_ns", "cmdline_sha"))
+    if missing:
+        # A fast build can exit before or during a /proc snapshot. A null
+        # record means the observation was unreadable, not that the process is
+        # alive; poll() distinguishes a genuine exit from a live unreadable PID.
+        if proc_handle.poll() is not None:
+            # The launcher already exited. start_new_session=True makes it the
+            # process-group leader; prove that exact group is absent instead of
+            # inventing a peak or failing a completed arm on snapshot timing.
+            proof = build.stop_group(
+                {"pid": proc_handle.pid, "pgid": proc_handle.pid}, proc_handle)
+            return {"peak_rss": None, "cid": None, "teardown": proof,
+                    "enforcement": "userspace_observed",
+                    "kernel_enforcement": False}
+        # Live but unreadable is not a zero or missing reading; fail closed and
+        # still prove teardown of the exact process group.
+        exc = GuardExceeded("measurement_unavailable")
+        try:
+            exc.teardown = build.stop_group(
+                {"pid": proc_handle.pid, "pgid": proc_handle.pid}, proc_handle)
+        except Exception as stop_exc:
+            exc.teardown_error = str(stop_exc)[:320]
+        raise exc
     bound = build.bind_launcher(proc_handle.pid, snapshot=table)
 
     def take():
@@ -179,7 +197,7 @@ def watch_build(proc_handle, config, *, interval=0.5, margin=1024**3,
         running=(lambda: proc_handle.poll() is None), snapshot=take,
         measure=(lambda: _disk(config, margin, measure)), stop=terminate,
         clock=clock, sleep=sleep, interval=interval, rss_fn=build.rss,
-        heartbeat=heartbeat)
+        heartbeat=heartbeat, start=start)
 
 
 def watch(proc_handle, config, *, interval=1, margin=1024**3,

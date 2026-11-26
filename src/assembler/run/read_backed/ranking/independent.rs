@@ -1,4 +1,4 @@
-use super::{private, retained, Statistics, K};
+use super::{balanced, private, retained, Statistics, K};
 
 // Independent original fragments, rather than the length of a competing
 // genome, determine whether a second densely covered component is useful.
@@ -29,7 +29,8 @@ pub(in super::super) fn additional(
                 if selected & (1 << i) != 0 || !covered || stats.pairs[i] < minimum {
                     return false;
                 }
-                let strong = counts[i] >= minimum && counts[i] * 5 >= stats.pairs[i] * 4;
+                let strong = counts[i] >= minimum && counts[i] * 5 >= stats.pairs[i] * 4
+                    || balanced::qualifies(contigs, stats, selected, primary, i);
                 private::qualifies(evidence[i], positions, strong)
             })
             .max_by_key(|&i| {
@@ -46,10 +47,8 @@ pub(in super::super) fn additional(
 fn independent_counts(masks: &[u16], selected: u16, count: usize) -> Vec<usize> {
     let mut counts = vec![0; count];
     for &mask in masks.iter().filter(|&&mask| mask & selected == 0) {
-        let mut remaining = mask;
-        while remaining != 0 {
-            counts[remaining.trailing_zeros() as usize] += 1;
-            remaining &= remaining - 1;
+        for i in (0..count).filter(|&i| mask & (1 << i) != 0) {
+            counts[i] += 1;
         }
     }
     counts

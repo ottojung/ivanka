@@ -1,3 +1,4 @@
+mod balanced;
 mod independent;
 mod junction;
 mod private;

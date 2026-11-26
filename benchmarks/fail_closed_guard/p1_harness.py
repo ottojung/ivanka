@@ -190,7 +190,7 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                     disk_reserve_bytes=DEFAULT_RESERVE_BYTES, disk_usage=None,
                     limit=4_000_000_000, wall_seconds=2400, deadline_utc=None,
                     running=None, measure=None, snapshot=None, clock=None,
-                    sleep=None, audit=None, attestation=None,
+                    sleep=None, audit=None, heartbeat=None, attestation=None,
                     bind_container=None, stop_cid=None):
     """Run a caller-supplied spawn under the durable pre-spawn guard.
 
@@ -268,7 +268,7 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
 
         kwargs = {}
         for key, value in (("clock", clock), ("sleep", sleep), ("audit", audit),
-                           ("start", None)):
+                           ("heartbeat", heartbeat), ("start", None)):
             if value is not None:
                 kwargs[key] = value
         stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))

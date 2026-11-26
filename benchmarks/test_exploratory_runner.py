@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from assembler_bench.exploratory_policy import checked
 from assembler_bench.exploratory_runtime.launch import operate
+from fail_closed_guard import heartbeat
 
 REG = Path(__file__).parent / "assembler_bench/exploratory_candidates.json"
 
@@ -47,6 +48,7 @@ class TestRunner(unittest.TestCase):
         self.addCleanup(self.available.stop)
 
     def run_job(self, mode="build", argv=None):
+        heartbeat.ping(self.root)
         return operate(REG, self.baseline, "skesa", mode,
                        argv or [sys.executable, "-c", "print('hello')"], 1024**3)
 
@@ -119,7 +121,7 @@ class TestRunner(unittest.TestCase):
             self.run_job("pilot")
 
     def test_changed_store_is_rejected(self):
-        (self.root / "storage.conf").write_text("[storage]\ndriver = 'vfs'\n")
+        (self.root / "storage.conf").write_text('[storage]\ndriver = "vfs"\n')
         with self.assertRaises(ValueError):
             self.run_job()
 

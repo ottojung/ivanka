@@ -1,57 +1,47 @@
 # Gated COPY-only overlay build admission (source only)
 
-## Exact-head NO-GO closure
+## Exact-head audit closure
 
-This revision rebases PR535 onto current main `119cfacec` and closes the
-exact-head review blockers raised at `433e4ea`. Generic `build` remains refused
-by `watchdog_contract`; only one reviewed binary-only COPY overlay is admitted.
+Rebased onto current main `b0dda86c` (PR536 `091f562` merged). This revision
+closes the operator's exact-head audit findings at `c7356b58`. Generic `build`
+remains refused; only a reviewed one-layer binary COPY overlay is admitted.
 
-- **Default watchdog teardown** now works without injected callbacks: it
-  re-verifies the exact bound group identity before any signal, proves absence
-  from fresh process snapshots, and reclaims only the lease-owned external IDs
-  recorded at bind. `stop_group_by_id` refuses if `verify`/`absent` are absent.
-- **Base-derived ownership** is proved with `podman inspect {{.Image}}` for
-  every new external container: it must equal the pinned frozen base digest in
-  addition to the exact owned name and `Storage` status. Baseline IDs must be
-  unchanged and only those exact new IDs are removed.
-- **Sealed context**: the reviewed context is copied into a private `0700` job
-  directory, then made read-only `0500`; files are `0400` (Containerfile) and
-  the pinned artifact mode. The helper re-verifies digest, mode, exact entries
-  and Containerfile after permission and before `exec`; tests mutate content,
-  mode and add extra files before exec and are refused.
-- **Shared PX binding**: the worker lock is the real `.global-worker.lock` and
-  the root must equal the shared PX project root. `STOP` is owner-bound; a
-  foreign owner refuses admission and is never removed.
-- **Hard reserve**: 32 GiB free (`34,359,738,368`) plus the per-job reservation
-  is enforced on every sample, not merely the small reservation.
-- **Receipts**: nonzero build exit is `failed/build_exit_nonzero`, and every
-  result passes through `downgrade_on_watchdog_teardown` before being written.
-
-## Gated helper
-
-`copy_overlay_helper.py` waits on a private pipe until the controller commits
-an exact durable bind (PID, PGID, `starttime`, `pid_ns`, pinned graphroot) to
-the lease journal, re-reads and verifies that bind and the sealed context, then
-execs the fixed build command. EOF, deadline, wrong token, missing/mismatched
-bind or unreadable context exits without building. The stable kernel identity
-survives `exec`. Permission is written only after `lease.bind_group`.
+- **Exact external IDs**: `podman ps -a --external --no-trunc` is mandatory and
+  only full 64-hex IDs are accepted. Ownership is no longer inferred from a
+  lease-derived name: `expected_name` is removed. Each new external container
+  is inspected with `podman inspect` and must report the pinned base image,
+  a base-derived working-container name, and a layer list equal to the pinned
+  base layers plus exactly one new layer. Baseline entries must remain
+  byte-identical. Only those exact new IDs are removed and their absence is
+  rechecked; there is no broad sweep.
+- **Helper deadlines**: the helper re-checks both the UTC deadline from the
+  durable lease start and the monotonic deadline after the pipe read and again
+  after bind/context verification, immediately before `exec`. EOF, deadline,
+  wrong token, mismatched bind or mutated context never builds.
+- **Build receipt**: the fixed argv now carries `--iidfile` and exact label
+  flags for source commit, artifact SHA-256, frozen base image and overlay
+  mode. After build, image inspect binds the exact digest, labels and base
+  layer prefix plus one new layer; a bad receipt fails closed.
+- **Pins and environment**: `storage.conf` SHA-256 and graphroot are pinned in
+  the reviewed plan and read from the same descriptor; the child environment
+  is an allowlist (pinned store plus PATH/HOME and job TMPDIR/TMP/TEMP), with
+  inherited host variables removed.
+- **Shared boundary**: real `.global-worker.lock`, shared PX root, owner-bound
+  STOP, hard 32 GiB reserve, durable/monotonic caps, nonzero exit failed,
+  watchdog receipt downgrade and verified-only group teardown remain.
 
 ## Validation
 
-`test_copy_overlay_build_admission.py` (17 deterministic tests) covers gate
-EOF/deadline/mismatch, mutation before exec, pre-bind crash with no permission,
-the real default run path with a fake spawned process, PID reuse refusing any
-signal, exact base-derived orphan proof, no broad sweep, actual `flock`
-exclusion, shared root/STOP, strict plan rejection, job-temp containment,
-32 GiB reserve, durable deadline, RSS, nonzero exit and watchdog downgrade.
-557 targeted guard/watchdog/launcher tests pass;
-`ruff check --select E4,E9,F,B006,B018,B023` and `git diff --check` pass.
+15 deterministic overlay tests plus 555 targeted guard/watchdog/launcher
+tests pass. `ruff check --select E4,E9,F,B006,B018,B023` and `git diff --check`
+pass. The real default run path is exercised with a fake spawned process and a
+fake image/iidfile; no Podman build, container, image, network, arm or frozen
+artifact was touched.
 
 ## Coordination and boundary
 
-No live build, container, image, network, s6 install/arming, STOP change,
-frozen write or receipt publication was performed. The k16K independent review
-session was live and its board text was not available in this head's workspace;
-the explicit NO-GO items are addressed here and fresh review is requested at
-this exact head. P1 `950fe331` integration and missing PX image builds still
-require the P1 owner and related PRs before any use.
+k16K's independent review session was live but its board text was not present
+in this workspace. Fresh review at this exact head is requested via the branch
+and this record; PR comment posting is not available with the current
+credentials. P1 `950fe331` integration still needs the P1 owner and related
+PRs. No live build or deployment, no arming, no frozen edits.

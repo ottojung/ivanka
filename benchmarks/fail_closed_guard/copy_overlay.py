@@ -121,9 +121,22 @@ def seal_context(temp, validated):
                   artifact_mode=validated["artifact_mode"])
     validated["containerfile"] = str(sealed / "Containerfile")
     validated["context"] = str(sealed)
-    validated["argv"] = ["podman", "build", "--network=none", "--pull=never",
-                         "-f", validated["containerfile"], "-t",
-                         validated["tag"], str(sealed)]
+    iidfile = Path(temp) / "image.iid"
+    labels = [
+        "org.ottojung.ivanka.source-commit=" + validated["source_commit"],
+        "org.ottojung.ivanka.artifact-sha256=" + validated["artifact_sha256"],
+        "org.ottojung.micall.frozen-image-id=" + validated["base_image"],
+        "org.ottojung.ivanka.overlay-mode=copy-only",
+    ]
+    argv = ["podman", "build", "--network=none", "--pull=never",
+            "--iidfile", str(iidfile)]
+    for label in labels:
+        argv.extend(["--label", label])
+    argv.extend(["-f", validated["containerfile"], "-t", validated["tag"],
+                 str(sealed)])
+    validated["argv"] = argv
+    validated["iidfile"] = str(iidfile)
+    validated["labels"] = labels
     return str(sealed)
 
 
@@ -171,11 +184,31 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
         raise GuardExceeded("invalid_plan")
     if plan.get("graphroot") != str(expected_graphroot):
         raise GuardExceeded("invalid_plan")
+    layers = plan.get("base_layers")
+    if (not isinstance(layers, list) or not layers
+            or not all(isinstance(item, str) and DIGEST.fullmatch(item)
+                       for item in layers)):
+        raise GuardExceeded("invalid_plan")
+    if (not isinstance(plan.get("storage_conf_sha256"), str)
+            or not DIGEST.fullmatch(plan["storage_conf_sha256"])):
+        raise GuardExceeded("invalid_plan")
     context = _under(root, plan.get("context", ""))
     conf = _under(root, plan.get("storage_conf", ""))
     if context.is_symlink() or not context.is_dir():
         raise GuardExceeded("invalid_plan")
     if conf.is_symlink() or not conf.is_file():
+        raise GuardExceeded("invalid_plan")
+    conf_fd = os.open(str(conf), os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        conf_digest = hashlib.sha256()
+        while True:
+            chunk = os.read(conf_fd, 1 << 20)
+            if not chunk:
+                break
+            conf_digest.update(chunk)
+    finally:
+        os.close(conf_fd)
+    if conf_digest.hexdigest() != plan["storage_conf_sha256"]:
         raise GuardExceeded("invalid_plan")
     entries = sorted(entry.name for entry in os.scandir(context))
     if entries != sorted(("Containerfile", SOURCE)):
@@ -214,15 +247,18 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
             "artifact_sha256": plan["artifact_sha256"],
             "artifact_mode": plan["artifact_mode"],
             "storage_conf": str(conf), "graphroot": str(expected_graphroot),
+            "storage_conf_sha256": plan["storage_conf_sha256"],
+            "base_layers": list(layers),
             "tag": tag, "argv": argv, "plan_sha256": plan_digest(plan)}
 
 
-def helper_argv(root, ident, graphroot, deadline, read_fd, command, *,
-                context, base, artifact_sha256, artifact_mode):
+def helper_argv(root, ident, graphroot, deadline, deadline_mono, read_fd,
+                command, *, context, base, artifact_sha256, artifact_mode):
     return [sys.executable, "-m", "fail_closed_guard.copy_overlay_helper",
             "--read-fd", str(read_fd), "--root", str(root),
             "--ident", str(ident), "--graphroot", str(graphroot),
-            "--deadline", str(deadline), "--context", str(context),
+            "--deadline", str(deadline), "--deadline-monotonic",
+            str(deadline_mono), "--context", str(context),
             "--base", str(base), "--artifact-sha256", str(artifact_sha256),
             "--artifact-mode", str(artifact_mode), "--argv"] + list(command)
 
@@ -246,7 +282,7 @@ def _owned(bound):
 
 
 def _teardown(bound, *, pinned, graphroot, snapshot, sleep, monotonic,
-              command, baseline, expected_name, stop=None, cleanup=None):
+              command, baseline, stop=None, cleanup=None):
     verify, absent = watchdog.group_callbacks(bound)
     pgid = bound["pgid"]
     terminate = stop if stop is not None else (
@@ -255,11 +291,43 @@ def _teardown(bound, *, pinned, graphroot, snapshot, sleep, monotonic,
                                               verify=verify, absent=absent))
     reclaim = cleanup if cleanup is not None else (
         lambda: orphans.reclaim_owned(
-            pinned, graphroot, baseline, expected_name=expected_name,
-            expected_base=bound.get("base_image"), command_fn=command))
+            pinned, graphroot, baseline,
+            expected_base=bound.get("base_image"),
+            base_layers=bound.get("base_layers") or [], command_fn=command))
     proof = terminate(pgid)
     proof["orphan_cleanup"] = reclaim()
     return proof
+
+
+IMAGE_FORMAT = "{{.Id}}|{{json .Config.Labels}}|{{json .RootFS.Layers}}"
+
+
+def verify_image_receipt(validated, env, command_fn=None):
+    """Bind the built image to exact digest, reviewed labels and one new layer."""
+    run = command_fn or orphans.command
+    identifier = Path(validated["iidfile"]).read_text().strip().removeprefix(
+        "sha256:")
+    if not DIGEST.fullmatch(identifier):
+        raise GuardExceeded("image_receipt_invalid")
+    fields = run(["podman", "image", "inspect", "--format",
+                  IMAGE_FORMAT, identifier], env).split("|")
+    if len(fields) != 3:
+        raise GuardExceeded("image_receipt_invalid")
+    try:
+        labels = json.loads(fields[1])
+        layers = json.loads(fields[2])
+    except ValueError as exc:
+        raise GuardExceeded("image_receipt_invalid") from exc
+    expected = dict(item.split("=", 1) for item in validated["labels"])
+    if (fields[0].strip().removeprefix("sha256:") != identifier
+            or not isinstance(labels, dict) or labels != expected
+            or not isinstance(layers, list)
+            or layers[:len(validated["base_layers"])] != validated["base_layers"]
+            or len(layers) != len(validated["base_layers"]) + 1):
+        raise GuardExceeded("image_receipt_invalid")
+    return {"image": identifier, "labels": labels,
+            "base_layers": validated["base_layers"], "layers": layers,
+            "one_layer_overlay": True, "kernel_enforcement": False}
 
 
 def _downgrade(root, ident, state):
@@ -316,11 +384,15 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
         owner = ident
         lease.acquire(root, ident, "copy_overlay", owner=owner)
         start = lease.acquisition_start(root, ident)
-        deadline = start + min(wall_seconds, watchdog.DEFAULT_WALL_SECONDS)
+        budget = min(wall_seconds, watchdog.DEFAULT_WALL_SECONDS)
+        deadline = start + budget
+        deadline_mono = mono() + budget
         limit = min(rss_limit, watchdog.RSS_LIMIT)
         temp = Path(tempfile.mkdtemp(prefix="copy-", dir=str(root)))
-        job_env = {key: value for key, value in pinned.items()
-                   if key not in ("TMPDIR", "TMP", "TEMP")}
+        # No inherited host variables: only the pinned store and known PATH.
+        job_env = {key: pinned[key] for key in ("PATH", "HOME",
+                                                "CONTAINERS_STORAGE_CONF")
+                   if key in pinned}
         job_env.update({"TMPDIR": str(temp), "TMP": str(temp),
                         "TEMP": str(temp)})
         emitter = heartbeat.Emitter(root, ident)
@@ -335,7 +407,8 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
         try:
             sealed = seal_context(temp, validated)
             gate = helper_argv(
-                root, ident, graphroot, deadline, read_fd, validated["argv"],
+                root, ident, graphroot, deadline, deadline_mono, read_fd,
+                validated["argv"],
                 context=sealed, base=validated["base_image"],
                 artifact_sha256=validated["artifact_sha256"],
                 artifact_mode=validated["artifact_mode"])
@@ -356,8 +429,9 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                 root, ident, handle.pid, handle.pid, stable, owner=owner,
                 plan_sha256=validated["plan_sha256"], graphroot=graphroot,
                 helper=True, baseline_ids=sorted(baseline),
-                expected_name=ident + "-working-container",
-                base_image=validated["base_image"])
+                base_image=validated["base_image"],
+                base_layers=validated["base_layers"],
+                storage_conf_sha256=validated["storage_conf_sha256"])
             bound = watchdog.bound_from_lease(root, ident, pinned)
             observed = watchdog.verify_group_bound(bound, table)
             state["peak_rss"] = observed["rss"]
@@ -368,7 +442,7 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
             os.close(write_fd)
             write_fd = None
             while handle.poll() is None:
-                if now() >= deadline:
+                if now() >= deadline or mono() >= deadline_mono:
                     raise GuardExceeded("wall_limit")
                 check_disk_floor(root, reserve_bytes, usage)
                 emitter.refresh()
@@ -380,17 +454,20 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                                         observed["rss"])
                 if observed["rss"] > limit:
                     raise GuardExceeded("observed_rss_limit")
+            if now() >= deadline or mono() >= deadline_mono:
+                raise GuardExceeded("wall_limit")
+            image = verify_image_receipt(validated, job_env, command)
             bound = watchdog.bound_from_lease(root, ident, pinned)
             proof = _teardown(
                 bound, pinned=pinned, graphroot=graphroot, snapshot=take,
                 sleep=nap, monotonic=mono, command=command, baseline=baseline,
-                expected_name=ident + "-working-container", stop=stop,
-                cleanup=cleanup)
+                stop=stop, cleanup=cleanup)
             exit_code = handle.poll()
             state.update({
                 "status": "completed" if exit_code == 0 else "failed",
                 "reason": None if exit_code == 0 else "build_exit_nonzero",
                 "exit_code": exit_code, "teardown": proof,
+                "image_receipt": image,
                 "orphan_baseline_ids": sorted(baseline)})
             lease.release(root, ident, owner=owner, proof=proof)
         except Exception as exc:
@@ -405,7 +482,6 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                             bound, pinned=pinned, graphroot=graphroot,
                             snapshot=take, sleep=nap, monotonic=mono,
                             command=command, baseline=baseline,
-                            expected_name=ident + "-working-container",
                             stop=stop, cleanup=cleanup)
                         watchdog.append_group_evidence(
                             root, ident, reason=reason, result="fail_closed",

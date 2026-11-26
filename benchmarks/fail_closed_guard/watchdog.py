@@ -167,8 +167,8 @@ def bound_from_lease(root, worker, env):
                     "plan_sha256": current.get("plan_sha256"),
                     "graphroot": current.get("graphroot"),
                     "baseline_ids": current.get("baseline_ids") or [],
-                    "expected_name": current.get("expected_name"),
                     "base_image": current.get("base_image"),
+                    "base_layers": current.get("base_layers") or [],
                     "durable_start": start}
         # A crash before the post-spawn group bind owns no process yet; the
         # active lease still blocks admission until an owner reconciles it.
@@ -383,9 +383,8 @@ def teardown_group_if_owned(root, worker, bound, env, *, stop=None,
     reclaim = cleanup if cleanup is not None else (
         lambda: orphans.reclaim_owned(
             env, graphroot_of(bound), bound.get("baseline_ids") or {},
-            expected_name=bound.get("expected_name")
-            or str(worker) + "-working-container",
             expected_base=bound.get("base_image"),
+            base_layers=bound.get("base_layers") or [],
             command_fn=binding.command))
     try:
         proof = terminate(pgid)

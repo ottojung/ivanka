@@ -7,8 +7,42 @@ exact bound CID is proven absent by inspection *and* the launcher supplies a
 real integer result. Teardown proof is verified separately by :mod:`watch`
 before any success receipt is returned.
 """
+import time
+
 from . import binding
 from .errors import GuardExceeded
+
+# A launcher poll may lag container exit. Bound the number of confirmations so
+# a stalled launcher cannot hold a guard loop open indefinitely.
+CONFIRMATIONS = 32
+
+
+def wait_and_attest(cid, env, poll, *, start, wall_seconds, interval=0.5,
+                    clock=time.monotonic, sleep=time.sleep,
+                    confirmations=CONFIRMATIONS, deadline_utc=None):
+    """Wait for exact-CID absence plus a real launcher result, then attest.
+
+    The deadline is monotonic and starts with the watcher's own ``start``, so
+    attestation cannot grant a fresh budget to an arm that already spent one.
+    An optional absolute epoch deadline covers a restarted controller as well.
+    The CID is always the exact bound CID and ``env`` is the caller's pinned
+    inspection environment; neither is discovered from a launcher or a name.
+    """
+    if not callable(poll):
+        raise GuardExceeded("natural_exit_unverified")
+    deadline = start + wall_seconds
+    for _ in range(confirmations):
+        if binding.inspect_pid_if_live(cid, env) is not None:
+            raise GuardExceeded("identity_lost")
+        result = poll()
+        if result is not None:
+            return attest(cid, env, result)
+        if clock() >= deadline:
+            break
+        if deadline_utc is not None and time.time() >= deadline_utc:
+            break
+        sleep(interval)
+    raise GuardExceeded("natural_exit_unverified")
 
 
 def attest(cid, env, returncode, *, inspect=None):

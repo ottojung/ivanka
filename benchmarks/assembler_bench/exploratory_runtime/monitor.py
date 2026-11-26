@@ -18,7 +18,7 @@ from fail_closed_guard.watch import watch_bound
 
 # A launcher poll can lag container exit. Bound the wait for a real result so
 # a stalled launcher cannot hold the guard loop open indefinitely.
-NATURAL_EXIT_CONFIRMATIONS = 32
+NATURAL_EXIT_CONFIRMATIONS = natural_exit.CONFIRMATIONS
 
 # Re-exported for legacy callers; one exception type makes the launcher's
 # fail-closed handler catch guard reasons from both the legacy sampler and the
@@ -155,18 +155,11 @@ def watch_pilot(proc_handle, config, *, cidfile, env, interval=0.5,
         identity loss and an unusable inspection is never absence; both stay
         fail-closed.
         """
-        cid = bound["cid"]
-        deadline = start + config["wall_seconds"]
-        for _ in range(NATURAL_EXIT_CONFIRMATIONS):
-            if binding.inspect_pid_if_live(cid, env) is not None:
-                raise GuardExceeded("identity_lost")
-            result = proc_handle.poll()
-            if result is not None:
-                return natural_exit.attest(cid, env, result)
-            if clock() >= deadline:
-                break
-            sleep(interval)
-        raise GuardExceeded("natural_exit_unverified")
+        return natural_exit.wait_and_attest(
+            bound["cid"], env, proc_handle.poll, start=start,
+            wall_seconds=config["wall_seconds"], interval=interval,
+            clock=clock, sleep=sleep,
+            confirmations=NATURAL_EXIT_CONFIRMATIONS)
 
     return watch_bound(
         bound, limit=config["rss_bytes"], wall_seconds=config["wall_seconds"],

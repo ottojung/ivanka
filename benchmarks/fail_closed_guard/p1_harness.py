@@ -29,8 +29,8 @@ import secrets
 import time
 from pathlib import Path
 
-from . import (binding, disk, heartbeat, lease, proc, startup, stop,
-               teardown, watch, watchdog_contract)
+from . import (binding, disk, heartbeat, lease, natural_exit, proc, startup,
+               stop, teardown, watch, watchdog_contract)
 from .errors import GuardExceeded
 
 DEFAULT_RESERVE_BYTES = 32 * 1024 ** 3  # independent project filesystem reserve
@@ -216,7 +216,8 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                     limit=4_000_000_000, wall_seconds=2400, deadline_utc=None,
                     running=None, measure=None, snapshot=None, clock=None,
                     sleep=None, audit=None, attestation=None,
-                    bind_container=None, stop_cid=None):
+                    bind_container=None, stop_cid=None, launcher=None,
+                    interval=0.5):
     """Run a caller-supplied spawn under the durable pre-spawn guard.
 
     Ordering (review): acquire the exclusive lock FIRST, then re-check STOP,
@@ -226,6 +227,10 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
     before the lease exists leaves no spurious active pending lease.
     """
     if not owner or running is None or measure is None:
+        raise GuardExceeded("invalid_config")
+    if launcher is not None and not callable(
+            getattr(launcher, "poll", None)) and not callable(launcher):
+        # Reject an unusable attestation seam before any lock, lease or spawn.
         raise GuardExceeded("invalid_config")
     env = dict(env or {})
     reserve = _bounded_reserve(disk_reserve_bytes)
@@ -271,7 +276,7 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
             raise GuardExceeded("heartbeat_unavailable") from exc
 
         try:
-            spawn(cidfile, env)
+            spawned = spawn(cidfile, env)
         except Exception as exc:
             _audit(lease_root, {"event": "spawn_failed", "lease_id": ident,
                                 "owner": str(owner), "cidfile": cidfile,
@@ -341,11 +346,31 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                                    snapshot=watchdog_snapshot)
             return emitted
 
+        # One monotonic start covers the watcher and natural-exit attestation,
+        # so a lagging launcher cannot grant the arm a second wall budget.
+        tick = clock if clock is not None else time.monotonic
+        start = tick()
+        poll = (launcher.poll if callable(getattr(launcher, "poll", None))
+                else launcher)
+        if launcher is None and callable(getattr(spawned, "poll", None)):
+            # A spawn that returns its launcher handle lets the adapter attest
+            # the real integer result instead of relying on a lagging poll.
+            launcher = spawned
+            poll = spawned.poll
         kwargs = {}
-        for key, value in (("clock", clock), ("sleep", sleep), ("audit", audit),
-                           ("start", None)):
+        for key, value in (("clock", clock), ("sleep", sleep), ("audit", audit)):
             if value is not None:
                 kwargs[key] = value
+        kwargs["start"] = start
+        if launcher is not None:
+            if not callable(poll):
+                raise GuardExceeded("natural_exit_unverified")
+            kwargs["attest_exit"] = (
+                lambda: natural_exit.wait_and_attest(
+                    cid, env, poll, start=start, wall_seconds=wall_seconds,
+                    interval=interval, clock=tick,
+                    sleep=(sleep if sleep is not None else time.sleep),
+                    deadline_utc=deadline_utc))
 
         proof = None
         outcome = None
@@ -359,7 +384,8 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                 disk_path=disk_path, disk_reserve_bytes=reserve,
                 disk_usage=disk_usage, strict_proof=True,
                 deadline_utc=deadline_utc, heartbeat=refresh_ready,
-                attestation=_attestation(attestation), **kwargs)
+                interval=interval, attestation=_attestation(attestation),
+                **kwargs)
             proof = result.get("teardown")
             outcome = {"status": "completed", "result": result}
         except GuardExceeded as exc:

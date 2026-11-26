@@ -10,6 +10,7 @@ fn internal_seed_overhang_can_extend() {
     index.insert(encode(seed).unwrap(), vec![Hit { read: 0, pos: 40 }]);
     let max_read_len = read.len();
     let reads = Reads {
+        quals: vec![vec![b'I'; read.len()]],
         seqs: vec![read],
         index,
         seed_counts: HashMap::new(),

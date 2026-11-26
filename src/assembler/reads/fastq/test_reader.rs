@@ -5,9 +5,13 @@ fn fastq_reuses_buffers_without_changing_records() {
     let mut reader = FastqSeqReader::new(Cursor::new(
         b"@first\nacgTn \n+\n!!!!!\n@second\nGGGG\n+\n####\n".as_slice(),
     ));
-    assert_eq!(reader.read_seq().unwrap().unwrap(), b"ACGTN");
+    let (seq, qual) = reader.read_seq().unwrap().unwrap();
+    assert_eq!(seq, b"ACGTN");
+    assert_eq!(qual, b"!!!!!");
     let first_capacity = reader.header.capacity();
-    assert_eq!(reader.read_seq().unwrap().unwrap(), b"GGGG");
+    let (seq, qual) = reader.read_seq().unwrap().unwrap();
+    assert_eq!(seq, b"GGGG");
+    assert_eq!(qual, b"####");
     assert!(reader.header.capacity() >= first_capacity);
     assert!(reader.read_seq().unwrap().is_none());
     let mut invalid = FastqSeqReader::new(Cursor::new(b"@x\nACGT\n+\n!!!\n".as_slice()));

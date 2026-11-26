@@ -1,0 +1,117 @@
+# Dedicated MiCall fork image for exactly one NONQUALIFYING exploratory assembler.
+# Build-READINESS recipe only (2026-11-26). NOT built, NOT promoted.
+# Fixes the unpinned apt python2.7/python-scipy path in the staged SAVAGE recipe:
+# the frozen parent has no python2.7 and /opt/venv scipy is 1.18.1 (py3).
+# Exact donor/upstream sources are reused from the already-verified cache;
+# context = dependency-evidence-cache-20261125 plus numpy-1.16.6.zip staged
+# by the operator at build time. No new checkout, no duplicate base image.
+ARG FORK_BASE_IMAGE
+FROM ${FORK_BASE_IMAGE}
+ARG FORK_BASE_IMAGE
+ARG MICALL_FORK_SOURCE_COMMIT
+ARG MICALL_FORK_BASE_COMMIT
+ARG TOOL_SOURCE_REPO
+ARG TOOL_SOURCE_COMMIT
+ARG TOOL_BINARY_SHA256
+ARG PYTHON27_ARCHIVE_SHA256=da3080e3b488f648a3d7a4560ddee895284c3380b11d6de75edb986526b9a814
+ARG NUMPY_ARCHIVE_SHA256=e5cf3fdf13401885e8eea8170624ec96225e2174eb0c611c6f26dd33b489e3ff
+ARG SCIPY_ARCHIVE_SHA256=ecbe6413ca90b8e19f8475bfa303ac001e81b04ec600d17fa7f816271f7cca57
+ARG QUICKCLIQUES_SOURCE_TREE_SHA256=4b41a2badc29877c28a0e903fe7df29a6666a220
+# 199d97b7... is the DONOR HOST-BUILT prebuilt binary. It is deliberately NOT
+# asserted against a fresh in-container rebuild (different compiler/path yields
+# different bytes). A rebuild must receive its own hash from an independently
+# reviewed armed build guard; empty values fail closed. No fake pin.
+# TOOL_BINARY_SHA256 (= that donor prebuilt digest) is retained only as a
+# provenance label; it is NOT checked against any freshly compiled artifact.
+ARG VIRAL_QUASISPECIES_BUILD_SHA256
+ARG QC_BINARIES_BUILD_SHA256
+RUN test "${#MICALL_FORK_SOURCE_COMMIT}" -eq 40 \
+    && test "${#MICALL_FORK_BASE_COMMIT}" -eq 40 \
+    && test "${#TOOL_SOURCE_COMMIT}" -eq 40 \
+    && test "${#TOOL_BINARY_SHA256}" -eq 64 \
+    && test "${#PYTHON27_ARCHIVE_SHA256}" -eq 64 \
+    && test "${#NUMPY_ARCHIVE_SHA256}" -eq 64 \
+    && test "${#SCIPY_ARCHIVE_SHA256}" -eq 64 \
+    && test "${#QUICKCLIQUES_SOURCE_TREE_SHA256}" -eq 40
+ENV MICALL_DENOVO_ASSEMBLER="savage"
+RUN test "${MICALL_DENOVO_ASSEMBLER}" = "savage"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      g++ make libboost-all-dev ncbi-blast+ git ca-certificates \
+      unzip gcc sqlite3 libbz2-dev zlib1g-dev libatlas-base-dev gfortran \
+    && rm -rf /var/lib/apt/lists/*
+
+# CPython 2.7.18 (python/cpython v2.7.18 @ 41ca0e78...), python.org tarball
+# da3080e3... independently attested by the donor. No apt python2.7.
+COPY Python-2.7.18.tgz /src/donor/
+RUN echo "${PYTHON27_ARCHIVE_SHA256}  /src/donor/Python-2.7.18.tgz" | sha256sum -c - \
+    && tar -xzf /src/donor/Python-2.7.18.tgz -C /src/donor \
+    && cd /src/donor/Python-2.7.18 \
+    && ./configure --prefix=/opt/python27 \
+    && make -j2 && make install \
+    && test -x /opt/python27/bin/python2.7 \
+    && /opt/python27/bin/python2.7 --version 2>&1 | grep -q '2\.7\.18'
+ENV PATH=/opt/python27/bin:${PATH}
+
+# NumPy 1.16.6: last upstream release supporting CPython 2.7. Official PyPI
+# sdist sha256 e5cf3fdf... independently recomputed from the downloaded
+# artifact; see numpy_1_16_6_attestation.json. Satisfies scipy 1.2.3's
+# numpy >= 1.8.2 requirement. Archive is NOT cached on the host; the operator
+# must stage exactly numpy-1.16.6.zip in the build context.
+COPY numpy-1.16.6.zip /src/donor/
+RUN echo "${NUMPY_ARCHIVE_SHA256}  /src/donor/numpy-1.16.6.zip" | sha256sum -c - \
+    && unzip -q /src/donor/numpy-1.16.6.zip -d /src/donor \
+    && cd /src/donor/numpy-1.16.6 \
+    && /opt/python27/bin/python2.7 setup.py install \
+    && /opt/python27/bin/python2.7 -c "import numpy; assert numpy.__version__ == '1.16.6'"
+
+# SciPy 1.2.3 (last py2.7-compatible), attested sdist ecbe6413...; official
+# metadata requires numpy >= 1.8.2, satisfied by the pinned 1.16.6 above.
+COPY scipy-1.2.3.tar.gz /src/donor/
+RUN echo "${SCIPY_ARCHIVE_SHA256}  /src/donor/scipy-1.2.3.tar.gz" | sha256sum -c - \
+    && tar -xzf /src/donor/scipy-1.2.3.tar.gz -C /src/donor \
+    && cd /src/donor/scipy-1.2.3 \
+    && /opt/python27/bin/python2.7 setup.py install \
+    && /opt/python27/bin/python2.7 -c "import scipy; assert scipy.__version__ == '1.2.3'"
+
+# Pinned HaploConduct de-novo mode: paired FASTQs via -p1/-p2; never any
+# reference-dependent mode. haploconduct.py dispatches savage.py and checks
+# bin/ViralQuasispecies; the compiled core hash is pinned separately.
+RUN git clone --quiet ${TOOL_SOURCE_REPO} /src/haploconduct \
+    && cd /src/haploconduct \
+    && git checkout --quiet ${TOOL_SOURCE_COMMIT} \
+    && test "$(git rev-parse HEAD)" = "${TOOL_SOURCE_COMMIT}" \
+    && test "$(git rev-parse HEAD:quick-cliques)" = "${QUICKCLIQUES_SOURCE_TREE_SHA256}" \
+    && make -j4 \
+    && test -x /src/haploconduct/bin/ViralQuasispecies \
+    && test -x /src/haploconduct/quick-cliques/bin/qc \
+    && test -x /src/haploconduct/quick-cliques/bin/printnm \
+    && test -x /src/haploconduct/quick-cliques/bin/compdegen \
+    && test -n "${VIRAL_QUASISPECIES_BUILD_SHA256}" \
+    && echo "${VIRAL_QUASISPECIES_BUILD_SHA256}  /src/haploconduct/bin/ViralQuasispecies" | sha256sum -c - \
+    && (cd /src/haploconduct/quick-cliques/bin \
+        && sha256sum qc printnm compdegen > /src/haploconduct/quick-cliques/bin/SHA256SUMS) \
+    && echo "${QC_BINARIES_BUILD_SHA256}  /src/haploconduct/quick-cliques/bin/SHA256SUMS" | sha256sum -c - \
+    && mkdir -p /opt/savage \
+    && cp -a /src/haploconduct/. /opt/savage/ \
+    && printf '#!/bin/sh\nexec /opt/python27/bin/python2.7 /opt/savage/haploconduct savage "$@"\n' > /usr/local/bin/savage \
+    && chmod 0755 /usr/local/bin/savage \
+    && rm -rf /src/haploconduct
+
+LABEL org.opencontainers.image.source="https://github.com/ottojung/MiCall"
+LABEL org.opencontainers.image.revision="${MICALL_FORK_SOURCE_COMMIT}"
+LABEL org.ottojung.micall.common-base="${FORK_BASE_IMAGE}"
+LABEL org.ottojung.micall.common-baseline-commit="${MICALL_FORK_BASE_COMMIT}"
+LABEL org.ottojung.micall.source-branch="bench/frozen-8458f9e5-savage-20261123"
+LABEL org.ottojung.micall.assembler="savage"
+LABEL org.ottojung.exploratory.tool-source-repo="${TOOL_SOURCE_REPO}"
+LABEL org.ottojung.exploratory.tool-source-commit="${TOOL_SOURCE_COMMIT}"
+LABEL org.ottojung.exploratory.tool-binary-sha256="${TOOL_BINARY_SHA256}"
+LABEL org.ottojung.exploratory.python27-archive-sha256="${PYTHON27_ARCHIVE_SHA256}"
+LABEL org.ottojung.exploratory.numpy-archive-sha256="${NUMPY_ARCHIVE_SHA256}"
+LABEL org.ottojung.exploratory.scipy-archive-sha256="${SCIPY_ARCHIVE_SHA256}"
+LABEL org.ottojung.exploratory.quick-cliques-source-tree="${QUICKCLIQUES_SOURCE_TREE_SHA256}"
+LABEL org.ottojung.exploratory.viral-quasispecies-build-sha256="${VIRAL_QUASISPECIES_BUILD_SHA256}"
+LABEL org.ottojung.exploratory.qc-binaries-build-sha256="${QC_BINARIES_BUILD_SHA256}"
+# Donor host-built prebuilt (199d97b7...) is documented, never asserted against a rebuild.
+LABEL org.ottojung.exploratory.nonqualifying="true"

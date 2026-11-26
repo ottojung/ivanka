@@ -1,0 +1,49 @@
+{
+  "schema": "ivanka.px.dependency-attestation.v1",
+  "attested_on": "2026-11-26T18:05:00Z",
+  "board": "V9roZ0y80gjXs7WrOCgNbH-moral",
+  "package": "numpy",
+  "version": "1.16.6",
+  "artifact_filename": "numpy-1.16.6.zip",
+  "artifact_size_bytes": 5143340,
+  "official_pinned_release_metadata": {
+    "source": "https://pypi.org/pypi/numpy/1.16.6/json",
+    "archive_url": "https://files.pythonhosted.org/packages/b7/6f/24647f014eef9b67a24adfcbcd4f4928349b4a0f8393b3d7fe648d4d2de3/numpy-1.16.6.zip",
+    "packagetype": "sdist",
+    "sha256": "e5cf3fdf13401885e8eea8170624ec96225e2174eb0c611c6f26dd33b489e3ff",
+    "md5": "3dc21c84a295fe77eadf8f872685a7de",
+    "blake2b_256": "b76f24647f014eef9b67a24adfcbcd4f4928349b4a0f8393b3d7fe648d4d2de3",
+    "requires_python": ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*",
+    "upload_time": "2019-12-29T23:42:23.924561Z",
+    "yanked": false
+  },
+  "independent_verification": {
+    "method": "fresh curl download of the official archive into a temporary directory, then local sha256sum/md5sum and in-archive PKG-INFO inspection; the resulting hash/md5/size matched the official metadata recorded verbatim in numpy_1_16_6_pypi_metadata.json (retained, 25 KB). The archive itself was NOT retained in the donor cache or any workspace store, so this is a metadata/pin attestation plus a one-time recomputation, not a claim of a retained independently verifiable artifact.",
+    "temp_path": "/tmp/opencode/numpy-1.16.6-attest-20261126/numpy-1.16.6.zip",
+    "computed_sha256": "e5cf3fdf13401885e8eea8170624ec96225e2174eb0c611c6f26dd33b489e3ff",
+    "computed_md5": "3dc21c84a295fe77eadf8f872685a7de",
+    "computed_size_bytes": 5143340,
+    "pkg_info": {
+      "Name": "numpy",
+      "Version": "1.16.6",
+      "License": "BSD",
+      "Requires-Python": ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*"
+    },
+    "metadata_match": true,
+    "retained_official_metadata": "numpy_1_16_6_pypi_metadata.json",
+    "reproduce_offline_check": "python3 -c \"import json; d=json.load(open('numpy_1_16_6_pypi_metadata.json')); u=[x for x in d['urls'] if x['filename']=='numpy-1.16.6.zip'][0]; print(u['digests']['sha256'], u['digests']['md5'], u['size'])\"",
+    "honest_limitation": "The external metadata artifact is retained; the downloaded archive is not, so recomputation cannot be repeated offline without re-downloading from the official URL."
+  },
+  "donor_cache_state": {
+    "path": "/workspace/ivanka-exploratory-ten-20261121/dependency-evidence-cache-20261125",
+    "numpy_archive_present": false,
+    "note": "No NumPy archive was staged by the donor. This attestation pins the official upstream sdist hash; a future guarded build must stage exactly this archive in the build context and fail closed on sha256sum -c. No new cache was created on marceline-dev."
+  },
+  "compatibility": {
+    "cpython": "2.7.18 (python/cpython v2.7.18 @ 41ca0e7833977c2475722ccc3dd5c16865d96dc1; python.org Python-2.7.18.tgz sha256 da3080e3b488f648a3d7a4560ddee895284c3380b11d6de75edb986526b9a814)",
+    "scipy": "1.2.3 sdist sha256 ecbe6413ca90b8e19f8475bfa303ac001e81b04ec600d17fa7f816271f7cca57; official metadata requires_dist numpy (>=1.8.2) and requires_python >=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*",
+    "numpy_1_16_6_satisfies_scipy_requirement": true,
+    "note": "NumPy 1.16.6 is the last upstream release declaring CPython 2.7 support. PyPI also lists DoS advisories PYSEC-2021-856/857 fixed only in 1.19+, which cannot be used on py2.7; document as an accepted, bounded risk for this NONQUALIFYING experimental tool, not silently waived."
+  },
+  "non_actions": "No podman build/run, no container, no frozen MiCall edit, no upstream/main write, no registry/receipt mutation, no additional large cache."
+}

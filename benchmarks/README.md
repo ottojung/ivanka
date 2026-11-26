@@ -146,3 +146,8 @@ One canonical dedicated fork branch and dedicated tool-only image are
 required **per assembler**, with a distinct immutable image ID for each.
 All-tools images are historical-only: see
 [Intent 016](../docs/intents/016-dedicated-assembler-branches-and-containers.md).
+
+[Intent 017](../docs/intents/017-reference-based-remap-comparator.md) adds
+ordinary reference-based MiCall as a diagnostic comparator. It may reuse an
+attested frozen image, but has a distinct method identity, execution mode and
+receipts; all applicable comparisons remain tool-neutral.

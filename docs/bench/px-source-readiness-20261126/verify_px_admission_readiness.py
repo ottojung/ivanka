@@ -230,7 +230,8 @@ class Readiness(unittest.TestCase):
                 ["git", "-C", str(src), "show", "HEAD:quick-cliques/" + name],
                 capture_output=True, check=True).stdout
             h.update(name.encode() + b"\0" + blob + b"\0")
-        self.assertEqual(len(h.hexdigest()), 64)
+        self.assertEqual(h.hexdigest(),
+                         "2f282f5bd03ab4d9382f304372302e94a2fb933bd3c70e74e7888c6715d7a3fe")
         makefile = (src / "quick-cliques/makefile").read_text()
         for exe in ("printnm", "compdegen", "qc"):
             self.assertIn("$(BIN_DIR)/" + exe, makefile)

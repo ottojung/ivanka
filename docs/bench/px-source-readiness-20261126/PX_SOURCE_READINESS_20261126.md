@@ -70,7 +70,8 @@ no additional large cache. Ten tools remain NONQUALIFYING; issue stays OPEN.
   documented provenance label. No fake pin or acceptance.
 - **quick-cliques source provenance established:** exact HaploConduct source
   pin `24e4d9fc…`; `git rev-parse HEAD:quick-cliques` =
-  `4b41a2badc29877c28a0e903fe7df29a6666a220` (35 tracked files). The recipe
+  `4b41a2badc29877c28a0e903fe7df29a6666a220` (35 tracked files; canonical
+  sorted path+blob digest `2f282f5b…a3fe`). The recipe
   verifies that tree id, checks that `make` produced `bin/qc`, `bin/printnm`
   and `bin/compdegen`, hashes those three into a manifest, and requires a
   build-attested `QC_BINARIES_BUILD_SHA256` — no donor or invented binary hash
@@ -81,8 +82,9 @@ no additional large cache. Ten tools remain NONQUALIFYING; issue stays OPEN.
 
 Unicycler `1429301e…` (README-only 2026 commit), adapter `5ad7874f…`, native
 `cpp_functions.so` `293f8406…`; SPAdes `896694ce…` is exactly tag `v3.15.5`
-(GitHub refs API). **Operator ruling: keep the exact upstream source pin;
-Debian `3.15.5+dfsg-2` version equivalence is NOT accepted.** The frozen image
+(GitHub refs API). **Operator ruling (current task directive to this agent): keep the exact
+upstream source pin; Debian `3.15.5+dfsg-2` version equivalence is NOT
+accepted.** The frozen image
 `a0e7e98d…` is not substituted, copied or modified; the recipe requires a
 guarded-build-attested `SPADES_CORE_SHA256` and fails closed otherwise.
 See `unicycler-source-provenance-20261126.md`.
@@ -102,8 +104,9 @@ PenguiN image inspection in the campaign store.
 
 An independent exact-head review of the prior head `373c252` was requested and
 returned one BLOCKING finding: the donor host-built `ViralQuasispecies` hash was
-asserted against a fresh in-container rebuild. It is closed above; a reviewer
-re-check of the new head is recorded in the board handoff. No build was run.
+asserted against a fresh in-container rebuild. It is closed above; the
+reviewer's re-check result for the new head is recorded in this turn's PX-board
+handoff. No build was run.
 
 ## Non-actions / next gates
 
@@ -113,7 +116,9 @@ claimed: PenguiN still needs a genuine two-cohort pilot with hashed final MAX;
 Unicycler needs an attested `spades-core` from a reviewed armed build guard;
 SAVAGE needs the NumPy archive staged by the operator plus a guarded build slot
 that attests `VIRAL_QUASISPECIES_BUILD_SHA256` and
-`QC_BINARIES_BUILD_SHA256`. Frozen images and existing scratch are untouched.
+`QC_BINARIES_BUILD_SHA256`. No live image build is permitted until an
+independently reviewed armed build guard admits it. Frozen images and existing
+scratch are untouched.
 Old Python/NumPy are bounded offline exploratory dependencies, not a general
 security waiver (see `offline-dependency-scope-20261126.md`). Keep V9ro OPEN;
 `kernel_enforcement=false`; no clinical claim.

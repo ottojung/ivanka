@@ -1,15 +1,20 @@
 """Bounded prospective P1 pilot controller for the combined 950fe331 candidate.
 
 Rebased source-only entrypoint: the previous hwe8M runner (babc4dba,
-"fix/p1-bounded-pilot-runner-integration") is re-based on exact PR520
-``1b6e88c05f09fc8092d2f9dda031e36db02c87a3``. On PR520 the shared guard
+"fix/p1-bounded-pilot-runner-integration") is re-based on exact PR527
+``aad9a2cde61d7e8b12b44268f0135ee5060911ef``. On PR527 the shared guard
 ``fail_closed_guard.p1_harness.run_prospective`` already owns a REAL durable
 controller heartbeat (``heartbeat.Emitter`` before spawn, ``bound(cid)`` and a
 fresh refresh on every watch sample). This controller therefore does NOT inject
 or override a heartbeat: it relies on the guard's real one. It adds only the
 pilot-specific source pins, the matching pinned PX store binding, the 32 GiB
-reserve + 1 GiB reservation admission, its own owner-bound STOP and the bounded
+reserve + 1 GiB reservation admission, its owner-bound STOP and the bounded
 explicit case list.
+
+Cross-campaign exclusion is NOT provided by a pilot-private lock. This
+controller must prove it operates inside the ACTUAL shared PX worker boundary
+(``.global-worker.lock`` plus the watchdog's durable ``.worker-lease.jsonl``
+root and its matching graphroot) or fail closed at ``--check`` time.
 
 No live container, image build, large image import, STOP mutation, lease
 creation or truth-in-assembly occurs by default. ``--check`` is read-only and
@@ -42,7 +47,6 @@ from .p1_full464_controller import (
     ADMISSION_GIB,
     DEFAULT_DATA,
     DEFAULT_FROZEN,
-    DEFAULT_STORAGE_CONF,
     DEFAULT_TIMER,
     MEMORY_BYTES,
     ORIGINAL_IVANKA_IMAGE,
@@ -65,7 +69,7 @@ SCHEMA = "ivanka.p1.bounded-pilot-controller.v2"
 STATUS = "ATTEMPTED_NOT_QUALIFIED"
 SOURCE_COMMIT = "950fe331dfcd857011bfd63f9eeca92462708545"
 PARENT_IMAGE = ORIGINAL_IVANKA_IMAGE
-INTEGRATION_BASE = "1b6e88c05f09fc8092d2f9dda031e36db02c87a3"
+INTEGRATION_BASE = "aad9a2cde61d7e8b12b44268f0135ee5060911ef"
 
 CASES_MANIFEST = Path(__file__).with_name("p1_pilot_cases.json")
 IMAGE_MANIFEST = Path(__file__).with_name("p1_pilot_image_manifest.json")
@@ -75,7 +79,7 @@ CONTAINERFILE = Path(__file__).with_name(
 PINS_V2 = {
     "cases_manifest": "fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de",
     "image_manifest": "95264bf23e5a1a263a26e1b29473552002be0b631632acad12e4f88f6d580263",
-    "storage_conf": "fde2bfd243f011053d929d6ac19d7a968a5e6858b7c35a860ba6cdc163f2eadf",
+    "storage_conf": "fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21",
     "physical_spec": "478c1b7b68943ac5e1ef565c257fd96ba6871184425ace80b026dd2b18cf8f87",
 }
 
@@ -85,12 +89,31 @@ PILOT_RESERVE_GIB = 32
 PILOT_RESERVATION_GIB = 1
 PILOT_REQUIRED_FREE_BYTES = (PILOT_RESERVE_GIB + PILOT_RESERVATION_GIB) * 1024 ** 3
 
-# Dedicated namespace: this pilot owns its STOP, lock and lease journal. It
-# never borrows the shared component-image pilot.lock or another worker's STOP.
+# ACTUAL shared PX worker boundary. A pilot-private lock or lease root cannot
+# exclude a live PX arm: cross-campaign exclusion requires the real
+# ``.global-worker.lock`` and the same durable lease journal the independent
+# watchdog supervises. The graphroot comes from PX's own pinned storage.conf so
+# readiness is bound to the same store namespace. All of these are proven by
+# ``verify_shared_px_boundary`` before any admission; never assumed.
+SHARED_PX_BOUNDARY = {
+    "worker_root": "/workspace/ivanka-exploratory-ten-20261121",
+    "global_lock": "/workspace/ivanka-exploratory-ten-20261121/.global-worker.lock",
+    "lease_root": "/workspace/ivanka-exploratory-ten-20261121",
+    "lease_journal": "/workspace/ivanka-exploratory-ten-20261121/.worker-lease.jsonl",
+    "storage_conf": "/workspace/ivanka-exploratory-ten-20261121/storage.conf",
+    "storage_conf_sha256": "fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21",
+    "graphroot": "/workspace/ivanka-exploratory-podman-20261121/store",
+    "watchdog_alive": "/workspace/ivanka-exploratory-ten-20261121/.watchdog-alive.json",
+}
+PX_ROOT = Path(SHARED_PX_BOUNDARY["worker_root"])
+
 PILOT_ROOT = Path("/workspace/ivanka-p1-pilot-950fe331-20261126")
-DEFAULT_LOCK = str(PILOT_ROOT / "pilot.lock")
+# Exclusion primitives are SHARED with PX; only the STOP sentinel stays
+# owner-bound (it is a boundary request, not an exclusion primitive).
+DEFAULT_LOCK = SHARED_PX_BOUNDARY["global_lock"]
+DEFAULT_LEASE_ROOT = SHARED_PX_BOUNDARY["lease_root"]
 DEFAULT_STOP = str(PILOT_ROOT / "p1-prospective.STOP")
-DEFAULT_LEASE_ROOT = str(PILOT_ROOT / "p1-prospective-leases")
+DEFAULT_STORAGE_CONF = SHARED_PX_BOUNDARY["storage_conf"]
 DEFAULT_EVIDENCE_ROOT = str(PILOT_ROOT / "evidence")
 SLOT_AUTH_PATH = PILOT_ROOT / "operator-slot.json"
 PENDING_SLOT = "NO-SLOT-GRANTED"
@@ -156,6 +179,74 @@ def verify_px_store_binding(storage_conf, *, expected_graphroot=None,
         raise ValueError("watchdog graphroot does not match pinned PX store")
     return {"storage_conf": str(conf), "storage_conf_sha256": digest,
             "graphroot": graphroot}
+
+
+def verify_shared_px_boundary(*, lock, lease_root, watchdog_path,
+                              storage_conf, graphroot, expected=None):
+    """Fail closed unless the pilot is inside the ACTUAL shared PX boundary.
+
+    A pilot-private ``pilot.lock`` or a private lease journal cannot exclude a
+    live PX arm. Exclusion is only real when both campaigns contend for the
+    same ``.global-worker.lock`` and write leases to the same durable journal
+    that the independent watchdog discovers and supervises. Readiness must be
+    bound to that watchdog's graphroot. This proof is read-only: it never
+    acquires a lock, writes a lease, creates a STOP or touches a container.
+    """
+    exp = dict(expected or SHARED_PX_BOUNDARY)
+
+    def _resolve(value, label):
+        path = Path(value)
+        if path.is_symlink():
+            raise ValueError(f"shared PX {label} is a symlink")
+        return path.resolve()
+
+    lock_path = _resolve(lock, "global worker lock")
+    if lock_path != Path(exp["global_lock"]).resolve():
+        raise ValueError("lock is not the actual PX .global-worker.lock; "
+                         "a pilot-private lock cannot exclude PX")
+    if not lock_path.is_file():
+        raise ValueError("actual PX global-worker lock is missing")
+
+    lease_path = _resolve(lease_root, "lease root")
+    if lease_path != Path(exp["lease_root"]).resolve():
+        raise ValueError("lease root is not the shared PX worker root")
+    if not lease_path.is_dir():
+        raise ValueError("shared PX lease root is missing")
+
+    journal = _resolve(Path(lease_root) / ".worker-lease.jsonl", "lease journal")
+    if journal != Path(exp["lease_journal"]).resolve():
+        raise ValueError("lease journal is not the PX durable lease journal")
+    if not journal.is_file():
+        raise ValueError("shared PX durable lease journal is missing")
+
+    conf = _resolve(storage_conf, "storage.conf")
+    if conf != Path(exp["storage_conf"]).resolve():
+        raise ValueError("storage.conf is not the actual PX storage.conf")
+    if not conf.is_file():
+        raise ValueError("actual PX storage.conf is missing")
+    if sha256(conf) != exp["storage_conf_sha256"]:
+        raise ValueError("PX storage.conf pin differs")
+
+    if str(graphroot) != str(exp["graphroot"]):
+        raise ValueError("graphroot differs from the PX watchdog graphroot; "
+                         "readiness would bind to a foreign store")
+
+    alive = _resolve(watchdog_path, "watchdog readiness record")
+    if alive != Path(exp["watchdog_alive"]).resolve():
+        raise ValueError("watchdog readiness record is not the shared PX ALIVE record")
+
+    return {
+        "shared": True,
+        "global_lock": str(lock_path),
+        "lease_root": str(lease_path),
+        "lease_journal": str(journal),
+        "storage_conf": str(conf),
+        "storage_conf_sha256": exp["storage_conf_sha256"],
+        "graphroot": str(graphroot),
+        "watchdog_alive": str(alive),
+        "watchdog_alive_present": alive.is_file(),
+        "kernel_enforcement": False,
+    }
 
 
 def _default_inspect(image, fmt):
@@ -428,7 +519,7 @@ def run_case(*, case_id, role, case_dir, destination, image, commit, timer,
         execution.env = dict(spawn_env)
         execution.spawn(cidfile, spawn_env, timeout=spawn_timeout)
 
-    # PR520 guard owns the real durable heartbeat (before_spawn / bound /
+    # PR527 guard owns the real durable heartbeat (before_spawn / bound /
     # refresh). No caller-supplied heartbeat is passed or overridden here.
     guard_stop.arm(stop_path, owner)
     source_hashes = candidate_source_hashes(dest, hashes, image)
@@ -561,6 +652,11 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
     verify_pins(Path(args.data), Path(args.frozen_results), Path(args.timer))
     store = verify_px_store_binding(
         store_conf or args.storage_conf, expected_sha=PINS_V2["storage_conf"])
+    shared = verify_shared_px_boundary(
+        lock=args.lock, lease_root=args.lease_root,
+        watchdog_path=args.watchdog_path,
+        storage_conf=store_conf or args.storage_conf,
+        graphroot=store["graphroot"])
     contract = verify_image_contract(
         args.image, args.commit, inspect=image_inspect,
         image_manifest=image_doc or image_manifest)
@@ -583,10 +679,11 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         "cases_manifest_sha256": cases_sha,
         "image_manifest_sha256": image_sha,
         "storage": store,
+        "shared_px_boundary": shared,
         "watchdog": {
             "path": str(args.watchdog_path),
             "graphroot": store["graphroot"],
-            "graphroot_source": "pinned PX storage.conf (match by construction)",
+            "graphroot_source": "shared PX storage.conf (match by construction)",
         },
         "disk_admission": {
             "reserve_gib": PILOT_RESERVE_GIB,
@@ -671,6 +768,11 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
     slot = verify_operator_slot(args.slot, wall=wall)
     if not args.armed:
         raise ValueError("--armed required to spawn; source-only until slot granted")
+    if not manifest.get("shared_px_boundary", {}).get("shared"):
+        raise ValueError("shared PX worker boundary not proven at preparation")
+    if (args.lock != SHARED_PX_BOUNDARY["global_lock"]
+            or args.lease_root != SHARED_PX_BOUNDARY["lease_root"]):
+        raise ValueError("execution must use the shared PX lock and lease root")
     if manifest["paths"]["stop"] != DEFAULT_STOP:
         raise ValueError("pilot must use its own owner-bound STOP")
     summary["slot"] = slot["slot"]

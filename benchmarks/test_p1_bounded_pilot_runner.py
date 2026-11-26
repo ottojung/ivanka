@@ -1,4 +1,4 @@
-"""Deterministic injected tests for the PR520-rebased bounded P1 pilot controller.
+"""Deterministic injected tests for the PR527-rebased bounded P1 pilot controller.
 
 No live podman, no image build/import, no real STOP/lease, no frozen receipt
 mutation and no /tmp evidence paths. The shared guard's real heartbeat is
@@ -110,13 +110,23 @@ class DesignAndSourceTests(unittest.TestCase):
         self.assertEqual(runner.PILOT_RESERVATION_GIB, 1)
         self.assertEqual(runner.PILOT_REQUIRED_FREE_BYTES, 33 * 1024 ** 3)
 
-    def test_dedicated_stop_lock_lease_not_shared(self):
+    def test_shared_px_lock_lease_and_graphroot_defaults(self):
+        self.assertEqual(runner.DEFAULT_LOCK,
+                         runner.SHARED_PX_BOUNDARY["global_lock"])
+        self.assertEqual(runner.DEFAULT_LEASE_ROOT,
+                         runner.SHARED_PX_BOUNDARY["lease_root"])
+        self.assertEqual(runner.DEFAULT_STORAGE_CONF,
+                         runner.SHARED_PX_BOUNDARY["storage_conf"])
+        self.assertEqual(runner.PINS_V2["storage_conf"],
+                         runner.SHARED_PX_BOUNDARY["storage_conf_sha256"])
+        self.assertEqual(runner.INTEGRATION_BASE,
+                         "aad9a2cde61d7e8b12b44268f0135ee5060911ef")
+        # STOP stays owner-bound; exclusion primitives must be shared with PX.
         self.assertEqual(runner.DEFAULT_STOP,
                          str(runner.PILOT_ROOT / "p1-prospective.STOP"))
-        self.assertNotIn("component-image", runner.DEFAULT_STOP)
-        self.assertNotIn("component-image", runner.DEFAULT_LOCK)
-        self.assertTrue(runner.DEFAULT_STOP.startswith("/workspace"))
-        self.assertNotIn("/tmp", runner.DEFAULT_LEASE_ROOT)
+        self.assertNotEqual(runner.DEFAULT_LOCK,
+                            str(runner.PILOT_ROOT / "pilot.lock"))
+        self.assertNotIn(str(runner.PILOT_ROOT), runner.DEFAULT_LEASE_ROOT)
 
     def test_no_name_based_kill_or_old_rss_tree(self):
         src = Path(runner.__file__).read_text()
@@ -127,7 +137,8 @@ class DesignAndSourceTests(unittest.TestCase):
         guard_src = Path(runner.p1_harness.__file__).read_text()
         self.assertIn("heartbeat.Emitter", guard_src)
         self.assertIn("before_spawn", guard_src)
-        self.assertIn("heartbeat=emitter.refresh", guard_src)
+        self.assertIn("heartbeat=refresh_ready", guard_src)
+        self.assertIn("emitter.refresh()", guard_src)
         runner_src = Path(runner.__file__).read_text()
         self.assertNotIn("heartbeat=", runner_src)
 
@@ -225,6 +236,83 @@ class PinAndBindingTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runner.verify_operator_slot("slot-abc", path=path,
                                             wall=lambda: 99999999999)
+
+
+class SharedBoundaryTests(unittest.TestCase):
+    """Fail-closed proof that exclusion is shared with PX, never pilot-private."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / ".global-worker.lock").write_text("")
+        (self.root / ".worker-lease.jsonl").write_text("")
+        (self.root / "storage.conf").write_text(
+            '[storage]\ngraphroot = "/workspace/px/store"\n')
+        self.exp = {
+            "worker_root": str(self.root),
+            "global_lock": str(self.root / ".global-worker.lock"),
+            "lease_root": str(self.root),
+            "lease_journal": str(self.root / ".worker-lease.jsonl"),
+            "storage_conf": str(self.root / "storage.conf"),
+            "storage_conf_sha256": runner.sha256(self.root / "storage.conf"),
+            "graphroot": "/workspace/px/store",
+            "watchdog_alive": str(self.root / ".watchdog-alive.json"),
+        }
+
+    def proof(self, **kw):
+        values = {"lock": self.exp["global_lock"],
+                  "lease_root": self.exp["lease_root"],
+                  "watchdog_path": self.exp["watchdog_alive"],
+                  "storage_conf": self.exp["storage_conf"],
+                  "graphroot": self.exp["graphroot"]}
+        values.update(kw)
+        return runner.verify_shared_px_boundary(expected=self.exp, **values)
+
+    def test_real_shared_boundary_is_accepted(self):
+        got = self.proof()
+        self.assertTrue(got["shared"])
+        self.assertEqual(got["graphroot"], "/workspace/px/store")
+        self.assertFalse(got["watchdog_alive_present"])
+        self.assertFalse(got["kernel_enforcement"])
+
+    def test_pilot_private_lock_fails_closed(self):
+        with self.assertRaises(ValueError):
+            self.proof(lock="/workspace/ivanka-p1-pilot-950fe331-20261126/pilot.lock")
+
+    def test_private_lease_root_fails_closed(self):
+        priv = self.root / "p1-prospective-leases"
+        priv.mkdir()
+        (priv / ".worker-lease.jsonl").write_text("")
+        with self.assertRaises(ValueError):
+            self.proof(lease_root=str(priv))
+
+    def test_wrong_watchdog_alive_path_fails_closed(self):
+        with self.assertRaises(ValueError):
+            self.proof(watchdog_path=str(self.root / "private-alive.json"))
+
+    def test_foreign_graphroot_fails_closed(self):
+        with self.assertRaises(ValueError):
+            self.proof(graphroot="/workspace/other/store")
+
+    def test_drifted_storage_conf_pin_fails_closed(self):
+        self.exp["storage_conf_sha256"] = "0" * 64
+        with self.assertRaises(ValueError):
+            self.proof()
+
+    def test_symlinked_lock_fails_closed(self):
+        other = self.root / "elsewhere.lock"
+        other.write_text("")
+        link = self.root / ".global-worker.lock"
+        link.unlink()
+        link.symlink_to(other)
+        with self.assertRaises(ValueError):
+            self.proof()
+
+    def test_missing_lease_journal_fails_closed(self):
+        (self.root / ".worker-lease.jsonl").unlink()
+        with self.assertRaises(ValueError):
+            self.proof()
 
 
 class RunCaseTests(unittest.TestCase):
@@ -401,6 +489,8 @@ class PrepareTests(unittest.TestCase):
                                return_value={"storage_conf": str(args.storage_conf),
                                              "storage_conf_sha256": "f" * 64,
                                              "graphroot": graphroot}), \
+             mock.patch.object(runner, "verify_shared_px_boundary",
+                               return_value={"shared": True}), \
              mock.patch.object(runner, "verify_image_contract",
                                return_value={"labels": {}, "parent": runner.PARENT_IMAGE}), \
              mock.patch.object(runner, "_disk_free", return_value=33 * 1024 ** 3), \
@@ -426,6 +516,8 @@ class PrepareTests(unittest.TestCase):
         with mock.patch.object(runner, "verify_pins", return_value=True), \
              mock.patch.object(runner, "verify_px_store_binding",
                                return_value={"graphroot": "/workspace/px/store"}), \
+             mock.patch.object(runner, "verify_shared_px_boundary",
+                               return_value={"shared": True}), \
              mock.patch.object(runner, "verify_image_contract", return_value={}), \
              mock.patch.object(runner, "_disk_free", return_value=32 * 1024 ** 3):
             with self.assertRaises(ValueError):

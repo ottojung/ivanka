@@ -1,4 +1,4 @@
-# Bounded prospective P1 pilot controller — combined 950fe331 on exact PR520 (source only)
+# Bounded prospective P1 pilot controller — combined 950fe331 on exact PR527 (source only)
 
 **Verdict: SOURCE-READY, NO-GO for live execution.** This change implements a
 runnable controller and a prepared image recipe. It does **not** build or import
@@ -12,52 +12,70 @@ is gated on watchdog deployment plus an exact operator slot token.
 |---|---|---|
 | Candidate source | `950fe331dfcd857011bfd63f9eeca92462708545` | combined PR506+PR516 head, 112/112 native, 0 regressions |
 | Candidate branch | `science/combined-pr506-pr516-20261126` | already remote, bundle retained |
-| Candidate binary | `8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786` | native release build |
+| Candidate binary | `8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786` | native release build, verified present; NOT rebuilt |
 | Previous hwe8M runner | `babc4dba90d7753a18458f284951c3452c26e8ef` | `fix/p1-bounded-pilot-runner-integration`, base `0e6969fd` |
-| Rebase target | `1b6e88c05f09fc8092d2f9dda031e36db02c87a3` | exact PR520 (`Close P1 harness review: lock-first ordering, heartbeat, capped policy`) |
-| This branch | `science/p1-bounded-pilot-950fe331-on-pr520-20261126` | clean worktree from exact PR520 |
-| Exact head | `63becaa4417a8fb4e8684e0e4daeadc8e32d9c69` | parent exactly `1b6e88c0`; no force-push/history rewrite |
-| Fallback bundle | `p1-pilot-<exact-head-prefix>.bundle` (recreated after final commit; SHA in operator handoff) | `git bundle verify` OK, prerequisite `1b6e88c0` |
-| Integration base diff | only 6 new files; **zero** guard/frozen/source changes | additive |
+| Prior rebase (superseded) | `7567302af86593e9bff9ac69fc6d13162dd51d28` | was on exact PR520 `1b6e88c0`; bundle retained |
+| Rebase target | `aad9a2cde61d7e8b12b44268f0135ee5060911ef` | **exact PR527 head** (`docs(watchdog): reconcile safety-status to wired implementation`); PR527 = `p1/reconciled-watchdog-current-main-20261126`, base main `bc98e05` |
+| This branch | `science/p1-bounded-pilot-950fe331-on-pr527-20261126` | clean worktree, single commit rebased onto exact PR527 |
+| Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | single commit whose parent is exactly `aad9a2cd…`; no force-push / history rewrite |
+| Fallback bundle | `p1-pilot-7567302a.bundle` (prior base) — verify with prerequisite `1b6e88c0`; the current source is the rebased branch above | offline provenance only |
+| Integration base diff | 6 changed paths (runner, tests, 2 manifests, Containerfile, this runbook); **zero** guard/frozen/source changes | additive only |
 
-Rebase recipe (already performed):
+The stale `63becaa4…` / `7567302a…` / PR520 references are superseded by this
+PR527 rebase. Rebase recipe (performed in the existing worktree):
 ```sh
-git worktree add -b science/p1-bounded-pilot-950fe331-on-pr520-20261126 \
-  /workspace/ivanka-p1-pilot-950fe331-20261126 1b6e88c05f09fc8092d2f9dda031e36db02c87a3
+git fetch origin aad9a2cde61d7e8b12b44268f0135ee5060911ef
+git rebase aad9a2cde61d7e8b12b44268f0135ee5060911ef
 # port only the runner + tests from babc4dba; do NOT carry babc4dba's 4-line
-# p1_harness.py heartbeat patch: PR520 already owns a REAL durable heartbeat.
+# p1_harness.py heartbeat patch: PR527 already owns a REAL durable heartbeat.
 ```
+Rebase was clean (1/1); parent is exactly the PR527 head.
 
 ### Why the hwe8M patch was adapted, not copied
-- PR520 `p1_harness.run_prospective` already calls `heartbeat.Emitter(lease_root,
-  ident)`, `before_spawn()`, `bound(cid)` and `heartbeat=emitter.refresh` on every
-  watch sample. Passing a caller `heartbeat=` (babc4dba) would override the real
-  observer with an injected one. The rebased runner passes **no** heartbeat and
-  records `heartbeat=guard_owned_real_emitter`.
-- PR520 adds exact-CID double `binding.inspect_pid` plus re-inspection proof on
-  bind. The injected tests were updated accordingly (hwe8M's injected bind alone
-  is insufficient on PR520).
-- PR520 enforces lock-first ordering, a durable pre-spawn lease, capped deadline,
+- PR527 `p1_harness.run_prospective` already calls `heartbeat.Emitter(lease_root,
+  ident)`, `before_spawn()`, `bound(cid)` and refreshes the real emitter on every
+  watch sample via a guard-internal `refresh_ready()` that ALSO re-checks
+  watchdog readiness. Passing a caller `heartbeat=` (babc4dba) would override
+  the real observer with an injected one. The rebased runner passes **no**
+  heartbeat and records `heartbeat=guard_owned_real_emitter`.
+- PR527 adds exact-CID double `binding.inspect_pid` plus re-inspection proof on
+  bind and a fail-closed receipt-race closure. The injected tests were updated
+  (hwe8M's injected bind alone is insufficient on PR527).
+- PR527 enforces lock-first ordering, a durable pre-spawn lease, capped deadline,
   owner-bound STOP retirement and `strict_proof=True`. All are inherited
   unchanged; the controller only supplies pinned inputs and policy values.
 
 ## 2. Gates implemented in the controller
 
-1. **Matching pinned PX store** — `verify_px_store_binding()` reads the pinned
-   `storage.conf` (SHA `fde2bfd243f011053d929d6ac19d7a968a5e6858b7c35a860ba6cdc163f2eadf`),
-   parses `graphroot` from TOML and passes that exact graphroot to the guard. The
-   watchdog ALIVE record must name it (`watchdog_contract.require_watchdog_readiness`)
-   or admission fails closed. No operator-supplied graphroot string can unblock a
-   foreign store: the match is by construction.
+1. **Matching pinned PX store / shared graphroot** — `verify_px_store_binding()`
+   reads the **actual PX** `storage.conf`
+   (`/workspace/ivanka-exploratory-ten-20261121/storage.conf`, SHA
+   `fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21`),
+   parses `graphroot` (`/workspace/ivanka-exploratory-podman-20261121/store`)
+   and passes that exact graphroot to the guard. The watchdog ALIVE record must
+   name it (`watchdog_contract.require_watchdog_readiness`) or admission fails
+   closed. A foreign/operator-supplied graphroot cannot unblock admission.
 2. **32 GiB + 1 GiB free** — `PILOT_RESERVE_GIB=32`, `PILOT_RESERVATION_GIB=1`,
    required free `>= 33 GiB` before any arm, plus the guard's independent
    `disk.check_reserve(32 GiB)` re-checked before every sample. Unreadable disk
    is a null measurement, never zero.
-3. **Exact pre-spawn lease + own STOP** — dedicated
-   `p1-prospective.STOP`, `pilot.lock` and `p1-prospective-leases` under
-   `/workspace/ivanka-p1-pilot-950fe331-20261126/`; never the shared
-   component-image namespace. STOP is owner-bound, retired only after exact-CID
-   teardown proof by the same owner.
+3. **ACTUAL shared PX worker boundary (fail closed)** — a pilot-private
+   `pilot.lock` / private lease journal cannot exclude a live PX arm.
+   `verify_shared_px_boundary()` proves, read-only, at `--check` time that:
+   - the lock is the real `/workspace/ivanka-exploratory-ten-20261121/.global-worker.lock`
+     (not a symlink, present);
+   - the lease root is the shared PX worker root
+     `/workspace/ivanka-exploratory-ten-20261121` with its real durable
+     `.worker-lease.jsonl` journal — the same journal the independent watchdog
+     discovers and supervises;
+   - `storage.conf` is the actual PX config and matches its SHA pin;
+   - the derived graphroot equals the PX watchdog graphroot (same store);
+   - the watchdog readiness path is the shared PX `.watchdog-alive.json` record.
+   Any mismatch, symlink or missing durable artifact raises `ValueError` and the
+   prepared manifest is not written. `run()` re-checks the recorded proof and
+   the exact lock/lease-root values before any spawn. The owner-bound STOP
+   (`p1-prospective.STOP`) remains pilot-owned because a STOP is a boundary
+   request, not an exclusion primitive.
 4. **Real heartbeat** — guard-owned, durable, CID-bound and refreshed throughout
    the watch. No caller heartbeat injection.
 5. **No truth in the assembler** — `assert_reference_blind()` enforces exactly
@@ -66,18 +84,19 @@ git worktree add -b science/p1-bounded-pilot-950fe331-on-pr520-20261126 \
    scorer after guarded exit.
 6. **Exact slot gate** — default is `--check` (read-only). Live execution requires
    both `--armed` and an exact token from `operator-slot.json` (schema
-   `ivanka.p1.operator-slot.v1`, non-expired). No token, no spawn.
+   `ivanka.p1.operator-slot.v1`, non-expired). No token, no spawn. The shared
+   boundary proof is mandatory even for `--check`.
 
 ## 3. Deliverable files / manifests
 
 | File | Purpose |
 |---|---|
 | `benchmarks/expanded/p1_bounded_pilot_runner.py` | runnable controller (`python -m expanded.p1_bounded_pilot_runner`), `--check` / `--armed --slot` |
-| `benchmarks/test_p1_bounded_pilot_runner.py` | 18 deterministic injected tests, no live podman |
+| `benchmarks/test_p1_bounded_pilot_runner.py` | 26 deterministic injected tests, no live podman; 8 assert shared-boundary fail-closed |
 | `benchmarks/expanded/p1_pilot_cases.json` | source-pinned case manifest (SHA256 `fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de`) |
 | `benchmarks/expanded/p1_pilot_image_manifest.json` | source-pinned image manifest (SHA256 `95264bf23e5a1a263a26e1b29473552002be0b631632acad12e4f88f6d580263`) |
 | `benchmarks/expanded/Containerfile.p1-pilot-950fe331-binary-only` | prepared, **not built** |
-| `docs/bench/p1-bounded-pilot-950fe331-on-pr520-20261126.md` | this runbook |
+| `docs/bench/p1-bounded-pilot-950fe331-on-pr527-20261126.md` | this runbook |
 
 Both manifests are self-verified by SHA before use. The image manifest pins:
 parent `da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad`
@@ -125,16 +144,18 @@ No full-464 rerun. Truth is never in the assembler argv or mounts.
 ## 5. Exact commands
 
 Preparation (read-only; safe now, no image needed beyond the pin check — supply
-the built digest once available):
+the built digest once available). Note the shared PX lock/lease and the shared PX
+store/watchdog record are the defaults and are proven by `--check`:
 ```sh
 cd /workspace/ivanka-p1-pilot-950fe331-20261126
 PYTHONPATH=.:benchmarks python3 -m expanded.p1_bounded_pilot_runner \
   --check \
   --out /workspace/ivanka-p1-pilot-950fe331-20261126/evidence/<run-id> \
   --image <64-hex-built-candidate-digest> \
-  --watchdog-path /run/service/ivanka-watchdog/.watchdog-alive.json \
-  --storage-conf /workspace/ivanka-podman-overlay-20261103/storage.conf
-# writes prepared_manifest.json + check_summary.json; spawned=false
+  --watchdog-path /workspace/ivanka-exploratory-ten-20261121/.watchdog-alive.json \
+  --storage-conf /workspace/ivanka-exploratory-ten-20261121/storage.conf
+# writes prepared_manifest.json (with shared_px_boundary proof) + check_summary.json;
+# spawned=false; no lock acquired, no lease/STOP written
 ```
 
 Live run — **only after watchdog deployment and exact slot grant**:
@@ -143,16 +164,18 @@ PYTHONPATH=.:benchmarks python3 -m expanded.p1_bounded_pilot_runner \
   --armed --slot <exact-token-from-operator-slot.json> \
   --out /workspace/ivanka-p1-pilot-950fe331-20261126/evidence/<run-id> \
   --image <64-hex-built-candidate-digest> \
-  --watchdog-path /run/service/ivanka-watchdog/.watchdog-alive.json \
+  --watchdog-path /workspace/ivanka-exploratory-ten-20261121/.watchdog-alive.json \
   --cases equal_strains-s000,equal_strains-s002,equal_strains-s006,equal_strains-s015,clonal-s000,coverage_hole-s002,physical-canary-R042
 ```
+Do not pass `--lock` or `--lease-root`: they default to the proven shared PX
+resources. Any override that points at a pilot-private lock/lease fails closed.
 
 ## 6. Tests (run; all green)
 
 ```sh
 cd /workspace/ivanka-p1-pilot-950fe331-20261126
 PYTHONPATH=.:benchmarks python3 -m pytest -q benchmarks/test_p1_bounded_pilot_runner.py
-# 18 passed (no live podman, no build, no frozen mutation)
+# 26 passed (no live podman, no build, no frozen mutation)
 
 PYTHONPATH=.:benchmarks python3 -m pytest -q \
   benchmarks/test_p1_bounded_pilot_runner.py \
@@ -172,30 +195,31 @@ PYTHONPATH=.:benchmarks python3 -m pytest -q \
   benchmarks/test_exploratory_space.py \
   benchmarks/test_exploratory_pilot_guard.py \
   benchmarks/test_guarded_canary_launcher.py
-# 422 passed
 
-ruff check --select E4,E9,F,B006,B018,B023 \
+python3 -m ruff check --select E4,E9,F,B006,B018,B023 \
   benchmarks/expanded/p1_bounded_pilot_runner.py \
   benchmarks/test_p1_bounded_pilot_runner.py   # All checks passed
-git diff --check 1b6e88c0 -- .                 # clean
+git diff --check aad9a2cde61d7e8b12b44268f0135ee5060911ef -- .   # clean
 ```
 
 To inspect the exact source in a clean clone:
 ```sh
-git fetch origin science/p1-bounded-pilot-950fe331-on-pr520-20261126
-git rev-parse FETCH_HEAD   # MUST be 63becaa4417a8fb4e8684e0e4daeadc8e32d9c69
-# or, offline:
-git bundle verify p1-pilot-63becaa4.bundle   # prerequisite 1b6e88c0
-git clone p1-pilot-63becaa4.bundle <dst> && git -C <dst> checkout 63becaa4
+git fetch origin science/p1-bounded-pilot-950fe331-on-pr527-20261126
+git rev-parse FETCH_HEAD   # exact tip SHA posted to the P1 board
+git log --format='%H %P' -1 FETCH_HEAD   # parent MUST be aad9a2cd…
 ```
-No push, PR, merge or deployment was performed by this source preparation.
 
 ## 7. Boundary / operator checklist
 
 - [ ] Independent reviewer approves this exact branch head.
-- [ ] Shared watchdog deployed; ALIVE record names the pinned PX graphroot.
+- [ ] `--check` prepared manifest contains `shared_px_boundary.shared=true`, the
+      real PX `.global-worker.lock`, the shared `.worker-lease.jsonl` root and
+      the PX graphroot; no pilot-private lock/lease is used.
+- [ ] Shared watchdog deployed with `WATCHDOG_ROOT` = the PX worker root; its
+      ALIVE record names the pinned PX graphroot and is freshly identity-bound.
 - [ ] Operator writes `operator-slot.json` with the exact slot token and expiry.
-- [ ] Free space `>= 33 GiB` on shared `/workspace`; no competing worker holds the lock.
+- [ ] Free space `>= 33 GiB` on shared `/workspace`; no competing worker holds
+      the shared PX lock.
 - [ ] Binary-only image built from the prepared recipe; digest/labels match the manifest.
 - [ ] `--check` manifest reviewed; then (and only then) `--armed --slot`.
 - Keep the issue open. `STATUS=ATTEMPTED_NOT_QUALIFIED`, `qualified=false`,

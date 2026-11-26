@@ -30,7 +30,8 @@ def absent_inspect(cid, *, other=False):
     """Real podman error naming the exact CID it cannot find."""
     named = "f" * 64 if other else cid
     return subprocess.CalledProcessError(
-        1, ["podman", "inspect"], stderr=f'Error: no such object: "{named}"')
+        1, ["podman", "inspect", "--format", "{{.Id}} {{.State.Pid}}", cid],
+        stderr=f'Error: no such object: "{named}"')
 
 
 class NaturalExitInterleavings(WatchdogTests):
@@ -147,6 +148,22 @@ class ProofShapeInterleavings(unittest.TestCase):
         with patch.object(teardown, "command",
                           side_effect=self._inspect(absent_inspect(CID))):
             self.assertFalse(teardown._inspected(self.env, CID))
+
+    def test_absence_uses_only_exact_unambiguous_stderr(self):
+        argv = ["podman", "inspect", "--format", "{{.Id}} {{.State.Pid}}", CID]
+        for detail in (
+            None, "no such object", f'Error: no such object: "{"f" * 64}"',
+            f'Error: no such object: "{CID}0"',
+            f'Error: no such object: "{CID}"\nError: database unavailable',
+            f'Error: no such object: "{"f" * 64}" (requested {CID})',
+        ):
+            with self.subTest(detail=detail):
+                exc = subprocess.CalledProcessError(1, argv, stderr=detail)
+                self.assertFalse(binding.absent_evidence(exc, CID))
+        for detail in (f'Error: no such object: "{CID}"',
+                       f'Error: no such container: {CID}'.encode()):
+            self.assertTrue(binding.absent_evidence(
+                subprocess.CalledProcessError(1, argv, stderr=detail), CID))
 
     def test_wrong_fields_raise_instead_of_returning_false(self):
         for value in (f"{CID}\n", f"{CID} 100 extra\n",

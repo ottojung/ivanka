@@ -53,9 +53,15 @@ def absent_evidence(exc, cid):
     detail = getattr(exc, "stderr", "") or ""
     if isinstance(detail, bytes):
         detail = detail.decode("utf-8", "replace")
-    detail = (detail + " " + str(exc)).lower()
-    return (cid in detail and ("no such object" in detail
-                               or "no such container" in detail))
+    # CalledProcessError.__str__ includes the requested CID in its argv,
+    # even when stderr names an unrelated object. Only an unambiguous
+    # diagnostic naming the exact CID is evidence, not the invocation.
+    if not CID.fullmatch(cid) or not isinstance(detail, str):
+        return False
+    return re.fullmatch(
+        r"""(?:Error:\s*)?no such (?:object|container):?\s+(?P<quote>["']?)"""
+        + re.escape(cid) + r"(?P=quote)", detail.strip(),
+        flags=re.IGNORECASE) is not None
 
 
 def inspect_pid(cid, env):

@@ -1,5 +1,5 @@
 {
-  "published_at": "2026-11-26T13:37:26.689789+00:00",
+  "published_at": "2026-11-26T13:43:48.140000+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -274057,11 +274057,11 @@
             "haploflow",
             "spades",
             "velvet",
-            "ray",
+            "minia",
             "soapdenovo2",
-            "idba-ud",
+            "ray",
             "fermi-lite",
-            "minia"
+            "idba-ud"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -275220,8 +275220,8 @@
           "failures": [
             "haploflow",
             "velvet",
-            "ray",
-            "soapdenovo2"
+            "soapdenovo2",
+            "ray"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -286719,8 +286719,8 @@
           },
           "exact_profiles": {},
           "failures": [
-            "idba-ud",
-            "fermi-lite"
+            "fermi-lite",
+            "idba-ud"
           ],
           "floor_ok": true,
           "measurement_evidence": {
@@ -379527,11 +379527,11 @@
             "haploflow",
             "spades",
             "velvet",
-            "ray",
+            "minia",
             "soapdenovo2",
-            "idba-ud",
+            "ray",
             "fermi-lite",
-            "minia"
+            "idba-ud"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -380692,8 +380692,8 @@
           "failures": [
             "haploflow",
             "velvet",
-            "ray",
-            "soapdenovo2"
+            "soapdenovo2",
+            "ray"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -392209,8 +392209,8 @@
           },
           "exact_profiles": {},
           "failures": [
-            "idba-ud",
-            "fermi-lite"
+            "fermi-lite",
+            "idba-ud"
           ],
           "family": "physical",
           "floor_ok": true,

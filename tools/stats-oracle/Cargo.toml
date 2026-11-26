@@ -1,0 +1,14 @@
+[package]
+name = "ivanka-stats-oracle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-only"
+
+# Standalone provenance harness. It is intentionally outside the main
+# workspace and never links production Ivanka code.
+[workspace]
+
+[[bin]]
+name = "stats-oracle"
+path = "src/main.rs"

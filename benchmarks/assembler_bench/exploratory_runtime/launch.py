@@ -6,7 +6,7 @@ import os
 import subprocess
 import time
 
-from assembler_bench.exploratory_space import admit
+from assembler_bench.exploratory_space import admit_reserve
 
 from fail_closed_guard import identity, lease, teardown
 from fail_closed_guard import proc as process_snapshot
@@ -31,7 +31,7 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
         guard_env = {**os.environ,
                      "CONTAINERS_STORAGE_CONF": str(root / "storage.conf")}
         lease.require_clear(root, guard_env)
-        admit(reg, base, root, base["image_store"], base["workspace"], reserve_bytes)
+        admit_reserve(reg, base, root, base["image_store"], base["workspace"], reserve_bytes)
         ident = tool + "-" + str(time.time_ns())
         argv, cidfile = bind_pilot(root, mode, argv, ident)
         # Ownership is durably recorded before a process/container exists, so

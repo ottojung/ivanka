@@ -113,8 +113,8 @@ class RamScopeTests(unittest.TestCase):
 
     def test_legacy_receipt_keeps_raw_bytes_without_comparable_peak(self):
         self._write()
-        _, merged, _, _ = ingest(self.report, self.evidence,
-                                 self.root, self.source)
+        updated, merged, _, _ = ingest(self.report, self.evidence,
+                                        self.root, self.source)
         real = next(r for r in merged["runs"] if r["cohort"] == "real")
         row = next(s for s in real["samples"] if s["alias"] == "R037")
         arm = row["diagnostics"]["skesa"]
@@ -124,7 +124,7 @@ class RamScopeTests(unittest.TestCase):
         self.assertEqual(arm[LAUNCHER_DIAGNOSTIC], MIB)
         self.assertEqual(arm["peak_ram_scope"], LEGACY_SCOPE)
         self.assertEqual(proof["peak_rss_bytes"], RAW)
-        validate_publication(merged, self.evidence)
+        validate_publication(merged, updated)
 
     def test_attested_container_receipt_publishes_comparable_peak(self):
         attestation = {
@@ -135,8 +135,8 @@ class RamScopeTests(unittest.TestCase):
         self.receipt.update(attestation)
         self.resource.update(attestation)
         self._write()
-        _, merged, _, _ = ingest(self.report, self.evidence,
-                                 self.root, self.source)
+        updated, merged, _, _ = ingest(self.report, self.evidence,
+                                        self.root, self.source)
         real = next(r for r in merged["runs"] if r["cohort"] == "real")
         row = next(s for s in real["samples"] if s["alias"] == "R037")
         arm = row["diagnostics"]["skesa"]
@@ -146,7 +146,7 @@ class RamScopeTests(unittest.TestCase):
         self.assertEqual(proof["peak_ram_method_version"],
                          COMPARABLE_METHOD_VERSION)
         self.assertNotIn(LAUNCHER_DIAGNOSTIC, arm)
-        validate_publication(merged, self.evidence)
+        validate_publication(merged, updated)
 
     def test_forged_side_file_attestation_never_promotes_legacy_peak(self):
         # The receipt stays legacy; only the unbound side files are forged.
@@ -158,8 +158,8 @@ class RamScopeTests(unittest.TestCase):
         self.resource.update(attestation)
         self.result["samples"][0].update(attestation)
         self._write()
-        _, merged, _, _ = ingest(self.report, self.evidence,
-                                 self.root, self.source)
+        updated, merged, _, _ = ingest(self.report, self.evidence,
+                                        self.root, self.source)
         real = next(r for r in merged["runs"] if r["cohort"] == "real")
         row = next(s for s in real["samples"] if s["alias"] == "R037")
         arm = row["diagnostics"]["skesa"]
@@ -169,7 +169,7 @@ class RamScopeTests(unittest.TestCase):
         self.assertEqual(arm[LAUNCHER_DIAGNOSTIC], MIB)
         self.assertEqual(arm["peak_ram_scope"], LEGACY_SCOPE)
         self.assertEqual(proof["peak_rss_bytes"], RAW)
-        validate_publication(merged, self.evidence)
+        validate_publication(merged, updated)
 
     def test_receipt_alone_attests_comparable_peak(self):
         # Side files carry no attestation; the bound receipt is authoritative.
@@ -179,8 +179,8 @@ class RamScopeTests(unittest.TestCase):
             "peak_ram_scope": COMPARABLE_SCOPE,
         })
         self._write()
-        _, merged, _, _ = ingest(self.report, self.evidence,
-                                 self.root, self.source)
+        updated, merged, _, _ = ingest(self.report, self.evidence,
+                                        self.root, self.source)
         real = next(r for r in merged["runs"] if r["cohort"] == "real")
         row = next(s for s in real["samples"] if s["alias"] == "R037")
         arm = row["diagnostics"]["skesa"]
@@ -188,17 +188,18 @@ class RamScopeTests(unittest.TestCase):
         self.assertEqual(arm["peak_ram_method_version"],
                          COMPARABLE_METHOD_VERSION)
         self.assertNotIn(LAUNCHER_DIAGNOSTIC, arm)
-        validate_publication(merged, self.evidence)
+        validate_publication(merged, updated)
 
     def test_unknown_method_never_claims_whole_container(self):
         self.receipt.update({"peak_ram_method": "container_tree",
                              "peak_ram_scope": COMPARABLE_SCOPE})
         self._write()
-        _, merged, _, _ = ingest(self.report, self.evidence,
-                                 self.root, self.source)
+        updated, merged, _, _ = ingest(self.report, self.evidence,
+                                        self.root, self.source)
         real = next(r for r in merged["runs"] if r["cohort"] == "real")
         row = next(s for s in real["samples"] if s["alias"] == "R037")
         self.assertIsNone(row["diagnostics"]["skesa"][COMPARABLE_KEY])
+        validate_publication(merged, updated)
 
     def test_published_legacy_peak_is_withdrawn_on_reread(self):
         case = {"peak_rss_bytes": RAW, "peak_ram_observed_mib": MIB,

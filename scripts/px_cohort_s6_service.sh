@@ -12,21 +12,22 @@ STOP="$PX_ROOT/STOP"
 exec 9>"$LOCK"
 while :; do
     if [ -f "$STOP" ]; then
-        echo "PX STOP present; supervisor idle" >&2
-        exit 0
+        echo "PX STOP present; supervisor idle for 60s" >&2
+        sleep 60
+        continue
     fi
     if flock -n 9; then
         flock -u 9
         cd "$PX_ROOT"
         if PYTHONPATH="$PX_CODE:$PX_CODE/benchmarks" python3 \
             -m assembler_bench.px_execution \
-            --registry "$PX_REGISTRY" --root "$PX_ROOT" --check-ready; then
+            --registry "$PX_REGISTRY" --root "$PX_ROOT" --check-ready --check-admission; then
             PYTHONPATH="$PX_CODE:$PX_CODE/benchmarks" exec python3 \
                 -m assembler_bench.px_execution \
                 --registry "$PX_REGISTRY" --root "$PX_ROOT" \
                 --supervise --armed
         fi
-        echo "PX images or handoffs not certified; deferring 60s" >&2
+        echo "PX images, handoffs, or disk admission not ready; deferring 60s" >&2
     else
         echo "PX exclusive worker still held; deferring 60s" >&2
     fi

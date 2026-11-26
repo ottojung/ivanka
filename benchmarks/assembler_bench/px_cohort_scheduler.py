@@ -18,6 +18,7 @@ from pathlib import Path
 from benchmarks.milestone198 import MANIFEST_SHA256 as PHYSICAL_MANIFEST_SHA256
 
 from . import exploratory_policy, exploratory_space
+from . import px_timing_semantics as timing
 from .px_ram_semantics import (METHOD_KEY, SCOPE_KEY, VERSION_KEY, attested,
                                observed_mib)
 
@@ -362,6 +363,9 @@ def _verify_receipt_data(data, arm):
             raise ValueError("successful PX receipt lacks hashed final MAX output")
     elif data.get("failure_reason") not in FAILURE_REASONS:
         raise ValueError("failed PX receipt lacks a classified reason")
+    # A partial or unpinned timing label is not a comparable runtime proof.
+    if timing.has_proof_keys(data) and not timing.attested(data):
+        raise ValueError("PX receipt timing proof is incomplete or unpinned")
     _assert_public(data)
     return data
 
@@ -401,8 +405,8 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
                    runner_attestation=None):
     """Write an immutable terminal receipt; preserve original infra failures.
 
-    Sampler attestation is read only from the runner's bound evidence, never
-    from dispatch metadata or post-hoc side files.
+    Sampler and timer attestations are read only from the runner's bound
+    evidence, never from dispatch metadata or post-hoc side files.
     """
     existing = verify_receipt(root, arm)
     attempt = 1
@@ -439,9 +443,14 @@ def record_outcome(root, arm, output_path, outcome, seconds=None, peak_rss=None,
     fields = peak_ram_fields(runner_attestation)
     if attested(fields):
         receipt.update(fields)
-    if outcome == "success" and (not isinstance(seconds, (int, float))
-                                 or seconds <= 0):
-        raise ValueError("successful arm needs a positive runtime")
+    clock = timing.timing_fields(runner_attestation)
+    if clock and outcome != "success":
+        raise ValueError("failed arm cannot claim runtime attestation")
+    receipt.update(clock)
+    if outcome == "success" and (isinstance(seconds, bool)
+                                 or not isinstance(seconds, (int, float))
+                                 or not math.isfinite(seconds) or seconds <= 0):
+        raise ValueError("successful arm needs a finite positive runtime")
     # An observed peak is retained for failed arms as well; null is honest
     # when monitoring never produced a measurement.
     if peak_rss is not None:
@@ -560,7 +569,7 @@ def admit_arm(registry, baseline, root, reserve_bytes):
     data = exploratory_policy.checked(registry)
     if not MIN_RESERVE <= reserve_bytes <= MAX_RESERVE:
         raise ValueError("PX arm reservation must be 1-4 GiB")
-    return exploratory_space.admit(data, baseline, root,
+    return exploratory_space.admit_reserve(data, baseline, root,
                                    baseline["image_store"], baseline["workspace"],
                                    reserve_bytes)
 

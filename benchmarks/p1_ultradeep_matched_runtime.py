@@ -4,8 +4,8 @@
 Diagnostic only: no OCI build/run, no deployment, no benchmark metric, gate or
 qualification change. Historical receipts are read-only and SHA-verified. Host
 evidence is aggregate-only; no per-process argument data is read or recorded.
-Guarded execution stays blocked while the build-admission and natural-exit
-dependencies (PR535/PR536) are pending, so this module only emits a plan.
+There is deliberately no execution mode: readiness can only *describe* whether
+a future guarded run may be considered, never authorize one by itself.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import pathlib
 import sys
 from typing import Any
@@ -22,6 +21,7 @@ from typing import Any
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
 SCHEMA = "ivanka.p1.ultradeep-matched-runtime.plan.v1"
+ATTESTATION_SCHEMA = "ivanka.p1.guard-deployment-attestation.v1"
 RECEIPT_SCHEMA = "ivanka.ultradeep-runtime-diagnostic.v1"
 RECEIPT_SHA256 = "7d0726a5cf6d6f9bb7a42689402633fe44ad5c30621fa7881b0862fe6b262e5c"
 CASES = ("ultradeep-s006", "ultradeep-s007", "ultradeep-s008", "ultradeep-s009")
@@ -64,6 +64,25 @@ CONSTRAINTS = {
 DEPENDENCIES = {
     "PR535": "433e4ea8630018b2549e581a5c36ca9aed58bdb4",
     "PR536": "6e6886a824a7cb0f1b812f1c24c233f8100a9d8b",
+}
+# Exact guard identity of the independently reviewed PR536 head. A merge into
+# main alone never proves that PX and the independent watchdog run this code;
+# readiness below requires an explicit deployed-identity attestation instead.
+GUARD_IDENTITY = {
+    "PR536": "6e6886a824a7cb0f1b812f1c24c233f8100a9d8b",
+    "natural_exit_sha256": "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
+    "watch_sha256": "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96",
+    "monitor_sha256": "b0bbefa221ff092acf33021b0203f2b07a912c250fc0893e8fdd59dad642293c",
+    "p1_helper_sha256": "b950ff947da8144271d8f4f0064fe72b4d6b1a492591e36610b942a553f21a27",
+    "p1_harness_sha256": "c193ca79b23fc6f2190b92ae7ce70d46de582a3fd71d9c17d09c6b6704d185fb",
+}
+COMPARABILITY = {
+    "required_container_cpu_max": "200000 100000",
+    "required_container_effective_cpus": 2.0,
+    "min_effective_host_cpus": 2.0,
+    "max_loadavg_per_cpu": 1.0,
+    "max_throttle_ratio": 0.05,
+    "max_host_load_ratio_between_arms": 1.5,
 }
 PROTECTED_ROOTS = (
     pathlib.Path("/workspace/micall-frozen-seven-20261117"),
@@ -167,6 +186,38 @@ def effective_cpus(cpu_max_text: str) -> float | None:
     return int(parts[0]) / int(parts[1])
 
 
+def cpuset_count(text: Any) -> int | None:
+    """Count CPUs in a cpuset list such as '0-31' or '0,2-3'; None if malformed."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    total = 0
+    for part in text.split(","):
+        part = part.strip()
+        if not part:
+            return None
+        if "-" in part:
+            bounds = part.split("-")
+            if len(bounds) != 2 or not all(bound.isdigit() for bound in bounds):
+                return None
+            low, high = int(bounds[0]), int(bounds[1])
+            if high < low:
+                return None
+            total += high - low + 1
+        elif part.isdigit():
+            total += 1
+        else:
+            return None
+    return total or None
+
+
+def host_cpu_capacity(host: dict[str, Any]) -> float | None:
+    """Host CPUs actually available: cpu.max quota, else the effective cpuset."""
+    quota = host.get("effective_cpus")
+    if isinstance(quota, (int, float)) and not isinstance(quota, bool) and quota > 0:
+        return float(quota)
+    return cpuset_count(host.get("cpuset_effective"))
+
+
 def host_evidence(
     cgroup_root: pathlib.Path = pathlib.Path("/sys/fs/cgroup"),
     proc_root: pathlib.Path = pathlib.Path("/proc"),
@@ -199,17 +250,98 @@ def host_evidence(
     return evidence
 
 
+def contention_check(host: dict[str, Any]) -> dict[str, Any]:
+    """Deterministic abort rule for one aggregate host snapshot."""
+    reasons: list[str] = []
+    load = host.get("loadavg") if isinstance(host, dict) else None
+    if (not isinstance(load, list) or not load
+            or isinstance(load[0], bool) or not isinstance(load[0], (int, float))):
+        reasons.append("missing loadavg")
+    capacity = host_cpu_capacity(host) if isinstance(host, dict) else None
+    if capacity is None or capacity < COMPARABILITY["min_effective_host_cpus"]:
+        reasons.append("insufficient host CPU capacity")
+    load_per_cpu = None
+    if not reasons:
+        load_per_cpu = float(load[0]) / capacity
+        if load_per_cpu > COMPARABILITY["max_loadavg_per_cpu"]:
+            reasons.append("loadavg per CPU above threshold")
+    stat = host.get("cpu_stat") if isinstance(host, dict) else None
+    if not isinstance(stat, dict):
+        reasons.append("missing cpu.stat")
+    else:
+        periods, throttled = stat.get("nr_periods"), stat.get("nr_throttled")
+        if not isinstance(periods, int) or isinstance(periods, bool) or periods <= 0:
+            reasons.append("missing nr_periods")
+        elif not isinstance(throttled, int) or isinstance(throttled, bool):
+            reasons.append("missing nr_throttled")
+        elif throttled / periods > COMPARABILITY["max_throttle_ratio"]:
+            reasons.append("cpu throttling above threshold")
+    return {"abort": bool(reasons), "reasons": reasons,
+            "capacity": capacity, "loadavg_per_cpu": load_per_cpu}
+
+
 def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
-    """Guard dependencies are pending until both exact heads are attested merged."""
-    blocked: list[str] = []
+    """Describe whether a DEPLOYED, exact-identity guard may be considered.
+
+    A mere "merged" state is never enough: PR536 merged into main while PR530
+    was still the running guard. The attestation must name the exact deployed
+    guard head, its five guard-file digests, both service pins, fresh watchdog
+    ALIVE, a clear lease and an attested idle boundary. Even a ready result
+    leaves this module with execution='blocked' and no execute mode.
+    """
+    all_blocked = sorted(DEPENDENCIES)
     if attestation is None or not attestation.is_file():
-        return {"ready": False, "blocked_by": sorted(DEPENDENCIES)}
-    record = json.loads(attestation.read_text())
+        return {"ready": False, "blocked_by": all_blocked,
+                "reasons": ["deployment attestation file missing"]}
+    try:
+        record = json.loads(attestation.read_text())
+    except (OSError, ValueError) as exc:
+        return {"ready": False, "blocked_by": all_blocked,
+                "reasons": ["deployment attestation unreadable: " + type(exc).__name__]}
+    if not isinstance(record, dict) or record.get("schema") != ATTESTATION_SCHEMA:
+        return {"ready": False, "blocked_by": all_blocked,
+                "reasons": ["unexpected deployment attestation schema"]}
+
+    blocked: list[str] = []
+    reasons: list[str] = []
     for name, head in DEPENDENCIES.items():
-        state = record.get(name, {})
-        if state.get("state") != "merged" or state.get("head") != head:
+        state = record.get(name)
+        if not isinstance(state, dict) or state.get("state") != "deployed":
             blocked.append(name)
-    return {"ready": not blocked, "blocked_by": sorted(set(blocked))}
+            reasons.append(name + " not attested as deployed")
+        elif state.get("head") != head:
+            blocked.append(name)
+            reasons.append(name + " deployed head mismatch")
+
+    guard = record.get("deployed_guard")
+    expected_files = {key: value for key, value in GUARD_IDENTITY.items()
+                      if key != "PR536"}
+    if not isinstance(guard, dict):
+        blocked.append("deployed_guard")
+        reasons.append("deployed guard identity missing")
+    else:
+        checks = (
+            ("head", GUARD_IDENTITY["PR536"], "deployed head mismatch"),
+            ("tree_clean", True, "deployed guard tree not clean"),
+            ("guard_sha256", expected_files, "guard file digest mismatch"),
+            ("px_service_head", GUARD_IDENTITY["PR536"], "PX service pin mismatch"),
+            ("watchdog_service_head", GUARD_IDENTITY["PR536"],
+             "watchdog service pin mismatch"),
+            ("watchdog_alive_fresh", True, "watchdog ALIVE not fresh"),
+            ("lease_clear", True, "shared lease not clear"),
+            ("idle_boundary_attested", True, "idle boundary not attested"),
+        )
+        for key, expected, reason in checks:
+            if guard.get(key) != expected:
+                blocked.append("deployed_guard")
+                reasons.append(reason)
+    for key in ("attested_by", "attested_at_utc"):
+        value = record.get(key)
+        if not isinstance(value, str) or not value.strip():
+            blocked.append("attestation")
+            reasons.append(key + " missing")
+    return {"ready": not blocked and not reasons,
+            "blocked_by": sorted(set(blocked)), "reasons": reasons}
 
 
 def check_output_root(raw: str | pathlib.Path) -> pathlib.Path:
@@ -227,9 +359,18 @@ def check_output_root(raw: str | pathlib.Path) -> pathlib.Path:
 
 def arm_evidence_record(
     step: dict[str, str], before: dict[str, Any], after: dict[str, Any],
-    timing: dict[str, Any],
+    timing: dict[str, Any], *, sampled_rss_bytes: int | None = None,
+    container_cpu_max: str | None = None,
 ) -> dict[str, Any]:
-    """Durable per-arm record: aggregate host pressure plus matched timing."""
+    """Durable per-arm record: matched timing, sampled RSS, quota and host state."""
+    rss_ok = (isinstance(sampled_rss_bytes, int)
+              and not isinstance(sampled_rss_bytes, bool) and sampled_rss_bytes > 0)
+    quota_effective = None
+    if isinstance(container_cpu_max, str):
+        try:
+            quota_effective = effective_cpus(container_cpu_max)
+        except ValueError:
+            quota_effective = None
     return {
         "schema": "ivanka.p1.ultradeep.arm-evidence.v1",
         "case": step["case"], "arm": step["arm"],
@@ -239,10 +380,64 @@ def arm_evidence_record(
         "timing_origin": timing.get("timing_origin"),
         "wall_seconds": timing.get("seconds"),
         "exit_code": timing.get("exit_code"),
+        "sampled_peak_rss_bytes": sampled_rss_bytes if rss_ok else None,
+        "rss_evidence_complete": rss_ok,
+        "cpu_quota": {
+            "host_cpu_max": before.get("cpu_max"),
+            "container_cpu_max": container_cpu_max,
+            "container_effective_cpus": quota_effective,
+            "memory_limit_bytes": int(CONSTRAINTS["memory"]),
+        },
+        "cpu_quota_complete": (
+            quota_effective == COMPARABILITY["required_container_effective_cpus"]),
+        "rss_enforcement": "sampled_userspace_observed",
+        "kernel_enforcement": False,
         "constraints": CONSTRAINTS,
         "privacy": "aggregate_only_no_process_arguments",
         "formal_qualification": False,
     }
+
+
+def evidence_complete(record: dict[str, Any]) -> bool:
+    """No arm counts as matched without sampled RSS and a verified 2-CPU quota."""
+    return (record.get("rss_evidence_complete") is True
+            and record.get("cpu_quota_complete") is True)
+
+
+def comparability_check(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Fail-closed comparability decision for a complete AB/BA evidence set."""
+    reasons: list[str] = []
+    ratios: list[float] = []
+    if not records or len(records) != len(alternating_schedule()):
+        reasons.append("incomplete AB/BA evidence set")
+    for record in records:
+        label = str(record.get("case")) + "/" + str(record.get("arm"))
+        if not evidence_complete(record):
+            reasons.append(label + " missing sampled RSS or container CPU quota")
+        quota = record.get("cpu_quota") or {}
+        if quota.get("container_effective_cpus") != COMPARABILITY[
+            "required_container_effective_cpus"
+        ]:
+            reasons.append(label + " container CPU quota mismatch")
+        if quota.get("memory_limit_bytes") != int(CONSTRAINTS["memory"]):
+            reasons.append(label + " memory limit mismatch")
+        for phase in ("host_before", "host_after"):
+            host = record.get(phase)
+            if not isinstance(host, dict):
+                reasons.append(label + " " + phase + " missing")
+                continue
+            decision = contention_check(host)
+            if decision["abort"]:
+                reasons.append(label + " " + phase + " contention: "
+                               + ", ".join(decision["reasons"]))
+            if decision["loadavg_per_cpu"] is not None:
+                ratios.append(decision["loadavg_per_cpu"])
+    if ratios and min(ratios) > 0 and (
+            max(ratios) / min(ratios)
+            > COMPARABILITY["max_host_load_ratio_between_arms"]):
+        reasons.append("host load imbalance between arms")
+    return {"comparable": not reasons, "abort": bool(reasons),
+            "reasons": reasons}
 
 
 def write_arm_evidence(root: pathlib.Path, record: dict[str, Any]) -> pathlib.Path:
@@ -289,6 +484,8 @@ def build_plan(
         },
         "host_evidence": host_evidence(),
         "dependencies": gate,
+        "deployed_guard_identity": GUARD_IDENTITY,
+        "comparability_plan": COMPARABILITY,
         "execution": "blocked",
         "scientific_gates_changed": False,
         "formal_qualification": False,

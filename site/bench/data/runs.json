@@ -1,5 +1,5 @@
 {
-  "published_at": "2026-11-26T04:58:31.837516+00:00",
+  "published_at": "2026-11-26T05:04:42.517479+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -262385,6 +262385,39 @@
               "scorer_source_sha256": "6745f660d08a61278f9dc90882a7ad9b6d3bb51eac0f6f3b1d84a667424fc6c9",
               "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            {
+              "adapter_commit": "9e02a9205fc338e1be4f0cd4a8dd4a13b406ae88",
+              "binding_receipts": 3,
+              "canonical_alias": "R003",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 2350.046875,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "error",
+              "image_sha256": "ef26acf7212682124adde73329a4395aedf7e7a4d4a06e94a48307a59a353aad",
+              "input_sha256": {
+                "R1": "1ad0057d5208e96dfc3abbfa7198243ba462860ffc51820dd9e6333dfa61a2c4",
+                "R2": "d04442e6bd1f1f19955fbdaa62b31e0c2b6c575b0087d523c17ac35bd7dd87a2"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 2350.046875,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 2464202752,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2"
             }
           ],
           "id": "ray",
@@ -262929,11 +262962,11 @@
             "haploflow",
             "spades",
             "velvet",
-            "minia",
-            "ray",
             "idba-ud",
+            "fermi-lite",
             "soapdenovo2",
-            "fermi-lite"
+            "ray",
+            "minia"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -263950,7 +263983,12 @@
               "unstitched_contig_count": 4468
             },
             "penguin": {},
-            "ray": {},
+            "ray": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 2350.046875,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "savage-denovo": {},
             "skesa": {
               "average_concordance": 0.9209583012477661,
@@ -264021,7 +264059,8 @@
           "exact_profiles": {},
           "failures": [
             "haploflow",
-            "velvet"
+            "velvet",
+            "ray"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -264084,6 +264123,30 @@
               "scorer_source_sha256": "6745f660d08a61278f9dc90882a7ad9b6d3bb51eac0f6f3b1d84a667424fc6c9",
               "source_commit": "7b7239c69ecc63534a20fc0d0c2de30f0f67e31c",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            "ray": {
+              "adapter_commit": "9e02a9205fc338e1be4f0cd4a8dd4a13b406ae88",
+              "canonical_alias": "R003",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "error",
+              "image_sha256": "ef26acf7212682124adde73329a4395aedf7e7a4d4a06e94a48307a59a353aad",
+              "input_sha256": {
+                "R1": "1ad0057d5208e96dfc3abbfa7198243ba462860ffc51820dd9e6333dfa61a2c4",
+                "R2": "d04442e6bd1f1f19955fbdaa62b31e0c2b6c575b0087d523c17ac35bd7dd87a2"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 2350.046875,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 2464202752,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2"
             },
             "skesa": {
               "adapter_commit": "2fb3cd5af8769f834635b21187738cf90565c349",
@@ -317342,8 +317405,8 @@
         },
         "ray": {
           "expected": 198,
-          "failed": 1,
-          "finished": 2
+          "failed": 2,
+          "finished": 3
         },
         "savage-denovo": {
           "expected": 198,
@@ -346999,6 +347062,39 @@
               "scorer_source_sha256": "6745f660d08a61278f9dc90882a7ad9b6d3bb51eac0f6f3b1d84a667424fc6c9",
               "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            {
+              "adapter_commit": "9e02a9205fc338e1be4f0cd4a8dd4a13b406ae88",
+              "binding_receipts": 3,
+              "canonical_alias": "R003",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 2350.046875,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "error",
+              "image_sha256": "ef26acf7212682124adde73329a4395aedf7e7a4d4a06e94a48307a59a353aad",
+              "input_sha256": {
+                "R1": "1ad0057d5208e96dfc3abbfa7198243ba462860ffc51820dd9e6333dfa61a2c4",
+                "R2": "d04442e6bd1f1f19955fbdaa62b31e0c2b6c575b0087d523c17ac35bd7dd87a2"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 2350.046875,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 2464202752,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2"
             }
           ],
           "id": "ray",
@@ -347567,11 +347663,11 @@
             "haploflow",
             "spades",
             "velvet",
-            "minia",
-            "ray",
             "idba-ud",
+            "fermi-lite",
             "soapdenovo2",
-            "fermi-lite"
+            "ray",
+            "minia"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -348590,7 +348686,12 @@
               "unstitched_contig_count": 4468
             },
             "penguin": {},
-            "ray": {},
+            "ray": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 2350.046875,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "savage-denovo": {},
             "skesa": {
               "average_concordance": 0.9209583012477661,
@@ -348661,7 +348762,8 @@
           "exact_profiles": {},
           "failures": [
             "haploflow",
-            "velvet"
+            "velvet",
+            "ray"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -348725,6 +348827,30 @@
               "scorer_source_sha256": "6745f660d08a61278f9dc90882a7ad9b6d3bb51eac0f6f3b1d84a667424fc6c9",
               "source_commit": "7b7239c69ecc63534a20fc0d0c2de30f0f67e31c",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            "ray": {
+              "adapter_commit": "9e02a9205fc338e1be4f0cd4a8dd4a13b406ae88",
+              "canonical_alias": "R003",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "error",
+              "image_sha256": "ef26acf7212682124adde73329a4395aedf7e7a4d4a06e94a48307a59a353aad",
+              "input_sha256": {
+                "R1": "1ad0057d5208e96dfc3abbfa7198243ba462860ffc51820dd9e6333dfa61a2c4",
+                "R2": "d04442e6bd1f1f19955fbdaa62b31e0c2b6c575b0087d523c17ac35bd7dd87a2"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 2350.046875,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 2464202752,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2"
             },
             "skesa": {
               "adapter_commit": "2fb3cd5af8769f834635b21187738cf90565c349",
@@ -613569,8 +613695,8 @@
         },
         "ray": {
           "expected": 662,
-          "failed": 1,
-          "finished": 2
+          "failed": 2,
+          "finished": 3
         },
         "savage-denovo": {
           "expected": 662,

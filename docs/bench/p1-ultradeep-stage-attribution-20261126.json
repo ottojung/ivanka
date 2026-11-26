@@ -1,0 +1,2489 @@
+{
+  "candidate_commit": "12d8c72f01f305b7f81db26193ec5fc213ba55bf",
+  "candidate_results_sha256": "903ff012e4e35b0bc7b83c147c56f8ff3c5adc017d188a4679438c7e16eea10d",
+  "interpretation": "Retrospective log intervals, not controlled CPU attribution. Candidate and original differed in run time and resource conditions. No new benchmark, no qualification, no original receipt or scorer changes. Log digests are present-day observed hashes, not proof of historical log immutability.",
+  "original_results_sha256": "7e1e81ce253fec2e4052db4843bfc580491c89bbc320a21374058f4297482203",
+  "rows": [
+    {
+      "candidate_log_sha256": "51f4353ad1ae811457306d7b6188af8422d37a486aa83f38fbd2374b82264330",
+      "candidate_score": 9265.361102476427,
+      "candidate_seconds": 177.903428398,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 1.633,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.797,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 15.297,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.689,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.942,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 13.404,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 21.072,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 23.091,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 20.12,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 23.058,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 25.856,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 24.692,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.252,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.013,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s000",
+      "original_log_sha256": "7cdfdc225fd3234d97c7cad813eaadad62b252241f075cbc04ed4217da572e6d",
+      "original_score": 9265.361102476427,
+      "original_seconds": 132.634482346,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.29,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.299,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.156,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.032,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.764,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.283,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 15.733,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 19.093,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 16.073,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.003,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 17.066,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.974,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.964,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.011,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "16c77402b377f389e2faaec2f15c65ad13d7853158e34485abbc6cc3db309774",
+      "candidate_score": 9281.301482701812,
+      "candidate_seconds": 190.370541077,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 1.617,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.707,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 15.547,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.785,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.153,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 14.072,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 21.765,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 28.997,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 21.745,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 22.763,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 32.229,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 21.724,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.233,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.013,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s001",
+      "original_log_sha256": "3c75d8515324d8bd7ceaa46db449353b6c9cdd5011a53b55952451bb8859e496",
+      "original_score": 9281.301482701812,
+      "original_seconds": 141.281468193,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.524,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.42,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.188,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 1.991,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.785,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.37,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 15.649,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 21.565,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.847,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.018,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 21.458,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 17.201,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.923,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "039b68becf7f79afb933abfc3339cc190c9cd103698cc72948a9057ee952ed6e",
+      "candidate_score": 9944.295440478647,
+      "candidate_seconds": 186.855614907,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 1.631,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 2.043,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 17.721,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.82,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.081,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 13.69,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 22.552,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 28.153,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 21.19,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.002,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 23.001,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 27.187,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 21.469,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.004,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.227,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.014,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s002",
+      "original_log_sha256": "763fed88cbd67ce07d827dc4af6d4698b229e617296b0d3aecedd49c6c1721fe",
+      "original_score": 9944.295440478647,
+      "original_seconds": 139.86058835,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.343,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.331,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.138,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.019,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.849,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.384,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 16.999,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 21.749,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.769,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.119,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 20.418,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.845,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.944,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.011,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "f76ba31a9e33531f90ac3bc9de7abbca8e36fca198374a203acb3846568023ab",
+      "candidate_score": 9937.752878929348,
+      "candidate_seconds": 159.854783626,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 1.658,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.512,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 14.177,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.275,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.907,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 11.772,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 19.884,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 22.731,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 19.105,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 20.116,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 22.5,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 18.468,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.519,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.011,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s003",
+      "original_log_sha256": "d66b649a8a2f84884e66af57161db14afd924c2b342ae401b35e1c767c4bc559",
+      "original_score": 9937.752878929348,
+      "original_seconds": 138.843662771,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.278,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.324,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.201,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.073,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.814,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.345,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 16.878,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 18.519,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.926,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 16.972,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 18.913,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 19.02,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.688,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.012,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "7b4438f166211e6fa075ef06c64d84adf1edc7a8980020145d6b615bc7510531",
+      "candidate_score": 9935.67797489366,
+      "candidate_seconds": 169.002052195,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 1.442,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.501,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 14.628,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.297,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.949,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 11.925,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 20.605,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 21.36,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 20.643,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 23.215,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 24.82,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 21.47,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.241,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.012,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s004",
+      "original_log_sha256": "23a792a8f044d566eddfd2c3eb299e4c59983eb562cba969d0dfcc7038263292",
+      "original_score": 9935.67797489366,
+      "original_seconds": 138.507794271,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.277,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.284,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.852,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.389,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.987,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 11.188,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 18.015,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 19.772,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.825,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.041,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 18.244,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.734,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.96,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "4f9095ce6932ed3fe040d7f9d842fac672cfac48c31230fdf685de2a533224cf",
+      "candidate_score": 9937.752878929348,
+      "candidate_seconds": 161.441554444,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 1.589,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.569,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 14.399,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.324,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.949,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 12.247,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 20.115,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 21.342,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 19.322,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 20.602,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 22.109,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 20.335,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.168,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.013,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s005",
+      "original_log_sha256": "9b30f39658b995596ac7d59eb2ee0951044232199437f947b1d2978ef075f68a",
+      "original_score": 9937.752878929348,
+      "original_seconds": 137.79834833,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.37,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.429,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.927,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.081,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.842,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.499,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 16.88,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 17.412,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.895,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 16.975,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 17.66,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 16.698,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.181,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.011,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "77f2df11d512846b6b2a60a352a419152aa7f39685c7c9bd7554847209b2c980",
+      "candidate_score": 9277.869871529216,
+      "candidate_seconds": 608.531919195,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 1.545,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.717,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 30.21,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 8.734,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 2.95,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 38.017,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 68.077,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 102.299,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 92.273,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.018,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 72.918,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 98.039,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 82.33,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 5.419,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.047,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s006",
+      "original_log_sha256": "86ee5b81afd968cfe60b95f6720604ce1cc8df385f3ab2a0714300e6a8207d07",
+      "original_score": 9277.869871529216,
+      "original_seconds": 138.544854052,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.309,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.304,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.111,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.023,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.797,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.324,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 15.523,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 20.889,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.853,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.073,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 19.035,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.825,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.993,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "aa50df7d1a2ba084675fb4b5afdd19532dd752e9ceac799d4216001c5dc6e536",
+      "candidate_score": 9163.30123226675,
+      "candidate_seconds": 658.750989186,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 6.011,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 7.612,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 43.465,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 10.265,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 2.769,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 43.613,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 70.027,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 88.379,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 88.549,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.008,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 76.691,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 103.887,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 91.37,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.004,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 5.662,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.082,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s007",
+      "original_log_sha256": "939e19bdb32489ca7815b97e74b2044ae345bc3729dd59478bcb4040f9ce9aa3",
+      "original_score": 9163.30123226675,
+      "original_seconds": 131.947603786,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.297,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.296,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.025,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.02,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.776,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.457,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 15.844,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 16.521,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.837,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.013,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 18.475,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 16.313,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.118,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.011,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "9da9db43938af3307872da700f12f8905b49a72f4cf6b7a236f381a820a0f413",
+      "candidate_score": 9940.834544322192,
+      "candidate_seconds": 768.706882466,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 6.641,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 6.318,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 58.636,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 11.809,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 3.084,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 44.208,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 83.772,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 111.706,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 110.125,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.006,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 85.768,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 104.962,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 112.985,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.005,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.004,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 10.247,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.074,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s008",
+      "original_log_sha256": "55253bdbf178c3daa06b9cc67947eb7c7cd5a4fa8fa0cf05735df76ddbfd3a5e",
+      "original_score": 9940.834544322192,
+      "original_seconds": 131.250365166,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.279,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.389,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.183,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.01,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.8,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.045,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 16.792,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 16.079,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.919,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 18.249,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 15.994,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 16.308,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.332,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "e38c32d811e7d62cc9dac24452237b0aa454b22354e205e56ef396ecf515c7ec",
+      "candidate_score": 9940.082644628099,
+      "candidate_seconds": 836.226300251,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 7.339,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 6.958,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 75.12,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 11.816,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 6.426,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 60.713,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 108.574,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 141.083,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 109.638,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.012,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 89.53,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 147.525,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 49.489,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.8,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.028,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s009",
+      "original_log_sha256": "fc835d43e2beddb16f5036d9c4c2b31ecec9fe0ce13c7910206825d42a9e42bd",
+      "original_score": 9940.082644628099,
+      "original_seconds": 143.327928713,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.459,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.284,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.114,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 1.972,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.031,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.842,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 16.977,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 21.255,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 17.168,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.549,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 20.144,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 17.188,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.954,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "586858a9b12a687719a8ca3adcc5469a0e266a09798eb7a558cd9f86ea7ac547",
+      "candidate_score": 9936.905254447662,
+      "candidate_seconds": 231.998946871,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 2.365,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 2.547,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 21.768,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 4.041,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.813,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 17.86,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 28.752,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 29.724,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 29.283,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 31.911,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 28.072,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 26.516,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.652,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.016,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s010",
+      "original_log_sha256": "4bf6faf27d4cae953705cc27b639cc317edc4089c55a449a53a8c6601a6457fe",
+      "original_score": 9936.905254447662,
+      "original_seconds": 131.517706677,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.311,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.316,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.166,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 1.959,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.932,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.423,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 17.047,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 16.962,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 16.093,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.106,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 16.501,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.823,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.941,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "b380b10b1b4986687df1306336a0592bd7a9ef584b2f9c35cf1e49313d170dfa",
+      "candidate_score": 9436.299814164773,
+      "candidate_seconds": 238.596808898,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 2.059,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 2.417,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 21.127,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 3.56,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.591,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 16.192,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 24.668,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 35.611,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 31.041,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.004,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 26.117,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 34.065,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 33.361,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 2.52,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.018,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s011",
+      "original_log_sha256": "6cc04d2e0d52bc5e74416b8c01cd9ab96af509303808670b4b30a7610b88576b",
+      "original_score": 9436.299814164773,
+      "original_seconds": 132.665721175,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.291,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.283,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.293,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.017,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.872,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 9.769,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 15.424,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 18.417,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.85,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 15.695,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 18.533,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 17.195,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.113,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.011,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "3a1ef6200973d20efa5d190f0e222adc9a0d30bf700fe57cbdca2f15ff4bf8a9",
+      "candidate_score": 9934.769103334023,
+      "candidate_seconds": 301.972461374,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 2.266,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 3.759,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 29.037,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 6.324,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 2.01,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 21.376,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 36.379,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 38.143,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 46.704,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.003,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 36.057,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 37.664,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 34.676,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.777,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.02,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s012",
+      "original_log_sha256": "baf412e8335a2272146eb2b8a367b34cf59d57a0d98ef546d9c3ed5cf7d6a2d4",
+      "original_score": 9934.769103334023,
+      "original_seconds": 134.625646871,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.302,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.333,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.152,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 1.935,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.807,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.401,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 16.993,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 18.793,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 16.103,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.097,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 18.066,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.807,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.933,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "f9073efc543b9a1914afa2d1163a34b4066fc84a871a7e94c8c0bc88d3d1538a",
+      "candidate_score": 9941.860465116279,
+      "candidate_seconds": 292.135848198,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 2.31,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 2.34,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 20.687,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 3.512,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.802,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 19.656,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 36.668,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 46.64,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 33.97,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 35.891,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 50.235,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 29.544,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 2.643,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.028,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s013",
+      "original_log_sha256": "a5d0e42e963aac333c0ed9b945a3fe536be9e3c09a568ceee188998774f3e74c",
+      "original_score": 9941.860465116279,
+      "original_seconds": 138.464050223,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.285,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.326,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.253,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.087,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.909,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.206,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 16.968,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 19.146,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.629,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.141,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 19.515,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 17.758,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.314,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "2cac2c96555cbcdc5960184a28bcec86c8ab88a0ddd1f23adcac405f216e581f",
+      "candidate_score": 9936.98347107438,
+      "candidate_seconds": 256.662191939,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 3.211,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 2.805,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 21.798,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 3.651,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.476,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 19.121,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 34.432,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 33.957,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 30.055,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 28.257,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 37.237,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 31.277,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 2.269,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.034,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s014",
+      "original_log_sha256": "f95bac3944825aa8eba2f28da01940b8b66eff14f1b62e2a4683d87b1726f38f",
+      "original_score": 9936.98347107438,
+      "original_seconds": 141.196688536,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.307,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.321,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 12.195,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.029,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 0.913,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.712,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 18.136,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 21.453,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 16.655,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.067,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 19.975,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.64,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.925,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.01,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    },
+    {
+      "candidate_log_sha256": "c3203c2be159ceefdbc9af9f8d3c5ebb6e619856b8d9575f181f5160fc8ce123",
+      "candidate_score": 9934.917355371901,
+      "candidate_seconds": 289.990505932,
+      "candidate_stages": [
+        {
+          "seconds_to_next_event": 2.256,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 2.432,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 20.682,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 4.064,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.971,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 18.635,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 29.62,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 59.904,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 38.531,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.001,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 30.198,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 38.895,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 35.604,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 1.627,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.018,
+          "stage": "resistance report"
+        }
+      ],
+      "case": "ultradeep-s015",
+      "original_log_sha256": "f8f30e66dd57220834a6c92f8791f73d1728388d1432a9f1eb0777d63e5f18bb",
+      "original_score": 9934.917355371901,
+      "original_seconds": 141.034817232,
+      "original_stages": [
+        {
+          "seconds_to_next_event": 1.403,
+          "stage": "start"
+        },
+        {
+          "seconds_to_next_event": 1.38,
+          "stage": "merge_for_entropy"
+        },
+        {
+          "seconds_to_next_event": 13.135,
+          "stage": "fastq_g2p"
+        },
+        {
+          "seconds_to_next_event": 2.108,
+          "stage": "de novo assembly"
+        },
+        {
+          "seconds_to_next_event": 1.099,
+          "stage": "assembly_finished"
+        },
+        {
+          "seconds_to_next_event": 10.331,
+          "stage": "remap"
+        },
+        {
+          "seconds_to_next_event": 17.047,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 19.368,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 15.742,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 17.276,
+          "stage": "sam2aln"
+        },
+        {
+          "seconds_to_next_event": 19.504,
+          "stage": "aln2counts"
+        },
+        {
+          "seconds_to_next_event": 16.048,
+          "stage": "coverage_plots"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "cascade_report"
+        },
+        {
+          "seconds_to_next_event": 0.0,
+          "stage": "finished"
+        },
+        {
+          "seconds_to_next_event": 0.922,
+          "stage": "resistance"
+        },
+        {
+          "seconds_to_next_event": 0.011,
+          "stage": "resistance report"
+        }
+      ],
+      "same_output_hashes": {
+        "conseq.csv": true,
+        "conseq_all.csv": true,
+        "conseq_region.csv": true,
+        "coverage_scores.csv": true
+      }
+    }
+  ],
+  "schema": "ivanka.p1.retrospective-stage-attribution.v1"
+}

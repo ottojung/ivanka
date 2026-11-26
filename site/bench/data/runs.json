@@ -1,5 +1,5 @@
 {
-  "published_at": "2026-11-26T06:16:34.110379+00:00",
+  "published_at": "2026-11-26T06:23:32.079585+00:00",
   "runs": [
     {
       "cohort": "synthetic",
@@ -264480,6 +264480,39 @@
               "scorer_source_sha256": "6745f660d08a61278f9dc90882a7ad9b6d3bb51eac0f6f3b1d84a667424fc6c9",
               "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "binding_receipts": 3,
+              "canonical_alias": "R007",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 654.230469,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "measurement_unavailable",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "c976b25cdbd98de5ff5e860583ee991628bc24d86136cc8539fed3bf43c225d4",
+                "R2": "d0b8c559177d6b30645397d19ab01ef36136f4f253bdb07f8f951d387f62ce8a"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 654.230469,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 686010368,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             }
           ],
           "id": "soapdenovo2",
@@ -265077,11 +265110,11 @@
             "haploflow",
             "spades",
             "velvet",
-            "soapdenovo2",
+            "idba-ud",
             "ray",
             "minia",
             "fermi-lite",
-            "idba-ud"
+            "soapdenovo2"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -266240,8 +266273,8 @@
           "failures": [
             "haploflow",
             "velvet",
-            "soapdenovo2",
-            "ray"
+            "ray",
+            "soapdenovo2"
           ],
           "floor_ok": null,
           "measurement_evidence": {
@@ -268670,7 +268703,12 @@
               "unique_aligned_fragments": 13056,
               "unstitched_contig_count": 2
             },
-            "soapdenovo2": {},
+            "soapdenovo2": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 654.230469,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "spades": {
               "average_concordance": 0.7891680799165549,
               "average_read_depth": 12867.677108433734,
@@ -268760,7 +268798,8 @@
           },
           "exact_profiles": {},
           "failures": [
-            "idba-ud"
+            "idba-ud",
+            "soapdenovo2"
           ],
           "floor_ok": true,
           "measurement_evidence": {
@@ -268875,6 +268914,30 @@
               "scorer_source_sha256": "1da4219b5297faf4fd30f6c691139a628e12b09175ac3a5e02a640a80e114229",
               "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            "soapdenovo2": {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "canonical_alias": "R007",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "measurement_unavailable",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "c976b25cdbd98de5ff5e860583ee991628bc24d86136cc8539fed3bf43c225d4",
+                "R2": "d0b8c559177d6b30645397d19ab01ef36136f4f253bdb07f8f951d387f62ce8a"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 654.230469,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 686010368,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             },
             "tadpole": {
               "adapter_commit": "3fd7f695c378875fd7b3b80ca263601a66476c2f",
@@ -320879,8 +320942,8 @@
         },
         "soapdenovo2": {
           "expected": 198,
-          "failed": 3,
-          "finished": 6
+          "failed": 4,
+          "finished": 7
         },
         "spades": {
           "expected": 198,
@@ -352576,6 +352639,39 @@
               "scorer_source_sha256": "6745f660d08a61278f9dc90882a7ad9b6d3bb51eac0f6f3b1d84a667424fc6c9",
               "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "binding_receipts": 3,
+              "canonical_alias": "R007",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "cohort": "real",
+              "diagnostics": {
+                "peak_ram_method": "container_process_tree_sampled_rss",
+                "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+                "peak_ram_observed_mib": 654.230469,
+                "peak_ram_scope": "whole_container_process_tree"
+              },
+              "failure_reason": "measurement_unavailable",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "c976b25cdbd98de5ff5e860583ee991628bc24d86136cc8539fed3bf43c225d4",
+                "R2": "d0b8c559177d6b30645397d19ab01ef36136f4f253bdb07f8f951d387f62ce8a"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 654.230469,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 686010368,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             }
           ],
           "id": "soapdenovo2",
@@ -353197,11 +353293,11 @@
             "haploflow",
             "spades",
             "velvet",
-            "soapdenovo2",
+            "idba-ud",
             "ray",
             "minia",
             "fermi-lite",
-            "idba-ud"
+            "soapdenovo2"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -354362,8 +354458,8 @@
           "failures": [
             "haploflow",
             "velvet",
-            "soapdenovo2",
-            "ray"
+            "ray",
+            "soapdenovo2"
           ],
           "family": "physical",
           "floor_ok": null,
@@ -356796,7 +356892,12 @@
               "unique_aligned_fragments": 13056,
               "unstitched_contig_count": 2
             },
-            "soapdenovo2": {},
+            "soapdenovo2": {
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 654.230469,
+              "peak_ram_scope": "whole_container_process_tree"
+            },
             "spades": {
               "average_concordance": 0.7891680799165549,
               "average_read_depth": 12867.677108433734,
@@ -356886,7 +356987,8 @@
           },
           "exact_profiles": {},
           "failures": [
-            "idba-ud"
+            "idba-ud",
+            "soapdenovo2"
           ],
           "family": "physical",
           "floor_ok": true,
@@ -357002,6 +357104,30 @@
               "scorer_source_sha256": "1da4219b5297faf4fd30f6c691139a628e12b09175ac3a5e02a640a80e114229",
               "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
               "timing_origin": "guarded_launcher_total_wall_with_podman_cleanup_v1"
+            },
+            "soapdenovo2": {
+              "adapter_commit": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+              "canonical_alias": "R007",
+              "canonical_manifest_sha256": "4478ed222b4ace8f6b1c7eaa66d338ba14c4962c00b298089f8af48837169192",
+              "failure_reason": "measurement_unavailable",
+              "image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+              "input_sha256": {
+                "R1": "c976b25cdbd98de5ff5e860583ee991628bc24d86136cc8539fed3bf43c225d4",
+                "R2": "d0b8c559177d6b30645397d19ab01ef36136f4f253bdb07f8f951d387f62ce8a"
+              },
+              "launcher_seconds": null,
+              "method": "best_final_max_contig_local_alignment_over_reference_panel",
+              "outcome": "failure",
+              "output_sha256": null,
+              "peak_ram_method": "container_process_tree_sampled_rss",
+              "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+              "peak_ram_observed_mib": 654.230469,
+              "peak_ram_scope": "whole_container_process_tree",
+              "peak_rss_bytes": 686010368,
+              "reference_panel_sha256": "018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8",
+              "runtime_seconds": null,
+              "score_origin": "micall_final_max_reference_panel_v1",
+              "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11"
             },
             "tadpole": {
               "adapter_commit": "3fd7f695c378875fd7b3b80ca263601a66476c2f",
@@ -620588,8 +620714,8 @@
         },
         "soapdenovo2": {
           "expected": 662,
-          "failed": 3,
-          "finished": 6
+          "failed": 4,
+          "finished": 7
         },
         "spades": {
           "expected": 662,

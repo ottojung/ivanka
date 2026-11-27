@@ -661,10 +661,14 @@ def main() -> None:
     parser.add_argument("--attestation", type=pathlib.Path)
     parser.add_argument("--verify-files", action="store_true")
     parser.add_argument("--emit-plan", type=pathlib.Path)
+    parser.add_argument("--cases", default=",".join(CASES),
+                        help="comma-separated case IDs; includes ordinary controls when requested")
     args = parser.parse_args()
+    cases = tuple(c.strip() for c in args.cases.split(",") if c.strip())
     plan = build_plan(
         args.receipt, args.output_root,
         verify_files=args.verify_files, attestation=args.attestation,
+        cases=cases,
     )
     text = json.dumps(plan, indent=2, sort_keys=True) + "\n"
     if args.emit_plan is not None:

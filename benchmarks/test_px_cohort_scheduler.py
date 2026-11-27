@@ -262,6 +262,30 @@ class PlannerTests(unittest.TestCase):
                             for a in plan["pending"][396:]))
         self.assertFalse(plan["qualifying"])
 
+    def test_each_plan_hashes_attested_inputs_once_and_revalidates(self):
+        physical = cases_for("physical", self.r1, self.r2)
+        synthetic = cases_for("synthetic", self.r1, self.r2)
+        expected = {case.source_id: case.input_hashes() for case in synthetic}
+        source = sched.CohortSource(physical, synthetic,
+                                    attested_inputs={"synthetic": expected})
+        registry = self.promoted_registry()
+        calls = {}
+        original = sched.CasePair.input_hashes
+
+        def tracked(case):
+            key = (case.cohort, case.alias)
+            calls[key] = calls.get(key, 0) + 1
+            return original(case)
+
+        with patch.object(sched.CasePair, "input_hashes", tracked):
+            plan = sched.build_plan(registry, source, self.px)
+        self.assertEqual(len(calls), 662)
+        self.assertEqual(set(calls.values()), {1})
+        self.assertEqual(plan["total_arms"], 2 * 662)
+        self.r2.write_bytes(b"changed after first plan")
+        with self.assertRaisesRegex(ValueError, "attested paired input SHA mismatch"):
+            sched.build_plan(registry, source, self.px)
+
     def test_cohort_size_and_alias_validation(self):
         cases = cases_for("physical", self.r1, self.r2)[:197]
         with self.assertRaisesRegex(ValueError, "cohort size"):

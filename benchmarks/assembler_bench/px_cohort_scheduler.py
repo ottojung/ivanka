@@ -231,7 +231,12 @@ class CohortSource:
         self._attested = attested_inputs or {}
         self.validate()
 
-    def validate(self):
+    def validate(self, *, collect_hashes=False):
+        """Validate each case; reuse the exact verified hash within this call.
+
+        Do not persist a hash cache: a later plan must re-read the inputs.
+        """
+        hashes = {}
         for cohort in COHORTS:
             cases = self._cases[cohort]
             if len(cases) != EXPECTED_COUNTS[cohort]:
@@ -246,13 +251,18 @@ class CohortSource:
                     raise ValueError("public alias is not the canonical original alias")
                 if not case.r1.is_file() or not case.r2.is_file():
                     raise ValueError("paired FASTQ input is missing")
-                if expected_inputs is not None and case.input_hashes() != expected_inputs.get(
-                        case.source_id):
-                    raise ValueError("attested paired input SHA mismatch for " + case.alias)
+                if expected_inputs is not None or collect_hashes:
+                    actual = case.input_hashes()
+                    if (expected_inputs is not None
+                            and actual != expected_inputs.get(case.source_id)):
+                        raise ValueError("attested paired input SHA mismatch for " + case.alias)
+                    if collect_hashes:
+                        hashes[(cohort, case.alias)] = actual
                 if case.seeds is not None and case.seeds_provenance != {
                         "kind": "read-derived", "sample_alias": case.alias}:
                     # Only same-sample read-derived seeds may enter an arm.
                     raise ValueError("seed provenance is not read-derived same-sample")
+        return hashes if collect_hashes else None
 
     def _expected_inputs(self, cohort, ids):
         if (cohort == "physical" and self._manifest is not None
@@ -495,14 +505,11 @@ def build_plan(registry, source, root, *, provenance_root=None):
     instead of the deployed evidence root; it never changes queue ordering.
     """
     data, tools = _tool_rows(registry, provenance_root=provenance_root)
-    source.validate()
+    case_hashes = source.validate(collect_hashes=True)
     arms, accepted_ids, pending = [], [], []
-    case_hashes = {}
     # Founder order applies globally: every assembler finishes the 198 physical
     # cases before any assembler starts a 464-synthetic case.
     for cohort in COHORTS:
-        for case in source.cases(cohort):
-            case_hashes[(cohort, case.alias)] = case.input_hashes()
         for tool in tools:
             for case in source.cases(cohort):
                 arm = {"tool_id": tool["id"], "cohort": cohort,

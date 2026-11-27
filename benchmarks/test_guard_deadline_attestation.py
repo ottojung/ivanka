@@ -152,17 +152,18 @@ class ReceiptAttestationTests(unittest.TestCase):
 
     def arm(self, alias="PX-R001"):
         return {"tool_id": "skesa", "cohort": "physical", "alias": alias,
-                "input_sha256": {"R1": "1" * 64, "R2": "2" * 64},
+                "input_sha256": {"R1": hashlib.sha256(b"@r1\n").hexdigest(),
+                                 "R2": hashlib.sha256(b"@r2\n").hexdigest()},
                 "source_commit": "3" * 40, "adapter_commit": "4" * 40,
                 "image_sha256": "5" * 64}
 
-    def case(self):
+    def case(self, alias="PX-R001"):
         reads = self.root / "reads"
         reads.mkdir(exist_ok=True)
         r1, r2 = reads / "R1.fastq.gz", reads / "R2.fastq.gz"
         r1.write_bytes(b"@r1\n")
         r2.write_bytes(b"@r2\n")
-        return SimpleNamespace(r1=r1, r2=r2)
+        return sched.CasePair("test-source", alias, "physical", r1, r2)
 
     def output(self):
         folder = self.root / "outputs" / "skesa-PX-R001"
@@ -173,8 +174,8 @@ class ReceiptAttestationTests(unittest.TestCase):
                         "timing_origin": "micall_in_container_monotonic_v1"}))
         return folder
 
-    def report(self, state):
-        return exe.run_guarded(None, None, self.arm(), self.case(),
+    def report(self, state, alias="PX-R001"):
+        return exe.run_guarded(None, None, self.arm(alias), self.case(alias),
                                self.output(), lambda *args: state)
 
     def state(self, *, status="finished", peak=RAW, fields=True):
@@ -231,8 +232,7 @@ class ReceiptAttestationTests(unittest.TestCase):
                 state["reason"] = "error"
                 if fields:
                     state.update(fields)
-                report = self.report(state)
-                report["alias"] = alias
+                report = self.report(state, alias)
                 receipt = self.supervisor._record(arm, report)
                 self.assertFalse(attested(receipt))
                 self.assertNotIn(METHOD_KEY, receipt)

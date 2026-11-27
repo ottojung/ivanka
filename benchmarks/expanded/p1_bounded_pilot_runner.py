@@ -337,6 +337,167 @@ def verify_copy_overlay_admission_pins(bench_dir=None):
             "prospective": True, "deployed": False, "build_executed": False}
 
 
+# Separate, exact portable-artifact plan. The pinned NATIVE binaries carry a
+# Guix PT_INTERP that does not exist in the frozen base image; a portable
+# artifact must be retargeted and newly pinned, never silently substituted.
+PORTABLE_PLAN = Path(__file__).with_name("p1_pilot_portable_image_manifest.json")
+PORTABLE_PLAN_SHA256 = "3f5eec61b5f9dbdea4028236461d89cb6ccce6ed8150e5ce07dc343eff33eb1e"
+PORTABLE_INTERP = "/lib64/ld-linux-x86-64.so.2"
+PORTABLE_NEEDED = ("libgcc_s.so.1", "libc.so.6", "ld-linux-x86-64.so.2")
+PORTABLE_MAX_GLIBC_MINOR = 34
+
+
+def load_portable_plan(expected_sha=None):
+    """Read the pinned plan; a changed plan is refused, not reinterpreted."""
+    if PORTABLE_PLAN.is_symlink() or not PORTABLE_PLAN.is_file():
+        raise ValueError("portable artifact plan missing or symlink")
+    actual = sha256(PORTABLE_PLAN)
+    if actual != (expected_sha or PORTABLE_PLAN_SHA256):
+        raise ValueError(f"portable artifact plan pin mismatch: {actual}")
+    doc = json.loads(PORTABLE_PLAN.read_text())
+    if doc.get("schema") != "ivanka.p1.portable-artifact-plan.v1":
+        raise ValueError("unknown portable artifact plan schema")
+    return doc
+
+
+def verify_portable_plan(plan=None):
+    """Validate the portability contract without producing any artifact."""
+    doc = plan or load_portable_plan()
+    contract = doc.get("contract") or {}
+    if not doc.get("prepared_only") or doc.get("build_executed") is not False:
+        raise ValueError("portable plan must be prepared-only and unexecuted")
+    if contract.get("pt_interp_required") != PORTABLE_INTERP:
+        raise ValueError("portable plan interpreter pin differs")
+    if (not contract.get("guix_store_path_forbidden")
+            or not contract.get("needed_unchanged")
+            or not contract.get("native_artifact_retained")
+            or not contract.get("silent_substitution_forbidden")):
+        raise ValueError("portable plan contract weakened")
+    candidates = doc.get("candidates")
+    if not isinstance(candidates, list) or len(candidates) != 2:
+        raise ValueError("portable plan must cover both exact candidates")
+    for row in candidates:
+        if (len(row.get("native_binary_sha256", "")) != 64
+                or len(row.get("source_commit", "")) < 7
+                or "/gnu/store/" not in row.get("native_interp", "")
+                or row.get("portable_binary_sha256") is not None
+                or row.get("portable_image") is not None):
+            raise ValueError("portable plan candidate pin incomplete or substituted")
+    return {"schema": doc["schema"], "candidates": len(candidates),
+            "produced": False, "build_executed": False}
+
+
+def inspect_elf_portability(path):
+    """Read-only ELF facts: PT_INTERP, dynamic RUNPATH and DT_NEEDED entries.
+
+    Only the live dynamic section is authoritative: a cleared RUNPATH may
+    still leave inert /gnu/store strings in debug data, as the prior portable
+    artifact demonstrates.
+    """
+    target = Path(path)
+    if target.is_symlink() or not target.is_file():
+        raise ValueError("binary missing or symlink")
+    data = target.read_bytes()
+    if (len(data) < 64 or data[:4] != b"\x7fELF" or data[4] != 2
+            or data[5] != 1):
+        raise ValueError("not a 64-bit little-endian ELF")
+    phoff = int.from_bytes(data[32:40], "little")
+    phentsize = int.from_bytes(data[54:56], "little")
+    phnum = int.from_bytes(data[56:58], "little")
+    if phentsize < 56 or phnum < 1:
+        raise ValueError("invalid ELF program header table")
+    interp = None
+    loads = []
+    dynamic = None
+    for index in range(phnum):
+        off = phoff + index * phentsize
+        if off + 56 > len(data):
+            raise ValueError("truncated ELF program header")
+        kind = int.from_bytes(data[off:off + 4], "little")
+        p_offset = int.from_bytes(data[off + 8:off + 16], "little")
+        p_vaddr = int.from_bytes(data[off + 16:off + 24], "little")
+        p_filesz = int.from_bytes(data[off + 32:off + 40], "little")
+        if kind == 3:  # PT_INTERP
+            if p_offset + p_filesz > len(data) or p_filesz == 0:
+                raise ValueError("invalid PT_INTERP")
+            interp = data[p_offset:p_offset + p_filesz].split(b"\0", 1)[0].decode("ascii")
+        elif kind == 1:  # PT_LOAD
+            loads.append((p_vaddr, p_offset, p_filesz))
+        elif kind == 2:  # PT_DYNAMIC
+            if p_offset + p_filesz > len(data):
+                raise ValueError("invalid PT_DYNAMIC")
+            dynamic = (p_offset, p_filesz)
+    if interp is None:
+        raise ValueError("ELF has no PT_INTERP")
+
+    def vaddr_to_offset(vaddr):
+        for base_vaddr, base_offset, filesz in loads:
+            if base_vaddr <= vaddr < base_vaddr + filesz:
+                return base_offset + (vaddr - base_vaddr)
+        raise ValueError("dynamic address unmapped in ELF")
+
+    needed_offsets, search_offsets = [], []
+    strtab_vaddr, strtab_size = None, 0
+    if dynamic is not None:
+        off, size = dynamic
+        for cursor in range(off, off + size - 15, 16):
+            tag = int.from_bytes(data[cursor:cursor + 8], "little", signed=True)
+            value = int.from_bytes(data[cursor + 8:cursor + 16], "little")
+            if tag == 1:  # DT_NEEDED
+                needed_offsets.append(value)
+            elif tag == 5:  # DT_STRTAB
+                strtab_vaddr = value
+            elif tag == 10:  # DT_STRSZ
+                strtab_size = value
+            elif tag in (15, 29):  # DT_RPATH / DT_RUNPATH
+                search_offsets.append(value)
+    needed, runpath = [], []
+    if strtab_vaddr is not None:
+        base = vaddr_to_offset(strtab_vaddr)
+        table = data[base:base + strtab_size] if strtab_size else data[base:]
+
+        def string_at(index):
+            if index >= len(table):
+                raise ValueError("dynamic string offset out of range")
+            return table[index:].split(b"\0", 1)[0].decode("ascii", "replace")
+
+        needed = [string_at(index) for index in needed_offsets]
+        runpath = [string_at(index) for index in search_offsets]
+    versions = sorted({int(match.group(1))
+                       for match in re.finditer(rb"GLIBC_2\.(\d+)", data)})
+    return {"interp": interp,
+            "guix_store_runpath": any("/gnu/store/" in path for path in runpath),
+            "runpath": runpath, "glibc_minor_versions": versions,
+            "needed": needed}
+
+
+def verify_portable_binary(path, source_commit=None, *, plan=None):
+    """Fail closed on Guix-interpreter binaries; require an exact new pin."""
+    doc = plan or load_portable_plan()
+    verify_portable_plan(doc)
+    digest = sha256(Path(path))
+    rows = [row for row in doc["candidates"]
+            if source_commit is None
+            or row["source_commit"] == source_commit]
+    if len(rows) != 1:
+        raise ValueError("portable plan candidate not uniquely selected")
+    row = rows[0]
+    info = inspect_elf_portability(path)
+    if info["interp"] != PORTABLE_INTERP or info["guix_store_runpath"]:
+        if digest == row["native_binary_sha256"]:
+            raise ValueError("native artifact retained; no silent substitution")
+        raise ValueError("binary interpreter is not portable")
+    if (info["needed"] != list(PORTABLE_NEEDED)
+            or (info["glibc_minor_versions"]
+                and max(info["glibc_minor_versions"]) > PORTABLE_MAX_GLIBC_MINOR)):
+        raise ValueError("binary symbol/NEEDED contract differs from base")
+    expected = row["portable_binary_sha256"]
+    if not expected or digest != expected:
+        raise ValueError("portable artifact not produced/pinned")
+    return {"source_commit": row["source_commit"], "sha256": digest,
+            "image": row["portable_image"], "portable": True}
+
+
 def pinned_podman_env(storage_conf=None, *, expected_sha=None):
     """Minimal env with ONLY the verified shared store selector set.
 

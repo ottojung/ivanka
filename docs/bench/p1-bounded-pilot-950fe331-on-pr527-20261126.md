@@ -273,6 +273,21 @@ git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach 07231fa1…
 - Separate staged candidate: PCR integration at exact source
   `19386765b40a4d57dce15c0984a731486b69121e` has its OWN binary-only recipe
   and manifest; it does NOT overwrite the `950fe331` pin. No build performed.
+- **Portability blocker (source-only plan, no artifact produced here):** both
+  pinned native binaries (`8569290d…` and `ec5eb835…`) carry a Guix `PT_INTERP`
+  (`/gnu/store/m31vlvwm79m89fk3xk0z4h7snk61y510-glibc-2.41/lib/ld-linux-x86-64.so.2`)
+  and a Guix `RUNPATH` that cannot resolve in the frozen base image. The prior
+  portable recipe (source `12d8c72`, binary `e7c10dc6…`, image `6fba7095…`)
+  retargeted `PT_INTERP` to `/lib64/ld-linux-x86-64.so.2`, cleared the dynamic
+  RUNPATH, left the three `NEEDED` entries unchanged, and required only GLIBC
+  symbol versions ≤2.34 against base 2.36 — with successful portable pilots.
+  `benchmarks/expanded/p1_pilot_portable_image_manifest.json` stages this as a
+  **separate, exact-source-pinned plan** for both candidates with null portable
+  SHA/image pins: `verify_portable_plan()` and `inspect_elf_portability()` fail
+  closed on Guix interpreter/RUNPATH, changed NEEDED or future GLIBC versions,
+  and `verify_portable_binary()` refuses silent substitution of native for
+  portable. Native manifests/binary pins are untouched; no build, import,
+  container or PX action was taken (PX Ray active).
 
 ## 7. Boundary / operator checklist
 

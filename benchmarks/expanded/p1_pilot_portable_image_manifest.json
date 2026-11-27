@@ -1,0 +1,61 @@
+{
+  "schema": "ivanka.p1.portable-artifact-plan.v1",
+  "status": "PLANNED_NOT_PRODUCED",
+  "prepared_only": true,
+  "build_executed": false,
+  "execution": "blocked",
+  "blocked_by": [
+    "active PX Ray worker - no unguarded image build",
+    "operator slot and deployed watchdog attestation required",
+    "portable artifact not produced/pinned yet"
+  ],
+  "integration_base": "07231fa1a06b2cdd7d43d9896935f5050b7df4f5",
+  "portable_base_image": "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad",
+  "base_glibc_version": "2.36",
+  "prior_portable_recipe": {
+    "source_commit": "12d8c72f01f305b7f81db26193ec5fc213ba55bf",
+    "native_binary_sha256": "43e0de0143941db341571d90b6a4857afead6cf13f2949a09b16b305d3b76c72",
+    "portable_binary_sha256": "e7c10dc6b510689bbf0e396d30958f073c618e01abafde8f1beaba24b4bdc9b5",
+    "image": "6fba70953664b95c3357c65d80fa56f0563962d0ff0112fa97e43ddd10a70971",
+    "pt_interp": "/lib64/ld-linux-x86-64.so.2",
+    "clear_runpath": true,
+    "needed": ["libgcc_s.so.1", "libc.so.6", "ld-linux-x86-64.so.2"],
+    "max_glibc_symbol_version": "2.34",
+    "evidence": "/workspace/ivanka-p1-component-image-20261124/portable/{Containerfile,file-attestation.txt,build.log,portable-pilots.log}"
+  },
+  "contract": {
+    "pt_interp_required": "/lib64/ld-linux-x86-64.so.2",
+    "guix_store_path_forbidden": true,
+    "needed_unchanged": true,
+    "max_glibc_symbol_version": "2.34",
+    "native_artifact_retained": true,
+    "silent_substitution_forbidden": true,
+    "verify_before_arm": true
+  },
+  "candidates": [
+    {
+      "role": "bounded-prospective-p1-950fe331",
+      "source_commit": "950fe331dfcd857011bfd63f9eeca92462708545",
+      "native_binary_path": "/workspace/ivanka-combined-candidate-20261126/binaries/combined-950fe331",
+      "native_binary_sha256": "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786",
+      "native_interp": "/gnu/store/m31vlvwm79m89fk3xk0z4h7snk61y510-glibc-2.41/lib/ld-linux-x86-64.so.2",
+      "portable_binary_sha256": null,
+      "portable_image": null
+    },
+    {
+      "role": "bounded-prospective-p1-pcr-19386765",
+      "source_commit": "19386765b40a4d57dce15c0984a731486b69121e",
+      "native_binary_path": "/workspace/ivanka-pcr-integration-950fe331-20261126/binaries/new-candidate",
+      "native_binary_sha256": "ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563",
+      "native_interp": "/gnu/store/m31vlvwm79m89fk3xk0z4h7snk61y510-glibc-2.41/lib/ld-linux-x86-64.so.2",
+      "portable_binary_sha256": null,
+      "portable_image": null
+    }
+  ],
+  "non_claims": [
+    "No portable binary or image was produced here",
+    "Native artifacts remain pinned and unchanged",
+    "No substitution of portable for native without an exact new pin",
+    "No build, import, container, arm or PX interaction"
+  ]
+}

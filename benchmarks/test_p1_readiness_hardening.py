@@ -393,6 +393,100 @@ class CopyOverlayAdmissionPinTests(unittest.TestCase):
             r.verify_copy_overlay_admission_pins(base)
 
 
+class PortableArtifactPlanTests(unittest.TestCase):
+    @staticmethod
+    def _elf(interp, *, needed=(), runpath=None, glibc=b""):
+        phoff, phentsize, phnum = 64, 56, 3
+        interp_offset = phoff + phnum * phentsize
+        interp_payload = interp.encode() + b"\0"
+        strtab_offset = interp_offset + len(interp_payload)
+        strings = bytearray(b"\0")
+        offsets = {}
+        for name in needed:
+            offsets[name] = len(strings)
+            strings.extend(name.encode() + b"\0")
+        if runpath is not None:
+            runpath_offset = len(strings)
+            strings.extend(runpath.encode() + b"\0")
+        else:
+            runpath_offset = None
+        entries = [(1, offsets[name]) for name in needed]
+        entries.append((5, strtab_offset))  # DT_STRTAB (vaddr == file offset)
+        entries.append((10, len(strings)))  # DT_STRSZ
+        if runpath_offset is not None:
+            entries.append((29, runpath_offset))  # DT_RUNPATH
+        dynamic = b"".join(
+            tag.to_bytes(8, "little", signed=True) + value.to_bytes(8, "little")
+            for tag, value in entries)
+        total = strtab_offset + len(strings) + len(dynamic) + len(glibc)
+        header = bytearray(64)
+        header[0:4] = b"\x7fELF"
+        header[4], header[5] = 2, 1
+        header[32:40] = phoff.to_bytes(8, "little")
+        header[54:56] = phentsize.to_bytes(2, "little")
+        header[56:58] = phnum.to_bytes(2, "little")
+
+        def ph(kind, offset, vaddr, size):
+            row = bytearray(phentsize)
+            row[0:4] = kind.to_bytes(4, "little")
+            row[8:16] = offset.to_bytes(8, "little")
+            row[16:24] = vaddr.to_bytes(8, "little")
+            row[32:40] = size.to_bytes(8, "little")
+            return bytes(row)
+
+        return bytes(header
+                     + ph(1, 0, 0, total)              # PT_LOAD maps vaddr==offset
+                     + ph(3, interp_offset, interp_offset, len(interp_payload))
+                     + ph(2, strtab_offset + len(strings),
+                          strtab_offset + len(strings), len(dynamic))
+                     + interp_payload + strings + dynamic + glibc)
+
+    def _write(self, data):
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        self.addCleanup(lambda: tmp.name and Path(tmp.name).unlink(missing_ok=True))
+        tmp.write(data)
+        tmp.close()
+        return tmp.name
+
+    def test_plan_is_pinned_pending_and_covers_both_candidates(self):
+        proof = r.verify_portable_plan()
+        self.assertEqual(proof["schema"], "ivanka.p1.portable-artifact-plan.v1")
+        self.assertEqual(proof["candidates"], 2)
+        self.assertFalse(proof["produced"])
+        self.assertFalse(proof["build_executed"])
+        doc = r.load_portable_plan()
+        native = [row["native_binary_sha256"] for row in doc["candidates"]]
+        self.assertEqual(native, [
+            "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786",
+            "ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563"])
+        self.assertTrue(all("/gnu/store/" in row["native_interp"]
+                            for row in doc["candidates"]))
+
+    def test_guix_interpreter_refused_no_silent_substitution(self):
+        path = self._write(self._elf(
+            "/gnu/store/m31vlvwm79m89fk3xk0z4h7snk61y510-glibc-2.41/lib/ld-linux-x86-64.so.2"))
+        with self.assertRaises(ValueError):
+            r.verify_portable_binary(path)
+
+    def test_portable_interp_without_exact_pin_refused(self):
+        path = self._write(self._elf(r.PORTABLE_INTERP,
+                                     needed=r.PORTABLE_NEEDED))
+        with self.assertRaises(ValueError):
+            r.verify_portable_binary(path)
+
+    def test_guix_runpath_and_future_glibc_refused(self):
+        guix = self._write(self._elf(
+            r.PORTABLE_INTERP, needed=r.PORTABLE_NEEDED,
+            runpath="/gnu/store/m31vlvwm79m89fk3xk0z4h7snk61y510-glibc-2.41/lib"))
+        with self.assertRaises(ValueError):
+            r.verify_portable_binary(guix)
+        future = self._write(self._elf(
+            r.PORTABLE_INTERP, needed=r.PORTABLE_NEEDED,
+            glibc=b"GLIBC_2.36\0"))
+        with self.assertRaises(ValueError):
+            r.verify_portable_binary(future)
+
+
 class SeparatePcrCandidateTests(unittest.TestCase):
     def test_existing_950fe331_pin_untouched(self):
         path = Path(r.__file__).with_name("p1_pilot_image_manifest.json")

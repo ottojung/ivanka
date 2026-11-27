@@ -55,11 +55,14 @@ supplied delta list. None of them reads site data.
    peak RSS remain comparable. Launcher-group RSS may only be published as a
    scoped diagnostic.
 3. `merge_diagnostic_report` is the opt-in boundary: it deep-copies a public
-   report, appends the method to the run roster, publishes the label and method
-   type, joins only genuine rows, recomputes the tool-neutral Ψ matrix and
-   refuses any change to the published PSI certificate. The input report,
-   registry, rows, frozen manifests, attested evidence and private gates are
-   never mutated. Empty opt-in leaves the report byte-identical.
+   report, requires an independently attested alias->read-pair/manifest mapping,
+   appends the method to the run roster, publishes the label and method type,
+   joins only rows whose alias/read hashes/manifest match that mapping, is
+   idempotent for exact same-run rows, and fails closed on duplicate or
+   conflicting bindings. It recomputes the tool-neutral Ψ matrix and refuses
+   any change to the published PSI certificate. The input report, registry,
+   rows, frozen manifests, attested evidence and private gates are never
+   mutated. Empty opt-in leaves the report byte-identical.
 
 `qualification_view` removes the method from every known decision input:
 private `comparators`, public run rosters/case rows/progress/images/matrix,

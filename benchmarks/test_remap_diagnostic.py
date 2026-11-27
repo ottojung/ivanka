@@ -77,7 +77,17 @@ def make_case(alias="R001", *, status="measured", score=100.5, seconds=12.5,
     return value
 
 
+def make_attested_inputs(cases, cohort="real"):
+    return {c["alias"]: {
+        "alias": c["alias"], "cohort": cohort,
+        "canonical_manifest_sha256": c["canonical_manifest_sha256"],
+        "read_sha256": c.get("read_sha256", {"R1": "2"*64, "R2": "3"*64}),
+        "paired_input_sha256": c.get("paired_input_sha256"),
+    } for c in cases}
+
+
 def make_rows(cases=None, *, cohort="real"):
+    cases = cases if cases is not None else [make_case()]
     return {
         "schema": remap.ROWS_SCHEMA,
         "tool_id": remap.TOOL_ID,
@@ -89,7 +99,7 @@ def make_rows(cases=None, *, cohort="real"):
         "frozen_master_commit": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
         "invocation_sha256": "1" * 64,
         "cohort": cohort,
-        "cases": cases if cases is not None else [make_case()],
+        "cases": cases,
     }
 
 
@@ -292,7 +302,8 @@ class QualificationInvarianceTests(unittest.TestCase):
         report["runs"][1]["cohort"] = "synthetic"
         report["runs"][1]["expected_sample_count"] = 464
         merged, _ = remap.merge_diagnostic_report(
-            report, make_registry(), make_rows())
+            report, make_registry(), make_rows(),
+            attested_inputs=make_attested_inputs(make_rows()['cases']))
         view = remap.qualification_view(merged)
         self.assertEqual(sum(run["expected_sample_count"]
                              for run in view["runs"]), 662)
@@ -316,8 +327,10 @@ class QualificationInvarianceTests(unittest.TestCase):
         self.assertEqual(baseline["positive_all_nonnegative"], True)
 
     def test_public_report_view_restores_original_roster(self):
+        rows = make_rows()
         merged, joined = remap.merge_diagnostic_report(
-            make_public_report(), make_registry(), make_rows())
+            make_public_report(), make_registry(), rows,
+            attested_inputs=make_attested_inputs(rows['cases']))
         self.assertGreater(joined, 0)
         stripped = remap.qualification_view(merged)
         original = make_public_report()
@@ -331,14 +344,14 @@ class PublicDisplayMergeTests(unittest.TestCase):
     def test_opt_in_off_leaves_report_untouched(self):
         report = make_public_report()
         merged, joined = remap.merge_diagnostic_report(
-            report, make_registry(enabled=False), make_rows())
+            report, make_registry(enabled=False), make_rows(), attested_inputs=make_attested_inputs((make_rows())["cases"], (make_rows()).get("cohort","real")))
         self.assertEqual(joined, 0)
         self.assertEqual(merged, report)
 
     def test_merge_is_additive_and_does_not_mutate_inputs(self):
         report, registry, rows = make_public_report(), make_registry(), make_rows()
         before = copy.deepcopy((report, registry, rows))
-        merged, joined = remap.merge_diagnostic_report(report, registry, rows)
+        merged, joined = remap.merge_diagnostic_report(report, registry, rows, attested_inputs=make_attested_inputs(rows["cases"], rows.get("cohort","real")))
         self.assertEqual((report, registry, rows), before)
         self.assertEqual(joined, 1)
         run = merged["runs"][0]
@@ -359,7 +372,7 @@ class PublicDisplayMergeTests(unittest.TestCase):
             "exact_coverage_breadth_ge_1": 0.88,
         }, unavailable=["final_contig_count", "final_contig_total_bases"])]
         merged, _ = remap.merge_diagnostic_report(
-            make_public_report(), make_registry(), make_rows(cases))
+            make_public_report(), make_registry(), make_rows(cases), attested_inputs=make_attested_inputs((make_rows(cases))["cases"], (make_rows(cases)).get("cohort","real")))
         arm = merged["runs"][0]["samples"][0]["diagnostics"][remap.TOOL_ID]
         self.assertIsNone(arm["final_contig_count"])
         self.assertIsNone(arm["final_contig_total_bases"])
@@ -370,14 +383,16 @@ class PublicDisplayMergeTests(unittest.TestCase):
     def test_failed_case_is_published_as_failure(self):
         merged, _ = remap.merge_diagnostic_report(
             make_public_report(), make_registry(),
-            make_rows([make_case(status="failed")]))
+            make_rows([make_case(status="failed")]),
+            attested_inputs=make_attested_inputs([make_case(status="failed")]))
         sample = merged["runs"][0]["samples"][0]
         self.assertIn(remap.TOOL_ID, sample["failures"])
         self.assertIsNone(sample["score"][remap.TOOL_ID])
 
     def test_distinct_run_identity_is_recorded_not_reused(self):
         merged, _ = remap.merge_diagnostic_report(
-            make_public_report(), make_registry(), make_rows())
+            make_public_report(), make_registry(), make_rows(),
+            attested_inputs=make_attested_inputs(make_rows()['cases']))
         method = merged["runs"][0]["diagnostic_methods"][0]
         self.assertEqual(method["run_id"], "remap-real-diagnostic-fixture")
         self.assertNotEqual(method["run_id"], merged["runs"][0]["id"])
@@ -396,16 +411,21 @@ class StagedReadbackTests(unittest.TestCase):
             rows = remap.validate_rows(
                 json.loads((root / "rows.json").read_text()))
             first, _ = remap.merge_diagnostic_report(
-                make_public_report(), registry, rows)
+                make_public_report(), registry, rows, attested_inputs=make_attested_inputs(rows["cases"], rows.get("cohort","real")))
             second, _ = remap.merge_diagnostic_report(
-                make_public_report(), registry, rows)
+                make_public_report(), registry, rows, attested_inputs=make_attested_inputs(rows["cases"], rows.get("cohort","real")))
             encoded = lambda doc: json.dumps(doc, sort_keys=True, separators=(",", ":"))
             self.assertEqual(encoded(first), encoded(second))
 
     def test_rows_for_another_cohort_cannot_join_this_run(self):
-        rows = make_rows([make_case(alias="H001")])
+        case = make_case(alias="H001")
+        case["canonical_manifest_sha256"] = "e" * 64
+        with self.assertRaises(ValueError):
+            remap.validate_rows(make_rows([case], cohort="real"))
+        rows = make_rows([case], cohort="synthetic")
         merged, joined = remap.merge_diagnostic_report(
-            make_public_report(), make_registry(), rows)
+            make_public_report(), make_registry(), rows,
+            attested_inputs=make_attested_inputs(rows["cases"], "synthetic"))
         self.assertEqual(joined, 0)
         self.assertNotIn(remap.TOOL_ID, merged["runs"][0]["tools"])
 
@@ -444,7 +464,7 @@ class RunnerRowShapeTests(unittest.TestCase):
         self.assertEqual(set(rows["cases"][0]), self.RUNNER_CASE_KEYS)
         validated = remap.validate_rows(rows)
         merged, joined = remap.merge_diagnostic_report(
-            make_public_report(), make_registry(), validated)
+            make_public_report(), make_registry(), validated, attested_inputs=make_attested_inputs((validated).get("cases",[]), (validated).get("cohort","real")))
         self.assertEqual(joined, 1)
         arm = merged["runs"][0]["samples"][0]["diagnostics"][remap.TOOL_ID]
         self.assertIsNone(arm["final_contig_count"])
@@ -463,5 +483,97 @@ class RunnerRowShapeTests(unittest.TestCase):
                     remap.validate_rows(candidate)
 
 
+class AdversarialMergeTests(unittest.TestCase):
+    def test_requires_independent_attested_input_mapping(self):
+        rows = make_rows()
+        with self.assertRaises(ValueError):
+            remap.merge_diagnostic_report(make_public_report(), make_registry(), rows)
+        bad = make_attested_inputs(rows["cases"])
+        bad["R001"]["read_sha256"] = {"R1": "0" * 64, "R2": "3" * 64}
+        with self.assertRaises(ValueError):
+            remap.merge_diagnostic_report(make_public_report(), make_registry(), rows,
+                                          attested_inputs=bad)
+
+    def test_alias_prefix_must_match_rows_cohort(self):
+        case = make_case(alias="R001")
+        case["canonical_manifest_sha256"] = "e" * 64
+        rows = make_rows([case], cohort="synthetic")
+        with self.assertRaises(ValueError):
+            remap.validate_rows(rows)
+
+    def test_cross_cohort_alias_cannot_be_merged(self):
+        rows = make_rows([make_case(alias="R001")], cohort="real")
+        report = make_public_report()
+        report["runs"][0]["cohort"] = "synthetic"
+        report["runs"][0]["samples"] = [{
+            "alias": "H001", "score": {"iva": 1.0}, "seconds": {"iva": 1.0},
+            "diagnostics": {}, "failures": [], "outcome": "success",
+        }]
+        merged, joined = remap.merge_diagnostic_report(
+            report, make_registry(), rows, attested_inputs=make_attested_inputs(rows["cases"]))
+        self.assertEqual(joined, 0)
+        self.assertNotIn(remap.TOOL_ID, merged["runs"][0]["tools"])
+
+    def test_duplicate_roster_and_method_rows_are_not_duplicated(self):
+        rows = make_rows()
+        report = make_public_report()
+        att = make_attested_inputs(rows["cases"])
+        merged, joined = remap.merge_diagnostic_report(report, make_registry(), rows, attested_inputs=att)
+        merged2, joined2 = remap.merge_diagnostic_report(merged, make_registry(), rows, attested_inputs=att)
+        self.assertEqual(joined, 1)
+        self.assertEqual(joined2, 0)
+        run = merged2["runs"][0]
+        self.assertEqual(sum(1 for i in run["roster"] if i["id"] == remap.TOOL_ID), 1)
+        self.assertEqual(sum(1 for m in run.get("diagnostic_methods", []) if m.get("run_id") == rows["run_id"]), 1)
+
+    def test_combined_cohort_real_and_synthetic_rows_do_not_duplicate_roster(self):
+        report = make_public_report()
+        report["runs"][0]["cohort"] = "combined"
+        report["runs"][0]["id"] = "fixture-combined"
+        report["runs"][0]["samples"] = [
+            {"alias": "R-R001", "score": {"iva": 10.0}, "seconds": {"iva": 5.0},
+             "diagnostics": {}, "failures": [], "outcome": "success"},
+            {"alias": "S-H001", "score": {"iva": 20.0}, "seconds": {"iva": 6.0},
+             "diagnostics": {}, "failures": [], "outcome": "success"},
+        ]
+        real_case = make_case(alias="R001")
+        real_rows = make_rows([real_case], cohort="real")
+        syn_case = make_case(alias="H001")
+        syn_case["canonical_manifest_sha256"] = "e" * 64
+        syn_rows = make_rows([syn_case], cohort="synthetic")
+        syn_rows["run_id"] = "remap-synthetic-diagnostic-fixture"
+        merged, j1 = remap.merge_diagnostic_report(report, make_registry(), real_rows,
+                                                   attested_inputs=make_attested_inputs(real_rows["cases"], "real"))
+        merged, j2 = remap.merge_diagnostic_report(merged, make_registry(), syn_rows,
+                                                   attested_inputs=make_attested_inputs(syn_rows["cases"], "synthetic"))
+        self.assertEqual((j1, j2), (1, 1))
+        run = merged["runs"][0]
+        self.assertEqual(sum(1 for i in run["roster"] if i["id"] == remap.TOOL_ID), 1)
+        ids = [m["run_id"] for m in run.get("diagnostic_methods", []) if m["id"] == remap.TOOL_ID]
+        self.assertEqual(sorted(ids), ["remap-real-diagnostic-fixture", "remap-synthetic-diagnostic-fixture"])
+        note = run["tool_notes"][remap.TOOL_ID]
+        self.assertIn("physical scoring against the ordinary frozen reference panel", note)
+        self.assertIn("synthetic hidden-truth post-hoc scoring", note)
+
+    def test_measured_seconds_must_be_positive_and_bounded(self):
+        bad = make_case(seconds=0.0)
+        with self.assertRaises(ValueError):
+            remap.validate_rows(make_rows([bad]))
+        bad = make_case(seconds=2401.0)
+        with self.assertRaises(ValueError):
+            remap.validate_rows(make_rows([bad]))
+        bad = make_case(seconds=float("nan"))
+        with self.assertRaises(ValueError):
+            remap.validate_rows(make_rows([bad]))
+
+    def test_receipt_sha256_alone_does_not_bind_input(self):
+        rows = make_rows()
+        att = make_attested_inputs(rows["cases"])
+        att["R001"]["read_sha256"] = {"R1": "4" * 64, "R2": "5" * 64}
+        with self.assertRaises(ValueError):
+            remap.merge_diagnostic_report(make_public_report(), make_registry(), rows, attested_inputs=att)
+
+
 if __name__ == "__main__":
     unittest.main()
+

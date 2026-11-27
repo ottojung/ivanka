@@ -398,7 +398,14 @@ def verify_receipt(root, arm):
         if not preserved.is_file():
             raise ValueError("versioned retry missing preserved original failure")
         prior = _verify_receipt_data(json.loads(preserved.read_bytes()), arm)
-        if (prior.get("attempt") != prior_attempt
+        # Attempts preserved before the attempt field became mandatory carry no
+        # redundant self-declared index. The versioned path is already the
+        # authority for the attempt number, so a missing field resolves to the
+        # path index; an explicitly wrong index still fails closed.
+        recorded_attempt = prior.get("attempt")
+        if recorded_attempt is None:
+            recorded_attempt = prior_attempt
+        if (recorded_attempt != prior_attempt
                 or prior.get("outcome") != "failure"
                 or prior.get("failure_reason") not in INFRASTRUCTURE_FAILURE_REASONS):
             raise ValueError("only infrastructure failures may be retried")

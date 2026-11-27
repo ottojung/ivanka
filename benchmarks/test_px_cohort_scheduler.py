@@ -324,6 +324,54 @@ class PlannerTests(unittest.TestCase):
         self.assertNotIn(sched.receipt_id(first), remaining)
         self.assertNotIn(sched.receipt_id(second), remaining)
 
+    def test_legacy_preserved_original_without_attempt_field(self):
+        """One-shot retries preserved before the attempt field existed still count."""
+        registry = self.promoted_registry()
+        arm = sched.build_plan(registry, self.source(), self.px)["pending"][0]
+        output = self.root / "conseq.csv"
+        output.write_bytes(b"consensus\n")
+        sched.record_outcome(self.px, arm, None, "failure",
+                             failure_reason="disk_stop")
+        sched.record_outcome(self.px, arm, output, "success", seconds=1)
+        original = sched.attempt_path(self.px, arm, 1)
+        legacy = json.loads(original.read_text())
+        legacy.pop("attempt")
+        original.write_text(json.dumps(legacy, sort_keys=True))
+        self.assertEqual(sched.verify_receipt(self.px, arm)["attempt"], 2)
+        plan = sched.build_plan(registry, self.source(), self.px)
+        self.assertIn(sched.receipt_id(arm), plan["accepted_ids"])
+
+    def test_legacy_preserved_original_still_requires_path_bound_index(self):
+        registry = self.promoted_registry()
+        arm = sched.build_plan(registry, self.source(), self.px)["pending"][0]
+        output = self.root / "conseq.csv"
+        output.write_bytes(b"consensus\n")
+        sched.record_outcome(self.px, arm, None, "failure",
+                             failure_reason="disk_stop")
+        sched.record_outcome(self.px, arm, output, "success", seconds=1)
+        original = sched.attempt_path(self.px, arm, 1)
+        legacy = json.loads(original.read_text())
+        legacy["attempt"] = 2
+        original.write_text(json.dumps(legacy, sort_keys=True))
+        with self.assertRaisesRegex(ValueError, "only infrastructure failures"):
+            sched.verify_receipt(self.px, arm)
+
+    def test_legacy_preserved_original_still_requires_infrastructure_failure(self):
+        registry = self.promoted_registry()
+        arm = sched.build_plan(registry, self.source(), self.px)["pending"][0]
+        output = self.root / "conseq.csv"
+        output.write_bytes(b"consensus\n")
+        sched.record_outcome(self.px, arm, None, "failure",
+                             failure_reason="disk_stop")
+        sched.record_outcome(self.px, arm, output, "success", seconds=1)
+        original = sched.attempt_path(self.px, arm, 1)
+        legacy = json.loads(original.read_text())
+        legacy.pop("attempt")
+        legacy["failure_reason"] = "error"
+        original.write_text(json.dumps(legacy, sort_keys=True))
+        with self.assertRaisesRegex(ValueError, "only infrastructure failures"):
+            sched.verify_receipt(self.px, arm)
+
     def test_outcomes_fail_closed(self):
         registry = self.promoted_registry()
         arm = sched.build_plan(registry, self.source(), self.px)["pending"][0]

@@ -28,7 +28,7 @@ const BenchViews = (() => {
       const info=ranks.definition(key,catalog);
       if(!info)continue;
       const first=measured(run,snapshot,key,a).find(x=>x.id===alias);
-      const second=measured(run,snapshot,key,b).find(x=>x.id===alias);
+      const second=b?measured(run,snapshot,key,b).find(x=>x.id===alias):null;
       const stage=key==="score"||key==="seconds"?"Core measurements":info.stage;
       if(!groups.has(stage))groups.set(stage,[]);
       groups.get(stage).push({key,info,first:first?.value??null,
@@ -45,13 +45,13 @@ const BenchViews = (() => {
       ' metrics have at least one recorded value. N/A means unavailable, not zero.</p>'+
       groups.map(g=>'<section class="sample-metric-group"><h3>'+safe(g.stage)+
         '</h3><table class="sample-metric-table"><thead><tr>'+
-        '<th>Metric and calculation</th><th class="assembler-blue">'+safe(label(run,a))+
-        '</th><th class="assembler-red">'+safe(label(run,b))+'</th></tr></thead><tbody>'+
+        '<th>Metric and calculation</th><th'+(b?' class="assembler-blue"':'')+'>'+safe(label(run,a))+
+        '</th>'+(b?'<th class="assembler-red">'+safe(label(run,b))+'</th>':'')+'</tr></thead><tbody>'+
         g.rows.map(row=>'<tr><td><details><summary>'+safe(row.info.label)+
           '</summary><p>'+safe(row.info.description)+'</p><p><strong>Basis:</strong> '+
           safe(row.info.denominator)+'</p></details><small>'+safe(row.info.unit)+
           '</small></td><td class="number">'+value(row.first)+'</td>'+
-          '<td class="number">'+value(row.second)+'</td></tr>').join("")+
+          (b?'<td class="number">'+value(row.second)+'</td>':'')+'</tr>').join("")+
         '</tbody></table></section>').join("");
   }
   function plotMetric(run,snapshot,subject,a,b) {

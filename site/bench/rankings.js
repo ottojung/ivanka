@@ -66,16 +66,26 @@ const BenchRanks = (() => {
     entries.forEach((item,index)=>{item.rank=index+1;});
     return entries;
   }
-  function pairs(run,snapshot,key,direction,first,second) {
-    const one=new Map(measurements(run,snapshot,key,first).map(x=>[x.id,x.value]));
-    const two=new Map(measurements(run,snapshot,key,second).map(x=>[x.id,x.value]));
-    const all=isCore(key)
+  function caseRecords(run,snapshot,key) {
+    return isCore(key)
       ?run.hxb2_truth_verified||run.cohort==="real"||run.cohort==="combined"
         ?run.samples.map(s=>({id:s.alias,detail:s}))
         :(run.families||[]).map(f=>({id:f.family,detail:f}))
       :run.archive || (run.samples||[]).some(s=>s.diagnostics)
         ?run.samples.map(s=>({id:s.alias,detail:s}))
       :snapshot?.run_id===run.id?[{id:snapshot.sample_alias,detail:null}]:[];
+  }
+  function cases(run,snapshot,key,tool) {
+    const values=new Map(measurements(run,snapshot,key,tool).map(x=>[x.id,x.value]));
+    return caseRecords(run,snapshot,key).map(row=>{
+      const first=values.get(row.id)??null;
+      return {...row,first,unavailable:first===null};
+    });
+  }
+  function pairs(run,snapshot,key,direction,first,second) {
+    const one=new Map(measurements(run,snapshot,key,first).map(x=>[x.id,x.value]));
+    const two=new Map(measurements(run,snapshot,key,second).map(x=>[x.id,x.value]));
+    const all=caseRecords(run,snapshot,key);
     return all.map(row=>{
       const a=one.has(row.id)?one.get(row.id):null;
       const b=two.has(row.id)?two.get(row.id):null;
@@ -85,6 +95,6 @@ const BenchRanks = (() => {
         detail:row.detail,unavailable:!available};
     });
   }
-  return {CORE,isCore,definition,measurements,summary,pairs};
+  return {CORE,isCore,definition,measurements,summary,pairs,cases};
 })();
 if(typeof module!=="undefined")module.exports=BenchRanks;

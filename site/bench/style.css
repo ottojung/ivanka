@@ -341,3 +341,30 @@ section.dominance,section.diagnostics{margin-top:61px}
   .sticky-exponent-controls #exponentMode{min-width:0;font-size:11px}
   .samples .filters{grid-template-columns:1fr}
 }
+
+
+/* Exclusive comparison modes, with shared sticky metric controls. */
+.comparison-mode-heading{margin-top:61px}
+.metric-workspace .mode-heading{font-size:20px;margin:22px 0 12px;letter-spacing:-.025em}
+.mode-control{display:flex;flex-direction:column;gap:7px;flex:none}
+.mode-switch{display:flex;border:1px solid var(--border);border-radius:8px;padding:3px;background:var(--surface);height:42px}
+.mode-switch button{border:0;background:transparent;color:var(--muted);padding:5px 16px;border-radius:5px;cursor:pointer;font-weight:650;font-size:13px}
+.mode-switch button[aria-pressed="true"]{background:var(--elev);color:var(--cyan)}
+.mode-switch button:focus-visible{outline:2px solid var(--cyan)}
+.sticky-metric-controls>label[for="diagnosticMetric"]{flex:1;min-width:0;max-width:none}
+.sticky-metric-controls>label[for="singleDirection"]{flex:0 1 170px}
+.subject-panel>summary{cursor:pointer;font-weight:650;color:var(--text)}
+.subject-panel>summary #subjectsCount{float:right;padding:0;font-weight:400}
+.subject-panel:not([open]){padding:14px 18px}
+.subject-panel[open]>summary{margin-bottom:12px}
+#resultsTable:has(#redCaseHeading[hidden]){min-width:0}
+#resultsTable:has(#redCaseHeading[hidden]) th:last-of-type{width:auto}
+.sample-metric-table:has(th:nth-child(2):last-child) th:first-child{width:72%}
+@media(max-width:650px){
+  .sticky-metric-controls{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:8px}
+  .sticky-metric-controls .mode-control{grid-column:1/-1}
+  .mode-switch button{flex:1}
+  .mode-control>.meta-label{display:none}
+  .sticky-metric-controls>label{min-width:0;max-width:none}
+  .subject-panel>summary #subjectsCount{float:none;display:block;margin-left:17px}
+}

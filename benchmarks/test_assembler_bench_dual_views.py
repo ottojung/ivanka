@@ -51,6 +51,15 @@ assert(html.includes('Ivanka')&&html.includes('IVA'));
 assert.equal((html.match(/<summary>/g)||[]).length,3);
 assert(html.includes('N/A means unavailable, not zero'));
 assert(!html.includes('table-scroll'));
+const single=V.sampleTable(run,snapshot,'R002','ivanka',null);
+assert(single.includes('Ivanka')&&!single.includes('IVA'));
+assert.equal((single.match(/<td class="number">/g)||[]).length,3);
+const R=require(require('node:path').join(require('node:path').dirname(process.argv[2]),'rankings.js'));
+const cases=R.cases(run,snapshot,'clips','iva');
+assert.deepEqual(cases.map(x=>x.first),[4,null,6,null]);
+assert.deepEqual(cases.map(x=>x.unavailable),[false,true,false,true]);
+assert(cases.every(x=>!Object.hasOwn(x,'delta')));
+
 const subjects=[
  {key:'alignment',direction:'higher',label:'Alignment'},
  {key:'runtime',direction:'lower',label:'Runtime'},
@@ -133,6 +142,20 @@ console.log('PLAIN_NA_LEGEND_OK');
             capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PLAIN_NA_LEGEND_OK", result.stdout)
+
+    def test_comparison_modes_have_exclusive_controls(self):
+        html = (ROOT / "site/bench/index.html").read_text()
+        js = (ROOT / "site/bench/app.js").read_text()
+        self.assertIn('id="totalMode"', html)
+        self.assertIn('id="pairwiseMode"', html)
+        self.assertIn('<details class="subject-panel" id="additionalRequirements">', html)
+        self.assertIn('el("totalPanel").hidden=!total', js)
+        self.assertIn('el("pairwisePanel").hidden=total', js)
+        self.assertIn('el("psiCaseHeading").hidden=total', js)
+        self.assertIn('el("redCaseHeading").hidden=total', js)
+        self.assertIn('params.set("mode",state.mode)', js)
+        self.assertIn('state.totalTool=button.dataset.tool', js)
+        self.assertIn('if(total)drawCompare();else drawDominance()', js)
 
     def test_modal_controls_and_no_obsolete_progress(self):
         html = (ROOT / "site/bench/index.html").read_text()

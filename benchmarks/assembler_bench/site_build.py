@@ -48,6 +48,9 @@ def validate_public_site(site=SITE):
                  'id="diagnosticExplanation"',
                  'id="singleDirection"', 'id="psiExponent"',
                  'id="exponentControls"', 'id="momentLegend"',
+                 'id="totalMode"', 'id="pairwiseMode"',
+                 'id="totalPanel"', 'id="pairwisePanel"',
+                 'id="additionalRequirements"', 'id="measurementFilter"',
                  ):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
@@ -94,6 +97,11 @@ def validate_public_site(site=SITE):
     if (not (html.index('class="compare"') < html.index('class="dominance"')
              < html.index('class="samples"'))):
         raise ValueError("single-metric, Ψ matrix, and case table out of order")
+    if ('<details class="subject-panel" id="additionalRequirements">' not in html
+            or 'function drawMode()' not in js
+            or 'BenchRanks.cases(' not in js
+            or 'params.set("mode",state.mode)' not in js):
+        raise ValueError("exclusive comparison modes or folded requirements missing")
     if any(f'id="{name}"' in html for name in ("psiMetric", "firstTool", "comparisonTool")):
         raise ValueError("duplicate metric or assembler selectors are forbidden")
     if "id=\"scoreView\"" in html or "id=\"timeView\"" in html:

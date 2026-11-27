@@ -1,26 +1,19 @@
-"""Operator-facing, fail-closed readiness/dry-run CLI for the remap pilot.
+"""Operator-facing, fail-closed CLI for the diagnostic remap pilot.
 
-This module is a read-only *interface* over the merged remap pilot
-controller. It deliberately has NO execution path: it never calls
-``remap_pilot_controller.execute_case``, never launches Podman/MiCall, never
-mounts truth/panel data and never touches frozen, registry or publisher state.
+``readiness`` is read-only and never executes. ``execute`` is the single
+authorized entry point into the merged controller: it re-runs the complete
+readiness gate, then requires an explicit, case-bound operator authorization,
+an exact watchdog checker, and a hash-verified post-hoc panel before calling
+``remap_pilot_controller.execute_case`` unchanged. No truth or panel is ever
+mounted into the assembler container, and no frozen, gate, registry, receipt
+or publisher state is written by this module.
 
-It answers one question: "if an authorized operator asked for the first guarded
-remap pilot case right now, would the reviewed gate admit it?" Every input is
-re-derived from primary sources (the pinned private read-pair manifest, the
-frozen source/image pins, the shared guard paths) and passed through the *same*
-merged ``preflight`` that the real controller uses. A blocked report is a
-typed refusal with reasons, never a partial GO.
+Every input is re-derived from primary sources and passed through the *same*
+merged ``preflight`` used by the controller. A blocked report is a typed
+refusal with reasons, never a partial GO.
 
-Usage (read-only, no container)::
-
-    PYTHONPATH=.:benchmarks python3 -m assembler_bench.remap_pilot_cli readiness \\
-      --alias R001 --reads-dir /attested/originals/R001 \\
-      --attempt-dir /sealed/remap-R001 --cidfile /sealed/remap-R001/cid \\
-      --stamp 20261127T120000Z --token <operator-token>
-
-Exit codes: 0 = admitted (still NOT a run authorization), 2 = blocked,
-1 = usage/internal error. See docs/bench/remap-pilot-cli.md.
+Exit codes: 0 = admitted/executed, 2 = blocked, 1 = usage/internal error.
+See docs/bench/remap-pilot-cli.md.
 """
 from __future__ import annotations
 
@@ -32,17 +25,23 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from fail_closed_guard import disk, errors as guard_errors, p1_harness, proc, stop
+from fail_closed_guard import disk, errors as guard_errors, heartbeat, p1_harness, proc, stop
 
 from . import remap_guarded_exec as gexec
 from . import remap_pilot_controller as ctl
 from . import remap_runner as runner
 
 SCHEMA = "ivanka.remap.pilot-readiness.v1"
+EXECUTION_SCHEMA = "ivanka.remap.pilot-execution.v1"
+AUTHORIZATION_SCHEMA = "ivanka.remap.pilot.authorization.v1"
+AUTHORIZATION_SCOPE = "single_guarded_physical_remap_pilot"
+WATCHDOG_CHECKER_SCHEMA = "ivanka.remap.watchdog-checker.v1"
+ISSUE_ID = "RkRqnfTardxTOd6hkMiM65-mustered"
 EXIT_ADMITTED = 0
 EXIT_BLOCKED = 2
 EXIT_ERROR = 1
@@ -401,45 +400,221 @@ def build_readiness_report(*, alias, reads_dir, attempt_dir, cidfile, stamp,
     else:
         report["next_action"] = (
             "Admitted means the reviewed gate is satisfied, NOT that a pilot "
-            "may start. No execution is implemented by this interface.")
+            "may start. The execute subcommand additionally requires explicit "
+            "case-bound operator authorization.")
     return report
 
 
-def main(argv=None, *, config=None, probes=None) -> int:
-    """CLI entry point. Prints one JSON report; never starts a container."""
+def _load_authorization(path, *, operator, alias, run_id, token, graphroot,
+                        clock=None) -> dict:
+    """Require an explicit, current, case-bound operator authorization."""
+    record = json.loads(Path(path).read_text())
+    expected = {
+        "schema": AUTHORIZATION_SCHEMA,
+        "issue": ISSUE_ID,
+        "operator": str(operator),
+        "alias": str(alias),
+        "run_id": str(run_id),
+        "token_sha256": hashlib.sha256(str(token).encode()).hexdigest(),
+        "scope": AUTHORIZATION_SCOPE,
+        "watchdog_graphroot": str(graphroot),
+    }
+    if not isinstance(record, dict) or set(record) != set(expected) | {
+            "id", "expires_at_utc"}:
+        raise ValueError("authorization_shape")
+    for key, value in expected.items():
+        if record.get(key) != value:
+            raise ValueError("authorization_" + key)
+    if not isinstance(record.get("id"), str) or not record["id"].strip():
+        raise ValueError("authorization_id")
+    expires = record.get("expires_at_utc")
+    if (type(expires) not in (int, float) or isinstance(expires, bool)
+            or not expires or expires <= (clock or time.time)()):
+        raise ValueError("authorization_expired")
+    return record
+
+
+def _watchdog_checker(path, *, config, graphroot, snapshot=None,
+                      clock=None):
+    """Build a fresh, identity-bound checker for the shared harness contract."""
+
+    def checker():
+        record = json.loads(Path(path).read_text())
+        if (not isinstance(record, dict)
+                or record.get("schema") != WATCHDOG_CHECKER_SCHEMA
+                or record.get("ready") is not True
+                or record.get("identity_bound") is not True):
+            raise ValueError("watchdog_checker_unbound")
+        starttime, pid_ns = record.get("starttime"), record.get("pid_ns")
+        if (type(starttime) is not int or starttime <= 0
+                or type(pid_ns) is not int or pid_ns <= 0):
+            raise ValueError("watchdog_checker_identity")
+        at = record.get("at_utc")
+        if (type(at) not in (int, float) or isinstance(at, bool)
+                or (clock or time.time)() - at > heartbeat.ALIVE_MAX_AGE):
+            raise ValueError("watchdog_checker_stale")
+        alive = json.loads(Path(config.watchdog_path).read_text())
+        if (alive.get("schema") != heartbeat.ALIVE_SCHEMA
+                or alive.get("graphroot") != str(graphroot)
+                or alive.get("fingerprint") != [starttime, pid_ns]):
+            raise ValueError("watchdog_checker_alive_mismatch")
+        observed = (snapshot or proc.snapshot)().get(alive.get("pid"))
+        if (observed is None
+                or (observed.get("starttime"), observed.get("pid_ns"))
+                != (starttime, pid_ns)):
+            raise ValueError("watchdog_checker_live_mismatch")
+        return {"schema": WATCHDOG_CHECKER_SCHEMA, "ready": True,
+                "identity_bound": True, "pid_ns": pid_ns,
+                "starttime": starttime, "at_utc": at}
+
+    return checker
+
+
+def execute_report(*, alias, reads_dir, attempt_dir, cidfile, stamp, token,
+                   operator, authorization_file, watchdog_checker_file,
+                   panel_path, config=None, probes=None, snapshot=None,
+                   clock=None, execute=None) -> dict:
+    """Authorized single-case execution via the unchanged merged controller."""
+    config = config or ReadinessConfig()
+    readiness = build_readiness_report(
+        alias=alias, reads_dir=reads_dir, attempt_dir=attempt_dir,
+        cidfile=cidfile, stamp=stamp, token=token, config=config,
+        probes=probes, snapshot=snapshot)
+    blockers = list(readiness.get("blockers", []))
+    out = {
+        "schema": EXECUTION_SCHEMA,
+        "executed": False,
+        "execution_authorized": False,
+        "qualification_claim": "NONE",
+        "readiness": {"admitted": readiness["admitted"],
+                      "blockers": blockers},
+        "blockers": blockers,
+    }
+    if not readiness["admitted"]:
+        return out
+
+    graphroot, runroot = _storage_paths(config.storage_conf)
+    if not str(alias).startswith("R"):
+        blockers.append("only_physical_execute_supported")
+    if digest_file(panel_path) != runner.PANEL_SHA256:
+        blockers.append("panel_digest_drift")
+    if readiness["shared_guard"].get("stop", {}).get("owner") != str(operator):
+        blockers.append("stop_owner_mismatch")
+    try:
+        authorization = _load_authorization(
+            authorization_file, operator=operator, alias=alias,
+            run_id=readiness["plan"]["run_id"], token=token,
+            graphroot=graphroot, clock=clock)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        blockers.append("authorization_rejected:" + type(exc).__name__)
+        authorization = None
+    checker = _watchdog_checker(
+        watchdog_checker_file, config=config, graphroot=graphroot,
+        snapshot=snapshot, clock=clock)
+    try:
+        watchdog = checker()
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        blockers.append("watchdog_checker_rejected:" + type(exc).__name__)
+        watchdog = None
+    if blockers:
+        out["blockers"] = blockers
+        return out
+
+    inputs = readiness["inputs"]
+    case = runner.Case(
+        alias=str(alias), cohort=inputs["cohort"],
+        r1_sha256=inputs["read_sha256"]["R1"],
+        r2_sha256=inputs["read_sha256"]["R2"],
+        reads_dir=str(reads_dir), attempt_dir=str(attempt_dir),
+        timer=str(Path(attempt_dir) / "timer.json"), cidfile=str(cidfile),
+        storage_root=graphroot, runroot=runroot,
+        name=f"podman-name-remap-{alias}-{token}", stamp=stamp, token=token,
+        r1_name=inputs["read_basenames"][0],
+        r2_name=inputs["read_basenames"][1])
+    pilot = ctl.PilotCase(
+        case=case, panel_path=str(panel_path), panel_sha256=runner.PANEL_SHA256)
+    receipt = (execute or ctl.execute_case)(
+        pilot, plan=readiness["plan"],
+        preflight_result=readiness["preflight"],
+        output_dir=Path(attempt_dir), attempt_dir=Path(attempt_dir),
+        operator_owner=str(operator), stop_path=config.stop_path,
+        watchdog_ready=checker, guard_root=config.guard_root)
+    out["executed"] = True
+    out["execution_authorized"] = True
+    out["authorization"] = {"id": authorization["id"],
+                            "operator": authorization["operator"],
+                            "scope": authorization["scope"]}
+    out["watchdog"] = watchdog
+    out["receipt"] = {key: receipt.get(key) for key in (
+        "schema", "run_id", "alias", "status", "receipt_sha256",
+        "qualification_claim") if key in receipt}
+    return out
+
+
+def _add_case_args(parser) -> None:
+    parser.add_argument("--alias", required=True, help="canonical alias, e.g. R001")
+    parser.add_argument("--reads-dir", required=True,
+                        help="directory holding exactly the two attested FASTQs")
+    parser.add_argument("--attempt-dir", required=True,
+                        help="sealed attempt directory for retained artifacts")
+    parser.add_argument("--cidfile", required=True,
+                        help="fresh unique CID file path (must not pre-exist)")
+    parser.add_argument("--stamp", required=True, help="UTC stamp for run identity")
+    parser.add_argument("--token", required=True, help="operator token for run identity")
+    parser.add_argument("--manifest", default=None,
+                        help="override private manifest PATH only; SHA pin unchanged")
+    parser.add_argument("--output", default=None,
+                        help="also write the JSON report to this file")
+
+
+def main(argv=None, *, config=None, probes=None, execute=None,
+         snapshot=None, clock=None) -> int:
+    """Print one typed JSON report; only authorized execute reaches the controller."""
     parser = argparse.ArgumentParser(
         prog="remap_pilot_cli",
-        description="Read-only, fail-closed readiness/dry-run for the first "
-                    "guarded remap pilot case. No container is ever run.")
+        description="Fail-closed readiness and authorization-bound execution "
+                    "for the single diagnostic remap pilot case.")
     sub = parser.add_subparsers(dest="command", required=True)
     ready = sub.add_parser(
         "readiness", help="verify pins and shared admission state; no execution")
-    ready.add_argument("--alias", required=True, help="canonical alias, e.g. R001")
-    ready.add_argument("--reads-dir", required=True,
-                       help="directory holding exactly the two attested FASTQs")
-    ready.add_argument("--attempt-dir", required=True,
-                       help="sealed attempt directory for retained artifacts")
-    ready.add_argument("--cidfile", required=True,
-                       help="fresh unique CID file path (must not pre-exist)")
-    ready.add_argument("--stamp", required=True, help="UTC stamp for run identity")
-    ready.add_argument("--token", required=True, help="operator token for run identity")
-    ready.add_argument("--manifest", default=None,
-                       help="override private manifest PATH only; SHA pin unchanged")
-    ready.add_argument("--output", default=None,
-                       help="also write the JSON report to this file")
+    _add_case_args(ready)
+    execute_parser = sub.add_parser(
+        "execute", help="single guarded case; requires explicit operator authorization")
+    _add_case_args(execute_parser)
+    execute_parser.add_argument("--operator", required=True,
+                                help="operator named on the owner-bound STOP sentinel")
+    execute_parser.add_argument("--authorization-file", required=True,
+                                help="case-bound, time-limited authorization record")
+    execute_parser.add_argument("--watchdog-checker-file", required=True,
+                                help="fresh watchdog identity-bound readiness record")
+    execute_parser.add_argument("--panel-path", required=True,
+                                help="post-hoc reference panel JSON; digest pinned")
     args = parser.parse_args(argv)
 
     active = config or ReadinessConfig()
     if args.manifest is not None:
         active = replace(active, manifest_path=Path(args.manifest))
     try:
-        report = build_readiness_report(
-            alias=args.alias, reads_dir=Path(args.reads_dir),
-            attempt_dir=Path(args.attempt_dir), cidfile=Path(args.cidfile),
-            stamp=args.stamp, token=args.token, config=active, probes=probes)
-        exit_code = EXIT_ADMITTED if report["admitted"] else EXIT_BLOCKED
+        if args.command == "readiness":
+            report = build_readiness_report(
+                alias=args.alias, reads_dir=Path(args.reads_dir),
+                attempt_dir=Path(args.attempt_dir), cidfile=Path(args.cidfile),
+                stamp=args.stamp, token=args.token, config=active, probes=probes,
+                snapshot=snapshot)
+            exit_code = EXIT_ADMITTED if report["admitted"] else EXIT_BLOCKED
+        else:
+            report = execute_report(
+                alias=args.alias, reads_dir=Path(args.reads_dir),
+                attempt_dir=Path(args.attempt_dir), cidfile=Path(args.cidfile),
+                stamp=args.stamp, token=args.token, operator=args.operator,
+                authorization_file=Path(args.authorization_file),
+                watchdog_checker_file=Path(args.watchdog_checker_file),
+                panel_path=Path(args.panel_path), config=active, probes=probes,
+                snapshot=snapshot, clock=clock, execute=execute)
+            exit_code = EXIT_ADMITTED if report["executed"] else EXIT_BLOCKED
     except Exception as exc:  # fail closed on internal error too
-        report = {"schema": SCHEMA, **NO_EXECUTION, "admitted": False,
+        report = {"schema": SCHEMA if args.command == "readiness"
+                  else EXECUTION_SCHEMA, **NO_EXECUTION, "admitted": False,
                   "blockers": ["internal_error:" + type(exc).__name__],
                   "detail": str(exc)}
         exit_code = EXIT_ERROR

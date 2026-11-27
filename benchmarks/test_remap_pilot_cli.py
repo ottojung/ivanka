@@ -147,6 +147,58 @@ class RemapPilotCliTests(unittest.TestCase):
             guard_root=self.guard, lock_path=self.lock, stop_path=self.stop_path,
             watchdog_path=self.watchdog_path, storage_conf=self.storage_conf)
         self.probe = _Probe()
+        self.panel = self.root / "panel.json"
+        self.panel.write_bytes(b'{"hermetic":"posthoc-panel"}')
+        self.panel_sha = _sha(self.panel.read_bytes())
+        panel_patch = patch.object(runner, "PANEL_SHA256", self.panel_sha)
+        panel_patch.start()
+        self.addCleanup(panel_patch.stop)
+        self.authorization = self.root / "authorization.json"
+        self.checker_file = self.root / "watchdog-checker.json"
+        self.identity = heartbeat.identity(os.getpid())
+        self._write_authorization()
+        self._write_checker()
+
+    def _write_authorization(self, **overrides):
+        record = {
+            "schema": cli.AUTHORIZATION_SCHEMA,
+            "id": "auth-hermetic-1",
+            "issue": cli.ISSUE_ID,
+            "operator": "operator-test",
+            "alias": "R001",
+            "run_id": f"remap-real-{STAMP.lower()}-{TOKEN}",
+            "token_sha256": _sha(TOKEN.encode()),
+            "scope": cli.AUTHORIZATION_SCOPE,
+            "expires_at_utc": time.time() + 3600,
+            "watchdog_graphroot": self.graphroot,
+        }
+        record.update(overrides)
+        self.authorization.write_text(json.dumps(record, sort_keys=True))
+
+    def _write_checker(self, **overrides):
+        record = {
+            "schema": cli.WATCHDOG_CHECKER_SCHEMA,
+            "ready": True,
+            "identity_bound": True,
+            "pid_ns": self.identity["fingerprint"][1],
+            "starttime": self.identity["fingerprint"][0],
+            "at_utc": time.time(),
+        }
+        record.update(overrides)
+        self.checker_file.write_text(json.dumps(record, sort_keys=True))
+
+    def fake_execute(self, calls):
+        def run(pilot, **kwargs):
+            calls.append((pilot, kwargs))
+            return {
+                "schema": "ivanka.remap-diagnostic.receipt.v1",
+                "run_id": kwargs["plan"]["run_id"],
+                "alias": pilot.alias,
+                "status": "measured",
+                "receipt_sha256": "a" * 64,
+                "qualification_claim": "NONE",
+            }
+        return run
 
     def report(self, **kwargs):
         options = dict(alias="R001", reads_dir=self.reads,
@@ -160,6 +212,24 @@ class RemapPilotCliTests(unittest.TestCase):
         return ["readiness", "--alias", "R001", "--reads-dir", str(self.reads),
                 "--attempt-dir", str(self.attempt), "--cidfile", str(self.cidfile),
                 "--stamp", STAMP, "--token", TOKEN]
+
+    def exec_args(self):
+        args = self.cli_args()
+        args[0] = "execute"
+        return args + [
+            "--operator", "operator-test",
+            "--authorization-file", str(self.authorization),
+            "--watchdog-checker-file", str(self.checker_file),
+            "--panel-path", str(self.panel),
+        ]
+
+    def run_execute(self, calls, *, argv=None):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            rc = cli.main(argv or self.exec_args(), config=self.config,
+                          probes=self.probe, execute=self.fake_execute(calls),
+                          snapshot=lambda: self.snapshot)
+        return rc, json.loads(stdout.getvalue())
 
     def test_positive_admitted_without_execution(self):
         with patch.object(ctl, "execute_case",
@@ -289,6 +359,113 @@ class RemapPilotCliTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["blockers"], ["internal_error:RuntimeError"])
         self.assertFalse(payload["executed"])
+
+
+    def test_execute_positive_wiring_with_fake_controller(self):
+        calls = []
+        rc, report = self.run_execute(calls)
+        self.assertEqual(rc, cli.EXIT_ADMITTED)
+        self.assertTrue(report["executed"])
+        self.assertTrue(report["execution_authorized"])
+        self.assertEqual(report["receipt"]["qualification_claim"], "NONE")
+        self.assertEqual(report["authorization"]["scope"], cli.AUTHORIZATION_SCOPE)
+        self.assertEqual(len(calls), 1)
+        pilot, kwargs = calls[0]
+        self.assertEqual(pilot.alias, "R001")
+        self.assertEqual(pilot.panel_sha256, self.panel_sha)
+        self.assertEqual(kwargs["operator_owner"], "operator-test")
+        self.assertEqual(kwargs["stop_path"], self.config.stop_path)
+        self.assertEqual(kwargs["guard_root"], self.config.guard_root)
+        self.assertIsNone(kwargs.get("runner"))
+        self.assertIsNone(kwargs.get("scorer"))
+        self.assertIsNone(kwargs.get("spawn"))
+        self.assertTrue(kwargs["preflight_result"]["admitted"])
+        self.assertTrue(callable(kwargs["watchdog_ready"]))
+        self.assertEqual(kwargs["watchdog_ready"]()["pid_ns"],
+                         self.identity["fingerprint"][1])
+        self.assertNotIn("--denovo", kwargs["plan"]["argv"])
+
+    def test_execute_without_authorization_never_calls_controller(self):
+        self.authorization.unlink()
+        calls = []
+        rc, report = self.run_execute(calls)
+        self.assertEqual(rc, cli.EXIT_BLOCKED)
+        self.assertFalse(report["executed"])
+        self.assertTrue(any(b.startswith("authorization_rejected")
+                            for b in report["blockers"]))
+        self.assertEqual(calls, [])
+
+    def test_execute_rejects_wrong_scope_token_operator_and_expiry(self):
+        for overrides in (
+            {"scope": "anything_else"},
+            {"token_sha256": "0" * 64},
+            {"operator": "foreign-owner"},
+            {"alias": "R002"},
+            {"expires_at_utc": time.time() - 10},
+        ):
+            with self.subTest(overrides=overrides):
+                self._write_authorization(**overrides)
+                calls = []
+                rc, report = self.run_execute(calls)
+                self.assertEqual(rc, cli.EXIT_BLOCKED)
+                self.assertFalse(report["executed"])
+                self.assertEqual(calls, [])
+
+    def test_execute_rejects_below_reserve_and_held_slot(self):
+        for mutate in (lambda: setattr(self.probe, "free",
+                                       runner.RESERVE_BYTES - 1),
+                       lambda: setattr(self.probe, "lock", False)):
+            with self.subTest():
+                mutate()
+                calls = []
+                rc, report = self.run_execute(calls)
+                self.assertEqual(rc, cli.EXIT_BLOCKED)
+                self.assertFalse(report["executed"])
+                self.assertEqual(calls, [])
+
+    def test_execute_rejects_stop_owner_mismatch(self):
+        self.probe.stop_state = {"armed": True, "owner": "someone-else"}
+        calls = []
+        rc, report = self.run_execute(calls)
+        self.assertEqual(rc, cli.EXIT_BLOCKED)
+        self.assertIn("stop_owner_mismatch", report["blockers"])
+        self.assertEqual(calls, [])
+
+    def test_execute_rejects_unbound_watchdog_checker(self):
+        for overrides in ({"identity_bound": False},
+                          {"pid_ns": 1, "starttime": 1},
+                          {"at_utc": time.time() - 3600}):
+            with self.subTest(overrides=overrides):
+                self._write_checker(**overrides)
+                calls = []
+                rc, report = self.run_execute(calls)
+                self.assertEqual(rc, cli.EXIT_BLOCKED)
+                self.assertFalse(report["executed"])
+                self.assertEqual(calls, [])
+
+    def test_execute_rejects_panel_drift_and_synthetic_alias(self):
+        self.panel.write_bytes(b'{"hermetic":"tampered"}')
+        calls = []
+        rc, report = self.run_execute(calls)
+        self.assertEqual(rc, cli.EXIT_BLOCKED)
+        self.assertIn("panel_digest_drift", report["blockers"])
+        self.assertEqual(calls, [])
+        self.panel.write_bytes(b'{"hermetic":"posthoc-panel"}')
+        args = self.exec_args()
+        args[args.index("R001")] = "H001"
+        rc, report = self.run_execute(calls, argv=args)
+        self.assertEqual(rc, cli.EXIT_BLOCKED)
+        self.assertFalse(report["executed"])
+        self.assertTrue(report["blockers"])
+        self.assertEqual(calls, [])
+
+    def test_execute_rejects_preexisting_cid_and_truth_token(self):
+        self.cidfile.write_text("pre-existing\n")
+        calls = []
+        rc, report = self.run_execute(calls)
+        self.assertEqual(rc, cli.EXIT_BLOCKED)
+        self.assertIn("cidfile_not_fresh", report["blockers"])
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

@@ -45,8 +45,8 @@ const BenchViews = (() => {
       ' metrics have at least one recorded value. N/A means unavailable, not zero.</p>'+
       groups.map(g=>'<section class="sample-metric-group"><h3>'+safe(g.stage)+
         '</h3><table class="sample-metric-table"><thead><tr>'+
-        '<th>Metric and calculation</th><th>'+safe(label(run,a))+
-        '</th><th>'+safe(label(run,b))+'</th></tr></thead><tbody>'+
+        '<th>Metric and calculation</th><th class="assembler-blue">'+safe(label(run,a))+
+        '</th><th class="assembler-red">'+safe(label(run,b))+'</th></tr></thead><tbody>'+
         g.rows.map(row=>'<tr><td><details><summary>'+safe(row.info.label)+
           '</summary><p>'+safe(row.info.description)+'</p><p><strong>Basis:</strong> '+
           safe(row.info.denominator)+'</p></details><small>'+safe(row.info.unit)+

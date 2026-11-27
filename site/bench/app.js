@@ -93,7 +93,7 @@ function classify(row) {
       :failures&&(failures[state.firstTool]>0||failures[state.tool]>0);
     return affected?"failure":"unavailable";
   }
-  if(Math.abs(row.delta)<1e-9)return "tie";
+  if(row.delta===0)return "tie";
   return row.delta>0?"win":"loss";
 }
 function metricOptions() {
@@ -370,22 +370,21 @@ function drawTable() {
   const rows=currentRows();
   const info=metricInfo();
   const suffix=info?.unit==="seconds"?" s":"";
-  el("firstColumn").innerHTML=toolLabelHtml(state.firstTool)+' <span>↕</span>';
-  el("secondColumn").innerHTML=toolLabelHtml(state.tool)+' <span>↕</span>';
+  el("firstColumn").innerHTML='Assembler Blue · '+toolLabelHtml(state.firstTool)+' <span>↕</span>';
+  el("secondColumn").innerHTML='Assembler Red · '+toolLabelHtml(state.tool)+' <span>↕</span>';
   el("resultRows").innerHTML=rows.map(row=>{
-    const outcome=classify(row);
-    const tone=outcome==="win"?"positive":
-      outcome==="loss"?"negative":"neutral";
-    const delta=Number.isFinite(row.delta)?((row.delta>0?"+":"")+
-      na(row.delta)+suffix):"N/A";
+    const tone=row.delta>0?"assembler-blue":
+      row.delta<0?"assembler-red":"neutral";
+    const delta=Number.isFinite(row.delta)?
+      (row.delta!==0&&Math.abs(row.delta)<0.00001?fmtPsi(row.delta):
+        (row.delta>0?"+":"")+na(row.delta))+suffix:"N/A";
     return '<tr tabindex="0" role="button" data-alias="'+esc(row.id)+
       '" aria-label="Inspect '+esc(row.id)+'">'+
       '<td class="cell-title">'+esc(row.id)+'</td>'+
       '<td class="number">'+na(row.first)+(Number.isFinite(row.first)?suffix:"")+'</td>'+
       '<td class="number">'+na(row.rival)+(Number.isFinite(row.rival)?suffix:"")+'</td>'+
-      '<td class="number '+tone+'">'+delta+'</td>'+
-      '<td class="'+tone+'">'+esc(outcome)+'</td></tr>';
-  }).join("")||'<tr><td colspan="5">No matching measurements.</td></tr>';
+      '<td class="number '+tone+'">'+delta+'</td></tr>';
+  }).join("")||'<tr><td colspan="4">No matching measurements.</td></tr>';
   el("resultCount").textContent=rows.length+" visible of "+
     BenchRanks.pairs(state.run,state.diagnostics,state.metric,
       state.direction,state.firstTool,state.tool).length+
@@ -705,8 +704,6 @@ function drawDominance() {
       el("comparisonTool").innerHTML=choices.map(name=>
         '<option value="'+esc(name)+'">'+esc(toolLabel(name))+'</option>').join("");
       el("comparisonTool").value=b;
-      el("firstColumn").textContent=toolLabel(a);
-      el("secondColumn").textContent=toolLabel(b);
       drawCompare();drawTable();syncUrl();
     });
   });
@@ -750,11 +747,11 @@ function render() {
 function exportCsv() {
   const info=metricInfo();
   const header=["alias",state.firstTool+"_"+state.metric,
-    state.tool+"_"+state.metric,"assembler_a_advantage","outcome",
+    state.tool+"_"+state.metric,"assembler_blue_advantage",
     "metric_unit","numeric_preference"];
   const csv=x=>'"'+String(x??"").replace(/"/g,'""')+'"';
   const rows=[header.map(csv).join(",")].concat(state.rows.map(row=>
-    [row.id,row.first,row.rival,row.delta,classify(row),
+    [row.id,row.first,row.rival,row.delta,
       info.unit,state.direction].map(csv).join(",")));
   const href=URL.createObjectURL(new Blob([rows.join("\n")+"\n"],
     {type:"text/csv"}));

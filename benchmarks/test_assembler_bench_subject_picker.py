@@ -211,6 +211,37 @@ assert.equal(calc.winner({kind:'partial-yes',label:'YES'},no),0);
         self.assertIn('th[scope="row"]{color:var(--blue)}',css)
         self.assertIn('th[scope="col"]{color:var(--red)}',css)
 
+    def test_individual_cases_use_matrix_colours_and_four_columns(self):
+        from html.parser import HTMLParser
+
+        class HeaderParser(HTMLParser):
+            in_table = False
+            headers = 0
+            def handle_starttag(self, tag, attrs):
+                if tag == "table" and dict(attrs).get("id") == "resultsTable":
+                    self.in_table = True
+                if self.in_table and tag == "th":
+                    self.headers += 1
+            def handle_endtag(self, tag):
+                if tag == "table":
+                    self.in_table = False
+
+        html=(SITE/"index.html").read_text()
+        js=(SITE/"app.js").read_text()
+        css=(SITE/"style.css").read_text()
+        parser=HeaderParser()
+        parser.feed(html)
+        self.assertEqual(parser.headers,4)
+        self.assertIn('class="assembler-blue">Assembler Blue',html)
+        self.assertIn('class="assembler-red">Assembler Red',html)
+        self.assertIn('row.delta>0?"assembler-blue"',js)
+        self.assertIn('row.delta<0?"assembler-red"',js)
+        self.assertIn('colspan="4">No matching measurements',js)
+        self.assertIn('assembler_blue_advantage',js)
+        self.assertNotIn('assembler_a_advantage',js)
+        self.assertIn('color:var(--blue)',css)
+        self.assertIn('color:var(--red)',css)
+
     def test_psi_selector_is_independent_and_shareable(self):
         html=(SITE/"index.html").read_text()
         app=(SITE/"app.js").read_text()

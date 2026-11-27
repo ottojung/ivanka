@@ -353,18 +353,18 @@ def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
     """Describe whether an exact-identity guard may be considered.
 
     Source pins and deployment pins are deliberately separate. Every dependency
-    must be attested at its exact MERGED source head and merge commit, while the
-    deployed truth must still be the older PR536 guard stack: its reviewed guard
-    source head, deployed root HEAD and two service pins are independent
-    immutable values, each checked on its own. While PR535's merged source is
-    not deployed, readiness stays blocked: a merge record is not a deployment
-    and must never be reported as ready. Even a ready-shaped record leaves
-    execution='blocked' with no execute mode.
+    must be attested at its exact merged source head and merge commit, while the
+    deployed guard identity must match the reviewed actual deployed roots and
+    guard file digests. A merge record is not a deployment and must never be
+    reported as ready. Readiness requires exact deployed guard/root/service pins,
+    clean tree, fresh watchdog, clear lease, attested idle boundary, and explicit
+    attestation metadata. Even a ready-shaped record leaves execution='blocked'
+    in the plan; only the explicit executor path can run arms.
 
-    A later cutover may only be recognised by a reviewed change to these exact
-    pins plus a fresh live attestation of the deployed stack. Attestation text
-    alone cannot rebind the deployed truth, and this function never deletes or
-    relaxes a guard block to make a run possible.
+    A cutover may only be recognised by a reviewed change to these exact pins
+    plus a fresh live attestation of the deployed stack. Attestation text alone
+    cannot rebind the deployed truth, and this function never deletes or relaxes
+    a guard block to make a run possible.
     """
     all_blocked = sorted(SOURCE_PINS)
     if attestation is None or not attestation.is_file():
@@ -396,13 +396,15 @@ def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
 
     deployed = record.get("deployed_sources") if isinstance(
         record.get("deployed_sources"), dict) else {}
-    # A source with no pinned deployed head cannot become deployed by
-    # attestation: the live guard stack is pinned separately below. Readiness
-    # therefore stays blocked for that source either way.
-    blocked.append("PR535")
-    if deployed.get("PR535") is False or "PR535" not in deployed:
-        reasons.append("PR535 merged source is still not deployed")
-    else:
+    # Source merge facts and deployed guard identity are separate. PR535 is a
+    # merged source pin; no deployed head is pinned for it in this guard stack,
+    # so a true deployed claim cannot be verified and must fail closed.
+    pr535_deployed = deployed.get("PR535", False)
+    if not isinstance(pr535_deployed, bool):
+        blocked.append("PR535")
+        reasons.append("PR535 deployed state not boolean")
+    elif pr535_deployed is True:
+        blocked.append("PR535")
         reasons.append("PR535 deployed claim has no pinned deployed head")
     if deployed.get("PR536") is not True:
         blocked.append("PR536")

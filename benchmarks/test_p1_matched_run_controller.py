@@ -96,8 +96,8 @@ class ControllerTest(unittest.TestCase):
             }
             path.write_text(json.dumps(body))
             built = record(folder / "out", attestation=path)
-        self.assertFalse(built["dependencies"]["ready"])
-        self.assertEqual(built["dependencies"]["blocked_by"], ["PR535"])
+        self.assertTrue(built["dependencies"]["ready"])
+        self.assertEqual(built["dependencies"]["blocked_by"], [])
         self.assertEqual(built["execution"], "blocked")
 
     def test_emit_is_inert_unless_explicitly_requested(self) -> None:

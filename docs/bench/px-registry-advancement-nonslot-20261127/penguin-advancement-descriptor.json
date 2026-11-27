@@ -1,0 +1,54 @@
+{
+  "schema": "ivanka.px.penguin.advancement-descriptor.v1",
+  "purpose": "Public-safe, content-addressed record of the verified NONQUALIFYING PenguiN registry advancement. It is a review artifact, not a directly applicable host registry.",
+  "tool_id": "penguin",
+  "name": "PenguiN",
+  "change": {
+    "from": "source-pinned",
+    "to": "pilot"
+  },
+  "qualifying": false,
+  "seven_way_psi_release_inclusion": false,
+  "source": {
+    "repo": "https://github.com/soedinglab/plass",
+    "commit": "ac83d8fa2fd315738afe675609a3dea05837cfea",
+    "adapter_branch": "bench/frozen-8458f9e5-penguin-20261123",
+    "adapter_commit": "8e7c55a3ebcaa4584cb09b1ac743bb5320bd1257"
+  },
+  "evidence": {
+    "native_elf_sha256": "a175c7af8bed75b9add8229b30ee57380eaa4ffb67e351a8f5e91e43584bec0a",
+    "oci_image_sha256": "sha256:458ff3d095ecf7db1b3622b56dafb9eec0947f2c3e567fcc3da3ea69f7dba924",
+    "image_receipt": {
+      "artifact": "image-penguin-frozen-8458f9e5-8e7c55a3.json",
+      "sha256": "5ab7651c768aa29da9346cd5fa51a89d5d14ff757fbdff23e16eefbf6e7af7c1"
+    },
+    "paired_pilot_receipt": {
+      "artifact": "pilot-penguin-paired-canonical-proposed-20261126.json",
+      "sha256": "37d24d30b5e96c9faa51ab7f9f29d8f1e29d4fa5eadc80690c158a7d8881a6bc"
+    },
+    "physical_run_receipt_sha256": "55d4644a894eabb84b19e0aa51c32c91c0913c155c7ff226d4c8112601e33a0a",
+    "synthetic_run_receipt_sha256": "0b25a697ea39cca8dff9ac26951807786a98428fa135c73dc8359809276f92c2",
+    "physical_combined_read_sha256": "f971b40df8e14d1ba4d499d60065badc64fb7ba6afb11d45ddf6c3e8b385039e",
+    "synthetic_combined_read_sha256": "9411cc4e9464b629cd6e23461615d4e98972dacb5932f17a6f2017b5cf477013"
+  },
+  "measurement_claims": {
+    "physical": "success (pilot only, no score, no proxy zero)",
+    "synthetic": "terminal guard-limited failure at a 3.7e9 userspace sampled process-tree RSS soft trip; exit 137; no final MAX; not recoverable under the single-extra-attempt authorization policy",
+    "no_score": true,
+    "no_proxy_zero": true,
+    "no_scoring_attestation": true
+  },
+  "apply": {
+    "applied_live": false,
+    "candidate_registry_sha256": "af634259fb68f90cc4acf4987ee5cd5068eae9578e559c80ba62925d24d41b7d",
+    "reviewed_migration_sha256": "14bc3abb8948a5afb9b8774bc0bac8af63ec22cefb490014a0a7bf9251db1cd1",
+    "requirement": "sole slot owner must apply via the reviewed migration only at a genuine reviewed idle boundary with a named grant and all fail-closed gates passing",
+    "raw_candidate_and_scripts": "withheld from public publication because they carry absolute host paths; retained by the owner at a private durable location"
+  },
+  "publication_boundary": {
+    "host_paths": "none in this descriptor",
+    "private_identifiers": "none",
+    "credentials": "none",
+    "qualification_claim": "none; all ten PX assemblers remain NONQUALIFYING"
+  }
+}

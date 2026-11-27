@@ -1,0 +1,395 @@
+{
+  "attest_post_cutover": {
+    "active_leases": [
+      "soapdenovo2-1795822263147226741"
+    ],
+    "blockers": [],
+    "control_heads": [
+      "b8720600c9f10e71472b2b55210badeabc257a81"
+    ],
+    "global_lock_locked": true,
+    "kernel_enforcement": false,
+    "ready": true,
+    "watchdog_heads": [
+      "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+    ]
+  },
+  "branch_provenance": {
+    "fresh_branch": true,
+    "private_ancestor": "none (fresh branch created directly from current main)",
+    "publication": "sanitized aggregate only; raw private registry and scripts retained host-local, never merged",
+    "rooted_at_main": "3e534d6385524fe9ebd1b9da6f665e491007655f"
+  },
+  "build_prerequisites": {
+    "penguin": {
+      "note": "build_plans.json entry is superseded (older adapter 051836e9); admitted adapter is 8e7c55a3",
+      "recipe": "Dockerfile.assembler-bench.penguin.corrected enforces in-image sha256sum -c of /usr/local/bin/penguin against a175c7af... (not label-only)",
+      "status": "eligible for NONQUALIFYING pilot admission; verified"
+    },
+    "savage-denovo": {
+      "adapter_head": "0919ffa97f609b6f0b650ce834f0fc79822f18e5",
+      "donor_prebuilt": "ViralQuasispecies sha256 199d97b7330df213f0adf99aaebb8f74d59806dfe90379f15dea28f0aa0c6590 is host-built, NOT an in-container rebuild",
+      "image": null,
+      "missing": [
+        "VIRAL_QUASISPECIES_BUILD_SHA256 from reviewed armed build guard",
+        "QC_BINARIES_BUILD_SHA256 from reviewed armed build guard",
+        "operator-staged NumPy 1.16.6 archive in build context",
+        "pinned common MiCall base image digest"
+      ],
+      "paired_pilot": null,
+      "pinned_donor_archives": {
+        "CPython 2.7.18": "da3080e3...",
+        "NumPy 1.16.6": "e5cf3fdf...",
+        "SciPy 1.2.3": "ecbe6413..."
+      },
+      "policy": "donor hashes must not be asserted as in-container rebuild results; recipe fails closed on absent build-attested digests",
+      "quick_cliques_tree": "4b41a2ba...",
+      "source": "HaploConduct/HaploConduct@24e4d9fc35ef6a93e336949a9a8f98ed4ceef362 (fetch confirmed)",
+      "status": "not eligible: prerequisites unmet"
+    },
+    "unicycler": {
+      "adapter_head": "5ad7874fe193043fa378063efc123018bff546da",
+      "image": null,
+      "missing": [
+        "SPADES_CORE_SHA256 / SPADES_BINARY_SHA256 from an independently reviewed armed build guard",
+        "TOOL_BINARY_SHA256 attestation for cpp_functions.so",
+        "pinned common MiCall base image digest"
+      ],
+      "paired_pilot": null,
+      "policy": "operator ruling rejects Debian 3.15.5+dfsg-2 version equivalence",
+      "recipe": "Dockerfile.assembler-bench.unicycler.corrected removes the misapplied TOOL_BINARY_SHA256 gate on spades-core and fails closed without a separate SPADES_CORE_SHA256",
+      "retained_native": "cpp_functions.so sha256 293f840641afaf17ef8b73858ecc7418553c453958bfece305f658223f2dc668 (NOT spades-core)",
+      "source": "rrwick/Unicycler@1429301eb24df9162f3c9386e8522f942594ae42 (fetch confirmed)",
+      "spades_pin": "ablab/spades@896694ce5c7a9050a6ffa9fccc950a4cd9f04363 == tag v3.15.5 (fetch confirmed)",
+      "status": "not eligible: prerequisites unmet"
+    }
+  },
+  "contributor": "see commit Co-authored-by trailer",
+  "created_utc": "2026-11-27T23:35:31Z",
+  "donor_readiness": {
+    "build_authorization": "NO build attempted; a named slot from the sole live owner and a reviewed armed build guard are required before any image build",
+    "host_local_artifacts_present": {
+      "PenguiN ELF": "a175c7af8bed75b9add8229b30ee57380eaa4ffb67e351a8f5e91e43584bec0a",
+      "Python-2.7.18.tgz": "da3080e3b488f648a3d7a4560ddee895284c3380b11d6de75edb986526b9a814",
+      "SAVAGE donor ViralQuasispecies": "199d97b7330df213f0adf99aaebb8f74d59806dfe90379f15dea28f0aa0c6590 (host-built, not an in-container rebuild)",
+      "scipy-1.2.3.tar.gz": "ecbe6413ca90b8e19f8475bfa303ac001e81b04ec600d17fa7f816271f7cca57",
+      "unicycler cpp_functions.so": "293f840641afaf17ef8b73858ecc7418553c453958bfece305f658223f2dc668 (not spades-core)"
+    },
+    "operator_action_still_required": {
+      "numpy-1.16.6.zip": "NOT staged on host; attested digest e5cf3fdf13401885e8eea8170624ec96225e2174eb0c611c6f26dd33b489e3ff is metadata plus one-time recomputation; must be staged in the build context",
+      "spades-core": "no build-attested binary present on host; SPADES_CORE_SHA256 requires a reviewed armed build"
+    },
+    "scope": "host-local read-only checks; full operational paths retained host-local and are NOT published here",
+    "verified_from_fetched_source": {
+      "quick-cliques tree at HaploConduct@24e4d9fc": "4b41a2badc29877c28a0e903fe7df29a6666a220 (35 tracked files) matches the source-readiness pin"
+    }
+  },
+  "host": "authorized host (name withheld)",
+  "issue": "V9roZ0y80gjXs7WrOCgNbH-moral",
+  "live_registry": {
+    "artifact": "private-frozen-ten-pilot-registry-20gib-20261124.json",
+    "qualifying": false,
+    "sha256": "98de47a3eb76b45d3c09b4f3aa62a299b57f67b30642c18541a062c2dc720a7a"
+  },
+  "main_head": "a0f6cdeea80583c3825c2ce1e5bfd3e7ee10835a",
+  "penguin_advancement": {
+    "adapter_branch": "bench/frozen-8458f9e5-penguin-20261123",
+    "adapter_commit": "8e7c55a3ebcaa4584cb09b1ac743bb5320bd1257",
+    "applied_live": false,
+    "apply_blocker": "reviewed migration fails closed on supervisor_idle/clear_lease/global_lock/STOP while sole armed worker holds exclusive slot; no idle-boundary grant for this NON-SLOT agent",
+    "candidate_registry_sha256": "af634259fb68f90cc4acf4987ee5cd5068eae9578e559c80ba62925d24d41b7d",
+    "from": "source-pinned",
+    "image_in_bound_store": true,
+    "image_receipt_sha256": "5ab7651c768aa29da9346cd5fa51a89d5d14ff757fbdff23e16eefbf6e7af7c1",
+    "image_sha256": "sha256:458ff3d095ecf7db1b3622b56dafb9eec0947f2c3e567fcc3da3ea69f7dba924",
+    "migration_script_sha256": "14bc3abb8948a5afb9b8774bc0bac8af63ec22cefb490014a0a7bf9251db1cd1",
+    "native_elf_sha256": "a175c7af8bed75b9add8229b30ee57380eaa4ffb67e351a8f5e91e43584bec0a",
+    "no_score_no_proxy_zero_no_seven_way_inclusion": true,
+    "paired_pilot_receipt_sha256": "37d24d30b5e96c9faa51ab7f9f29d8f1e29d4fa5eadc80690c158a7d8881a6bc",
+    "physical": {
+      "alias": "PX-R053",
+      "container_id": "39b57480d6faf49c2e866f3e5232527a3a2f0326146ee2ccc13c1aafb6e09a01",
+      "outcome": "success",
+      "run_receipt_sha256": "55d4644a894eabb84b19e0aa51c32c91c0913c155c7ff226d4c8112601e33a0a"
+    },
+    "physical_combined_read_sha256": "f971b40df8e14d1ba4d499d60065badc64fb7ba6afb11d45ddf6c3e8b385039e",
+    "qualifying": false,
+    "residual_gap": "raw argv/mount table not retained by historical launcher; argv_sha256 cannot be independently recomputed",
+    "source_commit": "ac83d8fa2fd315738afe675609a3dea05837cfea",
+    "source_repo": "https://github.com/soedinglab/plass",
+    "synthetic": {
+      "alias": "PX-H452",
+      "bound_cid": "eb36474e8bf4d188cf5041bdd4d46dbb1e44fa8d448008076538429088ccf9c4",
+      "exit_code": 137,
+      "failure_cause": "native penguin nuclassemble produced 1355 contigs in 7.87 s; frozen referenceless stitcher tripped the 3.7e9 userspace sampled-RSS soft guard; exit 137; no final MAX",
+      "kernel_enforcement": false,
+      "manual_followup_receipt_sha256": "19b5403066bfce99fd5b5a765b71e645db5e5f3e86de182393f52bf0b4cf6242",
+      "outcome": "failure",
+      "run_receipt_sha256": "0b25a697ea39cca8dff9ac26951807786a98428fa135c73dc8359809276f92c2",
+      "sampled_process_tree_rss_bytes_at_soft_trip": 3701882880
+    },
+    "synthetic_combined_read_sha256": "9411cc4e9464b629cd6e23461615d4e98972dacb5932f17a6f2017b5cf477013",
+    "to": "pilot",
+    "verifier_sha256": "b1ac72b7770e838b0eec1b4ddb2e5b083370f0aed62ef611ba56e6c8c30d815d"
+  },
+  "penguin_failure_classification": {
+    "FAILURE_REASONS": [
+      "error",
+      "timeout",
+      "no_contigs",
+      "no_final_max",
+      "disk_stop",
+      "wall_limit",
+      "observed_rss_limit",
+      "measurement_unavailable",
+      "identity_lost",
+      "binding_unavailable"
+    ],
+    "INFRASTRUCTURE_FAILURE_REASONS": [
+      "disk_stop",
+      "measurement_unavailable",
+      "identity_lost",
+      "binding_unavailable"
+    ],
+    "MAX_INFRA_ATTEMPTS": 2,
+    "authorizable_only": "exhausted (attempt 2) infrastructure failure with preserved attempt receipts and deployed-guard-bound authorization",
+    "physical": {
+      "alias": "PX-R053",
+      "class": "pilot_success",
+      "outcome": "success",
+      "proxy_zero": false,
+      "scored": false
+    },
+    "synthetic": {
+      "alias": "PX-H452",
+      "class": "guard_limited_terminal",
+      "exact_cid_teardown": "proved by manual followup receipt 19b5403066bfce99fd5b5a765b71e645db5e5f3e86de182393f52bf0b4cf6242; not a pilot arm, not scored",
+      "failure_reason_equivalent": "observed_rss_limit",
+      "proxy_zero": false,
+      "scored": false,
+      "why_not_recoverable": [
+        "3.7e9 userspace sampled process-tree RSS soft trip, exit 137; deterministic resource-limit outcome, not a transient infrastructure failure",
+        "observed_rss_limit is not in INFRASTRUCTURE_FAILURE_REASONS, so no single-extra-attempt authorization exists",
+        "attempt 1 of a historical paired pilot, not an exhausted two-attempt cohort arm",
+        "no final MAX; no scored measurement; a re-run would be a new pilot arm requiring a named slot, not an authorized retry"
+      ]
+    },
+    "taxonomy_source": "benchmarks/assembler_bench/px_cohort_scheduler.py and px_retry_authorization.py"
+  },
+  "privacy_audit": {
+    "decision": "raw host-path-bearing candidate registry and private script copies are WITHHELD from the public branch; only a content-addressed descriptor with artifact basenames and digests is published; any live apply must use the reviewed migration from the owner's private durable location",
+    "findings": "raw candidate registry af634259... contained absolute filesystem paths; copied migration/verifier scripts contained host-specific constants",
+    "no_merge": "no branch was merged into main; no published history rewritten",
+    "scope": "proposed registry + copied scripts that had been added to the published topic branch"
+  },
+  "receipt_index": {
+    "all_indexed_files_byte_hash_match": true,
+    "artifact": "receipts/index.json",
+    "entries": 459,
+    "sha256": "dffbc61e2acfa4d8f8e98e7e410165fabe8a2f0fd8b74577b27e8de0c98f9c2b"
+  },
+  "repository": "https://github.com/ottojung/ivanka.git",
+  "schema": "ivanka.px.nonslot.registry-evidence.v1",
+  "scope": "NON-SLOT: read-only verification; published content-addressed evidence only; no live apply, no worker/slot/STOP/s6, no pilot launch, no frozen/receipt/site/registry mutation; raw host-path-bearing candidate registry and private scripts WITHHELD from publication",
+  "tools": [
+    {
+      "adapter_branch_head": "7947c2a201cf942ca11e76faf0f3a23a900c0d5c",
+      "genuine_case_receipts": {
+        "failure": 5,
+        "success": 50,
+        "terminal_total": 55
+      },
+      "id": "fermi-lite",
+      "name": "Fermi-lite",
+      "registry_image_sha256": "3cfc23c8b1bd7311d8bdc7c4c615092a7bdcc075e55541290bbee418fda6006e",
+      "registry_pilot_evidence_sha256": "61d6ea9f38560202d25fddcdccda38e4fd920a1ea760e73b8deafd82e74c7524",
+      "registry_status": "pilot",
+      "source_attestation_adapter_commit": "7947c2a201cf942ca11e76faf0f3a23a900c0d5c",
+      "source_attestation_native_sha256": "3d3dfb9f3fb4471e1067a669482f113d8187acb68908f0657a88ff33343ee466",
+      "source_commit": "85f159e5a2e15a4c4fb41cdfce91ba0c9b68d2e1",
+      "source_repo": "https://github.com/lh3/fermi-lite"
+    },
+    {
+      "adapter_branch_head": "ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9",
+      "genuine_case_receipts": {
+        "failure": 24,
+        "success": 32,
+        "terminal_total": 56
+      },
+      "id": "idba-ud",
+      "name": "IDBA-UD",
+      "registry_image_sha256": "36ae5c23a20e86cf1f93ef9e85fe9fee8b89b38c405f133e800aecc86a094a94",
+      "registry_pilot_evidence_sha256": "41b7c418992480e9a5f568cd2a87d2a4dc060652fa369732f2e242dbe7f4134c",
+      "registry_status": "pilot",
+      "source_attestation_adapter_commit": "ea51b5030edf6a6c89c36ffa3d48fac15b2cb1c9",
+      "source_attestation_native_sha256": "cf59219b9b27631acb21679cf830d26d4861f7b67eba7c8c0370b6877885d725",
+      "source_commit": "a1bafe6b012912cd9a76926ec75a98aee6213af6",
+      "source_repo": "https://github.com/loneknightpy/idba"
+    },
+    {
+      "adapter_branch_head": "ff75f0f2dca4b8b26dd8520638e4981d02484fbe",
+      "genuine_case_receipts": {
+        "failure": 9,
+        "success": 47,
+        "terminal_total": 56
+      },
+      "id": "minia",
+      "name": "Minia",
+      "registry_image_sha256": "d218919d19ac1e053e15905a222a1f05ae085d6f7e0e0e620817bd06913df08e",
+      "registry_pilot_evidence_sha256": "7bde32de21fc1669388a8c67bee6a0eb095e876e86d52a9ab1b6ddb525e1825a",
+      "registry_status": "pilot",
+      "source_attestation_adapter_commit": "ff75f0f2dca4b8b26dd8520638e4981d02484fbe",
+      "source_attestation_native_sha256": "7903bad733d0a57f4c74b74823810581b15b0031d37c8125d283b7829d7c4023",
+      "source_commit": "7b7239c69ecc63534a20fc0d0c2de30f0f67e31c",
+      "source_repo": "https://github.com/GATB/minia"
+    },
+    {
+      "adapter_branch_head": "8e7c55a3ebcaa4584cb09b1ac743bb5320bd1257",
+      "genuine_case_receipts": {
+        "failure": 0,
+        "success": 0,
+        "terminal_total": 0
+      },
+      "id": "penguin",
+      "name": "PenguiN",
+      "registry_image_sha256": null,
+      "registry_pilot_evidence_sha256": null,
+      "registry_status": "source-pinned",
+      "source_attestation_adapter_commit": "8e7c55a3ebcaa4584cb09b1ac743bb5320bd1257",
+      "source_attestation_native_sha256": "a175c7af8bed75b9add8229b30ee57380eaa4ffb67e351a8f5e91e43584bec0a",
+      "source_commit": "ac83d8fa2fd315738afe675609a3dea05837cfea",
+      "source_repo": "https://github.com/soedinglab/plass"
+    },
+    {
+      "adapter_branch_head": "9e02a9205fc338e1be4f0cd4a8dd4a13b406ae88",
+      "genuine_case_receipts": {
+        "failure": 3,
+        "success": 53,
+        "terminal_total": 56
+      },
+      "id": "ray",
+      "name": "Ray",
+      "registry_image_sha256": "ef26acf7212682124adde73329a4395aedf7e7a4d4a06e94a48307a59a353aad",
+      "registry_pilot_evidence_sha256": "1c8d41e529da25bb3ab6eb2ae50829f8884977a37e9bde5ca3ead8798ae1559a",
+      "registry_status": "pilot",
+      "source_attestation_adapter_commit": "9e02a9205fc338e1be4f0cd4a8dd4a13b406ae88",
+      "source_attestation_native_sha256": "3e93abc529fc9120cfbf97459049b8d0ac6794bc60918862cf61a85d1b5fbd86",
+      "source_commit": "621dfe8454dc96d49f405e413cb759d3f48790b2",
+      "source_repo": "https://github.com/sebhtml/ray"
+    },
+    {
+      "adapter_branch_head": "0919ffa97f609b6f0b650ce834f0fc79822f18e5",
+      "genuine_case_receipts": {
+        "failure": 0,
+        "success": 0,
+        "terminal_total": 0
+      },
+      "id": "savage-denovo",
+      "name": "SAVAGE de novo",
+      "registry_image_sha256": null,
+      "registry_pilot_evidence_sha256": null,
+      "registry_status": "source-pinned",
+      "source_attestation_adapter_commit": null,
+      "source_attestation_native_sha256": null,
+      "source_commit": "24e4d9fc35ef6a93e336949a9a8f98ed4ceef362",
+      "source_repo": "https://github.com/HaploConduct/HaploConduct"
+    },
+    {
+      "adapter_branch_head": "2fb3cd5af8769f834635b21187738cf90565c349",
+      "genuine_case_receipts": {
+        "failure": 18,
+        "success": 107,
+        "terminal_total": 125
+      },
+      "id": "skesa",
+      "name": "SKESA",
+      "registry_image_sha256": "ed0770eec1d6e7ca9318a447e4f7fbe1cd12b98ea38b50ec766893b8d388392e",
+      "registry_pilot_evidence_sha256": "9a650fa05e007c79f96b79facf41c70202fb8cb474546b591df9af82cd8e79c3",
+      "registry_status": "pilot",
+      "source_attestation_adapter_commit": "17a0efa0dcfbbbb0e8b3871d7ec7104aa87f92b0",
+      "source_attestation_native_sha256": "d7d97a95add33476e3b84ad8dab48db7278c3833ef8a9df76b08d1bbd78fb85c",
+      "source_commit": "34c872e7fd61c758d0d3917acd76507a43edfc64",
+      "source_repo": "https://github.com/ncbi/SKESA"
+    },
+    {
+      "adapter_branch_head": "39cfa22fad92157680382d1ea124b70b2e8515b3",
+      "genuine_case_receipts": {
+        "failure": 24,
+        "success": 31,
+        "terminal_total": 55
+      },
+      "id": "soapdenovo2",
+      "name": "SOAPdenovo2",
+      "registry_image_sha256": "bac9c5c1b45ea8e9f0d9501357bd9bf1ebe2412fefa73598ce96e5ce0fd6d8e6",
+      "registry_pilot_evidence_sha256": "17f3c09cec77e9746f30f6f86eb13c40dd06bddf20a21e18463bf26ea6e76342",
+      "registry_status": "pilot",
+      "source_attestation_adapter_commit": "02aff63992d68ba4a9c98e6917ad27bb402a58f1",
+      "source_attestation_native_sha256": "87eed4aa2e2b0944584d57e054f0a0b139ecf5fc39b52f05266d321eda617811",
+      "source_commit": "7560c0b9d59e253cb0c819eca40d60f8636b4a11",
+      "source_repo": "https://github.com/aquaskyline/SOAPdenovo2"
+    },
+    {
+      "adapter_branch_head": "3fd7f695c378875fd7b3b80ca263601a66476c2f",
+      "genuine_case_receipts": {
+        "failure": 7,
+        "success": 49,
+        "terminal_total": 56
+      },
+      "id": "tadpole",
+      "name": "Tadpole",
+      "registry_image_sha256": "c736c0c3607002a0198db0bdd9eb36fe2ec7af0b450b4debd2380d3affc8b65e",
+      "registry_pilot_evidence_sha256": "33aa283c2cc6980d74d10ea780d151cc1f42875e6a1eb4f039f27610880fea54",
+      "registry_status": "pilot",
+      "source_attestation_adapter_commit": "baaaa082c1c1eb62b203baf80b14031facde4b40",
+      "source_attestation_native_sha256": "7eaa09de4cdab334fb7ed8d11c0ebb802cd5cab660a30bd48da0b94572b8a6fe",
+      "source_commit": "fb1a2727b7b4994ecae0ddc362d4ed8148307b20",
+      "source_repo": "https://github.com/bbushnell/BBTools"
+    },
+    {
+      "adapter_branch_head": "5ad7874fe193043fa378063efc123018bff546da",
+      "genuine_case_receipts": {
+        "failure": 0,
+        "success": 0,
+        "terminal_total": 0
+      },
+      "id": "unicycler",
+      "name": "Unicycler",
+      "registry_image_sha256": null,
+      "registry_pilot_evidence_sha256": null,
+      "registry_status": "source-pinned",
+      "source_attestation_adapter_commit": "5ad7874fe193043fa378063efc123018bff546da",
+      "source_attestation_native_sha256": "293f840641afaf17ef8b73858ecc7418553c453958bfece305f658223f2dc668",
+      "source_commit": "1429301eb24df9162f3c9386e8522f942594ae42",
+      "source_repo": "https://github.com/rrwick/Unicycler"
+    }
+  ],
+  "updated_utc": "2026-11-27T23:55:39Z",
+  "upstream_pin_verification": {
+    "method": "git fetch --depth=1 <public upstream> <exact commit> into an isolated local object store (read-only wrt shared state)",
+    "verified": {
+      "HaploConduct/HaploConduct@24e4d9fc35ef6a93e336949a9a8f98ed4ceef362": true,
+      "ablab/spades@896694ce5c7a9050a6ffa9fccc950a4cd9f04363 (tag v3.15.5)": true,
+      "rrwick/Unicycler@1429301eb24df9162f3c9386e8522f942594ae42": true,
+      "soedinglab/plass@ac83d8fa2fd315738afe675609a3dea05837cfea": true
+    }
+  },
+  "verdict": {
+    "all_ten_nonqualifying": true,
+    "issue_state": "open",
+    "penguin": "source/image/pilot ready and verified; registry advancement prepared, not applied live",
+    "savage-denovo": "blocked: no VIRAL_QUASISPECIES_BUILD_SHA256 / QC_BINARIES_BUILD_SHA256, no image, no paired pilot",
+    "seven_tools_with_genuine_case_receipts": [
+      "fermi-lite",
+      "idba-ud",
+      "minia",
+      "penguin",
+      "ray",
+      "savage-denovo",
+      "skesa",
+      "soapdenovo2",
+      "tadpole",
+      "unicycler"
+    ],
+    "unicycler": "blocked: no build-attested SPADES_CORE_SHA256, no image, no paired pilot"
+  }
+}

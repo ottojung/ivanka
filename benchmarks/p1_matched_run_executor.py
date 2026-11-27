@@ -23,6 +23,7 @@ import hashlib
 import json
 import math
 import pathlib
+import subprocess
 import sys
 import time
 from typing import Any, Callable
@@ -59,6 +60,131 @@ def default_arm_runner(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     raise Refusal("no arm runner; live execution not authorized")
 
 
+def observe_container_cpu_max(env: dict[str, str], cid: str) -> str | None:
+    """Read live container CPU quota via podman inspect; None if unavailable."""
+    try:
+        out = subprocess.run(
+            ["podman", "inspect", "--format",
+             "{{.HostConfig.CpuQuota}} {{.HostConfig.CpuPeriod}}", cid],
+            env=env, check=True, capture_output=True, text=True, timeout=15,
+        ).stdout.strip().split()
+    except Exception:
+        return None
+    if len(out) != 2 or not all(part.lstrip("-").isdigit() for part in out):
+        return None
+    quota, period = int(out[0]), int(out[1])
+    if period <= 0:
+        return None
+    if quota <= 0:
+        return "max " + str(period)
+    return str(quota) + " " + str(period)
+
+
+def production_podman_spawn(argv: list[str], cidfile: str, env: dict[str, str],
+                            arm_dir: pathlib.Path) -> subprocess.Popen[str]:
+    """Spawn a real podman arm with the guard-owned cidfile.
+
+    The argv comes from the reviewed plan template and is re-verified before
+    execution. This function only injects --cidfile; it does not alter image,
+    mounts, entrypoint or user flags.
+    """
+    if not argv or argv[:2] != ["podman", "run"]:
+        raise Refusal("production runner requires reviewed podman run argv")
+    cmd = list(argv[:2]) + ["--cidfile", cidfile] + list(argv[2:])
+    log_path = arm_dir / "podman.log"
+    log_handle = log_path.open("ab")
+    try:
+        proc = subprocess.Popen(cmd, env=env, stdout=log_handle, stderr=subprocess.STDOUT,
+                                text=False)
+    except Exception:
+        log_handle.close()
+        raise
+    proc._ivanka_log_handle = log_handle  # type: ignore[attr-defined]
+    return proc
+
+
+def build_production_arm_runner(
+    *,
+    owner: str,
+    lease_root: pathlib.Path,
+    stop_path: pathlib.Path,
+    disk_path: pathlib.Path,
+    lock_path: pathlib.Path,
+    watchdog_path: pathlib.Path,
+    watchdog_graphroot: pathlib.Path,
+    attestation: pathlib.Path,
+    env: dict[str, str] | None = None,
+) -> Callable[..., dict[str, Any]]:
+    """Build a real guarded runner for live operator use.
+
+    This wires real podman spawn, CID/launcher liveness, /proc sampling via the
+    shared guard, and observed container CPU quota. It does NOT bypass the guard:
+    run_prospective still enforces STOP/lease/watchdog/disk/admission. Callers
+    must supply reviewed attestation and explicit operator authorization; absence
+    of those inputs must refuse before spawn.
+    """
+    if not attestation.is_file():
+        raise Refusal("deployment attestation file missing")
+    deps = plan.readiness(attestation)
+    if deps.get("ready") is not True:
+        raise Refusal("dependencies not ready: " + "; ".join(deps.get("reasons", [])))
+    run_env = dict(env or {})
+
+    def _spawn(cidfile: str, spawn_env: dict[str, str], *, argv: list[str], arm_dir: pathlib.Path):
+        return production_podman_spawn(argv, cidfile, spawn_env, arm_dir)
+
+    def _running(proc_holder: dict[str, Any]):
+        proc = proc_holder.get("proc")
+        return bool(proc is not None and proc.poll() is None)
+
+    inner_holder: dict[str, Any] = {}
+
+    def _measure():
+        # watch_bound requires a non-None measurement; actual RSS is sampled by
+        # the guard's bound tree sampler.
+        return True
+
+    def _runner(step: dict[str, str], argv: list[str], arm_dir: pathlib.Path,
+                *, deadline: float | None = None) -> dict[str, Any]:
+        def wrapped_spawn(cidfile, spawn_env, *, argv, arm_dir):
+            proc = production_podman_spawn(argv, cidfile, spawn_env, arm_dir)
+            inner_holder["proc"] = proc
+            return proc
+
+        local_runner = guarded_podman_arm_runner(
+            owner=owner,
+            lease_root=lease_root,
+            stop_path=stop_path,
+            disk_path=disk_path,
+            container_cpu_max="200000 100000",
+            lock_path=lock_path,
+            env=run_env,
+            watchdog_path=watchdog_path,
+            watchdog_graphroot=watchdog_graphroot,
+            host_evidence=plan.host_evidence,
+            spawn=wrapped_spawn,
+            running=lambda: _running(inner_holder),
+            measure=_measure,
+        )
+        result = local_runner(step, argv, arm_dir, deadline=deadline)
+        cidfiles = result.get("pinned_cidfiles") or []
+        if cidfiles:
+            try:
+                cid = pathlib.Path(cidfiles[0]).read_text().strip()
+                observed = observe_container_cpu_max(run_env, cid)
+                if observed is not None:
+                    result["observed_container_cpu_max"] = observed
+                    if observed != "200000 100000":
+                        raise Refusal("observed container cpu.max mismatch: " + observed)
+            except Refusal:
+                raise
+            except Exception:
+                pass
+        return result
+
+    return _runner
+
+
 def _require_ready(emitted_plan: dict[str, Any], *, allow_unready: bool = False) -> None:
     if emitted_plan.get("schema") != plan.SCHEMA:
         raise Refusal("unexpected plan schema")
@@ -74,16 +200,20 @@ def _require_ready(emitted_plan: dict[str, Any], *, allow_unready: bool = False)
         raise Refusal("unexpected plan execution state")
 
 
+TIMING_ORIGIN = "micall_in_container_monotonic_v1"
+
+
 def _normalize_timing(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise Refusal("missing timing record")
     seconds = raw.get("seconds")
+    max_seconds = int(plan.CONSTRAINTS["timeout"])
     if (isinstance(seconds, bool) or not isinstance(seconds, (int, float))
-            or not math.isfinite(seconds) or seconds <= 0):
+            or not math.isfinite(seconds) or seconds <= 0 or seconds > max_seconds):
         raise Refusal("invalid timing seconds")
     origin = raw.get("timing_origin")
-    if not isinstance(origin, str) or not origin.strip():
-        raise Refusal("missing timing origin")
+    if origin != TIMING_ORIGIN:
+        raise Refusal("missing or unexpected timing origin")
     exit_code = raw.get("exit_code")
     if exit_code != 0:
         raise Refusal("arm exited with code " + repr(exit_code))
@@ -307,11 +437,13 @@ def execute_plan(
     output_root: pathlib.Path,
     arm_runner: Callable[..., dict[str, Any]] = default_arm_runner,
     allow_unready: bool = False,
+    host_evidence: Callable[[], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Execute a previously emitted plan with an explicit arm runner."""
     if arm_runner is default_arm_runner:
         raise Refusal("no arm runner; live execution not authorized")
     _require_ready(emitted_plan, allow_unready=allow_unready)
+    sample_host = host_evidence or plan.host_evidence
     root = plan.check_output_root(output_root)
     root.mkdir(parents=True, exist_ok=True)
     schedule = emitted_plan.get("schedule")
@@ -322,9 +454,12 @@ def execute_plan(
     if len(schedule) != len(expected_steps):
         raise Refusal("schedule length does not match cases")
     plan_root = pathlib.Path(str(emitted_plan.get("output_root")))
-    records: list[dict[str, Any]] = []
-    started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    if plan_root.expanduser().resolve() != root.resolve():
+        raise Refusal("output root does not match emitted plan output root")
 
+    # Fail closed before any arm: validate the full schedule up front so a
+    # tampered or malformed later step cannot execute after earlier arms ran.
+    validated: list[tuple[dict[str, str], list[str]]] = []
     for index, step in enumerate(schedule):
         if not isinstance(step, dict):
             raise Refusal("invalid schedule step")
@@ -336,17 +471,34 @@ def execute_plan(
         argv = step.get("argv")
         if argv != plan.argv_for(step, plan_root):
             raise Refusal("argv deviates from the reviewed template for " + case + "/" + arm)
+        validated.append(({"case": case, "arm": arm}, list(argv)))
+
+    records: list[dict[str, Any]] = []
+    started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    for step, argv in validated:
+        case = step["case"]
+        arm = step["arm"]
         arm_dir = root / case / arm
-        before_default = plan.host_evidence()
+        before_default = sample_host()
+        preflight = plan.contention_check(before_default)
+        if preflight["abort"]:
+            raise Refusal(
+                "host contention before " + case + "/" + arm + ": "
+                + ", ".join(preflight["reasons"]))
         raw = arm_runner(step, list(argv), arm_dir)
         if not isinstance(raw, dict):
             raise Refusal("arm runner returned invalid result")
         before = raw.get("host_before") if isinstance(raw.get("host_before"), dict) else before_default
-        after = raw.get("host_after") if isinstance(raw.get("host_after"), dict) else plan.host_evidence()
+        after = raw.get("host_after") if isinstance(raw.get("host_after"), dict) else sample_host()
         timing = _normalize_timing(raw.get("timing"))
         log_text, log_sha = _read_log(arm_dir, raw)
-        if isinstance(raw.get("log_sha256"), str):
-            log_sha = raw["log_sha256"]
+        raw_log_sha = raw.get("log_sha256")
+        if isinstance(raw_log_sha, str):
+            if log_sha is not None and raw_log_sha != log_sha:
+                raise Refusal("log sha mismatch for " + case + "/" + arm)
+            if log_sha is None:
+                log_sha = raw_log_sha
         stage_timing = raw.get("stage_timing")
         if stage_timing is None and log_text is not None:
             stage_timing = _stage_timing(log_text, timing["seconds"])
@@ -400,14 +552,49 @@ def main() -> None:
     parser.add_argument("--attestation", type=pathlib.Path)
     parser.add_argument("--verify-files", action="store_true")
     parser.add_argument("--cases", default=",".join(plan.CASES))
+    parser.add_argument("--arm-runner", choices=["refuse", "production"],
+                        default="refuse")
+    parser.add_argument("--owner")
+    parser.add_argument("--lease-root", type=pathlib.Path)
+    parser.add_argument("--stop-path", type=pathlib.Path)
+    parser.add_argument("--disk-path", type=pathlib.Path)
+    parser.add_argument("--lock-path", type=pathlib.Path)
+    parser.add_argument("--watchdog-path", type=pathlib.Path)
+    parser.add_argument("--watchdog-graphroot", type=pathlib.Path)
     args = parser.parse_args()
     cases = tuple(c.strip() for c in args.cases.split(",") if c.strip())
     try:
         emitted_plan = plan.build_plan(
             args.receipt, args.output_root, verify_files=args.verify_files,
             attestation=args.attestation, cases=cases)
-        # The CLI deliberately has no arm runner: it can only refuse.
-        receipt = execute_plan(emitted_plan, output_root=args.output_root)
+        if args.arm_runner == "production":
+            required = {
+                "--owner": args.owner,
+                "--lease-root": args.lease_root,
+                "--stop-path": args.stop_path,
+                "--disk-path": args.disk_path,
+                "--lock-path": args.lock_path,
+                "--watchdog-path": args.watchdog_path,
+                "--watchdog-graphroot": args.watchdog_graphroot,
+                "--attestation": args.attestation,
+            }
+            missing = [k for k, v in required.items() if v is None]
+            if missing:
+                raise Refusal("production runner missing required args: " + ", ".join(missing))
+            runner = build_production_arm_runner(
+                owner=args.owner,
+                lease_root=args.lease_root,
+                stop_path=args.stop_path,
+                disk_path=args.disk_path,
+                lock_path=args.lock_path,
+                watchdog_path=args.watchdog_path,
+                watchdog_graphroot=args.watchdog_graphroot,
+                attestation=args.attestation,
+            )
+        else:
+            runner = default_arm_runner
+        receipt = execute_plan(emitted_plan, output_root=args.output_root,
+                               arm_runner=runner)
     except plan.Refusal as exc:
         sys.stdout.write(json.dumps({
             "schema": RECEIPT_SCHEMA, "execution": "refused",

@@ -162,7 +162,7 @@ class GuardedExecutorIntegrationTest(unittest.TestCase):
             with patch("fail_closed_guard.binding.inspect_pid", return_value=PID):
                 receipt = ex.execute_plan(
                     emitted, output_root=out, arm_runner=harness.runner(),
-                    allow_unready=True)
+                    allow_unready=True, host_evidence=harness.host_evidence)
             self.assertEqual(receipt["execution"], "executed")
             self.assertEqual(receipt["schedule_len"], 4)
             self.assertEqual(len(harness.calls["spawn"]), 4)
@@ -196,7 +196,7 @@ class GuardedExecutorIntegrationTest(unittest.TestCase):
                 with self.assertRaises(plan.Refusal):
                     ex.execute_plan(emitted, output_root=out,
                                     arm_runner=harness.runner(),
-                                    allow_unready=True)
+                                    allow_unready=True, host_evidence=harness.host_evidence)
 
     def test_closed_stop_refuses_before_spawn(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -209,7 +209,7 @@ class GuardedExecutorIntegrationTest(unittest.TestCase):
                 with self.assertRaises(ex.Refusal):
                     ex.execute_plan(emitted, output_root=out,
                                     arm_runner=harness.runner(),
-                                    allow_unready=True)
+                                    allow_unready=True, host_evidence=harness.host_evidence)
             self.assertEqual(harness.calls["spawn"], [])
 
     def test_unready_watchdog_refuses_before_spawn(self):
@@ -222,7 +222,7 @@ class GuardedExecutorIntegrationTest(unittest.TestCase):
                 with self.assertRaises(ex.Refusal):
                     ex.execute_plan(emitted, output_root=out,
                                     arm_runner=harness.runner(),
-                                    allow_unready=True)
+                                    allow_unready=True, host_evidence=harness.host_evidence)
             self.assertEqual(harness.calls["spawn"], [])
 
     def test_disk_shortfall_refuses_before_spawn(self):
@@ -235,7 +235,7 @@ class GuardedExecutorIntegrationTest(unittest.TestCase):
                 with self.assertRaises(ex.Refusal):
                     ex.execute_plan(emitted, output_root=out,
                                     arm_runner=harness.runner(),
-                                    allow_unready=True)
+                                    allow_unready=True, host_evidence=harness.host_evidence)
             self.assertEqual(harness.calls["spawn"], [])
 
     def test_tampered_argv_refused_before_any_arm(self):

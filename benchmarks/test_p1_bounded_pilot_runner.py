@@ -549,6 +549,104 @@ class PrepareTests(unittest.TestCase):
         self.assertIn("NO-GO", manifest["guard_status"])
         self.assertFalse(manifest["truth_used_at_assembly_time"])
 
+    @staticmethod
+    def _portable_contract_inspect(labels, image=IMAGE):
+        """Read-only fake Podman inspect for the portable one-layer image.
+
+        Only inspect strings are synthesized from the immutable portable plan;
+        the image-contract verifier itself is deliberately NOT mocked.
+        """
+        base_layers = ["sha256:" + "b" * 64]
+        added = "sha256:" + "c" * 64
+
+        def inspect(i, fmt):
+            if fmt == "{{.Id}}":
+                return 0, "sha256:" + i
+            if fmt == "{{json .Config.Labels}}":
+                return 0, json.dumps(labels)
+            if fmt == "{{json .RootFS.Layers}}":
+                return 0, json.dumps(
+                    base_layers + [added] if i == image else base_layers)
+            raise AssertionError("unexpected inspect format: " + fmt)
+
+        return inspect
+
+    def test_prepare_runs_real_portable_image_contract(self):
+        """Regression: the portable positive path must exercise the REAL
+        verify_image_contract, not a mock that hides native-label pins.
+
+        Only the orthogonal added-layer disk acquisition (which needs a real
+        overlay store) is injected; the label/source/layer-shape contract under
+        test is executed verbatim on the per-role portable image contract.
+        """
+        args = self.args()
+        row = next(c for c in runner.load_portable_plan()["candidates"]
+                   if c["source_commit"] == runner.SOURCE_COMMIT)
+        portable_labels = runner.expected_portable_labels(row)
+        native_labels = runner.load_image_manifest()[0]["expected_labels"]
+        # Vacuity guard: the two contracts must actually differ on the binary.
+        self.assertNotEqual(portable_labels["org.ottojung.ivanka.binary-sha256"],
+                            native_labels["org.ottojung.ivanka.binary-sha256"])
+        self.assertEqual(portable_labels["org.ottojung.ivanka.binary-sha256"],
+                         row["portable_binary_sha256"])
+        inspect = self._portable_contract_inspect(portable_labels)
+        graphroot = "/workspace/px/store"
+        # NOTE: no mock.patch.object(runner, "verify_image_contract", ...) here.
+        with mock.patch.object(runner, "verify_pins", return_value=True), \
+             mock.patch.object(runner, "pinned_podman_env",
+                               return_value={"CONTAINERS_STORAGE_CONF":
+                                             runner.SHARED_PX_BOUNDARY["storage_conf"]}), \
+             mock.patch.object(runner, "verify_px_store_binding",
+                               return_value={"storage_conf": str(args.storage_conf),
+                                             "graphroot": graphroot}), \
+             mock.patch.object(runner, "verify_shared_px_boundary",
+                               return_value={"shared": True}), \
+             mock.patch.object(runner, "verify_image_layer_contract",
+                               return_value={"verified": True, "entries": {},
+                                             "image": IMAGE,
+                                             "parent": runner.PARENT_IMAGE}), \
+             mock.patch.object(runner, "_disk_free", return_value=33 * 1024 ** 3), \
+             mock.patch.object(runner.subprocess, "Popen",
+                               side_effect=AssertionError("spawn in check mode")):
+            summary = runner.run(args, disk_usage_fn=lambda p: 33 * 1024 ** 3,
+                                 live_watchdog_check=lambda *a, **k: {"ready": True},
+                                 image_inspect=inspect,
+                                 copy_overlay_root=self.root)
+        self.assertFalse(summary["spawned"])
+        manifest = json.loads((self.out / "prepared_manifest.json").read_text())
+        contract = manifest["candidate_image_contract"]
+        # image_digest is emitted only by the real verify_image_contract; a
+        # mocked verifier cannot produce it.
+        self.assertEqual(contract["image_digest"], IMAGE)
+        self.assertEqual(contract["parent"], runner.PARENT_IMAGE)
+        self.assertEqual(contract["labels"], portable_labels)
+        self.assertEqual(contract["layer_contract"]["binary_sha256"],
+                         row["portable_binary_sha256"])
+        self.assertEqual(manifest["candidate_portable_role"], row["role"])
+        self.assertEqual(manifest["candidate_image"], IMAGE)
+        self.assertFalse(manifest["qualified"])
+
+    def test_real_image_contract_rejects_native_binary_label(self):
+        """The real verifier must fail closed on the native binary-sha pin."""
+        args = self.args()
+        native_labels = runner.load_image_manifest()[0]["expected_labels"]
+        inspect = self._portable_contract_inspect(native_labels)
+        with mock.patch.object(runner, "verify_pins", return_value=True), \
+             mock.patch.object(runner, "pinned_podman_env",
+                               return_value={"CONTAINERS_STORAGE_CONF":
+                                             runner.SHARED_PX_BOUNDARY["storage_conf"]}), \
+             mock.patch.object(runner, "verify_px_store_binding",
+                               return_value={"storage_conf": str(args.storage_conf),
+                                             "graphroot": "/workspace/px/store"}), \
+             mock.patch.object(runner, "verify_shared_px_boundary",
+                               return_value={"shared": True}), \
+             mock.patch.object(runner, "verify_image_layer_contract",
+                               return_value={"verified": True}), \
+             mock.patch.object(runner, "_disk_free", return_value=33 * 1024 ** 3):
+            with self.assertRaisesRegex(ValueError, "binary-sha256 differs from pin"):
+                runner.prepare(args, image_inspect=inspect,
+                               copy_overlay_root=self.root)
+
     def test_disk_shortfall_blocks_preparation(self):
         args = self.args()
         with mock.patch.object(runner, "verify_pins", return_value=True), \

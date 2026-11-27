@@ -59,10 +59,12 @@ with an explicit not-applicable reason; no zero, contig or timing is
 fabricated. Exact coverage is computed from the final MAX consensus in both
 modes and remains comparable.
 
-Peak RAM is ended, sampled whole-container process-tree RSS only, with
-`kernel_enforcement: false`. The attested method/version/scope fields travel
-with the receipt; launcher-process-group bytes are never promoted to the
-comparable metric.
+Peak RAM is accepted only from a validated, ended whole-container
+process-tree observation (`observation_ended=true`, `samples>=2`, exact bound
+CID, attested method/version/scope, kernel_enforcement false). Launcher-group
+scope, missing CID/guard binding, or unfinished observations are never promoted
+to the comparable metric; measured receipts reject nonfinite score/time and
+require output evidence plus an exact guard-receipt bound CID.
 
 The `reference.panel_sha256` pin
 `018f6ab2e28a6abbbc2ba9dbaa522a42c8c45531276530a8956489f8e21cc4a8` is the

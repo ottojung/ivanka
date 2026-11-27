@@ -161,13 +161,32 @@ class RemapReceiptTests(unittest.TestCase):
             self.case, runner.input_manifest([self.case]),
             stamp=STAMP, token=TOKEN)
 
-    def measured(self, diagnostics=None, **kwargs):
+    def valid_resource(self, **overrides):
+        resource = {
+            "peak_rss_bytes": 3_100_000_000,
+            "samples": 12,
+            "observation_ended": True,
+            "bound_cid": "a" * 64,
+            "peak_ram_method": "container_process_tree_sampled_rss",
+            "peak_ram_method_version": "ivanka.px.whole-container-rss.v2",
+            "peak_ram_scope": "whole_container_process_tree",
+            "guard_receipt": {
+                "bound_cid": "a" * 64,
+                "rss_limit_bytes": 4_000_000_000,
+                "wall_seconds": 2400,
+                "cpu_allocation": 2,
+                "kernel_enforcement": False,
+            },
+        }
+        resource.update(overrides)
+        return resource
+
+    def measured(self, diagnostics=None, resource=None, outputs=None, **kwargs):
         return runner.build_receipt(
             self.plan, status="measured", score=91.25, seconds=812.5,
             diagnostics=diagnostics or {"average_read_depth": 42.0},
-            outputs={"conseq_csv_sha256": "e" * 64},
-            resource={"peak_rss_bytes": 3_100_000_000,
-                      "samples": 12, "observation_ended": True},
+            outputs=outputs or {"conseq_csv_sha256": "e" * 64},
+            resource=self.valid_resource() if resource is None else resource,
             **kwargs)
 
     def test_contig_only_metrics_are_null_never_zero(self):
@@ -193,11 +212,11 @@ class RemapReceiptTests(unittest.TestCase):
         self.assertEqual(diag[SCOPE_KEY], COMPARABLE_SCOPE)
         self.assertEqual(diag[COMPARABLE_KEY], round(3_100_000_000 / 1048576, 6))
         self.assertIsNone(receipt["failure_reason"])
-        invalid = runner.build_receipt(
-            self.plan, status="measured", score=1.0, seconds=2.0,
-            resource={"peak_rss_bytes": 5_000_000_000})
-        self.assertIsNone(invalid["diagnostics"][COMPARABLE_KEY])
-        self.assertIn(UNAVAILABLE_KEY, invalid["diagnostics"])
+        with self.assertRaises(ValueError):
+            runner.build_receipt(
+                self.plan, status="measured", score=1.0, seconds=2.0,
+                outputs={"conseq_csv_sha256": "e" * 64},
+                resource=self.valid_resource(peak_rss_bytes=5_000_000_000))
 
     def test_failed_and_unavailable_cases_keep_no_measurement(self):
         for status in ("failed", "unavailable"):
@@ -247,6 +266,46 @@ class RemapReceiptTests(unittest.TestCase):
         self.assertEqual(rows["image_sha256"], runner.IMAGE_ID)
         self.assertEqual(rows["frozen_master_commit"], runner.SOURCE_COMMIT)
         self.assertEqual(len(rows["invocation_sha256"]), 64)
+
+    def test_rejects_nonfinite_score_time_and_invalid_success_evidence(self):
+        base = dict(outputs={"conseq_csv_sha256": "e" * 64}, resource=self.valid_resource())
+        for score in (float("nan"), float("inf"), -float("inf"), "1"):
+            with self.assertRaises(ValueError):
+                runner.build_receipt(self.plan, status="measured", score=score, seconds=1.0, **base)
+        for seconds in (float("nan"), float("inf"), 0.0, -1.0, 2401.0):
+            with self.assertRaises(ValueError):
+                runner.build_receipt(self.plan, status="measured", score=1.0, seconds=seconds, **base)
+        with self.assertRaises(ValueError):
+            runner.build_receipt(self.plan, status="measured", score=1.0, seconds=1.0,
+                                 resource=self.valid_resource(), outputs={})
+        with self.assertRaises(ValueError):
+            runner.build_receipt(self.plan, status="measured", score=1.0, seconds=1.0,
+                                 resource=self.valid_resource(),
+                                 outputs={"conseq_csv_sha256": "not-a-hash"})
+
+    def test_rejects_unattested_or_launcher_ram_and_missing_guard_binding(self):
+        base = dict(status="measured", score=1.0, seconds=1.0,
+                    outputs={"conseq_csv_sha256": "e" * 64})
+        with self.assertRaises(ValueError):
+            runner.build_receipt(self.plan, resource={"peak_rss_bytes": 1, "samples": 2,
+                                 "observation_ended": True, "bound_cid": "a"*64,
+                                 "peak_ram_method": "launcher_process_group_rss",
+                                 "peak_ram_method_version": "v0",
+                                 "peak_ram_scope": "launcher_process_group",
+                                 "guard_receipt": self.valid_resource()["guard_receipt"]}, **base)
+        for bad in (
+            self.valid_resource(observation_ended=False),
+            self.valid_resource(samples=1),
+            self.valid_resource(bound_cid="short"),
+            self.valid_resource(peak_ram_scope="launcher_process_group"),
+            {k: v for k, v in self.valid_resource().items() if k != "guard_receipt"},
+        ):
+            with self.assertRaises(ValueError):
+                runner.build_receipt(self.plan, resource=bad, **base)
+        bad_guard = self.valid_resource()
+        bad_guard["guard_receipt"] = dict(bad_guard["guard_receipt"], bound_cid="b" * 64)
+        with self.assertRaises(ValueError):
+            runner.build_receipt(self.plan, resource=bad_guard, **base)
 
     def test_emitted_rows_satisfy_display_registry_when_present(self):
         if importlib.util.find_spec("assembler_bench.remap_diagnostic") is None:

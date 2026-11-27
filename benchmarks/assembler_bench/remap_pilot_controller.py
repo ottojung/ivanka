@@ -454,7 +454,10 @@ def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
 
 def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
                  output_dir: Path, attempt_dir: Path,
-                 runner=None, original_manifest=None, scorer=None) -> dict:
+                 runner=None, original_manifest=None, scorer=None,
+                 operator_owner=None, stop_path=None, watchdog_ready=None,
+                 watchdog_path=None, watchdog_graphroot=None,
+                 guard_root=None, disk_path=None, spawn=None) -> dict:
     """Execute one guarded remap pilot case.
 
     By default this calls the REAL guarded execution path
@@ -480,8 +483,16 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
 
     if runner is None:
         manifest = original_manifest or remap_guarded_exec.load_original_input_manifest()
-        run = remap_guarded_exec.run_guarded_case(
-            plan, manifest, output_dir=output_dir, attempt_dir=attempt_dir) or {}
+        run_kwargs = dict(output_dir=output_dir, attempt_dir=attempt_dir,
+                          owner=operator_owner, stop_path=stop_path,
+                          watchdog_ready=watchdog_ready,
+                          watchdog_path=watchdog_path,
+                          watchdog_graphroot=watchdog_graphroot, spawn=spawn)
+        if guard_root is not None:
+            run_kwargs["guard_root"] = guard_root
+        if disk_path is not None:
+            run_kwargs["disk_path"] = disk_path
+        run = remap_guarded_exec.run_guarded_case(plan, manifest, **run_kwargs) or {}
     else:
         # Even injected source-test runners must bind to original reads when a
         # manifest is supplied; the real path always supplies one.

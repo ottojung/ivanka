@@ -1,36 +1,34 @@
 """Real guarded execution for remap diagnostic pilots.
 
-This module is the non-mock execution path used by
+This is the non-mock execution path used by
 ``remap_pilot_controller.execute_case``. Importing it starts nothing. A case
-is executed only through :func:`run_guarded_case`, which re-checks the
-reserve, takes the exclusive shared slot, binds the exact issued CID through
-the common fail-closed watcher, and returns the real end state and resource
-evidence. Posthoc scoring is a separate controller step that requires an
-unmount/teardown proof from this module.
+is executed only through :func:`run_guarded_case`, which delegates the whole
+pre-spawn/lifecycle to the proven shared ``p1_harness.run_prospective`` guard
+(exclusive lock, owner-bound STOP sentinel, lease, watchdog readiness,
+independent disk reserve, exact-CID binding, durable heartbeat refresh,
+strict teardown proof) and never invents an ad-hoc launcher contract.
 
 No frozen source, image, result, registry or qualification input is changed.
 """
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import re
 import subprocess
-import time
 from pathlib import Path
 
-from fail_closed_guard import heartbeat, lease
+from fail_closed_guard import disk, p1_harness
+from fail_closed_guard import proc
+# Re-exported guard modules so integration tests can inject only low-level
+# seams (CID inspect, /proc snapshot, podman CLI result, disk usage).
+from fail_closed_guard import (binding, heartbeat, lease, natural_exit, stop,  # noqa: F401
+                               teardown)
 from fail_closed_guard.errors import GuardExceeded
 
-from . import exploratory_space, guarded_canary_launcher as launcher
-from . import remap_runner
-from .exploratory_runtime import monitor
-from .exploratory_runtime import pilot, terminate
+from . import guarded_canary_launcher as launcher
+from .exploratory_runtime import monitor, pilot
 from .px_ram_semantics import (
-    COMPARABLE_METHOD,
-    COMPARABLE_METHOD_VERSION,
-    COMPARABLE_SCOPE,
     METHOD_KEY,
     SCOPE_KEY,
     VERSION_KEY,
@@ -49,12 +47,14 @@ COHORT_MAP = {"physical": "real", "synthetic": "synthetic"}
 CANONICAL_ALIAS = re.compile(r"^PX-([RH])([0-9]{3})$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
-# Shared dedicated guard root/store. No new store, guard or privilege is
-# introduced; remap uses the same exclusive slot and exact-CID teardown.
+# Shared dedicated guard root/store. No new store, guard or privilege is added.
 GUARD_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121")
 STORAGE_CONF = GUARD_ROOT / "storage.conf"
 WORKSPACE = Path("/workspace")
+LOCK_PATH = GUARD_ROOT / ".global-worker.lock"
+STOP_PATH = GUARD_ROOT / ".remap-pilot.STOP"
 LOG_NAMES = ("launcher.stdout.log", "launcher.stderr.log")
+RESERVE_BYTES = p1_harness.DEFAULT_RESERVE_BYTES
 
 EXECUTION_SCHEMA = "ivanka.remap.guarded-execution.v1"
 BINDING_SCHEMA = "ivanka.remap.original-input-binding.v1"
@@ -143,28 +143,55 @@ def bind_plan_to_original_manifest(plan: dict, manifest: dict) -> dict:
     }
 
 
-def cidfile_from_argv(argv) -> Path:
-    """Read the exact cidfile already pinned in the frozen plan argv."""
-    if not isinstance(argv, list) or "--cidfile" not in argv:
-        raise ValueError("plan argv has no exact cidfile")
+def safe_guard_env(root, temp_dir):
+    """Explicit environment; ambient container selectors are never trusted."""
+    base = Path(root).resolve()
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "CONTAINERS_STORAGE_CONF": str(base / "storage.conf"),
+        "TMPDIR": str(temp_dir),
+        "TMP": str(temp_dir),
+        "TEMP": str(temp_dir),
+    }
+    for key in list(env):
+        if key not in ("PATH", "CONTAINERS_STORAGE_CONF", "TMPDIR", "TMP", "TEMP"):
+            env.pop(key)
+    return env
+
+
+def pinned_plan_argv(plan: dict, cidfile) -> list[str]:
+    """Rebind the plan's exact command to the lease-pinned cidfile only."""
+    argv = list(plan.get("argv") or [])
+    if "--cidfile" not in argv:
+        raise ValueError("plan argv has no cidfile")
     index = argv.index("--cidfile")
-    if index + 1 >= len(argv) or not argv[index + 1]:
+    if index + 1 >= len(argv):
         raise ValueError("plan argv cidfile is empty")
-    return Path(argv[index + 1])
+    argv[index + 1] = str(cidfile)
+    mounts = [argv[i + 1] for i in range(len(argv) - 1) if argv[i] == "-v"]
+    allowed = frozenset(v for v in argv if v not in mounts) | frozenset({"podman"})
+    sources = frozenset(m.rsplit(":", 2)[0] for m in mounts)
+    reads = tuple((plan.get("inputs") or {}).get("read_basenames") or [])
+    if len(reads) != 2:
+        raise ValueError("plan lacks attested read basenames")
+    launcher.assert_reference_blind(
+        argv, allowed_values=allowed, expected_sources=sources,
+        denovo=False, reads=reads)
+    return argv
 
 
-def _unmount_proof(root, env, cid, teardown) -> dict:
+def _unmount_proof(root, env, cid, teardown_proof) -> dict:
     """Require exact-CID absence proof before any posthoc scoring can run."""
-    proof = pilot.prove_pilot_absent(root, env, cid, proof=teardown)
+    proof = pilot.prove_pilot_absent(root, env, cid, proof=teardown_proof)
     if proof.get("fresh_absence_check") is not True:
         raise ValueError("unmount proof lacks fresh absence check")
     return dict(proof, unmount_verified=True)
 
 
-def _guard_receipt(observation, *, plan, samples, unmount_proof) -> dict:
-    cid = observation.get("cid")
+def _guard_receipt(result, *, plan, samples, unmount_proof) -> dict:
+    cid = result.get("cid")
     if not isinstance(cid, str) or not HEX64.fullmatch(cid):
-        raise ValueError("guard observation has no exact bound CID")
+        raise ValueError("guard result has no exact bound CID")
     bounds = plan.get("guard") or {}
     return {
         "schema": EXECUTION_SCHEMA,
@@ -174,43 +201,60 @@ def _guard_receipt(observation, *, plan, samples, unmount_proof) -> dict:
         "cpu_allocation": bounds.get("cpu_allocation"),
         "kernel_enforcement": False,
         "samples": samples,
-        "observation_ended": True,
-        "teardown": observation.get("teardown"),
+        "observation_ended": isinstance(result.get("natural_exit"), dict)
+        or isinstance(result.get("teardown"), dict),
+        "teardown": result.get("teardown"),
         "unmount_proof": unmount_proof,
     }
 
 
 def run_guarded_case(plan: dict, original_manifest: dict, *, output_dir, attempt_dir,
-                     spawn=None, watch=None, clock=None,
-                     guard_root=GUARD_ROOT, env=None):
-    """Execute ONE remap case under the shared fail-closed guard.
+                     owner=None, stop_path=None, watchdog_ready=None,
+                     watchdog_path=None, watchdog_graphroot=None,
+                     spawn=None, env=None, guard_root=GUARD_ROOT,
+                     disk_path=WORKSPACE, clock=None,
+                     sleep=None, disk_usage=None, harness=None):
+    """Execute ONE case via the proven shared prospective guard.
 
-    ``spawn``/``watch`` default to the real subprocess/monitor functions; they
-    are injectable only so source-only tests can prove the wiring without a
-    container. No case is started when reserve or exclusive slot is missing.
+    ``owner`` is the operator slot identity and ``stop_path`` the owner-bound
+    STOP sentinel; neither has a permissive default. ``watchdog_ready`` is the
+    operator-supplied readiness checker. Missing gates fail closed before any
+    lock, lease or spawn. ``spawn`` is the only container-seam injection;
+    production uses :func:`_spawn_plan`, tests inject a low-level double.
+
+    All guard functions (lock, STOP, lease, watchdog, disk reserve, exact-CID
+    binding, heartbeat refresh, watcher, exact-CID teardown) are the real
+    shared implementations from ``p1_harness``/``fail_closed_guard``.
     """
-    spawn = spawn or subprocess.Popen
-    watch = watch or monitor.watch
-    clock = clock or time.monotonic
+    harness = harness or p1_harness
     guard_root = Path(guard_root).resolve()
-    env = dict(env or os.environ)
-    env["CONTAINERS_STORAGE_CONF"] = str(guard_root / "storage.conf")
     output_dir, attempt_dir = Path(output_dir), Path(attempt_dir)
-
-    # Fresh reserve check immediately before any ownership or process.
-    free = exploratory_space.available(str(WORKSPACE))
-    capacity = remap_runner.capacity_decision(free)
-    if not capacity["capacity_admitted"]:
-        return {"schema": EXECUTION_SCHEMA, "status": "failed",
-                "failure_reason": "reserve_below_32gib", "capacity": capacity}
+    state = {"schema": EXECUTION_SCHEMA, "status": "unknown",
+             "bound_cid": None, "unmount_verified": False,
+             "unmount_proof": None, "guard_receipt": None,
+             "failure_reason": None}
 
     binding_record = bind_plan_to_original_manifest(plan, original_manifest)
-    cidfile = cidfile_from_argv(plan.get("argv"))
-    if cidfile.exists() or cidfile.is_symlink():
-        raise ValueError("exact CID file already exists")
-    # The controller may already own this directory for plan/preflight
-    # records; per-file exclusive creation below still prevents
-    # overwriting any attempt evidence.
+    state["original_input_binding"] = binding_record
+    if not owner or not stop_path:
+        state.update(status="failed", failure_reason="operator_slot_not_armed")
+        return state
+    if watchdog_ready is None and not (watchdog_path and watchdog_graphroot):
+        # Either an operator-supplied readiness checker or a real readiness
+        # record bound to the exact graphroot is mandatory. No ambient watchdog.
+        state.update(status="failed", failure_reason="watchdog_not_bound")
+        return state
+    # Independent reserve check also happens inside the harness under the
+    # lock and on every watcher sample; this early check avoids any setup.
+    try:
+        free = disk.check_reserve(str(disk_path), RESERVE_BYTES, usage=disk_usage)
+    except GuardExceeded as exc:
+        state.update(status="failed", failure_reason="reserve_shortfall")
+        state["capacity"] = {"admitted": False, "reason": exc.reason, "detail": str(exc)}
+        return state
+    state["capacity"] = {"admitted": True, "free_bytes": int(free),
+                         "reserved_bytes": RESERVE_BYTES}
+
     attempt_dir.mkdir(parents=True, exist_ok=True)
     launcher.setup_bad_cycles(attempt_dir)
     launcher.write_receipt(
@@ -218,83 +262,130 @@ def run_guarded_case(plan: dict, original_manifest: dict, *, output_dir, attempt
         attempt_id=str(plan.get("attempt_id")), argv=list(plan["argv"]),
         status="attempted")
 
+    if guard_root == GUARD_ROOT.resolve():
+        # Production store binding: the frozen plan's explicit podman root and
+        # runroot must be the ones named by the pinned storage.conf. No ambient
+        # selector and no foreign store may satisfy the guard.
+        import configparser
+        parser = configparser.ConfigParser()
+        if not parser.read(guard_root / "storage.conf"):
+            raise ValueError("pinned storage.conf is missing")
+        section = {key: value.strip("\"'") for key, value
+                   in parser["storage"].items()}
+        argv = list(plan.get("argv") or [])
+        for flag, key in (("--root", "graphroot"), ("--runroot", "runroot")):
+            if flag not in argv or argv[argv.index(flag) + 1] != section.get(key):
+                raise ValueError(f"plan argv {flag} does not match pinned storage.conf")
+
+    guard_env = env or safe_guard_env(guard_root, attempt_dir)
+    if guard_env.get("CONTAINERS_STORAGE_CONF") != str(guard_root / "storage.conf"):
+        raise ValueError("guard environment storage selector is not pinned")
+    for key in guard_env:
+        if key.startswith(("CONTAINERS_", "PODMAN_", "DOCKER_")) \
+                and key != "CONTAINERS_STORAGE_CONF":
+            raise ValueError("ambient container selector in guard environment")
+
     stdout = attempt_dir / LOG_NAMES[0]
     stderr = attempt_dir / LOG_NAMES[1]
-    ident = f"remap-{plan['alias']}-{time.time_ns()}"
+    holder = {}
     counter = {"samples": 0}
-    state = {"schema": EXECUTION_SCHEMA, "status": "unknown", "_start": clock(),
-             "capacity": capacity, "original_input_binding": binding_record,
-             "bound_cid": None, "guard_observation": None,
-             "unmount_proof": None, "unmount_verified": False,
-             "guard_receipt": None, "failure_reason": None}
 
-    with (guard_root / ".global-worker.lock").open("a+") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            state.update(status="failed", failure_reason="exclusive_slot_busy")
-            return state
-        lease.require_clear(guard_root, env, watchdog_path=heartbeat.alive_path(guard_root))
-        lease.acquire(guard_root, ident, "pilot", cidfile=cidfile)
-        emitter = heartbeat.Emitter(guard_root, ident)
-        emitter.before_spawn()
-        proc = None
-        try:
-            with stdout.open("xb") as out, stderr.open("xb") as err:
-                proc = spawn(list(plan["argv"]), cwd=str(guard_root), env=env,
-                             stdin=subprocess.DEVNULL, stdout=out, stderr=err,
-                             start_new_session=True)
-            def on_bind(bound):
-                cid = bound.get("cid")
-                if not isinstance(cid, str) or not HEX64.fullmatch(cid):
-                    raise GuardExceeded("binding_unavailable")
-                state["bound_cid"] = cid
-                emitter.bound(cid)
-                lease.bind_cid(guard_root, ident, cid, cidfile=cidfile,
-                               pid=bound.get("pid"), fingerprint=bound.get("fingerprint"))
+    def checked_ready():
+        # Called by the harness on every sample alongside emitter.refresh().
+        counter["samples"] += 1
+        return watchdog_ready()
 
-            cfg = {"wall_seconds": plan["guard"]["wall_seconds"],
-                   "rss_bytes": plan["guard"]["rss_limit_bytes"],
-                   "guard_mode": "pilot", "cidfile": cidfile, "env": env,
-                   "heartbeat": lambda: counter.__setitem__("samples", counter["samples"] + 1)}
-            observation = watch(proc, cfg, on_bind=on_bind)
-            state["guard_observation"] = observation
-            cid = state.get("bound_cid") or observation.get("cid")
-            if not isinstance(cid, str) or not HEX64.fullmatch(cid):
-                raise ValueError("guard observation has no bound CID")
-            unmount = _unmount_proof(guard_root, env, cid, observation.get("teardown"))
-            state["unmount_proof"] = unmount
-            state["unmount_verified"] = True
-            receipt = _guard_receipt(observation, plan=plan, samples=counter["samples"],
-                                     unmount_proof=unmount)
-            state["guard_receipt"] = receipt
-            state["resource"] = {
-                "peak_rss_bytes": observation.get("peak_rss"),
-                "samples": counter["samples"],
-                "observation_ended": True,
-                "bound_cid": cid,
-                "guard_receipt": receipt,
-                METHOD_KEY: COMPARABLE_METHOD,
-                VERSION_KEY: COMPARABLE_METHOD_VERSION,
-                SCOPE_KEY: COMPARABLE_SCOPE,
-            }
-            state["returncode"] = terminate.group(proc)
-            state["wall_seconds"] = round(clock() - state["_start"], 3)
-            if state["returncode"] != 0:
-                state.update(status="failed", failure_reason=f"exit_{state['returncode']}")
-            else:
-                state["status"] = "finished"
-        except (GuardExceeded, ValueError, OSError, subprocess.SubprocessError) as exc:
-            state.update(status="failed", failure_reason=f"{type(exc).__name__}:{exc}"[:320])
-            if proc is not None:
-                terminate.group(proc)
-        finally:
-            if state["unmount_verified"]:
-                lease.release(guard_root, ident,
-                              cid=state.get("bound_cid"),
-                              proof=state.get("guard_observation"))
-            else:
-                state["lease_state"] = "active_unreleased"
-            state["log_paths"] = {
-                LOG_NAMES[0]: str(stdout), LOG_NAMES[1]: str(stderr)}
+    def do_spawn(cidfile, spawn_env):
+        actual = spawn or _spawn_plan
+        proc = actual(plan, Path(cidfile), spawn_env, stdout, stderr, guard_root)
+        holder["proc"] = proc
+        return proc
+
+    class LauncherHandle:
+        def poll(self):
+            return holder["proc"].poll()
+
+    def running():
+        proc = holder.get("proc")
+        return proc is not None and proc.poll() is None
+
+    outcome = None
+    try:
+        outcome = harness.run_prospective(
+            owner=owner, lease_root=guard_root, stop_path=stop_path,
+            disk_path=disk_path, spawn=do_spawn, env=guard_env,
+            lock=harness.ExclusiveLock(LOCK_PATH if guard_root == GUARD_ROOT
+                                       else guard_root / ".global-worker.lock"),
+            watchdog_ready=(checked_ready if watchdog_ready is not None else None),
+            watchdog_path=watchdog_path, watchdog_graphroot=watchdog_graphroot,
+            disk_reserve_bytes=RESERVE_BYTES, disk_usage=disk_usage,
+            limit=int(plan["guard"]["rss_limit_bytes"]),
+            wall_seconds=int(plan["guard"]["wall_seconds"]),
+            running=running,
+            measure=lambda: disk.check_reserve(str(disk_path), RESERVE_BYTES,
+                                               usage=disk_usage),
+            snapshot=proc.snapshot, clock=clock, sleep=sleep,
+            attestation={"method": monitor.BOUND_ATTESTATION[METHOD_KEY],
+                         "version": monitor.BOUND_ATTESTATION[VERSION_KEY]},
+            launcher=LauncherHandle(), interval=0.5)
+    except GuardExceeded as exc:
+        state.update(status="failed", failure_reason=exc.reason,
+                     guard_result=exc.guard_result, teardown=exc.teardown,
+                     teardown_error=exc.teardown_error)
+    except Exception as exc:
+        state.update(status="failed",
+                     failure_reason=f"{type(exc).__name__}:{exc}"[:320])
+
+    if outcome is not None:
+        result = outcome.get("result") or {}
+        state["guard_result"] = result
+        state["bound_cid"] = result.get("cid")
+        state["harness_outcome"] = outcome.get("status")
+        if outcome.get("status") == "completed" and result.get("teardown"):
+            try:
+                proof = _unmount_proof(guard_root, guard_env, result["cid"],
+                                       result["teardown"])
+                state["unmount_proof"] = proof
+                state["unmount_verified"] = True
+                state["guard_receipt"] = _guard_receipt(
+                    result, plan=plan, samples=counter["samples"],
+                    unmount_proof=proof)
+                # Actual field names verified from watch.watch_bound._result.
+                state["resource"] = {
+                    "peak_rss_bytes": result.get("peak_rss"),
+                    "samples": counter["samples"],
+                    "observation_ended": state["guard_receipt"]["observation_ended"],
+                    "bound_cid": result.get("cid"),
+                    "guard_receipt": state["guard_receipt"],
+                    METHOD_KEY: result.get("method"),
+                    VERSION_KEY: result.get("version"),
+                    SCOPE_KEY: result.get("rss_sample_scope"),
+                }
+                proc_handle = holder.get("proc")
+                state["returncode"] = proc_handle.poll() if proc_handle else None
+                if state["returncode"] == 0:
+                    state["status"] = "finished"
+                else:
+                    state.update(status="failed",
+                                 failure_reason=f"exit_{state['returncode']}")
+            except (ValueError, GuardExceeded, OSError) as exc:
+                state.update(status="failed",
+                             failure_reason=f"unmount_unverified:{exc}"[:320])
+        else:
+            state.update(status="failed",
+                         failure_reason=outcome.get("reason", "guard_fail_closed"))
+    if not state["unmount_verified"]:
+        # Never leave a live/unproved container owned by a completed receipt.
+        state["lease_state"] = "active_unreleased_or_unproven"
+        state["status"] = "failed"
+    state["log_paths"] = {LOG_NAMES[0]: str(stdout), LOG_NAMES[1]: str(stderr)}
     return state
+
+
+def _spawn_plan(plan, cidfile, env, stdout, stderr, guard_root):
+    """Real Podman spawn of the exact frozen non-de-novo argv."""
+    argv = pinned_plan_argv(plan, cidfile)
+    with stdout.open("xb") as out, stderr.open("xb") as err:
+        return subprocess.Popen(argv, cwd=str(Path(guard_root).resolve()),
+                                env=env, stdin=subprocess.DEVNULL,
+                                stdout=out, stderr=err, start_new_session=True)

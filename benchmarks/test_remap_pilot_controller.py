@@ -1,6 +1,8 @@
 import copy
 import math
+import os
 import tempfile
+from types import SimpleNamespace
 import unittest
 from pathlib import Path
 
@@ -11,6 +13,7 @@ from assembler_bench import remap_diagnostic as display
 from assembler_bench import remap_guarded_exec as gexec
 from assembler_bench import px_ram_semantics
 from unittest.mock import patch
+from fail_closed_guard import heartbeat as heartbeat_module
 
 STAMP = "20261127T120000000000Z"
 TOKEN = "deadbeef"
@@ -496,87 +499,154 @@ class RealGuardedExecutionTests(unittest.TestCase):
 
     def test_real_runner_refuses_below_reserve_before_spawn(self):
         def forbidden(*args, **kwargs):
-            self.fail("process spawned below reserve")
-        with (patch.object(gexec.exploratory_space, "available",
-                           return_value=32 * 1024**3 - 1),
-              patch.object(gexec.lease, "require_clear") as require_clear):
+            self.fail("process/spawn invoked below reserve")
+
+        def low_usage(path):
+            return SimpleNamespace(free=32 * 1024**3 - 1)
+
+        with patch.object(gexec.lease, "require_clear") as require_clear:
             state = gexec.run_guarded_case(
-                self.plan, self.manifest,
-                output_dir=self.root / "below-o",
-                attempt_dir=self.root / "below-a",
-                spawn=forbidden, watch=forbidden, guard_root=self.root / "below-root")
+                self.plan, self.manifest, output_dir=self.root / "below-o",
+                attempt_dir=self.root / "below-a", owner="test-owner",
+                stop_path=self.root / "STOP", watchdog_ready=lambda: {},
+                spawn=forbidden, guard_root=self.root / "below-root",
+                disk_path=self.root, disk_usage=low_usage)
         self.assertEqual(state["status"], "failed")
-        self.assertEqual(state["failure_reason"], "reserve_below_32gib")
+        self.assertEqual(state["failure_reason"], "reserve_shortfall")
         require_clear.assert_not_called()
 
-    def test_real_runner_wires_lock_guard_watch_and_unmount(self):
-        """Drive the real runner with injected process/watch doubles."""
-        root = self.root / "guard-root"
+    def test_real_guard_integration_disk_refresh_teardown_unmount(self):
+        """Drive the REAL p1_harness/watch_bound/lease/heartbeat guard.
+
+        Only low-level seams (CID inspect, /proc snapshot, podman CLI result,
+        disk usage) are injected. Lock, STOP, lease, watchdog gate, reserve
+        check, CID binding, durable heartbeat, watcher and teardown are real.
+        """
+        root = self.root / "groot"
         root.mkdir(parents=True)
+        owner = "remap-review-owner"
+        stop_path = root / "STOP"
+        gexec.stop.arm(stop_path, owner)
         cid = "a" * 64
-        plan = dict(self.plan)
-        argv = list(plan["argv"])
-        cid_index = argv.index("--cidfile")
-        cidfile = self.root / "real-case.cid"
-        argv[cid_index + 1] = str(cidfile)
-        plan["argv"] = argv
-        events = []
+        disk_calls = {"n": 0}
 
-        fake_proc = type("P", (), {"pid": 4242})()
+        def usage(path):
+            disk_calls["n"] += 1
+            return SimpleNamespace(free=40 * 1024**3)
 
-        def fake_spawn(argv, **kwargs):
-            events.append(("spawn", list(argv)))
-            return fake_proc
+        def watchdog_ready():
+            return {"ready": True, "identity_bound": True,
+                    "pid_ns": 4242, "starttime": 111}
 
-        def fake_watch(proc, cfg, on_bind=None):
-            events.append(("watch", cfg["cidfile"], cfg["rss_bytes"],
-                           cfg["wall_seconds"]))
-            on_bind({"cid": cid, "pid": 4242, "fingerprint": [1, 2]})
-            cfg["heartbeat"]()
-            cfg["heartbeat"]()
-            return {"peak_rss": 3_000_000_000, "cid": cid,
-                    "teardown": {"container_removed": True, "cid": cid},
-                    px_ram_semantics.METHOD_KEY: px_ram_semantics.COMPARABLE_METHOD,
-                    px_ram_semantics.VERSION_KEY: px_ram_semantics.COMPARABLE_METHOD_VERSION,
-                    px_ram_semantics.SCOPE_KEY: px_ram_semantics.COMPARABLE_SCOPE}
+        record = {"starttime": 111, "pid_ns": 4242, "rss": 3_000_000_000,
+                  "cmdline_sha": "c" * 64}
+        controller = {"starttime": 999, "pid_ns": 777, "rss": 1024,
+                      "cmdline_sha": "d" * 64}
 
-        def fake_absent(groot, env, bound_cid, proof=None):
-            events.append(("absent", bound_cid))
-            return {"fresh_absence_check": True, "container_removed": False,
-                    "pilot_container_id": bound_cid}
+        class FakeProc:
+            def __init__(self): self.polls = 0
+            def poll(self):
+                self.polls += 1
+                return 0 if self.polls >= 4 else None
 
-        class FakeEmitter:
-            def __init__(self, groot, ident): events.append(("emitter", ident))
-            def before_spawn(self): events.append(("before_spawn",))
-            def bound(self, bound_cid): events.append(("bound", bound_cid))
-            def refresh(self): return {}
+        spawned = {}
 
-        with (patch.object(gexec.exploratory_space, "available", return_value=40 * 1024**3),
-              patch.object(gexec.heartbeat, "Emitter", FakeEmitter),
-              patch.object(gexec.lease, "require_clear") as require_clear,
-              patch.object(gexec.lease, "acquire") as acquire,
-              patch.object(gexec.lease, "bind_cid") as bind_cid,
-              patch.object(gexec.lease, "release") as release,
-              patch.object(gexec.pilot, "prove_pilot_absent", side_effect=fake_absent),
-              patch.object(gexec.terminate, "group", return_value=0)):
+        def fake_spawn(plan, cidfile, env, stdout, stderr, groot):
+            Path(cidfile).write_text(cid + "\n")
+            self.assertNotIn("--denovo", gexec.pinned_plan_argv(plan, cidfile))
+            self.assertEqual(env["CONTAINERS_STORAGE_CONF"],
+                             str(Path(groot).resolve() / "storage.conf"))
+            proc = FakeProc()
+            spawned["proc"] = proc
+            return proc
+
+        proof = {"cid": cid, "container_removed": True,
+                 "fresh_absence_check": True, "kernel_enforcement": False}
+
+        with (patch.object(gexec.binding, "inspect_pid", return_value=4242),
+              patch.object(gexec.proc, "snapshot",
+                           side_effect=lambda: {4242: record,
+                                                os.getpid(): controller}),
+              patch.object(gexec.teardown, "stop_cid", return_value=proof) as stopper,
+              patch.object(gexec.natural_exit, "wait_and_attest",
+                           return_value={"cid": cid, "launcher_result": 0}),
+              patch.object(gexec.pilot, "ROOT", root),
+              patch.object(gexec.pilot, "STORE", str(root / "store")),
+              patch.object(gexec.pilot, "command",
+                           side_effect=lambda argv, env: "" if argv[1] == "ps"
+                           else str(root / "store"))):
             state = gexec.run_guarded_case(
-                plan, self.manifest, output_dir=self.root / "guard-out",
-                attempt_dir=self.root / "guard-attempt", spawn=fake_spawn,
-                watch=fake_watch, guard_root=root)
+                self.plan, self.manifest, output_dir=root / "out",
+                attempt_dir=root / "attempt", owner=owner, stop_path=stop_path,
+                watchdog_ready=watchdog_ready, spawn=fake_spawn,
+                guard_root=root, disk_path=root, disk_usage=usage,
+                sleep=lambda seconds: None)
 
-        self.assertEqual(state["status"], "finished")
+        self.assertEqual(state["status"], "finished", str(state))
         self.assertTrue(state["unmount_verified"])
-        self.assertEqual(state["resource"]["samples"], 2)
+        self.assertGreater(disk_calls["n"], 0, "no real disk reserve check")
+        self.assertGreaterEqual(state["resource"]["samples"], 1)
         self.assertEqual(state["resource"]["peak_rss_bytes"], 3_000_000_000)
+        self.assertEqual(state["resource"][px_ram_semantics.SCOPE_KEY],
+                         "whole_container_process_tree")
         self.assertEqual(state["guard_receipt"]["bound_cid"], cid)
-        require_clear.assert_called_once()
-        acquire.assert_called_once()
-        bind_cid.assert_called_once()
-        release.assert_called_once()
-        kinds = [event[0] for event in events]
-        self.assertEqual(kinds, ["emitter", "before_spawn", "spawn", "watch",
-                                 "bound", "absent"])
-        self.assertNotIn("--denovo", events[2][1])
+        stopper.assert_called()
+        self.assertFalse(stop_path.exists(), "STOP not retired after proof")
+        heartbeat_schema = heartbeat_module.SCHEMA
+        heartbeats = [p for p in root.glob("*.json")
+                      if '"schema": "' + heartbeat_schema + '"' in p.read_text()]
+        self.assertTrue(heartbeats, "no durable controller heartbeat")
+        self.assertEqual(state["harness_outcome"], "completed")
+
+    def test_unmount_failure_forbids_scoring(self):
+        root = self.root / "unmount-guard"
+        root.mkdir(parents=True)
+        owner = "remap-unmount-owner"
+        stop_path = root / "STOP"
+        gexec.stop.arm(stop_path, owner)
+        cid = "a" * 64
+        proof = {"cid": cid, "container_removed": True,
+                 "fresh_absence_check": True}
+
+        class FakeProc:
+            def poll(self): return 0
+
+        def fake_spawn(plan, cidfile, env, stdout, stderr, groot):
+            Path(cidfile).write_text(cid + "\n")
+            return FakeProc()
+
+        record = {"starttime": 111, "pid_ns": 4242, "rss": 3_000_000_000,
+                  "cmdline_sha": "c" * 64}
+        controller = {"starttime": 999, "pid_ns": 777, "rss": 1024,
+                      "cmdline_sha": "d" * 64}
+
+        with (patch.object(gexec.binding, "inspect_pid", return_value=4242),
+              patch.object(gexec.proc, "snapshot",
+                           side_effect=lambda: {4242: record,
+                                                os.getpid(): controller}),
+              patch.object(gexec.teardown, "stop_cid", return_value=proof),
+              patch.object(gexec.natural_exit, "wait_and_attest",
+                           return_value={"cid": cid, "launcher_result": 0}),
+              patch.object(gexec.pilot, "prove_pilot_absent",
+                           return_value={"fresh_absence_check": False})):
+            run = gexec.run_guarded_case(
+                self.plan, self.manifest, output_dir=root / "out",
+                attempt_dir=root / "attempt", owner=owner, stop_path=stop_path,
+                watchdog_ready=lambda: {"ready": True, "identity_bound": True,
+                                        "pid_ns": 4242, "starttime": 111},
+                spawn=fake_spawn, guard_root=root, disk_path=root,
+                disk_usage=lambda p: SimpleNamespace(free=40 * 1024**3),
+                sleep=lambda seconds: None)
+        self.assertEqual(run["status"], "failed")
+        self.assertIn("unmount_unverified", str(run))
+        with patch.object(gexec, "run_guarded_case", return_value=run):
+            receipt = ctl.execute_case(
+                ctl.PilotCase(case=self.case), plan=self.plan,
+                preflight_result=self.pre, output_dir=root / "o2",
+                attempt_dir=root / "a2", original_manifest=self.manifest,
+                scorer=lambda *a: self.fail("scorer ran without unmount"))
+        self.assertEqual(receipt["status"], "failed")
+        self.assertIsNone(receipt["score"])
 
 
 if __name__ == "__main__":

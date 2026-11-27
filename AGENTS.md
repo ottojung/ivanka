@@ -18,7 +18,7 @@ and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 ## Required execution intents
 
-**All sixteen intent records are cumulative and binding. New requirements do
+**All seventeen intent records are cumulative and binding. New requirements do
 not supersede the reference-blindness, dominant-sequence, original 198-sample
 Ψ qualification, provenance, or source-quality requirements.** See
 [the complete intent index](docs/intents/README.md).
@@ -92,6 +92,13 @@ descriptions of what the existing qualifying image already implements:
   tool-only container, immutable distinct image ID and full fork-commit
   provenance, sharing only the pinned downstream MiCall base. A combined
   all-contenders image is forbidden even with separate run containers.
+- **[Intent 017: reference-based MiCall remap comparator](docs/intents/017-reference-based-remap-comparator.md).**
+  Add ordinary reference-based MiCall remap to both benchmark cohorts as
+  a diagnostic peer. Reuse the exact frozen clinical workflow and reference
+  assets, with distinct method/run identity; no truth access and no fake
+  contigs. Remap is excluded from all private qualification gates and
+  required denominators. Public Assembler Bench labels the method accurately
+  and compares applicable measured metrics without acceptance terminology.
 - **[Intent 012: comprehensive diagnostics](docs/intents/012-assembler-diagnostic-metrics.md).**
   All assemblers must have comparable final MiCall quality, mapping,
   coverage/depth, contig structure, runtime/resource and failure metrics,

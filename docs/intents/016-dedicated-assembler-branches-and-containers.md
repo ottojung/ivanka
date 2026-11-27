@@ -41,6 +41,13 @@ image layers may be reused, but every final image must have a
 **distinct immutable image identity**, tool-specific branch and source
 commit, and exact common downstream MiCall base SHA.
 
+**Scope clarification (November 26, 2026):** the reference-based MiCall
+remap comparator in [Intent 017](017-reference-based-remap-comparator.md)
+is not a de novo assembler. Its distinct provenance includes the exact
+immutable image and execution mode; a verified frozen image may be reused
+without building a redundant image. The distinct branch/image requirement
+for every actual assembler and the freeze remain unchanged.
+
 A dedicated image must install only its designated assembler's
 nonbaseline executable and dependencies, rather than installing all
 competing tools. Executables already present in the ordinary shared

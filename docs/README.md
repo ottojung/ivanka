@@ -64,7 +64,11 @@ must recover the most abundant identifiable haplotype.
   one canonical fork branch and tool-only image per assembler, each at
   a distinct immutable image ID and exact source commit.
 
-[All sixteen intents are cumulative](intents/README.md). The original
+- [Intent 017: reference-based MiCall remap comparator](intents/017-reference-based-remap-comparator.md) —
+  ordinary reference-based MiCall with the same applicable benchmark metrics,
+  isolated from Ivanka acceptance decisions.
+
+[All seventeen intents are cumulative](intents/README.md). The original
 scientific and numerical gates remain in force. The tagged native Rust
 alpha.3 passed the original physical-198 gate, but the mandatory
 seven-assembler benchmark, new HXB2 synthetic cohort, and published

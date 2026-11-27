@@ -1,35 +1,121 @@
-"""Read-only live service attestation for PX guard cutover.
+"""Read-only, fail-closed live attestation for the PR535 guard cutover.
 
-This inspects s6 persistent/runtime pins, /proc identity and lease state. It
-never mutates services, files, leases, receipts or registry. A source-byte
-match alone is not live attestation; this module reports both.
+This module never mutates services, files, leases, receipts or registry. It has
+two deliberately different verdicts:
+
+* ``pre_cutover`` proves an **idle boundary** is safe to switch pins: exact old
+  runtime/persistent script pins, a live old-code watchdog with real s6/proc
+  identity and readiness, no supervisor process, no active lease, unlocked
+  global lock and no foreign STOP sentinel.
+* ``post_cutover`` proves the **running expected service**: exact new
+  runtime/persistent script pins, live new-code watchdog and supervisor with
+  real s6/proc identity, canonical code root and module bytes, and watchdog
+  readiness. An active lease is normal here, but a foreign STOP is not.
+
+A mismatch in any checked fact is a blocker, never a warning. Source-byte
+verification alone is not live attestation; both phases bind the actual s6
+PID to a real /proc snapshot and to the watchdog ALIVE record.
 """
-import json
 import os
+import re
 from pathlib import Path
+
+from benchmarks.fail_closed_guard import errors as guard_errors
+from benchmarks.fail_closed_guard import heartbeat, lease, proc, watchdog_contract
 
 from . import px_guard_source as guard_source
 
+OLD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
+OLD_ROOT = "/workspace/ivanka-guard-pr536-staged-20261126"
+NEW_ROOT = "/workspace/ivanka-guard-pr535-staged-20261127"
+PROJECT_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121")
+GRAPHROOT = Path("/workspace/ivanka-exploratory-podman-20261121/store")
+S6_ROOT = Path("/run/s6/legacy-services")
+
+# Reviewed bytes of the old live guard (14-file PR536 map). Kept as explicit
+# evidence for the pre-cutover phase; it is never used to attest new code.
+OLD_MODULES = {
+    "benchmarks/assembler_bench/exploratory_space.py":
+        "bffdc90b703475aeb68f31c2df4334cb36a8912ebaba806cd7baee4d2bc18943",
+    "benchmarks/memory_guard/proc.py":
+        "086ce9aca6d73703216e841d8e9b580cab6678e743f868d6e133a50ba0d69e72",
+    "benchmarks/memory_guard/guard.py":
+        "6e096ffb7cae5014595a6aaa889beb2ed7d05172588556adb6a82ffa23e32dbe",
+    "benchmarks/memory_guard/signals.py":
+        "b5a4dc351da3fc9144bcfad7a26059a849e9c5a58980c26e3c004ad817d88c53",
+    "benchmarks/fail_closed_guard/proc.py":
+        "e8b4c9ebe1a8a3a509466cf824873820df962577352457c879090fd795030b31",
+    "benchmarks/fail_closed_guard/watchdog.py":
+        "a67bac2672efb961408f2401163b49e12e01c07c6300ffb200519c1cc07a6d5e",
+    "benchmarks/fail_closed_guard/watchdog_contract.py":
+        "a2d198b35f0c756cce68f094bebdf79068ad1a585f1f5f061e4e9c2c74906365",
+    "benchmarks/fail_closed_guard/binding.py":
+        "1e764c6a358ddc3b58fe09aa0948d6309b00942936ac525d93ef17d19516e945",
+    "benchmarks/fail_closed_guard/identity.py":
+        "1feecc9e75e71c4bf54b2dbd960cc92886fa00cd9a564c7d220e90f4163aa973",
+    "benchmarks/fail_closed_guard/startup.py":
+        "80b07ce334fa99691ed0a89baf9aa803d4e67631be72c022188963f094ae7b6d",
+    "benchmarks/fail_closed_guard/watchdog_cli.py":
+        "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369",
+    "benchmarks/fail_closed_guard/natural_exit.py":
+        "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
+    "benchmarks/fail_closed_guard/watch.py":
+        "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96",
+    "benchmarks/assembler_bench/exploratory_runtime/monitor.py":
+        "b0bbefa221ff092acf33021b0203f2b07a912c250fc0893e8fdd59dad642293c",
+}
+
+PHASES = {
+    "pre_cutover": {
+        "root": OLD_ROOT, "head": OLD_HEAD, "modules": OLD_MODULES,
+        "supervisor": "absent", "idle_required": True,
+    },
+    "post_cutover": {
+        "root": NEW_ROOT, "head": guard_source.DEPLOYED_HEAD,
+        "modules": dict(guard_source.EXPECTED),
+        "supervisor": "running", "idle_required": False,
+    },
+}
+
+
+def _block(blockers, reason):
+    if reason not in blockers:
+        blockers.append(reason)
+
 
 def _read(path):
-    p = Path(path)
-    return p.read_text() if p.is_file() else None
-
-
-def _proc(pid):
-    proc = Path("/proc") / str(int(pid))
-    if not proc.is_dir():
-        return None
-    cmd = (proc / "cmdline").read_bytes().replace(b"\x00", b" ").decode(errors="replace").strip()
-    env = {}
-    for item in (proc / "environ").read_bytes().split(b"\x00"):
-        if b"=" in item:
-            k, v = item.split(b"=", 1)
-            env[k.decode(errors="replace")] = v.decode(errors="replace")
     try:
-        cwd = os.readlink(proc / "cwd")
+        return Path(path).read_text()
     except OSError:
-        cwd = None
+        return None
+
+
+def _s6_pid(service_dir):
+    """Derive the live service PID from the s6 supervise status, read-only."""
+    status = Path(service_dir) / "supervise" / "status"
+    if not status.is_file():
+        return None
+    blob = status.read_bytes()
+    if len(blob) < 32:
+        return None
+    return int.from_bytes(blob[24:32], "big")
+
+
+def _proc(pid, proc_root):
+    entry = Path(proc_root) / str(int(pid))
+    if not entry.is_dir():
+        return None
+    try:
+        cmd = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(
+            errors="replace").strip()
+        env = {}
+        for item in (entry / "environ").read_bytes().split(b"\0"):
+            if b"=" in item:
+                key, value = item.split(b"=", 1)
+                env[key.decode(errors="replace")] = value.decode(errors="replace")
+        cwd = os.readlink(entry / "cwd")
+    except OSError:
+        return None
     return {"pid": int(pid), "cmdline": cmd, "cwd": cwd, "environ": env}
 
 
@@ -39,87 +125,260 @@ def _flock_locked(path):
     try:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            fcntl.flock(fd, fcntl.LOCK_UN)
-            return False
         except BlockingIOError:
             return True
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return False
     finally:
         os.close(fd)
 
 
-def _active_lease(lease_path):
-    p = Path(lease_path)
-    if not p.is_file():
-        return {"present": False, "active": False}
-    active = None
-    for line in p.read_text().splitlines():
-        if not line.strip():
-            continue
+def _pin_lines(variable, root, head):
+    return (
+        "export %s=%s" % (variable, root),
+        'test "$(git -C "$%s" rev-parse HEAD)" = %s || exit 1' % (variable, head),
+        'git -C "$%s" diff --quiet HEAD || exit 1' % variable,
+    )
+
+
+def _check_script(label, text, expected, variable, markers, checks, blockers):
+    check = {"present": text is not None}
+    if text is None:
+        _block(blockers, "missing_script:" + label)
+        checks[label] = check
+        return
+    pins = _pin_lines(variable, expected["root"], expected["head"])
+    check["pins"] = {line: line in text for line in pins}
+    if not all(check["pins"].values()):
+        _block(blockers, "script_pin_mismatch:" + label)
+    roots = set(re.findall(r"/workspace/ivanka-guard-[A-Za-z0-9._-]+", text))
+    heads = set(re.findall(r"\b[a-f0-9]{40}\b", text))
+    check["roots"] = sorted(roots)
+    check["heads"] = sorted(heads)
+    if roots != {expected["root"]} or heads != {expected["head"]}:
+        _block(blockers, "foreign_script_pin:" + label)
+    check["markers"] = {marker: marker in text for marker in markers}
+    if not all(check["markers"].values()):
+        _block(blockers, "script_marker_missing:" + label)
+    checks[label] = check
+
+
+def _check_code_root(label, code, table, pid, expected, checks, blockers,
+                     *, module_reader, head_reader, git_present):
+    check = {}
+    if code != expected["root"]:
+        _block(blockers, "wrong_code_root:" + label)
+    check["code_root"] = code
+    code_path = Path(code) if code else None
+    if code_path and code_path.is_dir():
+        if not git_present(code_path):
+            _block(blockers, "code_root_not_git_checkout:" + label)
+        else:
+            try:
+                check["code_head"] = head_reader(code_path)
+            except ValueError:
+                check["code_head"] = None
+            if check["code_head"] != expected["head"]:
+                _block(blockers, "code_head_mismatch:" + label)
+        drifted = []
+        for name, digest in expected["modules"].items():
+            if module_reader(code_path, name) != digest:
+                drifted.append(name)
+        check["drifted_modules"] = drifted
+        if drifted:
+            _block(blockers, "module_bytes_mismatch:" + label)
+    else:
+        _block(blockers, "code_root_missing:" + label)
+    record = table.get(pid)
+    if (not isinstance(record, dict) or not isinstance(record.get("starttime"), int)
+            or not isinstance(record.get("pid_ns"), int)
+            or record["starttime"] <= 0 or record["pid_ns"] <= 0):
+        _block(blockers, "proc_snapshot_unavailable:" + label)
+        check["snapshot_identity"] = None
+    else:
+        check["snapshot_identity"] = [record["starttime"], record["pid_ns"]]
+    return check
+
+
+def _check_service(label, *, service, expected, presence, variable, module,
+                   args, proc_root, s6_root, table, checks, blockers,
+                   module_reader, head_reader, git_present):
+    s6_pid = _s6_pid(Path(s6_root) / service)
+    check = {"s6_pid": s6_pid}
+    if presence == "absent":
+        supervisor_argv = [pid for pid in table
+                           if "-m assembler_bench.px_execution" in (
+                               (_proc(pid, proc_root) or {}).get("cmdline", ""))
+                           and "--supervise" in (
+                               (_proc(pid, proc_root) or {}).get("cmdline", ""))]
+        check["supervisor_processes"] = supervisor_argv
+        if s6_pid or supervisor_argv:
+            _block(blockers, "supervisor_not_idle:" + label)
+        checks[label] = check
+        return None, None
+    if not s6_pid:
+        _block(blockers, "s6_service_down:" + label)
+        checks[label] = check
+        return None, None
+    proc = _proc(s6_pid, proc_root)
+    check["proc"] = proc is not None
+    if proc is None:
+        _block(blockers, "proc_missing:" + label)
+        checks[label] = check
+        return None, None
+    code = proc["environ"].get(variable)
+    check["pythonpath_head"] = proc["environ"].get("PYTHONPATH", "").split(":")[0]
+    if proc["environ"].get("PYTHONPATH", "").split(":")[0] != expected["root"]:
+        _block(blockers, "pythonpath_mismatch:" + label)
+    if module not in proc["cmdline"] or any(token not in proc["cmdline"] for token in args):
+        _block(blockers, "cmdline_mismatch:" + label)
+    check["cmdline"] = proc["cmdline"]
+    check.update(_check_code_root(label, code, table, s6_pid, expected,
+                                  checks, blockers, module_reader=module_reader,
+                                  head_reader=head_reader, git_present=git_present))
+    checks[label] = check
+    return s6_pid, _proc(s6_pid, proc_root)
+
+
+def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
+           proc_root="/proc", persistent_watchdog="/etc/services.d/ivanka-watchdog/run",
+           runtime_watchdog=None, persistent_supervisor="/etc/services.d/px-cohort-supervisor/run",
+           runtime_supervisor=None, global_lock=None, worker_journal=None,
+           snapshot=None, lock_probe=None, now=None, module_reader=None,
+           head_reader=None, git_present=None):
+    """Return a read-only, fail-closed verdict for one exact cutover phase."""
+    if phase not in PHASES:
+        raise ValueError("unknown attestation phase: " + str(phase))
+    expected = PHASES[phase]
+    root = Path(project_root)
+    s6_root = Path(s6_root)
+    runtime_watchdog = runtime_watchdog or str(s6_root / "ivanka-watchdog" / "run")
+    runtime_supervisor = runtime_supervisor or str(s6_root / "px-cohort-supervisor" / "run")
+    global_lock = Path(global_lock or root / ".global-worker.lock")
+    worker_journal = Path(worker_journal or root / lease.JOURNAL_NAME)
+    take_snapshot = snapshot or proc.snapshot
+    table = take_snapshot()
+    module_reader = module_reader or (
+        lambda base, name: guard_source.digest(base / name)
+        if not (base / name).is_symlink() and (base / name).is_file() else None)
+    head_reader = head_reader or guard_source._git_head
+    git_present = git_present or (lambda path: (path / ".git").exists())
+    clock = now or (lambda: __import__("time").time())
+    blockers = []
+    checks = {"phase": phase, "expected_root": expected["root"],
+              "expected_head": expected["head"]}
+
+    wd_persist = _read(persistent_watchdog)
+    wd_runtime = _read(runtime_watchdog)
+    sup_persist = _read(persistent_supervisor)
+    sup_runtime = _read(runtime_supervisor)
+    wd_markers = ("export WATCHDOG_ROOT=", "export WATCHDOG_STORAGE_CONF=",
+                  "export WATCHDOG_GRAPHROOT=", "export WATCHDOG_STOP=",
+                  "export WATCHDOG_ARMED=1", "-m fail_closed_guard.watchdog_cli",
+                  'exec env PYTHONPATH="$CODE:$CODE/benchmarks"')
+    sup_markers = ("export PX_ROOT=", "export PX_REGISTRY=",
+                   'exec /bin/sh "$PX_CODE/scripts/px_cohort_s6_service.sh"',
+                   "export WATCHDOG_ARMED=1")
+    _check_script("persistent_watchdog", wd_persist, expected, "WATCHDOG_CODE",
+                  wd_markers, checks, blockers)
+    _check_script("runtime_watchdog", wd_runtime, expected, "WATCHDOG_CODE",
+                  wd_markers, checks, blockers)
+    _check_script("persistent_supervisor", sup_persist, expected, "PX_CODE",
+                  sup_markers, checks, blockers)
+    _check_script("runtime_supervisor", sup_runtime, expected, "PX_CODE",
+                  sup_markers, checks, blockers)
+    for label, a, b in (("watchdog", wd_persist, wd_runtime),
+                        ("supervisor", sup_persist, sup_runtime)):
+        if a is not None and b is not None and a != b:
+            _block(blockers, "runtime_persist_mismatch:" + label)
+        checks[label + "_scripts_identical"] = (a is not None and a == b)
+
+    graphroot = GRAPHROOT
+    if wd_persist:
+        found = re.search(r"export WATCHDOG_GRAPHROOT=(\S+)", wd_persist)
+        if found:
+            graphroot = Path(found.group(1))
+        if str(graphroot) != str(GRAPHROOT):
+            _block(blockers, "foreign_graphroot")
+
+    watchdog_pid, watchdog_proc = _check_service(
+        "watchdog", service="ivanka-watchdog", expected=expected,
+        presence="running", variable="WATCHDOG_CODE", module="fail_closed_guard.watchdog_cli",
+        args=["--root", str(root)], proc_root=proc_root, s6_root=s6_root,
+        table=table, checks=checks, blockers=blockers,
+        module_reader=module_reader, head_reader=head_reader,
+        git_present=git_present)
+    _check_service(
+        "supervisor", service="px-cohort-supervisor", expected=expected,
+        presence=expected["supervisor"], variable="PX_CODE", module="assembler_bench.px_execution",
+        args=["--registry", "--root", "--supervise", "--armed"],
+        proc_root=proc_root, s6_root=s6_root, table=table,
+        checks=checks, blockers=blockers, module_reader=module_reader,
+        head_reader=head_reader, git_present=git_present)
+
+    alive_path = heartbeat.alive_path(root)
+    if watchdog_pid is None:
+        _block(blockers, "watchdog_not_running")
+    else:
         try:
-            row = json.loads(line)
-        except ValueError:
-            return {"present": True, "active": True, "error": "unreadable"}
-        if row.get("state") == "active":
-            active = row
-        elif row.get("state") == "released" and active and row.get("lease") == active.get("lease"):
-            active = None
-    return {"present": True, "active": active is not None, "lease": active}
+            table_snapshot = lambda: table
+            alive = heartbeat.read_alive(root, wall=clock, snapshot=table_snapshot)
+            ready = watchdog_contract.require_watchdog_readiness(
+                alive_path, graphroot=str(graphroot), wall=clock,
+                snapshot=table_snapshot)
+            checks["watchdog_readiness"] = ready
+            record = table.get(watchdog_pid, {})
+            if alive.get("pid") != watchdog_pid or tuple(
+                    alive.get("fingerprint") or ()) != (
+                    record.get("starttime"), record.get("pid_ns")):
+                _block(blockers, "watchdog_alive_identity_mismatch")
+        except (guard_errors.GuardExceeded, ValueError) as exc:
+            checks["watchdog_readiness"] = {"error": str(exc)}
+            _block(blockers, "watchdog_readiness_failed")
 
+    try:
+        events = lease.events(root)
+        latest = lease.latest(events)
+        active = {name: row for name, row in latest.items()
+                  if row.get("state") not in lease.CLOSED}
+        checks["leases"] = {"events": len(events),
+                            "latest_count": len(latest),
+                            "active": sorted(active)}
+        if expected["idle_required"] and active:
+            _block(blockers, "active_lease")
+    except (guard_errors.GuardExceeded, ValueError, TypeError) as exc:
+        checks["leases"] = {"error": str(exc)}
+        _block(blockers, "lease_journal_unreadable")
 
-def attest(*, watchdog_pid=None, supervisor_pid=None,
-           persistent_watchdog="/etc/services.d/ivanka-watchdog/run",
-           runtime_watchdog="/run/s6/legacy-services/ivanka-watchdog/run",
-           persistent_supervisor="/etc/services.d/px-cohort-supervisor/run",
-           runtime_supervisor="/run/s6/legacy-services/px-cohort-supervisor/run",
-           global_lock="/workspace/ivanka-exploratory-ten-20261121/.global-worker.lock",
-           worker_lease="/workspace/ivanka-exploratory-ten-20261121/.worker-lease.jsonl"):
-    report = {"kind": "px.live.attestation.read_only.v1", "blockers": [], "checks": {}}
-    for name, path in [("persistent_watchdog", persistent_watchdog),
-                       ("runtime_watchdog", runtime_watchdog),
-                       ("persistent_supervisor", persistent_supervisor),
-                       ("runtime_supervisor", runtime_supervisor)]:
-        text = _read(path)
-        report["checks"][name] = {"path": path, "present": text is not None}
-        if text is None:
-            report["blockers"].append(f"missing:{name}")
-        else:
-            report["checks"][name]["mentions_deployed_head"] = guard_source.DEPLOYED_HEAD in text
-            report["checks"][name]["mentions_old_head"] = "091f56275ae823cb3291b81dbdf016fcf16c3ea0" in text
-    for label, pid, code_key in [("watchdog", watchdog_pid, "WATCHDOG_CODE"),
-                                 ("supervisor", supervisor_pid, "PX_CODE")]:
-        proc = _proc(pid) if pid is not None else None
-        check = {"pid": pid, "present": proc is not None}
-        if proc is None:
-            report["blockers"].append(f"missing_proc:{label}")
-        else:
-            code = proc["environ"].get(code_key)
-            check["code_root"] = code
-            check["pythonpath"] = proc["environ"].get("PYTHONPATH")
-            if code:
-                code_path = Path(code)
-                check["code_root_exists"] = code_path.exists()
-                if (code_path / ".git").exists():
-                    try:
-                        head = guard_source._git_head(code_path)
-                    except ValueError:
-                        head = None
-                    check["code_head"] = head
-                try:
-                    modules = guard_source.verify_deployment(code_path)["modules"]
-                    check["staged_bytes_match_expected"] = modules == dict(guard_source.EXPECTED)
-                except Exception as exc:
-                    check["staged_bytes_match_expected"] = False
-                    check["bytes_error"] = str(exc)
-            else:
-                report["blockers"].append(f"missing_env:{label}:{code_key}")
-        report["checks"][label] = check
-    lock = Path(global_lock)
-    lease = _active_lease(worker_lease)
-    report["checks"]["global_lock"] = {"path": str(lock), "exists": lock.exists(),
-                                       "locked": _flock_locked(lock) if lock.exists() else False}
-    report["checks"]["worker_lease"] = lease
-    if lease.get("active") or report["checks"]["global_lock"].get("locked"):
-        report["blockers"].append("active_lease_or_lock")
-    report["ready_for_cutover"] = len(report["blockers"]) == 0
-    report["attests_live_process_identity"] = False  # bytes/pins evidence only; not kernel proof
-    return report
+    probe = lock_probe or _flock_locked
+    locked = probe(global_lock) if global_lock.exists() else None
+    checks["global_lock"] = {"path": str(global_lock), "exists": global_lock.exists(),
+                             "locked": locked}
+    if expected["idle_required"] and locked:
+        _block(blockers, "global_lock_busy")
+    if not expected["idle_required"] and not global_lock.exists():
+        _block(blockers, "global_lock_missing")
+
+    sentinels = []
+    stop = root / "STOP"
+    if stop.exists() or stop.is_symlink():
+        sentinels.append(stop.name)
+    for item in root.glob("STOP*"):
+        if item.name.startswith("STOP.resolved-"):
+            continue
+        sentinels.append(item.name)
+    checks["stop_sentinels"] = sorted(set(sentinels))
+    if sentinels:
+        _block(blockers, "foreign_stop")
+
+    ready = not blockers
+    return {
+        "kind": "px.live.attestation.v2",
+        "phase": phase,
+        "ready": ready,
+        "blockers": blockers,
+        "checks": checks,
+        "attests_live_process_identity": ready and watchdog_pid is not None
+        and expected["supervisor"] == "running",
+        "kernel_enforcement": False,
+    }

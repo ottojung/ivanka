@@ -78,8 +78,9 @@ records `guard_control_source_sha256` and `guard_identity_sha256`.
 
 ```
 PYTHONPATH=.:benchmarks python3 -m pytest -q \
-  benchmarks/test_px_guard_source.py benchmarks/test_px_retry_authorization.py
-# 16 + 24 passed
+  benchmarks/test_px_live_attestation.py benchmarks/test_px_guard_source.py \
+  benchmarks/test_px_retry_authorization.py
+# 20 + 16 + 24 passed
 
 PYTHONPATH=.:benchmarks python3 -m pytest -q \
   benchmarks/test_px_cohort_scheduler.py benchmarks/test_px_supervisor.py \
@@ -97,12 +98,31 @@ git diff --check
 
 ## Read-only live attestation (observed, no mutation)
 
-Observed on marceline-dev during this preparation: watchdog pid 139 runs with
-`WATCHDOG_CODE=/workspace/ivanka-guard-pr536-staged-20261126` (HEAD `091f5627`),
-PX supervisor is active under s6, global worker lock is locked and worker lease
-has an active case. Therefore **cutover is blocked until an operator-confirmed
-idle boundary with no active lease/lock**. Persistent and runtime s6 pins still
-point at the old guard. This is expected pre-cutover state.
+`px_live_attestation.attest(phase=...)` has two distinct, fail-closed verdicts:
+
+- `pre_cutover` requires exact **old** runtime+persistent script pins (root
+  `/workspace/ivanka-guard-pr536-staged-20261126`, HEAD `091f5627`), a live old
+  watchdog whose s6 PID matches a real `/proc` snapshot identity and the
+  watchdog ALIVE record, fresh readiness against the pinned graphroot, **no
+  supervisor process** (correct idle boundary), no active lease from
+  `lease.events/latest`, an unlocked global lock and no foreign STOP sentinel.
+- `post_cutover` requires exact **new** pins (`165a86b3` staged guard), a live
+  new-code watchdog **and** supervisor with real s6/proc identity and canonical
+  module bytes, fresh readiness and no foreign STOP. An active lease is normal
+  while the new supervisor runs.
+
+Every mismatch adds a blocker; `ready` is true only with an empty blocker list.
+The module includes injection points and `benchmarks/test_px_live_attestation.py`
+proves adversarial cases hermetically: foreign/old script heads, runtime vs
+persistent script drift, wrong code root, module-byte drift, ALIVE fingerprint
+and age failures, foreign release/reconciled events that must not hide an
+active lease, STOP sentinels, busy/missing lock, down s6 services and a process
+present at an idle boundary.
+
+Observed pre-cutover state on marceline-dev: watchdog pid 139 runs old code
+with matching old pins and readiness, but the PX supervisor is running and the
+worker journal/lock are active. Therefore `pre_cutover.ready == false` and
+cutover is blocked until an operator-confirmed idle boundary.
 
 ## Cutover steps (operator + reserve only; no mutation by agent)
 
@@ -117,21 +137,24 @@ point at the old guard. This is expected pre-cutover state.
 5. Run read-only source-byte verification: `verify_deployment()` and
    `verify_control()` (or the test suite). This proves checked-out bytes, not
    live process identity.
-6. Independently verify s6 runtime and persistent run scripts, actual watchdog
-   `/proc` cmdline/environ/cwd/PYTHONPATH, actual supervisor proc identity, and
-   watchdog readiness/ALIVE record. Record evidence.
+6. Run `attest(phase="pre_cutover")` and require `ready is True` with no
+   blockers: exact old runtime/persistent pins, live old watchdog s6/proc
+   identity and readiness, no supervisor process, no active lease, unlocked
+   lock and no foreign STOP. Record evidence.
 7. Only at an idle boundary, operator updates persistent+runtime s6 pins to the
    reviewed roots, restarts watchdog, lets supervisor pick up on boundary.
-8. Re-run live attestation; only then may one-shot retry be authorized under
-   the new guard. Existing old-guard authorizations fail closed.
+8. Re-run `attest(phase="post_cutover")` and require `ready is True`: exact new
+   runtime/persistent pins, live new-code watchdog and supervisor with real
+   s6/proc identity and canonical module bytes, fresh readiness and no foreign
+   STOP. Only then may one-shot retry be authorized under the new guard.
 
 ## Rollback steps (operator + reserve)
 
 1. Acknowledge rollback; no evidence deletion.
 2. Restore s6 persistent+runtime pins to old guard `091f5627` roots.
 3. Restart watchdog at boundary; supervisor picks up restored code at boundary.
-4. Re-run read-only live attestation; confirm old identity and no active-lease
-   cutover hazards. New-guard authorizations fail closed after rollback.
+4. Re-run `attest(phase="pre_cutover")`; confirm old identity and a clean idle
+   boundary. New-guard authorizations fail closed after rollback.
 
 ## ACV P1 PR531 coordination
 

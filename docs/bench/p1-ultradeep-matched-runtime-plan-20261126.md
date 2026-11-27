@@ -116,6 +116,26 @@ Any future guarded run still requires a fresh operator attestation, the shared
 PX slot and STOP boundary under the actually running reviewed guard, and a
 clear lease at that later boundary.
 
+## Ordinary controls and operator-ready executor
+
+The plan supports `ALL_CASES = CASES + CONTROL_CASES` where controls are
+`ultradeep-s002` (typical ultradeep, small historical unattributed delta,
+identical outputs) and `clonal-s015` (ordinary clonal, near-zero historical
+delta, identical outputs). Control read pins are recorded in
+`p1_ultradeep_matched_runtime.py`; clonal-s015 historical timing is pinned to
+`docs/bench/diagnostics/p1-full-stage-intervals-20261127.json` (SHA-256
+`62ac208258e8427730ab08ff806811c258b08f073c5bea1927bbe300070059ee`). The
+default 4-case plan remains unchanged.
+
+`benchmarks/p1_matched_run_executor.py` provides an operator-ready, fail-closed
+executor. It refuses by default, refuses when dependencies are not ready, and
+requires an explicit arm runner. The guarded runner factory wires each arm
+through `fail_closed_guard.p1_harness.run_prospective`; tests inject fake
+runners. Executed arms write fresh host-evidence and a receipt with stage
+timing/log SHA attribution, sampled RSS/CPU quota, contention/comparability
+checks, and no historical mutation. No live container is started by import or
+CLI default.
+
 ## Tests and limitations
 
 `benchmarks/test_p1_ultradeep_matched_runtime.py` covers receipt pin and
@@ -128,6 +148,9 @@ inert, gate-neutral plan emission.
 `benchmarks/test_p1_matched_run_controller.py` covers retained original inputs,
 timer and image identities, real CLI-template and reference-blind validation,
 shared-guard reuse, and inert source-only emission that stays blocked.
+`benchmarks/test_p1_matched_run_executor.py` covers default refusal, unready
+refusal, mocked execution with fresh receipt/stage/log attribution, 12-arm
+control schedule, and comparability with case count.
 
 Limitations: this is a plan, not a measurement. No host-contention causal
 claim is made; plan-time loadavg was about 21 with host `cpu.max = max 100000`
@@ -136,4 +159,5 @@ verified per arm in a future guarded run. PX was active at the 20:19Z guard
 cutover with no lease or arm at that boundary; the plan does not claim the
 shared slot, start an arm or alter any live state. The plan does not reuse or
 replace any historical timing, does not prove RSS enforcement on this host, and
-does not change the Ivanka scientific gates.
+does not change the Ivanka scientific gates. No live container execution was
+performed by this artifact.

@@ -90,10 +90,12 @@ def build_controller_record(
     *,
     attestation: pathlib.Path | None = None,
     verify_files: bool = False,
+    cases: tuple[str, ...] = plan.CASES,
 ) -> dict:
     """Build a source-only controller record; emit it without any live action."""
     emitted_plan = plan.build_plan(
-        receipt, output_root, verify_files=verify_files, attestation=attestation)
+        receipt, output_root, verify_files=verify_files, attestation=attestation,
+        cases=tuple(cases))
     template = verify_cli_template(emitted_plan)
     return {
         "schema": CONTROLLER_SCHEMA,
@@ -102,6 +104,7 @@ def build_controller_record(
         "timer_sha256": emitted_plan["inputs"]["timer_sha256"],
         "images": emitted_plan["images"],
         "candidate_commit": emitted_plan["candidate_commit"],
+        "cases": list(emitted_plan.get("cases", list(cases))),
         "schedule": emitted_plan["schedule"],
         "source_pins": emitted_plan["source_pins"],
         "deployed_pins": emitted_plan["deployed_pins"],

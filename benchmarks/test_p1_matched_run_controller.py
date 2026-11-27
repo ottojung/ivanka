@@ -39,7 +39,8 @@ class ControllerTest(unittest.TestCase):
     def test_original_inputs_timer_and_images_are_retained(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             built = record(pathlib.Path(tmp) / "out")
-        self.assertEqual(built["inputs"]["reads"], plan.READ_SHA256)
+        self.assertEqual(built["inputs"]["reads"],
+                         {c: plan.READ_SHA256[c] for c in plan.CASES})
         self.assertEqual(built["inputs"]["timer_sha256"], plan.TIMER_SHA256)
         self.assertEqual(built["timer_sha256"], plan.TIMER_SHA256)
         self.assertEqual(built["images"], {

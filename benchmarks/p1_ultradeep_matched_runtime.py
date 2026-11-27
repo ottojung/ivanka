@@ -25,6 +25,11 @@ ATTESTATION_SCHEMA = "ivanka.p1.guard-deployment-attestation.v1"
 RECEIPT_SCHEMA = "ivanka.ultradeep-runtime-diagnostic.v1"
 RECEIPT_SHA256 = "7d0726a5cf6d6f9bb7a42689402633fe44ad5c30621fa7881b0862fe6b262e5c"
 CASES = ("ultradeep-s006", "ultradeep-s007", "ultradeep-s008", "ultradeep-s009")
+# Ordinary controls: one typical ultradeep (small historical unattributed delta,
+# identical outputs) and one ordinary clonal (near-zero historical delta,
+# identical outputs). Selection is documented, not outcome-dependent.
+CONTROL_CASES = ("ultradeep-s002", "clonal-s015")
+ALL_CASES = CASES + CONTROL_CASES
 CANDIDATE_COMMIT = "12d8c72f01f305b7f81db26193ec5fc213ba55bf"
 FROZEN_IMAGE = "da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad"
 CANDIDATE_IMAGE = "6fba70953664b95c3357c65d80fa56f0563962d0ff0112fa97e43ddd10a70971"
@@ -35,6 +40,10 @@ TIMER_PATH = pathlib.Path(
     "benchmarks/inside_container_timing.py"
 )
 READ_SHA256 = {
+    "ultradeep-s002": {
+        "R1.fastq.gz": "94fdc0312526679a517f3221c4a4db9a9d292fd39676789af01df654aa36c755",
+        "R2.fastq.gz": "9197a88487c770556145e421a6f141cddb40c6d343af5dd36fbab48d0e7386e4",
+    },
     "ultradeep-s006": {
         "R1.fastq.gz": "8c056bd05e59000e3da2adbfcce0abe8c1f43007de6d861fba64e7826cbf10c4",
         "R2.fastq.gz": "77476a42721b315984f5b9c886bbb5bb3bde240559ff8de1da97cf1522416a99",
@@ -50,6 +59,30 @@ READ_SHA256 = {
     "ultradeep-s009": {
         "R1.fastq.gz": "56ce9217976f60eacd2a9376f2198fa79c4cecc5cb29e19c0ebe62f2c741f5d8",
         "R2.fastq.gz": "2a72ccbde6261c28a239a439b4740eb1c5a2f879bb198f62f1440753b9a03025",
+    },
+    "clonal-s015": {
+        "R1.fastq.gz": "9e3e884062d799ca550afc65e4825f35c5b0a5cf26e602b94c3b2e2081722812",
+        "R2.fastq.gz": "6968c00d05c3d6763e25413bb80be4749b6142beb58260cbf4b312eddf8d20d3",
+    },
+}
+# Historical control timings from the pinned full-stage-intervals diagnostic.
+# These are retained retrospective measurements, never new execution.
+FULL_STAGE_INTERVALS_SHA256 = "62ac208258e8427730ab08ff806811c258b08f073c5bea1927bbe300070059ee"
+CONTROL_HISTORICAL = {
+    "ultradeep-s002": {
+        "source": "docs/bench/diagnostics/p1-ultradeep-runtime-20261126.json",
+        "candidate_seconds": 186.855614907,
+        "frozen_seconds": 139.86058835,
+        "ordered_unstitched_sequences_identical": True,
+        "conseq_csv_bytes_identical": True,
+    },
+    "clonal-s015": {
+        "source": "docs/bench/diagnostics/p1-full-stage-intervals-20261127.json",
+        "source_sha256": FULL_STAGE_INTERVALS_SHA256,
+        "candidate_seconds": 74.678916762,
+        "frozen_seconds": 76.018442715,
+        "ordered_unstitched_sequences_identical": True,
+        "conseq_csv_bytes_identical": True,
     },
 }
 CONSTRAINTS = {
@@ -128,7 +161,7 @@ def sha256(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
-def load_receipt(path: pathlib.Path) -> dict[str, Any]:
+def load_receipt(path: pathlib.Path, cases: tuple[str, ...] = CASES) -> dict[str, Any]:
     """Read the immutable PR539 residual receipt or refuse."""
     if sha256(path) != RECEIPT_SHA256:
         raise Refusal("receipt SHA-256 mismatch")
@@ -136,9 +169,10 @@ def load_receipt(path: pathlib.Path) -> dict[str, Any]:
     if report.get("schema") != RECEIPT_SCHEMA or report.get("case_count") != 16:
         raise Refusal("unexpected receipt schema or case count")
     rows = {row["case"]: row for row in report.get("cases", [])}
-    if set(CASES) - set(rows):
-        raise Refusal("receipt missing a selected ultradeep case")
-    for case in CASES:
+    missing = set(cases) - set(rows)
+    if missing:
+        raise Refusal("receipt missing selected case: " + ", ".join(sorted(missing)))
+    for case in cases:
         row = rows[case]
         if not row.get("ordered_unstitched_sequences_identical") or not row.get(
             "conseq_csv_bytes_identical"
@@ -153,18 +187,27 @@ def load_receipt(path: pathlib.Path) -> dict[str, Any]:
     return report
 
 
-def pinned_inputs(verify_files: bool, reads_root: pathlib.Path = READS_ROOT) -> dict[str, Any]:
+def pinned_inputs(
+    verify_files: bool,
+    reads_root: pathlib.Path = READS_ROOT,
+    cases: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     """Return pins; when asked, verify file bytes without writing anything."""
+    selected = tuple(cases) if cases is not None else tuple(READ_SHA256)
+    unknown = [c for c in selected if c not in READ_SHA256]
+    if unknown:
+        raise Refusal("unknown case pins: " + ", ".join(sorted(unknown)))
+    reads = {case: READ_SHA256[case] for case in selected}
     if not verify_files:
-        return {"reads": READ_SHA256, "timer_sha256": TIMER_SHA256, "verified": False}
-    for case, names in READ_SHA256.items():
-        for name, expected in names.items():
+        return {"reads": reads, "timer_sha256": TIMER_SHA256, "verified": False}
+    for case in selected:
+        for name, expected in READ_SHA256[case].items():
             path = reads_root / case / "reads" / name
             if not path.is_file() or sha256(path) != expected:
                 raise Refusal("read pin mismatch for " + case + "/" + name)
     if not TIMER_PATH.is_file() or sha256(TIMER_PATH) != TIMER_SHA256:
         raise Refusal("timer pin mismatch")
-    return {"reads": READ_SHA256, "timer_sha256": TIMER_SHA256, "verified": True}
+    return {"reads": reads, "timer_sha256": TIMER_SHA256, "verified": True}
 
 
 def alternating_schedule(cases: tuple[str, ...] = CASES) -> list[dict[str, str]]:
@@ -406,10 +449,30 @@ def check_output_root(raw: str | pathlib.Path) -> pathlib.Path:
     return root
 
 
+def stage_timing_from_log(
+    log_text: str,
+    official_seconds: float | int | None,
+) -> dict[str, Any] | None:
+    """Parse MiCall stage intervals from a retained log; fail closed on bad shape."""
+    if not isinstance(log_text, str) or not log_text.strip():
+        return None
+    if (isinstance(official_seconds, bool)
+            or not isinstance(official_seconds, (int, float))
+            or not math.isfinite(official_seconds) or official_seconds <= 0):
+        return None
+    try:
+        from px_stage_interval_diagnostic import intervals
+        return intervals(log_text, float(official_seconds))
+    except Exception:
+        return None
+
+
 def arm_evidence_record(
     step: dict[str, str], before: dict[str, Any], after: dict[str, Any],
     timing: dict[str, Any], *, sampled_rss_bytes: int | None = None,
     container_cpu_max: str | None = None,
+    stage_timing: dict[str, Any] | None = None,
+    log_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Durable per-arm record: matched timing, sampled RSS, quota and host state."""
     rss_ok = (isinstance(sampled_rss_bytes, int)
@@ -420,7 +483,7 @@ def arm_evidence_record(
             quota_effective = effective_cpus(container_cpu_max)
         except ValueError:
             quota_effective = None
-    return {
+    record = {
         "schema": "ivanka.p1.ultradeep.arm-evidence.v1",
         "case": step["case"], "arm": step["arm"],
         "image": FROZEN_IMAGE if step["arm"] == "frozen" else CANDIDATE_IMAGE,
@@ -445,6 +508,11 @@ def arm_evidence_record(
         "privacy": "aggregate_only_no_process_arguments",
         "formal_qualification": False,
     }
+    if stage_timing is not None:
+        record["stage_timing"] = stage_timing
+    if isinstance(log_sha256, str) and log_sha256:
+        record["log_sha256"] = log_sha256
+    return record
 
 
 def evidence_complete(record: dict[str, Any]) -> bool:
@@ -453,11 +521,15 @@ def evidence_complete(record: dict[str, Any]) -> bool:
             and record.get("cpu_quota_complete") is True)
 
 
-def comparability_check(records: list[dict[str, Any]]) -> dict[str, Any]:
+def comparability_check(
+    records: list[dict[str, Any]],
+    cases: tuple[str, ...] = CASES,
+) -> dict[str, Any]:
     """Fail-closed comparability decision for a complete AB/BA evidence set."""
     reasons: list[str] = []
     ratios: list[float] = []
-    if not records or len(records) != len(alternating_schedule()):
+    expected = len(alternating_schedule(tuple(cases)))
+    if not records or len(records) != expected:
         reasons.append("incomplete AB/BA evidence set")
     for record in records:
         label = str(record.get("case")) + "/" + str(record.get("arm"))
@@ -504,32 +576,63 @@ def build_plan(
     *,
     verify_files: bool = False,
     attestation: pathlib.Path | None = None,
+    cases: tuple[str, ...] = CASES,
 ) -> dict[str, Any]:
-    receipt = load_receipt(receipt_path)
+    requested = tuple(cases)
+    if not requested:
+        raise Refusal("no cases requested")
+    unknown = [c for c in requested if c not in READ_SHA256]
+    if unknown:
+        raise Refusal("unknown case: " + ", ".join(unknown))
+    receipt_cases = tuple(c for c in requested if c in CASES or c in {
+        row["case"] for row in json.loads(receipt_path.read_bytes()).get("cases", [])
+    } if receipt_path.is_file())
+    # Always validate the ultradeep receipt; it pins the tail cases.
+    receipt = load_receipt(receipt_path, cases=tuple(c for c in requested if c in {
+        row["case"] for row in json.loads(receipt_path.read_bytes()).get("cases", [])
+    }))
     gate = readiness(attestation)
-    steps = alternating_schedule()
-    rows = {row["case"]: row for row in receipt["cases"]}
+    steps = alternating_schedule(requested)
+    rows = {row["case"]: row for row in receipt.get("cases", [])}
+    historical_cases = {}
+    for case in requested:
+        if case in rows:
+            row = rows[case]
+            historical_cases[case] = {
+                "candidate_seconds": row["candidate_seconds"],
+                "frozen_seconds": row["frozen_seconds"],
+                "native_delta_seconds": row.get("native_delta_seconds"),
+                "unattributed_delta_seconds": row.get("unattributed_delta_seconds"),
+                "source": "docs/bench/diagnostics/p1-ultradeep-runtime-20261126.json",
+                "source_sha256": RECEIPT_SHA256,
+            }
+        elif case in CONTROL_HISTORICAL:
+            ctrl = CONTROL_HISTORICAL[case]
+            historical_cases[case] = {
+                "candidate_seconds": ctrl["candidate_seconds"],
+                "frozen_seconds": ctrl["frozen_seconds"],
+                "native_delta_seconds": None,
+                "unattributed_delta_seconds": None,
+                "source": ctrl["source"],
+                "source_sha256": ctrl.get("source_sha256"),
+                "control": True,
+            }
+        else:
+            raise Refusal("no historical pin for case: " + case)
     return {
         "schema": SCHEMA,
         "candidate_commit": CANDIDATE_COMMIT,
         "images": {"frozen": FROZEN_IMAGE, "candidate": CANDIDATE_IMAGE},
         "constraints": CONSTRAINTS,
-        "inputs": pinned_inputs(verify_files),
+        "inputs": pinned_inputs(verify_files, cases=requested),
         "output_root": str(output_root),
+        "cases": list(requested),
         "schedule": [
             {**step, "argv": argv_for(step, output_root)} for step in steps
         ],
         "historical_receipt": {
             "sha256": RECEIPT_SHA256,
-            "cases": {
-                case: {
-                    "candidate_seconds": rows[case]["candidate_seconds"],
-                    "frozen_seconds": rows[case]["frozen_seconds"],
-                    "native_delta_seconds": rows[case]["native_delta_seconds"],
-                    "unattributed_delta_seconds": rows[case]["unattributed_delta_seconds"],
-                }
-                for case in CASES
-            },
+            "cases": historical_cases,
         },
         "host_evidence": host_evidence(),
         "dependencies": gate,

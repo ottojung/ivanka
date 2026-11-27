@@ -1,25 +1,24 @@
-"""Pinned source identity of the deployed PX guard stack.
+"""Reviewed source-byte identity for the deployed PX guard stack.
 
-A retry authorization must bind to the guard bytes that the live services
-actually execute, never to a self-declared commit string. Two distinct,
-reviewed checkouts are bound explicitly:
+This module verifies checked-out source bytes and reviewed manifests. It does
+NOT prove which code a live watchdog/supervisor process is executing; live
+service attestation is a separate read-only step that must bind s6/runtime
+pins, /proc identity and active-lease boundaries before any cutover or
+authorization.
 
-* the immutable guard deployment checkout (``DEPLOYED_ROOT``) runs the
-  independent fail-closed watchdog. It may be a COPY build with no ``.git``;
-  its identity is then proven by ``IDENTITY_NAME``, a reviewed manifest whose
-  bytes are pinned here and whose digest chain covers every runtime module.
-* the operator/retry/supervisor control checkout (``CONTROL_ROOT``) runs the
-  PX supervisor and the retry authorization. It is a git checkout whose retry
-  implementation is pinned by ``CONTROL_RETRY_SHA256`` and carries
-  byte-identical copies of the same modules.
+Two explicit, non-self-referential identities are bound by reviewed source
+hashes and operator-attested manifests:
 
-The deployment checkout is pinned to the reviewed PR535 merge, a commit that
-does not contain this verifier. The control checkout is pinned by reviewed
-source bytes instead of a commit hash, so the verifier never has to name its
-own future commit. Neither identity is self-referential. Production
-verification checks BOTH service identities and every byte. A missing
-``.git`` directory is never treated as "nothing to check": without a real
-checkout or the reviewed manifest, verification fails closed.
+* the immutable guard deployment checkout (``DEPLOYED_ROOT``) is the reviewed
+  PR535 merge ``165a86b3``. It may be staged as a git checkout or a COPY
+  image. If ``.git`` exists, HEAD is checked against ``DEPLOYED_HEAD``. In all
+  cases the reviewed manifest and exact module-byte chain are required.
+* the operator/retry/supervisor control checkout (``CONTROL_ROOT``) is created
+  from reviewed main ``07231fa1`` plus this PR. Its identity is pinned by
+  reviewed source hashes (not by an arbitrary/self-referential git hash).
+
+A missing ``.git`` directory never silently skips identity verification. A
+checked-out byte match never implies live process attestation.
 """
 import hashlib
 import json
@@ -29,23 +28,24 @@ from pathlib import Path
 
 COMMIT = re.compile(r"^[a-f0-9]{40}$")
 
-# Operator/retry/supervisor control checkout (created from reviewed main after
-# PR550 plus this PR). Its identity is pinned by reviewed source bytes, never
-# by a commit hash that would point back at this verifier.
+# Operator/retry/supervisor control checkout. Pinned by reviewed source bytes
+# in a separate manifest (not a self-referential git hash).
 CONTROL_ROOT = Path("/workspace/ivanka-px-control-cutover")
+CONTROL_IDENTITY_NAME = "px_control_identity.json"
+CONTROL_IDENTITY_SCHEMA = "ivanka.px.control-source-identity.v1"
+CONTROL_IDENTITY_SHA256 = "87cf8d8e2f1b4097eb3778a0476d0b5bbdc38e3e17a47e9d56d4f7110f243307"
 CONTROL_RETRY_SOURCE = "benchmarks/assembler_bench/px_retry_authorization.py"
 CONTROL_RETRY_SHA256 = "0ba6009b3bb63411e92b159d54e7cb7e62bef9fb7d0cc31113b5320792acb3e6"
+CONTROL_GUARD_SOURCE_SHA256 = "18dd1e1e9a0b4ba3f5ffab96203b8eb861a9ff888e440f529c14cec795d9c94c"
 
-# Immutable guard deployment checkout (reviewed PR535 merge). A COPY build has
-# no .git, so the reviewed manifest below is the authority for its identity.
+# Immutable guard deployment checkout (reviewed PR535 merge). Preserve .git.
 DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr535-staged-20261127")
 DEPLOYED_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
 IDENTITY_NAME = "px_guard_identity.json"
 IDENTITY_SCHEMA = "ivanka.px.guard-source-identity.v1"
 IDENTITY_SHA256 = "7675143e1c2892383b59b2ca17f5fd7845c14945aacf1e175365862d0c6a04d9"
 
-# Origin of the constant-time shared disk reserve (PR #510). Retained evidence;
-# the reviewed deployment head below supersedes it for current guard semantics.
+# Origin of the constant-time shared disk reserve (PR #510). Retained evidence.
 RESERVE_COMMIT = "af1f10d19143fa7a00134a01b56a858ef8a09647"
 GUARD_COMMIT = DEPLOYED_HEAD
 
@@ -69,18 +69,14 @@ WATCHDOG = (
     "benchmarks/fail_closed_guard/lease.py",
     "benchmarks/fail_closed_guard/orphans.py",
 )
-# Critical natural-exit/monitor path: natural exit attested by exact CID, not a
-# lagging poll. Changes to any of these invalidate an authorization.
 NATURAL_EXIT = (
     "benchmarks/fail_closed_guard/natural_exit.py",
     "benchmarks/fail_closed_guard/watch.py",
     "benchmarks/assembler_bench/exploratory_runtime/monitor.py",
 )
 
-# Reviewed bytes of every runtime guard module in the deployment checkout.
-# The three modules changed by PR535 and the five it adds are rebound here;
-# the unchanged modules keep their original digests. This map is identical to
-# the ``sources`` chain in the reviewed identity manifest.
+# Reviewed deployment runtime-module bytes. This is the exact digest chain in
+# the reviewed manifest; module bytes are checked in every deployment form.
 EXPECTED = {
     RESERVE_SOURCE:
         "bffdc90b703475aeb68f31c2df4334cb36a8912ebaba806cd7baee4d2bc18943",
@@ -166,37 +162,20 @@ def _read_identity(base):
     return identity
 
 
-def _verify_control(base):
-    """Prove the operator/retry/supervisor service identity and byte parity."""
-    if not (base / ".git").exists():
-        raise ValueError("control checkout git identity missing")
-    # A real checkout is required; the reviewed retry bytes, not its mutable
-    # commit hash, are the authority for the control service identity.
-    _git_head(base)
-    retry = base / CONTROL_RETRY_SOURCE
-    if (retry.is_symlink() or not retry.is_file()
-            or digest(retry) != CONTROL_RETRY_SHA256):
-        raise ValueError("control PX retry source drift")
-    for name, expected in EXPECTED.items():
-        path = base / name
-        if path.is_symlink() or not path.is_file() or digest(path) != expected:
-            raise ValueError("control PX guard source drift")
+def verify_deployment(root=None):
+    """Verify staged deployment bytes; not live process attestation.
 
-
-def verify(root=None, *, control_root=None):
-    """Return deployed guard digests only for both reviewed service identities.
-
-    With no arguments this is production verification: the control checkout is
-    proven by git HEAD and byte digests, and the deployment checkout is proven
-    by its reviewed manifest and byte digests. An explicit ``root`` is used
-    only by the isolated test fixture; it still requires the reviewed manifest,
-    so removing git can never silently skip identity verification.
+    If ``.git`` exists, HEAD must equal the reviewed ``DEPLOYED_HEAD``. The
+    reviewed manifest and exact module-byte chain are required in every form,
+    including a COPY build that has no ``.git``.
     """
-    production = root is None
     base = Path(root) if root is not None else DEPLOYED_ROOT
-    control = Path(control_root) if control_root is not None else CONTROL_ROOT
-    if production or control_root is not None:
-        _verify_control(control)
+    if (base / ".git").exists():
+        if _git_head(base) != DEPLOYED_HEAD:
+            raise ValueError("deployed checkout HEAD drift")
+        git_state = "git_head_verified"
+    else:
+        git_state = "git_absent_manifest_attested"
     _read_identity(base)
     found = {}
     for name, expected in EXPECTED.items():
@@ -204,4 +183,92 @@ def verify(root=None, *, control_root=None):
         if path.is_symlink() or not path.is_file() or digest(path) != expected:
             raise ValueError("deployed PX guard source drift")
         found[name] = expected
-    return found
+    return {
+        "kind": "staged_deployment_bytes",
+        "root": str(base),
+        "source_commit": DEPLOYED_HEAD,
+        "git_state": git_state,
+        "identity_sha256": IDENTITY_SHA256,
+        "modules": found,
+    }
+
+
+def _read_control_identity(repo_root=None):
+    base = Path(repo_root) if repo_root is not None else root()
+    path = base / "benchmarks" / "assembler_bench" / CONTROL_IDENTITY_NAME
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("control identity manifest missing")
+    if digest(path) != CONTROL_IDENTITY_SHA256:
+        raise ValueError("control identity manifest drift")
+    try:
+        identity = json.loads(path.read_bytes())
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ValueError("control identity manifest unreadable") from exc
+    sources = identity.get("sources")
+    if (not isinstance(identity, dict)
+            or identity.get("schema") != CONTROL_IDENTITY_SCHEMA
+            or not isinstance(sources, dict)):
+        raise ValueError("control identity manifest drift")
+    for name, value in sources.items():
+        if (not isinstance(name, str) or not isinstance(value, str)
+                or not re.fullmatch(r"[a-f0-9]{64}", value)):
+            raise ValueError("control identity manifest drift")
+    return identity
+
+
+def verify_control(control_root=None, *, identity_root=None):
+    """Verify control-checkout source bytes by reviewed hashes.
+
+    The control checkout must be a real git checkout, but its HEAD is not
+    pinned to an arbitrary/self-referential hash. Reviewed source hashes in
+    the control identity manifest are the authority.
+    """
+    base = Path(control_root) if control_root is not None else CONTROL_ROOT
+    if not (base / ".git").exists():
+        raise ValueError("control checkout git identity missing")
+    head = _git_head(base)
+    identity = _read_control_identity(identity_root)
+    found = {}
+    for name, expected in identity["sources"].items():
+        path = base / name
+        if path.is_symlink() or not path.is_file() or digest(path) != expected:
+            raise ValueError("control PX source drift: " + name)
+        found[name] = expected
+    # Self-hash with canonicalized constant to avoid circular manifest pinning.
+    gs_name = "benchmarks/assembler_bench/px_guard_source.py"
+    gs_path = base / gs_name
+    if gs_path.is_symlink() or not gs_path.is_file():
+        raise ValueError("control PX source drift: " + gs_name)
+    gs_text = gs_path.read_text()
+    gs_canon = re.sub(r'CONTROL_GUARD_SOURCE_SHA256 = "[a-f0-9]{64}"',
+                      'CONTROL_GUARD_SOURCE_SHA256 = "' + "0" * 64 + '"',
+                      gs_text, count=1)
+    if hashlib.sha256(gs_canon.encode()).hexdigest() != CONTROL_GUARD_SOURCE_SHA256:
+        raise ValueError("control PX source drift: " + gs_name)
+    found[gs_name] = CONTROL_GUARD_SOURCE_SHA256
+    for name, expected in EXPECTED.items():
+        path = base / name
+        if path.is_symlink() or not path.is_file() or digest(path) != expected:
+            raise ValueError("control PX guard source drift: " + name)
+        found[name] = expected
+    return {
+        "kind": "control_checkout_bytes",
+        "root": str(base),
+        "head": head,
+        "head_pinned": False,
+        "identity_sha256": CONTROL_IDENTITY_SHA256,
+        "sources": found,
+    }
+
+
+def verify(root=None, *, control_root=None):
+    """Return deployed guard digests only when both byte identities verify.
+
+    Production (no args): verifies both pinned roots. Fixture mode
+    (explicit ``root``): verifies staged deployment bytes only and still
+    requires the reviewed manifest; it never silently skips identity checks.
+    """
+    deployment = verify_deployment(root)
+    if root is None or control_root is not None:
+        verify_control(control_root)
+    return deployment["modules"]

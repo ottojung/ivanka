@@ -8,6 +8,7 @@ from pathlib import Path
 from .public_fork_provenance import check as check_fork_provenance
 from .public_validation import check_public_site
 from .publication import SCHEMA
+from .remap_diagnostic import validate_display_contract
 from .site_validation import check_mapping_snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,11 +43,14 @@ def validate_public_site(site=SITE):
                  'id="sampleDialog"', 'id="sampleDialogMetrics"',
                  'id="sampleDialogClose"', 'id="dominanceMatrix"',
                  'id="dominanceSubjects"', 'id="subjectSearch"',
-                 'id="subjectsCount"', 'id="firstTool"',
+                 'id="subjectsCount"', 'id="metricControls"',
                  'id="diagnosticMetric"',
                  'id="diagnosticExplanation"',
                  'id="singleDirection"', 'id="psiExponent"',
-                 'id="psiMetric"', 'id="momentLegend"',
+                 'id="exponentControls"', 'id="momentLegend"',
+                 'id="totalMode"', 'id="pairwiseMode"',
+                 'id="totalPanel"', 'id="pairwisePanel"',
+                 'id="additionalRequirements"', 'id="measurementFilter"',
                  ):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
@@ -93,6 +97,13 @@ def validate_public_site(site=SITE):
     if (not (html.index('class="compare"') < html.index('class="dominance"')
              < html.index('class="samples"'))):
         raise ValueError("single-metric, Ψ matrix, and case table out of order")
+    if ('<details class="subject-panel" id="additionalRequirements">' not in html
+            or 'function drawMode()' not in js
+            or 'BenchRanks.cases(' not in js
+            or 'params.set("mode",state.mode)' not in js):
+        raise ValueError("exclusive comparison modes or folded requirements missing")
+    if any(f'id="{name}"' in html for name in ("psiMetric", "firstTool", "comparisonTool")):
+        raise ValueError("duplicate metric or assembler selectors are forbidden")
     if "id=\"scoreView\"" in html or "id=\"timeView\"" in html:
         raise ValueError("alignment/runtime-only comparison controls forbidden")
     subjects = (source / "subjects.js").read_text()
@@ -118,15 +129,26 @@ def validate_public_site(site=SITE):
                                'class="dom-scope-label"'))):
         raise ValueError("matrix must show a compact verdict and preserve detailed evidence")
     if (any(option not in html for option in
-            ('<option value="all" selected>All</option>',
+            ('<option value="all">All</option>',
              '<option value="0">0</option>',
-             '<option value="1">1</option>',
-             '<option value="2">2</option>')) or
-            'function moment(entry, exponent)' not in subjects or
+             '<option value="1" selected>1</option>',
+             '<option value="2">2</option>',
+             '<option value="Infinity">∞</option>')) or
+            'function moment(entry, exponent, context)' not in subjects or
             'BenchSubjects.moment(' not in js or
             'params.set("psi_r",state.psiExponent)' not in js or
-            'params.set("psi_metric",state.psiMetric)' not in js):
-        raise ValueError("matrix lacks checked-metric Ψ(0,1,2) numeric views")
+            'function primarySubject()' not in js):
+        raise ValueError("matrix lacks shared-metric Ψ(0,1,2,∞) numeric views")
+    if any(token not in js for token in ("function toolLabelHtml(",
+                                          "function na(",
+                                          "function methodNotes(")):
+        raise ValueError("method type and N/A display contract missing")
+    views_text = (source / "compare_views.js").read_text()
+    if ("label(run," not in views_text
+            or "N/A means unavailable" not in views_text):
+        raise ValueError("case detail must show published labels and N/A")
+    if ".method-badge" not in (source / "style.css").read_text():
+        raise ValueError("method type badge style missing")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
     if any(token in js for token in ("setInterval(", "setTimeout(",
@@ -139,6 +161,7 @@ def validate_public_site(site=SITE):
     if report.get("schema") != SCHEMA or not isinstance(report.get("runs"), list):
         raise ValueError("unsupported public result schema")
     checked = check_public_site(source)
+    validate_display_contract(report)
     for run in report["runs"]:
         if not RUN.fullmatch(run["id"]):
             raise ValueError("invalid public run identifier")

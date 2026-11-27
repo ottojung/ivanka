@@ -45,7 +45,12 @@ const BenchSubjects = (() => {
       return {status:"unresolved", paired:0, expected:report.expected_samples,
         proof:null, reason:"No beneficial direction was chosen"};
     }
-    const entry = report.metrics?.[key]?.[a]?.[b];
+    // Core proofs are published in their canonical directions. Reversing
+    // the preference is exactly equivalent to exchanging the two arms.
+    const flipped=(subject==="alignment"&&direction==="lower")||
+      (subject==="runtime"&&direction==="higher");
+    const entry = flipped?report.metrics?.[key]?.[b]?.[a]:
+      report.metrics?.[key]?.[a]?.[b];
     if (entry) return entry;
     if(subject!=="alignment" && subject!=="runtime") {
       const paired=pairedDiagnostics(
@@ -158,13 +163,65 @@ const BenchSubjects = (() => {
       selectedSubjects:result.entries.length,
       description:observed.map(item=>item.label+": "+item.text).join("; ")};
   }
-  function moment(entry, exponent) {
+  function tailSign(differences) {
+    const counts=new Map();
+    for(const d of differences) {
+      if(!Number.isFinite(d))return null;
+      if(d!==0)counts.set(Math.abs(d),(counts.get(Math.abs(d))||0)+Math.sign(d));
+    }
+    for(const magnitude of [...counts.keys()].sort((a,b)=>b-a)) {
+      if(counts.get(magnitude))return Math.sign(counts.get(magnitude));
+    }
+    return 0;
+  }
+  function infinitySign(entry, context) {
+    const proof=entry.proof||entry.subset?.proof;
+    const limit=proof?.psi_at_positive_infinity;
+    if(limit==="+inf")return 1;
+    if(limit==="-inf")return -1;
+    if(typeof limit==="number" && limit!==0 && Number.isFinite(limit))
+      return Math.sign(limit);
+    const counts=entry.observed;
+    if(counts && counts.gains+counts.losses+counts.ties===entry.paired) {
+      if(counts.losses===0)return counts.gains>0?1:0;
+      if(counts.gains===0)return -1;
+    }
+    // A limit of zero can approach from either side. Use the largest
+    // uncancelled absolute paired difference, not the magnitude of the limit.
+    if(!context || typeof BenchRanks==="undefined")return null;
+    const {run,snapshot,a,b}=context;
+    const key=entry.key==="alignment"?"score":entry.key==="runtime"?"seconds":entry.key;
+    const first=BenchRanks.measurements(run,snapshot,key,a);
+    const second=BenchRanks.measurements(run,snapshot,key,b);
+    if(first.some(x=>x.weight!==1)||second.some(x=>x.weight!==1))return null;
+    const other=new Map(second.map(x=>[x.id,x.value]));
+    const differences=first.filter(x=>other.has(x.id)).map(x=>
+      entry.direction==="lower"?other.get(x.id)-x.value:x.value-other.get(x.id));
+    return differences.length===entry.paired?tailSign(differences):null;
+  }
+  function casePsi(delta, exponent) {
+    if(!Number.isFinite(delta))return null;
+    if(delta===0)return 0;
+    if(exponent===Infinity)return Math.sign(delta)*Infinity;
+    if(exponent===0||exponent==="all")return Math.sign(delta);
+    return Math.sign(delta)*Math.pow(Math.abs(delta),exponent);
+  }
+  function winner(result, reverse) {
+    const wins=x=>["full-yes","observed-yes"].includes(x.kind)&&x.label==="YES";
+    return wins(result)&&!wins(reverse)?1:wins(reverse)&&!wins(result)?-1:0;
+  }
+  function moment(entry, exponent, context) {
     // Ψ(r) is an average over PAIRED cases: p_i > 0 favours row A.
     // Multiple metrics cannot be summed: their scales and units differ.
-    if (![0,1,2].includes(exponent) || !entry ||
+    if (![0,1,2,Infinity].includes(exponent) || !entry ||
         !Number.isInteger(entry.paired) || entry.paired<1 ||
         !Number.isInteger(entry.expected) || entry.paired>entry.expected)
       return {value:null, paired:0, expected:entry?.expected||0};
+    if(exponent===Infinity) {
+      const sign=infinitySign(entry,context);
+      return {value:sign===null?null:sign===0?0:sign*Infinity,
+        paired:entry.paired,expected:entry.expected};
+    }
     const proof=entry.proof || entry.subset?.proof;
     const direct=proof?.["psi"+exponent];
     let value=Number.isFinite(direct) ? direct : null;
@@ -192,6 +249,6 @@ const BenchSubjects = (() => {
     }));
     return {status:conjunction(entries), entries};
   }
-  return {criterion,conjunction,evaluate,verdict,observedVerdict,evidence,moment};
+  return {criterion,conjunction,evaluate,verdict,observedVerdict,evidence,moment,winner,tailSign,casePsi};
 })();
 if (typeof module !== "undefined") module.exports = BenchSubjects;

@@ -6,10 +6,17 @@ const BenchViews = (() => {
     ?BenchDistribution:require("./distribution.js");
   const safe=value=>String(value??"").replace(/[&<>"']/g,c=>
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const label=tool=>({iva:"IVA",ivanka:"Ivanka",megahit:"MEGAHIT",
-    haploflow:"Haploflow",abyss:"ABySS",spades:"SPAdes",velvet:"Velvet"})[tool]||tool;
+  const label=(run,tool)=>{
+    const id=String(tool??"").toLowerCase();
+    return run?.tool_labels?.[id]||run?.tool_names?.[id]||
+      ({iva:"IVA",ivanka:"Ivanka",megahit:"MEGAHIT",
+        haploflow:"Haploflow",abyss:"ABySS",spades:"SPAdes",
+        velvet:"Velvet"})[id]||tool;
+  };
+  // A missing measurement is not a zero and is never plotted. N/A is the
+  // display contract for de novo-only metrics of a reference-based method.
   const value=x=>Number.isFinite(x)?x.toLocaleString("en",{
-    maximumSignificantDigits:8}):"—";
+    maximumSignificantDigits:8}):"N/A";
   const keyFor=key=>key==="alignment"?"score":key==="runtime"?"seconds":key;
   function measured(run,snapshot,key,tool) {
     return ranks.measurements(run,snapshot,keyFor(key),tool);
@@ -21,7 +28,7 @@ const BenchViews = (() => {
       const info=ranks.definition(key,catalog);
       if(!info)continue;
       const first=measured(run,snapshot,key,a).find(x=>x.id===alias);
-      const second=measured(run,snapshot,key,b).find(x=>x.id===alias);
+      const second=b?measured(run,snapshot,key,b).find(x=>x.id===alias):null;
       const stage=key==="score"||key==="seconds"?"Core measurements":info.stage;
       if(!groups.has(stage))groups.set(stage,[]);
       groups.get(stage).push({key,info,first:first?.value??null,
@@ -35,16 +42,16 @@ const BenchViews = (() => {
       r.second!==null).length;
     return '<p class="subtle">'+known+' of '+
       groups.reduce((n,g)=>n+g.rows.length,0)+
-      ' metrics have at least one recorded value. — means unavailable, not zero.</p>'+
+      ' metrics have at least one recorded value. N/A means unavailable, not zero.</p>'+
       groups.map(g=>'<section class="sample-metric-group"><h3>'+safe(g.stage)+
         '</h3><table class="sample-metric-table"><thead><tr>'+
-        '<th>Metric and calculation</th><th>'+safe(label(a))+
-        '</th><th>'+safe(label(b))+'</th></tr></thead><tbody>'+
+        '<th>Metric and calculation</th><th'+(b?' class="assembler-blue"':'')+'>'+safe(label(run,a))+
+        '</th>'+(b?'<th class="assembler-red">'+safe(label(run,b))+'</th>':'')+'</tr></thead><tbody>'+
         g.rows.map(row=>'<tr><td><details><summary>'+safe(row.info.label)+
           '</summary><p>'+safe(row.info.description)+'</p><p><strong>Basis:</strong> '+
           safe(row.info.denominator)+'</p></details><small>'+safe(row.info.unit)+
           '</small></td><td class="number">'+value(row.first)+'</td>'+
-          '<td class="number">'+value(row.second)+'</td></tr>').join("")+
+          (b?'<td class="number">'+value(row.second)+'</td>':'')+'</tr>').join("")+
         '</tbody></table></section>').join("");
   }
   function plotMetric(run,snapshot,subject,a,b) {
@@ -60,8 +67,8 @@ const BenchViews = (() => {
     const common=new Set(first.map(x=>x.id));
     const shared=second.filter(x=>common.has(x.id)).length;
     const legend='<p class="distribution-legend"><span class="series-key series-a">'+
-      safe(label(a))+'</span> · '+nA+' measured; '+
-      '<span class="series-key series-b">'+safe(label(b))+'</span> · '+nB+
+      safe(label(run,a))+'</span> · '+nA+' measured; '+
+      '<span class="series-key series-b">'+safe(label(run,b))+'</span> · '+nB+
       ' measured. '+shared+' matched case IDs; missing runs are excluded individually.</p>';
     if(!comparison.pooled.n)return '<article class="matrix-plot">'+title+
       '<p class="hint">No recorded values for either assembler.</p>'+legend+'</article>';
@@ -85,7 +92,7 @@ const BenchViews = (() => {
         y(bin.density).toFixed(2)+'" width="'+
         Math.max(0,x(bin.to)-x(bin.from)-1).toFixed(2)+
         '" height="'+Math.max(0,bottom-y(bin.density)).toFixed(2)+
-        '"><title>'+safe(label(tool))+': '+bin.count+' values, '+
+        '"><title>'+safe(label(run,tool))+': '+bin.count+' values, '+
         value(bin.from)+' to '+value(bin.to)+'</title></rect>';
       const first=draw(firstBin,"series-a",a);
       const second=draw(secondBin,"series-b",b);
@@ -104,7 +111,7 @@ const BenchViews = (() => {
       'normalized within each assembler.</p>';
     return '<article class="matrix-plot">'+title+
       '<svg viewBox="0 0 735 245" role="img" aria-label="'+
-      safe(info.label+', '+label(a)+' and '+label(b)+' histogram and KDE')+'">'+
+      safe(info.label+', '+label(run,a)+' and '+label(run,b)+' histogram and KDE')+'">'+
       '<line class="distribution-axis" x1="'+left+'" x2="'+right+
       '" y1="'+bottom+'" y2="'+bottom+'"></line>'+
       bars+
@@ -113,7 +120,7 @@ const BenchViews = (() => {
   }
   function matrixPlots(run,snapshot,subjects,a,b) {
     return '<section class="matrix-distributions" aria-label="Per-metric comparison plots">'+
-      '<h3>Distributions · '+safe(label(a))+' versus '+safe(label(b))+'</h3>'+
+      '<h3>Distributions · '+safe(label(run,a))+' versus '+safe(label(run,b))+'</h3>'+
       '<p class="hint">Each selected metric has its own axis and units. '+
       'These distributions describe available observations; Ψ dominance is '+
       'computed separately from paired differences.</p>'+

@@ -173,18 +173,122 @@ console.log('PARTIAL_MOMENT_SYMMETRY_OK');
         js=(SITE/"app.js").read_text()
         self.assertIn("const fmtPsi =",js)
 
-    def test_psi_selector_is_independent_and_shareable(self):
+    def test_infinity_sign_and_two_direction_winners(self):
+        self._node_current("""
+const assert=require('assert');
+const calc=require(process.argv[1]);
+const runs=require(process.argv[2]).runs;
+const metric={key:'alignment',label:'Alignment',direction:'higher'};
+for(const run of runs){
+ for(const a of run.tools)for(const b of run.tools){
+  if(a===b)continue;
+  const x=calc.evaluate(run.dominance_matrix,a,b,[metric]);
+  const y=calc.evaluate(run.dominance_matrix,b,a,[metric]);
+  const v=calc.moment(x.entries[0],Infinity).value;
+  const w=calc.moment(y.entries[0],Infinity).value;
+  if(v!==null&&w!==null)assert(v===-w);
+  const vx=calc.observedVerdict(x),vy=calc.observedVerdict(y);
+  assert(calc.winner(vx,vy)===-calc.winner(vy,vx));
+ }
+}
+assert.equal(calc.tailSign([10,-10,-3,2]),-1);
+assert.equal(calc.tailSign([.8,-.8,.5]),1);
+assert.equal(calc.tailSign([3,-3,0]),0);
+const entry={paired:1,expected:3,observed:{gains:1,losses:0,ties:0}};
+assert.equal(calc.moment(entry,Infinity).value,Infinity);
+assert.equal(calc.moment({...entry,observed:{gains:0,losses:1,ties:0}},
+ Infinity).value,-Infinity);
+assert.equal(calc.moment({...entry,observed:{gains:0,losses:0,ties:1}},
+ Infinity).value,0);
+assert.equal(calc.moment({...entry,paired:0},Infinity).value,null);
+const yes={kind:'observed-yes',label:'YES'},no={kind:'observed-no',label:'NO'};
+assert.equal(calc.winner(no,no),0);
+assert.equal(calc.winner(yes,no),1);
+assert.equal(calc.winner(no,yes),-1);
+assert.equal(calc.winner({kind:'partial-yes',label:'YES'},no),0);
+""")
+        css=(SITE/"style.css").read_text()
+        self.assertIn('th[scope="row"]{color:var(--blue)}',css)
+        self.assertIn('th[scope="col"]{color:var(--red)}',css)
+
+    def test_individual_cases_use_matrix_colours_and_four_columns(self):
+        from html.parser import HTMLParser
+
+        class HeaderParser(HTMLParser):
+            in_table = False
+            headers = 0
+            def handle_starttag(self, tag, attrs):
+                if tag == "table" and dict(attrs).get("id") == "resultsTable":
+                    self.in_table = True
+                if self.in_table and tag == "th":
+                    self.headers += 1
+            def handle_endtag(self, tag):
+                if tag == "table":
+                    self.in_table = False
+
+        html=(SITE/"index.html").read_text()
+        js=(SITE/"app.js").read_text()
+        css=(SITE/"style.css").read_text()
+        parser=HeaderParser()
+        parser.feed(html)
+        self.assertEqual(parser.headers,4)
+        self.assertIn('classList.toggle("assembler-blue",!total)',js)
+        self.assertIn('class="assembler-red">Assembler Red',html)
+        self.assertIn('row.psi>0?"assembler-blue"',js)
+        self.assertIn('row.psi<0?"assembler-red"',js)
+        self.assertIn('(total?2:4)',js)
+        self.assertIn('psi_exponent',js)
+        self.assertNotIn('assembler_a_advantage',js)
+        self.assertIn('color:var(--blue)',css)
+        self.assertIn('color:var(--red)',css)
+
+    def test_case_psi_transforms_and_shared_direction(self):
+        self._node_current("""
+const assert=require('assert');
+const c=require(process.argv[1]);
+for(const [d,expected] of [[5,[1,5,25,Infinity]],[-7,[-1,-7,-49,-Infinity]],[0,[0,0,0,0]],[null,[null,null,null,null]]]){
+  assert.deepEqual([0,1,2,Infinity].map(r=>c.casePsi(d,r)),expected);
+}
+const report={metrics:{alignment:{a:{b:{paired:1,expected:1,proof:{psi1:5}}},b:{a:{paired:1,expected:1,proof:{psi1:-5}}}}}};
+assert.equal(c.criterion(report,'a','b','alignment','lower').proof.psi1,-5);
+assert.equal(c.criterion(report,'a','b','alignment','higher').proof.psi1,5);
+""")
+        app=(SITE/"app.js").read_text()
+        html=(SITE/"index.html").read_text()
+        css=(SITE/"style.css").read_text()
+        for removed in ("firstTool","comparisonTool","psiMetric"):
+            self.assertNotIn('id="'+removed+'"',html)
+        self.assertIn('const numeric=state.psiExponent!=="all"&&!additional.length',app)
+        self.assertIn('state.firstTool=a;state.tool=b;',app)
+        self.assertIn('position:sticky',css)
+        self.assertIn('new ResizeObserver(resize)',app)
+        self.assertIn('Ψ(r)',html)
+
+    def test_infinity_glyph_is_unadorned_and_enlarged(self):
         html=(SITE/"index.html").read_text()
         app=(SITE/"app.js").read_text()
         css=(SITE/"style.css").read_text()
-        for option in ('all','0','1','2'):
+        self.assertIn('<option value="Infinity">∞</option>',html)
+        self.assertNotIn('∞ (sign)</option>',html)
+        self.assertIn('infinityMarkup(esc(label))',app)
+        self.assertIn('infinityMarkup(esc(context))',app)
+        self.assertIn('infinityMarkup(esc(fmtPsi(number.value)))',app)
+        self.assertIn('font-size:1.5em',css)
+        self.assertIn('option[value="Infinity"]',css)
+        self.assertIn('font-size:22px',css)
+
+    def test_psi_selector_uses_shared_metric_and_is_shareable(self):
+        html=(SITE/"index.html").read_text()
+        app=(SITE/"app.js").read_text()
+        css=(SITE/"style.css").read_text()
+        for option in ('all','0','1','2','Infinity'):
             self.assertIn('value="'+option+'"',html)
-        self.assertIn('id="psiMetric"',html)
+        self.assertNotIn('id="psiMetric"',html)
         self.assertIn('id="momentLegend"',html)
-        self.assertIn('psiExponent:"all"',app)
-        self.assertIn('state.psiMetric=params.get("psi_metric")',app)
+        self.assertIn('psiExponent:"1"',app)
+        self.assertIn('const chosen=primarySubject()',app)
         self.assertIn('params.set("psi_r",state.psiExponent)',app)
-        self.assertIn('params.set("psi_metric",state.psiMetric)',app)
+        self.assertNotIn('params.set("psi_metric",state.psiMetric)',app)
         self.assertIn('const moment=numeric?BenchSubjects.moment(',app)
         self.assertIn('const moment=numeric?BenchSubjects.moment(',app)
         self.assertIn('.psi-matrix .psi-positive .dom-verdict{color:var(--blue)}',css)
@@ -227,7 +331,7 @@ console.log('ALL_HXB2_PAIRWISE_COMPARISONS_PARTIAL');
         self.assertIn('Object.entries(catalog)',source)
         self.assertIn('key==="alignment"||key==="runtime"',source)
         self.assertIn('drawSubjectControls();',source)
-        self.assertIn('id="addDiagnosticSubject"',source)
+        self.assertIn('const selected=[chosen,...additional]',source)
         ranks=(SITE/"rankings.js").read_text()
         self.assertIn('snapshot.tools?.[tool]?.values?.[key]',ranks)
         self.assertIn('function summary(',ranks)

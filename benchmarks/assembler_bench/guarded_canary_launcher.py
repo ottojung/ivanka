@@ -45,12 +45,76 @@ ALLOWED_MOUNT_TARGETS = frozenset(
 FASTA_SUFFIXES = (".fa", ".fasta", ".fna", ".fas", ".faf", ".mpfa")
 FORBIDDEN_PATH_COMPONENTS = frozenset(
     {"hidden-truth", "haplotypes.fasta", "reference", "truth", "panel", "hxb2"})
-MICALL_TAIL = (
+MICALL_TAIL_DENOVO = (
     "/ivanka-timer.py", "/results/timing.json", "micall", "analyze", "sample",
     "/reads/R1.fastq.gz", "/reads/R2.fastq.gz", "/results", "--denovo",
     "--keep_scratch", "--bad_cycles_csv", "/results/bad_cycles.csv",
     "--all_projects",
 )
+# The reference-based diagnostic removes exactly one token. Every other
+# launcher, mount, guard and MiCall option remains byte-for-byte identical to
+# the frozen de-novo contract; this is not a new or looser command shape.
+MICALL_TAIL_REMAP = tuple(
+    token for token in MICALL_TAIL_DENOVO if token != "--denovo")
+MICALL_TAIL = MICALL_TAIL_DENOVO
+# The two read basenames are the original FASTQ filenames. The aliases used by
+# the historical canary remain the default, so existing callers are unchanged.
+PINNED_READS = ("R1.fastq.gz", "R2.fastq.gz")
+SAFE_READ_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,126}$")
+
+
+def _check_reads(reads) -> tuple[str, str]:
+    if (not isinstance(reads, (tuple, list)) or len(reads) != 2
+            or not all(isinstance(name, str) and SAFE_READ_NAME.fullmatch(name)
+                       and name.endswith(".fastq.gz") for name in reads)
+            or reads[0] == reads[1]):
+        raise UnsafeCommand(f"unsafe original read basenames: {reads!r}")
+    return reads[0], reads[1]
+
+
+def micall_tail(*, denovo: bool = True,
+                reads=PINNED_READS) -> tuple[str, ...]:
+    """Return the exact allowlisted MiCall tail for one execution mode.
+
+    Only ``denovo`` changes between modes. ``reads`` substitutes the two
+    original FASTQ basenames into the same two pinned tail positions; it is
+    validated against a strict basename allowlist, never a path.
+    """
+    if type(denovo) is not bool:
+        raise UnsafeCommand(f"denovo must be a bool: {denovo!r}")
+    first, second = _check_reads(reads)
+    tail = list(MICALL_TAIL_DENOVO)
+    tail[tail.index("/reads/" + PINNED_READS[0])] = "/reads/" + first
+    tail[tail.index("/reads/" + PINNED_READS[1])] = "/reads/" + second
+    if not denovo:
+        tail.remove("--denovo")
+    return tuple(tail)
+
+
+def verify_isolated_reads(directory, *, reads, sha256s) -> bool:
+    """Prove a read mount contains exactly two hash-pinned original FASTQs.
+
+    Hard links are regular files and are accepted; symbolic links are not, so
+    nothing outside the mounted directory can be reached through them.
+    """
+    first, second = _check_reads(reads)
+    if (not isinstance(sha256s, (tuple, list)) or len(sha256s) != 2
+            or not all(re.fullmatch(r"[0-9a-f]{64}", value or "")
+                       for value in sha256s)):
+        raise UnsafeCommand("read hash pins must be two SHA-256 digests")
+    root = Path(directory).resolve()
+    if not root.is_dir():
+        raise UnsafeCommand("isolated read mount is not a directory")
+    names = sorted(path.name for path in root.iterdir())
+    if names != sorted((first, second)):
+        raise UnsafeCommand("isolated read mount exposes unexpected entries")
+    for name, expected in ((first, sha256s[0]), (second, sha256s[1])):
+        path = root / name
+        if path.is_symlink() or not path.is_file():
+            raise UnsafeCommand("isolated read must be a regular hard link")
+        if sha256_file(path) != expected:
+            raise UnsafeCommand("isolated read hash pin mismatch: " + name)
+    return True
 # Exact argv shape before the MiCall tail; ``None`` marks a caller-pinned value
 # that is validated separately (paths, digest, name, numeric limits).
 EXPECTED_ARGV_PREFIX = (
@@ -177,13 +241,16 @@ def _validate_bounded_number(token: str, prefix: str, low: int, high: int, label
     return number
 
 
-def assert_reference_blind(argv, *, allowed_values, expected_sources):
+def assert_reference_blind(argv, *, allowed_values, expected_sources,
+                           denovo: bool = True, reads=PINNED_READS):
     """Validate an *exact* allowlisted command; fail closed on anything else.
 
     ``allowed_values`` is the exact set of non-mount tokens the caller built;
     ``expected_sources`` is the exact set of three resolved bind sources.  A
     FASTA reference cannot be confused with FASTQ input because the check uses
-    basename suffixes, not the loose ``".fa"`` substring.
+    basename suffixes, not the loose ``".fa"`` substring.  ``denovo=False``
+    selects the reference-based diagnostic tail: the only difference is the
+    absence of the ``--denovo`` token.
     """
     if not isinstance(argv, (list, tuple)) or not argv or not all(isinstance(a, str) for a in argv):
         raise UnsafeCommand("command must be a non-empty list of strings")
@@ -228,7 +295,8 @@ def assert_reference_blind(argv, *, allowed_values, expected_sources):
                 part in FORBIDDEN_PATH_COMPONENTS for part in token.split("/")):
             raise ReferenceLeak(f"reference/truth reached the assembler argv: {token}")
 
-    if len(non_mount) != len(EXPECTED_ARGV_PREFIX) + len(MICALL_TAIL):
+    tail = micall_tail(denovo=denovo, reads=reads)
+    if len(non_mount) != len(EXPECTED_ARGV_PREFIX) + len(tail):
         raise UnsafeCommand("argv length differs from exact guarded launcher contract")
     for position, (expected, token) in enumerate(zip(EXPECTED_ARGV_PREFIX, non_mount)):
         if expected is not None and token != expected:
@@ -238,9 +306,11 @@ def assert_reference_blind(argv, *, allowed_values, expected_sources):
     _validate_bounded_number("--timeout=" + non_mount[16], "--timeout=", 1, 2400, "timeout")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", non_mount[19]):
         raise UnsafeCommand("image is not an exact sha256 digest")
-    tail = tuple(non_mount[-len(MICALL_TAIL):])
-    if tail != MICALL_TAIL:
+    observed_tail = tuple(non_mount[-len(tail):])
+    if observed_tail != tail:
         raise UnsafeCommand("integrated MiCall tail differs from exact contract")
+    if not denovo and "--denovo" in non_mount:
+        raise UnsafeCommand("reference-based remap must not carry --denovo")
     return True
 
 
@@ -257,8 +327,15 @@ def build_command(
     cpus: int = 2,
     memory_bytes: int = 4_000_000_000,
     timeout: int = 2398,
+    denovo: bool = True,
+    reads=PINNED_READS,
 ) -> list[str]:
-    """Build the exact guarded Podman+MiCall argv, then validate it closed."""
+    """Build the exact guarded Podman+MiCall argv, then validate it closed.
+
+    ``denovo=False`` builds the reference-based diagnostic analogue by
+    removing only the ``--denovo`` token; the mount allowlist, reference-blind
+    argv check, CPU/memory/timeout ceilings and receipt contract are shared.
+    """
     for label, value, high in (("cpus", cpus, 32), ("timeout", timeout, 2400)):
         if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= high:
             raise UnsafeCommand(f"{label} outside [1, {high}]: {value!r}")
@@ -288,11 +365,11 @@ def build_command(
     for mount in mounts:
         argv.extend(("-v", mount))
     argv.extend(("--entrypoint", "/opt/venv/bin/python", image))
-    argv.extend(MICALL_TAIL)
+    argv.extend(micall_tail(denovo=denovo, reads=reads))
     allowed_values = frozenset(
         value for value in argv if value not in mounts) | frozenset({"podman"})
     assert_reference_blind(
-        argv, allowed_values=allowed_values,
+        argv, allowed_values=allowed_values, denovo=denovo, reads=reads,
         expected_sources=frozenset({reads_source, results_source, timer_source}))
     return argv
 

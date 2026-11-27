@@ -129,6 +129,31 @@ remain incomplete. Preserve all historical evidence and do not claim
 full qualification. **Intent 004 is end-to-end:** an isolated Ivanka
 contig-to-truth score cannot establish success or failure.
 
+## Shared benchmark host storage discipline
+
+Keep scientific evidence, source, exact image provenance, and reproducible
+results; avoid retaining regenerable build and transfer intermediates.
+
+- Reuse existing verified binaries, environments, and source-pinned images
+  when they match the required identity. Do not copy entire OCI stores or
+  retain duplicate image transfer tarballs. A prospective binary-only image
+  may share verified immutable base layers; do not edit or retag frozen images.
+- For local development tests (not benchmark execution), prefer an explicit,
+  agent-owned disposable Cargo target directory. Use Antonina's registered
+  cache helper when available. Avoid debug symbols and incremental artifacts
+  when the test does not need them. Never use a shared target directory for
+  concurrent unrelated builds, or change production/benchmark build flags
+  merely to save space.
+- Retain necessary binaries, receipts, logs and scientific outputs outside any
+  disposable cache. Before retiring a cache or transfer artifact, prove it
+  is regenerable, no live process uses it, and no unique evidence is lost;
+  record exact paths, identity/provenance and measured reclaimed bytes.
+- Benchmark scratch retirement requires the existing worker and evidence
+  guards. Preserve ambiguous or unresolved attempts; do not remove frozen
+  artifacts, substitute receipts, rerun successful arms, or bypass the shared
+  worker lock. The independent workspace reserve remains binding; do not
+  introduce a project-specific PX incremental storage ceiling.
+
 ## Comments and source readability
 
 Write **useful, timeless comments**. Explain the reason behind a non-obvious

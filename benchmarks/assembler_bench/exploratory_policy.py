@@ -9,6 +9,7 @@ EXPERIMENTAL = frozenset(("skesa", "idba-ud", "minia", "ray", "unicycler",
                           "tadpole", "soapdenovo2", "fermi-lite", "penguin", "savage-denovo"))
 SHA40 = re.compile(r"[a-f0-9]{40}\Z")
 SHA64 = re.compile(r"[a-f0-9]{64}\Z")
+MIN_WORKSPACE_FREE_BYTES = 32 * 1024**3
 
 
 PROVENANCE_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121/receipts")
@@ -72,7 +73,7 @@ def checked(path, *, provenance_root=None):
             or data["qualifying"] is not False or len(names) != 10
             or set(names) != EXPERIMENTAL or len(set(names)) != len(names)
             or set(data["baseline_assemblers"]) != ORIGINAL
-            or policy["min_workspace_free_bytes"] != 32 * 1024**3
+            or policy["min_workspace_free_bytes"] != MIN_WORKSPACE_FREE_BYTES
             or policy["dedicated_image_store_root"] != "/workspace/ivanka-exploratory-podman-20261121"
             or policy["dedicated_podman_storage_conf"] != "/workspace/ivanka-exploratory-ten-20261121/storage.conf"
             or policy["max_concurrent_exploratory_workers"] != 1

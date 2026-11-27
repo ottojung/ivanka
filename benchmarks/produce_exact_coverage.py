@@ -65,16 +65,18 @@ def summarize(values):
     }
 
 
-def generate(fastq1, fastq2, conseq, output, overlap_size=70):
-    from micall.utils.exact_coverage import calculate_exact_coverage
+def generate(fastq1, fastq2, conseq, output, overlap_size=70, *, calculate=None):
     name, sequence = longest_max_conseq(conseq)
+    if calculate is None:
+        from micall.utils.exact_coverage import calculate_exact_coverage
+        calculate = calculate_exact_coverage
     # MiCall's read_contigs recognizes 'ref' and 'sequence' column names.
     stream = StringIO()
     writer = csv.DictWriter(stream, ["ref", "sequence"], lineterminator="\n")
     writer.writeheader()
     writer.writerow({"ref": "longest_MAX", "sequence": sequence})
     stream.seek(0)
-    bases, inner, _ = calculate_exact_coverage(
+    bases, inner, _ = calculate(
         Path(fastq1), Path(fastq2), stream, overlap_size=overlap_size)
     values = bases["longest_MAX"]
     overlapped = inner["longest_MAX"]

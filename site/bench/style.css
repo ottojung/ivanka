@@ -177,7 +177,7 @@ section.dominance,section.diagnostics{margin-top:61px}
 .psi-view-controls select{min-height:38px;min-width:94px;padding:8px;
   background:var(--surface);color:var(--text);border:1px solid var(--border);
   border-radius:7px;font-size:13px}
-.psi-view-controls #psiMetric{max-width:240px}
+
 .psi-matrix .psi-positive .dom-verdict{color:var(--blue)}
 .psi-matrix .psi-negative .dom-verdict{color:var(--red)}
 .psi-matrix .psi-zero .dom-verdict,
@@ -280,7 +280,91 @@ section.dominance,section.diagnostics{margin-top:61px}
 }
 
 
+/* Method type travels with the tool name wherever a tool is displayed. */
+.method-badge{display:inline-block;font-size:10px;font-weight:500;line-height:1.3;
+  padding:1px 5px;border:1px solid var(--border);border-radius:999px;
+  color:var(--muted);white-space:normal;vertical-align:middle}
+.method-note{font-size:12px;line-height:1.55;color:var(--muted);
+  padding:8px 10px;margin:10px 0;border-left:2px solid var(--cyan);
+  background:var(--surface)}
+
 /* The top notice is the only execution-status region; overviews remain observational. */
 .global-notice[hidden]{display:none}
 .global-notice{font-size:12px;line-height:1.6}
 .compare .bar-count:empty{visibility:hidden}
+
+/* Matrix axis colours match the winner colours, including method labels. */
+.psi-matrix th[scope="row"]{color:var(--blue)}
+.psi-matrix th[scope="col"]{color:var(--red)}
+.psi-matrix th[scope] .method-badge{color:inherit}
+
+/* The case table uses the same blue (row/first) and red (column/second) roles as Ψ. */
+.samples .assembler-blue,.sample-metric-table .assembler-blue{color:var(--blue)}
+.samples .assembler-red,.sample-metric-table .assembler-red{color:var(--red)}
+.samples #resultsTable th button.assembler-blue span,.samples #resultsTable th button.assembler-red span,
+.samples #resultsTable th button .method-badge{color:inherit}
+
+
+/* Infinity is a mathematical glyph, not a small typographic ornament. */
+.infinity-symbol{display:inline-block;font-family:"DejaVu Sans","Segoe UI Symbol",sans-serif;
+  font-size:1.5em;line-height:.9;vertical-align:-.075em;letter-spacing:0}
+.psi-view-controls #psiExponent:has(option[value="Infinity"]:checked){
+  font-family:"DejaVu Sans","Segoe UI Symbol",sans-serif;font-size:22px;line-height:1.15}
+.psi-view-controls #psiExponent option[value="Infinity"]{font-size:22px;
+  font-family:"DejaVu Sans","Segoe UI Symbol",sans-serif}
+.psi-view-controls #psiExponent option:not([value="Infinity"]){font-size:13px}
+.psi-matrix .dom-verdict:has(.infinity-symbol){font-size:16px;line-height:1.1;white-space:nowrap}
+
+
+/* Both sticky bars share the workspace boundary (sections 02 through 04). */
+.metric-workspace{--metric-bar-height:74px;display:flow-root}
+.metric-workspace>section.compare,.metric-workspace>section.dominance{display:contents}
+.metric-workspace>.compare>.section-heading,.metric-workspace>.dominance>.section-heading{margin-top:61px}
+.sticky-metric-controls,.sticky-exponent-controls{position:sticky;z-index:12;
+  background:var(--bg);padding:10px 12px;border:1px solid var(--border);
+  border-radius:8px;box-shadow:0 5px 10px #060a1060;margin-bottom:14px}
+.sticky-metric-controls{top:0}
+.sticky-exponent-controls{top:var(--metric-bar-height);z-index:11}
+.sticky-exponent-controls label{display:flex;flex-direction:column;gap:7px;
+  font-size:11px;letter-spacing:.09em;color:var(--muted)}
+.sticky-exponent-controls #exponentMode{flex:1;min-width:180px;font-size:12px;margin:0}
+.subject-panel>h3{margin:0 0 7px;font-size:17px}
+.samples .filters{grid-template-columns:minmax(150px,2fr) minmax(140px,1fr)}
+.psi-matrix button[aria-pressed="true"]{outline:2px solid var(--cyan);outline-offset:-2px}
+.samples #psiColumn{white-space:nowrap}
+@media(max-width:470px){
+  .sticky-metric-controls{grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:7px;padding:7px}
+  .sticky-metric-controls label:first-child{grid-column:auto}
+  .sticky-metric-controls label{min-width:0}
+  .sticky-metric-controls select{padding:7px 4px;min-height:38px}
+  .sticky-exponent-controls{flex-wrap:nowrap;padding:7px;gap:8px}
+  .sticky-exponent-controls #exponentMode{min-width:0;font-size:11px}
+  .samples .filters{grid-template-columns:1fr}
+}
+
+
+/* Exclusive comparison modes, with shared sticky metric controls. */
+.comparison-mode-heading{margin-top:61px}
+.metric-workspace .mode-heading{font-size:20px;margin:22px 0 12px;letter-spacing:-.025em}
+.mode-control{display:flex;flex-direction:column;gap:7px;flex:none}
+.mode-switch{display:flex;border:1px solid var(--border);border-radius:8px;padding:3px;background:var(--surface);height:42px}
+.mode-switch button{border:0;background:transparent;color:var(--muted);padding:5px 16px;border-radius:5px;cursor:pointer;font-weight:650;font-size:13px}
+.mode-switch button[aria-pressed="true"]{background:var(--elev);color:var(--cyan)}
+.mode-switch button:focus-visible{outline:2px solid var(--cyan)}
+.sticky-metric-controls>label[for="diagnosticMetric"]{flex:1;min-width:0;max-width:none}
+.sticky-metric-controls>label[for="singleDirection"]{flex:0 1 170px}
+.subject-panel>summary{cursor:pointer;font-weight:650;color:var(--text)}
+.subject-panel>summary #subjectsCount{float:right;padding:0;font-weight:400}
+.subject-panel:not([open]){padding:14px 18px}
+.subject-panel[open]>summary{margin-bottom:12px}
+#resultsTable:has(#redCaseHeading[hidden]){min-width:0}
+#resultsTable:has(#redCaseHeading[hidden]) th:last-of-type{width:auto}
+.sample-metric-table:has(th:nth-child(2):last-child) th:first-child{width:72%}
+@media(max-width:650px){
+  .sticky-metric-controls{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:8px}
+  .sticky-metric-controls .mode-control{grid-column:1/-1}
+  .mode-switch button{flex:1}
+  .mode-control>.meta-label{display:none}
+  .sticky-metric-controls>label{min-width:0;max-width:none}
+  .subject-panel>summary #subjectsCount{float:none;display:block;margin-left:17px}
+}

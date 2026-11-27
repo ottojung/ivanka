@@ -61,20 +61,45 @@ CONSTRAINTS = {
     "network": "none",
     "micall_flags": ["--denovo", "--keep_scratch", "--all_projects"],
 }
-DEPENDENCIES = {
-    "PR535": "433e4ea8630018b2549e581a5c36ca9aed58bdb4",
-    "PR536": "6e6886a824a7cb0f1b812f1c24c233f8100a9d8b",
+# Exact merged SOURCE identities. A merge is a source fact only: it never
+# proves which guard PX and the independent watchdog actually run. Deployment
+# is pinned separately below and describes the older live guard stack.
+SOURCE_PINS = {
+    "PR535": {
+        "state": "merged",
+        "head": "39317f021f4e5c00f5da859bcdcf755de4c6d353",
+        "merge_commit": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
+    },
+    "PR536": {
+        "state": "merged",
+        "head": "6e6886a824a7cb0f1b812f1c24c233f8100a9d8b",
+        "merge_commit": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
+    },
 }
-# Exact guard identity of the independently reviewed PR536 head. A merge into
-# main alone never proves that PX and the independent watchdog run this code;
-# readiness below requires an explicit deployed-identity attestation instead.
-GUARD_IDENTITY = {
-    "PR536": "6e6886a824a7cb0f1b812f1c24c233f8100a9d8b",
-    "natural_exit_sha256": "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
-    "watch_sha256": "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96",
-    "monitor_sha256": "b0bbefa221ff092acf33021b0203f2b07a912c250fc0893e8fdd59dad642293c",
-    "p1_helper_sha256": "b950ff947da8144271d8f4f0064fe72b4d6b1a492591e36610b942a553f21a27",
-    "p1_harness_sha256": "c193ca79b23fc6f2190b92ae7ce70d46de582a3fd71d9c17d09c6b6704d185fb",
+# Retained for callers that only need the exact source heads (never deployment).
+DEPENDENCIES = {name: pin["head"] for name, pin in SOURCE_PINS.items()}
+
+# Still-old deployed truth, read from the live s6 run scripts and the staged
+# tree. The reviewed guard source head, the deployed root HEAD and the two
+# service pins are separate immutable values; they are checked separately rather
+# than assumed equal. These digests were recomputed in that deployed tree.
+DEPLOYED_PINS = {
+    "guard_source_head": "6e6886a824a7cb0f1b812f1c24c233f8100a9d8b",
+    "deployed_root_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
+    "px_service_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
+    "watchdog_service_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
+    "guard_sha256": {
+        "natural_exit_sha256":
+            "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
+        "watch_sha256":
+            "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96",
+        "monitor_sha256":
+            "b0bbefa221ff092acf33021b0203f2b07a912c250fc0893e8fdd59dad642293c",
+        "p1_helper_sha256":
+            "b950ff947da8144271d8f4f0064fe72b4d6b1a492591e36610b942a553f21a27",
+        "p1_harness_sha256":
+            "c193ca79b23fc6f2190b92ae7ce70d46de582a3fd71d9c17d09c6b6704d185fb",
+    },
 }
 COMPARABILITY = {
     "required_container_cpu_max": "200000 100000",
@@ -281,15 +306,18 @@ def contention_check(host: dict[str, Any]) -> dict[str, Any]:
 
 
 def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
-    """Describe whether a DEPLOYED, exact-identity guard may be considered.
+    """Describe whether an exact-identity guard may be considered.
 
-    A mere "merged" state is never enough: PR536 merged into main while PR530
-    was still the running guard. The attestation must name the exact deployed
-    guard head, its five guard-file digests, both service pins, fresh watchdog
-    ALIVE, a clear lease and an attested idle boundary. Even a ready result
-    leaves this module with execution='blocked' and no execute mode.
+    Source pins and deployment pins are deliberately separate. Every dependency
+    must be attested at its exact MERGED source head and merge commit, while the
+    deployed truth must still be the older PR536 guard stack: its reviewed guard
+    source head, deployed root HEAD and two service pins are independent
+    immutable values, each checked on its own. While PR535's merged source is
+    not deployed, readiness stays blocked: a merge record is not a deployment
+    and must never be reported as ready. Even a ready-shaped record leaves
+    execution='blocked' with no execute mode.
     """
-    all_blocked = sorted(DEPENDENCIES)
+    all_blocked = sorted(SOURCE_PINS)
     if attestation is None or not attestation.is_file():
         return {"ready": False, "blocked_by": all_blocked,
                 "reasons": ["deployment attestation file missing"]}
@@ -304,29 +332,50 @@ def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
 
     blocked: list[str] = []
     reasons: list[str] = []
-    for name, head in DEPENDENCIES.items():
+    for name, pin in SOURCE_PINS.items():
         state = record.get(name)
-        if not isinstance(state, dict) or state.get("state") != "deployed":
+        if not isinstance(state, dict) or state.get("state") != pin["state"]:
             blocked.append(name)
-            reasons.append(name + " not attested as deployed")
-        elif state.get("head") != head:
+            reasons.append(name + " source not attested as merged")
+            continue
+        if state.get("head") != pin["head"]:
             blocked.append(name)
-            reasons.append(name + " deployed head mismatch")
+            reasons.append(name + " merged source head mismatch")
+        if state.get("merge_commit") != pin["merge_commit"]:
+            blocked.append(name)
+            reasons.append(name + " merge commit mismatch")
+
+    deployed = record.get("deployed_sources") if isinstance(
+        record.get("deployed_sources"), dict) else {}
+    # A source with no pinned deployed head cannot become deployed by
+    # attestation: the live guard stack is pinned separately below. Readiness
+    # therefore stays blocked for that source either way.
+    blocked.append("PR535")
+    if deployed.get("PR535") is False or "PR535" not in deployed:
+        reasons.append("PR535 merged source is still not deployed")
+    else:
+        reasons.append("PR535 deployed claim has no pinned deployed head")
+    if deployed.get("PR536") is not True:
+        blocked.append("PR536")
+        reasons.append("PR536 deployed truth not attested")
 
     guard = record.get("deployed_guard")
-    expected_files = {key: value for key, value in GUARD_IDENTITY.items()
-                      if key != "PR536"}
     if not isinstance(guard, dict):
         blocked.append("deployed_guard")
         reasons.append("deployed guard identity missing")
     else:
         checks = (
-            ("head", GUARD_IDENTITY["PR536"], "deployed head mismatch"),
-            ("tree_clean", True, "deployed guard tree not clean"),
-            ("guard_sha256", expected_files, "guard file digest mismatch"),
-            ("px_service_head", GUARD_IDENTITY["PR536"], "PX service pin mismatch"),
-            ("watchdog_service_head", GUARD_IDENTITY["PR536"],
+            ("source_head", DEPLOYED_PINS["guard_source_head"],
+             "reviewed guard source pin mismatch"),
+            ("root_head", DEPLOYED_PINS["deployed_root_head"],
+             "deployed guard root HEAD mismatch"),
+            ("px_service_head", DEPLOYED_PINS["px_service_head"],
+             "PX service pin mismatch"),
+            ("watchdog_service_head", DEPLOYED_PINS["watchdog_service_head"],
              "watchdog service pin mismatch"),
+            ("guard_sha256", DEPLOYED_PINS["guard_sha256"],
+             "guard file digest mismatch"),
+            ("tree_clean", True, "deployed guard tree not clean"),
             ("watchdog_alive_fresh", True, "watchdog ALIVE not fresh"),
             ("lease_clear", True, "shared lease not clear"),
             ("idle_boundary_attested", True, "idle boundary not attested"),
@@ -484,7 +533,8 @@ def build_plan(
         },
         "host_evidence": host_evidence(),
         "dependencies": gate,
-        "deployed_guard_identity": GUARD_IDENTITY,
+        "source_pins": SOURCE_PINS,
+        "deployed_pins": DEPLOYED_PINS,
         "comparability_plan": COMPARABILITY,
         "execution": "blocked",
         "scientific_gates_changed": False,
@@ -515,6 +565,7 @@ def main() -> None:
         target = check_output_root(args.emit_plan.parent)
         if args.emit_plan.name != "plan.json":
             raise Refusal("plan file must be plan.json in a fresh root")
+        target.mkdir(parents=True, exist_ok=True)
         (target / "plan.json").write_text(text)
     else:
         sys.stdout.write(text)

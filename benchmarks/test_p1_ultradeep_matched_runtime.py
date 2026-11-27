@@ -153,22 +153,23 @@ class HostEvidenceTest(unittest.TestCase):
 
 
 class GuardTest(unittest.TestCase):
-    def test_merged_only_attestation_stays_blocked(self) -> None:
+    def test_incomplete_attestation_stays_blocked(self) -> None:
         record = attestation()
-        for name in plan.SOURCE_PINS:
-            record[name] = {"state": "deployed", "head": plan.SOURCE_PINS[name]["head"]}
+        record["deployed_guard"]["watchdog_alive_fresh"] = False
+        record["deployed_guard"]["lease_clear"] = False
         with tempfile.TemporaryDirectory() as tmp:
             gate = plan.readiness(write_attestation(pathlib.Path(tmp), record))
         self.assertFalse(gate["ready"])
-        self.assertIn("PR535", gate["blocked_by"])
-        self.assertIn("PR536", gate["blocked_by"])
+        self.assertIn("deployed_guard", gate["blocked_by"])
+        self.assertIn("watchdog ALIVE not fresh", gate["reasons"])
+        self.assertIn("shared lease not clear", gate["reasons"])
 
-    def test_truthful_still_old_deployment_is_not_reported_ready(self) -> None:
+    def test_truthful_reviewed_deployed_guard_is_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gate = plan.readiness(write_attestation(pathlib.Path(tmp)))
-        self.assertFalse(gate["ready"])
-        self.assertEqual(gate["blocked_by"], ["PR535"])
-        self.assertIn("PR535 merged source is still not deployed", gate["reasons"])
+        self.assertTrue(gate["ready"])
+        self.assertEqual(gate["blocked_by"], [])
+        self.assertEqual(gate["reasons"], [])
 
     def test_deployed_pins_are_separate_and_exact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -216,13 +217,13 @@ class GuardTest(unittest.TestCase):
             with self.assertRaises(plan.Refusal):
                 plan.check_output_root(plan.PROTECTED_ROOTS[0] / "new-root")
 
-    def test_plan_is_inert_with_truthful_still_old_attestation(self) -> None:
+    def test_plan_is_inert_with_truthful_attested_deployed_guard(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp) / "out"
             attestation_path = write_attestation(pathlib.Path(tmp))
             built = plan.build_plan(RECEIPT, root, attestation=attestation_path)
-            self.assertFalse(built["dependencies"]["ready"])
-            self.assertEqual(built["dependencies"]["blocked_by"], ["PR535"])
+            self.assertTrue(built["dependencies"]["ready"])
+            self.assertEqual(built["dependencies"]["blocked_by"], [])
             self.assertEqual(built["execution"], "blocked")
             self.assertFalse(built["scientific_gates_changed"])
             self.assertFalse(built["formal_qualification"])

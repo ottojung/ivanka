@@ -126,12 +126,15 @@ def binding(root, arm, prior_digest=None):
             or receipt.get("attempt") != sched.MAX_INFRA_ATTEMPTS):
         raise ValueError("only exhausted infrastructure failure may be authorized")
     preserved = _preserved_attempts(root, arm)
-    # Re-derive the deployed guard identity instead of trusting a constant.
+    # Re-derive both service identities instead of trusting a constant. The
+    # guard stack digest map is the leaf of the reviewed manifest chain.
     guard = guard_source.verify()
     return {"schema": SCHEMA, "arm": arm_identity(arm),
             "prior_receipt_sha256": digest,
             "preserved_attempt_sha256": preserved,
             "guard_commit": GUARD_COMMIT,
+            "guard_control_source_sha256": guard_source.CONTROL_RETRY_SHA256,
+            "guard_identity_sha256": guard_source.IDENTITY_SHA256,
             "reserve_origin_commit": guard_source.RESERVE_COMMIT,
             "guard_source_sha256": guard[guard_source.RESERVE_SOURCE],
             "guard_stack_sha256": guard,

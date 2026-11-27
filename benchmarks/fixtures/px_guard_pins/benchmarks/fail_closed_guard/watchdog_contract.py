@@ -17,7 +17,9 @@ from pathlib import Path
 from . import heartbeat, lease, watchdog
 from .errors import GuardExceeded
 
-SUPPORTED_MODES = ("pilot",)
+# COPY-only overlay builds are supervised by the same watchdog through their
+# exact session-leader process group; arbitrary "build" mode stays refused.
+SUPPORTED_MODES = ("pilot", "copy_overlay")
 
 
 def is_bound(path, graphroot):

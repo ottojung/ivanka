@@ -355,6 +355,17 @@ class SupervisorArgvBindingTests(AttestationHarness):
         blocked = live.attest(phase="post_cutover", **opts)
         self.assertIn("flag_count_mismatch:supervisor:--supervise", blocked["blockers"])
 
+    def test_extra_unknown_supervisor_token_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        self.proc_entry(SUPERVISOR,
+                        self._supervisor_cmd(self.project, self.registry)
+                        + " --unknown-flag",
+                        self._supervisor_env(live.NEW_ROOT, self.registry))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertFalse(blocked["ready"], blocked["blockers"])
+        self.assertTrue(any("unexpected_argv_token:supervisor" in b
+                            for b in blocked["blockers"]), blocked["blockers"])
+
     def test_wrong_px_root_env_is_blocker(self):
         opts = self.build("post_cutover", supervisor="running")
         env = self._supervisor_env(live.NEW_ROOT, self.registry)
@@ -399,6 +410,62 @@ class SupervisorArgvBindingTests(AttestationHarness):
         opts["worker_journal"] = self.project / "other.jsonl"
         with self.assertRaisesRegex(ValueError, "canonical lease journal"):
             live.attest(phase="post_cutover", **opts)
+
+
+class WatchdogArgvBindingTests(AttestationHarness):
+    def _watchdog_cmd(self, *, graphroot=None, extra=""):
+        return ("python3 -m fail_closed_guard.watchdog_cli --root %s "
+                "--graphroot %s%s" % (self.project, graphroot or live.GRAPHROOT,
+                                      extra))
+
+    def _watchdog_env(self):
+        return {
+            "PYTHONPATH": "%s:%s/benchmarks" % (live.NEW_ROOT, live.NEW_ROOT),
+            "WATCHDOG_CODE": live.NEW_ROOT,
+            "WATCHDOG_ROOT": str(self.project),
+            "WATCHDOG_GRAPHROOT": str(live.GRAPHROOT),
+        }
+
+    def test_duplicate_watchdog_graphroot_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        self.proc_entry(WATCHDOG,
+                        self._watchdog_cmd(extra=" --graphroot /foreign/store"),
+                        self._watchdog_env())
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertFalse(blocked["ready"], blocked["blockers"])
+        self.assertIn("option_count_mismatch:watchdog:--graphroot",
+                      blocked["blockers"])
+
+    def test_foreign_watchdog_graphroot_value_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        self.proc_entry(WATCHDOG, self._watchdog_cmd(graphroot="/foreign/store"),
+                        self._watchdog_env())
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertFalse(blocked["ready"], blocked["blockers"])
+        self.assertIn("option_value_mismatch:watchdog:--graphroot",
+                      blocked["blockers"])
+
+    def test_extra_unknown_watchdog_token_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        self.proc_entry(WATCHDOG,
+                        self._watchdog_cmd(extra=" --unknown-option /foreign"),
+                        self._watchdog_env())
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertFalse(blocked["ready"], blocked["blockers"])
+        self.assertTrue(any("unexpected_argv_token:watchdog" in b
+                            for b in blocked["blockers"]), blocked["blockers"])
+
+    def test_legitimate_watchdog_options_remain_ready(self):
+        opts = self.build("post_cutover", supervisor="running")
+        cmd = ("python3 -m fail_closed_guard.watchdog_cli "
+               "--root %s --storage-conf %s --graphroot %s --stop %s "
+               "--rss-limit 4000000000"
+               % (self.project, self.project / "storage.conf", live.GRAPHROOT,
+                  self.project / "STOP"))
+        self.proc_entry(WATCHDOG, cmd, self._watchdog_env())
+        result = live.attest(phase="post_cutover", **opts)
+        self.assertTrue(result["ready"], result["blockers"])
+        self.assertTrue(result["attests_live_process_identity"])
 
 
 if __name__ == "__main__":

@@ -33,6 +33,13 @@ GRAPHROOT = Path("/workspace/ivanka-exploratory-podman-20261121/store")
 REGISTRY = PROJECT_ROOT / "private-frozen-ten-pilot-registry-20gib-20261124.json"
 S6_ROOT = Path("/run/s6/legacy-services")
 
+# Options the pinned watchdog run script may append in addition to the bound
+# --root/--graphroot. Recognised by name so an unknown token cannot hide a
+# second configuration source; the attestation binds the pinned values through
+# the script pins, service env and ALIVE graphroot cross-check separately.
+WATCHDOG_OPTION_NAMES = ("--storage-conf", "--stop", "--min-free", "--reserve",
+                         "--rss-limit", "--wall-seconds", "--max-age")
+
 # Reviewed bytes of the old live guard (14-file PR536 map). Kept as explicit
 # evidence for the pre-cutover phase; it is never used to attest new code.
 OLD_MODULES = {
@@ -203,12 +210,22 @@ def _check_code_root(label, code, table, pid, expected, checks, blockers,
     return check
 
 
-def _check_argv(label, argv, *, module, values, flags, checks, blockers):
-    """Bind exact option values, flag counts and the module; no duplicates."""
+def _check_argv(label, argv, *, module, values, flags, checks, blockers,
+                allowed_options=(), allowed_flags=()):
+    """Bind module, exact option values/flag counts and the whole argv grammar.
+
+    Tokens before ``-m`` belong to the pinned s6 launcher and are not a
+    configuration source. From ``-m`` onward every token must be the module, a
+    known option with its value, or a known flag: an extra token cannot smuggle
+    configuration past the value and count bindings.
+    """
     check = {"argv": argv}
     ok = True
-    if argv.count("-m") != 1 or (argv[argv.index("-m") + 1:argv.index("-m") + 2]
-                                 or [None])[0] != module:
+    module_count = argv.count("-m")
+    module_index = argv.index("-m") if module_count == 1 else None
+    actual_module = ((argv[module_index + 1:module_index + 2] or [None])[0]
+                     if module_index is not None else None)
+    if module_count != 1 or actual_module != module:
         _block(blockers, "module_argv_mismatch:" + label)
         ok = False
     for option, expected in values.items():
@@ -230,6 +247,32 @@ def _check_argv(label, argv, *, module, values, flags, checks, blockers):
         if count != 1:
             _block(blockers, "flag_count_mismatch:%s:%s" % (label, flag))
             ok = False
+
+    options = set(values) | set(allowed_options)
+    known_flags = set(flags) | set(allowed_flags)
+    tail = argv[module_index:] if module_index is not None else []
+    unexpected = []
+    index = 0
+    while index < len(tail):
+        token = tail[index]
+        if token == "-m" or token == module:
+            index += 1
+        elif token in options:
+            if index + 1 >= len(tail) or tail[index + 1].startswith("-"):
+                _block(blockers, "option_value_missing:%s:%s" % (label, token))
+                ok = False
+                index += 1
+            else:
+                index += 2
+        elif token in known_flags:
+            index += 1
+        else:
+            unexpected.append(token)
+            index += 1
+    if unexpected:
+        _block(blockers, "unexpected_argv_token:%s:%s" % (label, ",".join(unexpected)))
+        ok = False
+    check["unexpected_tokens"] = unexpected
     checks[label + "_argv_values"] = check
     return ok
 
@@ -249,7 +292,8 @@ def _check_env(label, env, expected_env, checks, blockers):
 
 def _check_service(label, *, service, expected, presence, variable, module,
                    values, flags, env_expected, proc_root, s6_root, table,
-                   checks, blockers, module_reader, head_reader, git_present):
+                   checks, blockers, module_reader, head_reader, git_present,
+                   allowed_options=(), allowed_flags=()):
     s6_pid = _s6_pid(Path(s6_root) / service)
     check = {"s6_pid": s6_pid}
     if presence == "absent":
@@ -279,7 +323,8 @@ def _check_service(label, *, service, expected, presence, variable, module,
         _block(blockers, "pythonpath_mismatch:" + label)
     check["cmdline"] = proc["cmdline"]
     _check_argv(label, proc["argv"], module=module, values=values, flags=flags,
-                checks=checks, blockers=blockers)
+                checks=checks, blockers=blockers,
+                allowed_options=allowed_options, allowed_flags=allowed_flags)
     _check_env(label, proc["environ"], env_expected, checks, blockers)
     check.update(_check_code_root(label, code, table, s6_pid, expected,
                                   checks, blockers, module_reader=module_reader,
@@ -364,7 +409,8 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
         "watchdog", service="ivanka-watchdog", expected=expected,
         presence="running", variable="WATCHDOG_CODE",
         module="fail_closed_guard.watchdog_cli",
-        values={"--root": str(root)}, flags=(),
+        values={"--root": str(root), "--graphroot": str(graphroot)}, flags=(),
+        allowed_options=WATCHDOG_OPTION_NAMES,
         env_expected={"WATCHDOG_ROOT": str(root),
                       "WATCHDOG_GRAPHROOT": str(graphroot)},
         proc_root=proc_root, s6_root=s6_root, table=table,

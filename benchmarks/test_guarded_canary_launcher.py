@@ -220,6 +220,111 @@ class GuardianLauncherTests(unittest.TestCase):
             self.attempt, case="coverage_hole-s002", attempt_id="attempt-9",
             argv=self.argv)["status"], "attempted")
 
+    def _build(self, *, denovo):
+        return launcher.build_command(
+            image="sha256:" + "a" * 64,
+            reads_dir=self.reads,
+            attempt_dir=self.attempt,
+            timer=self.timer,
+            cidfile=self.attempt / "cid",
+            storage_root=self.store,
+            runroot=self.runroot,
+            name="podman-name-remap-test",
+            denovo=denovo,
+        )
+
+    def test_reference_based_tail_removes_exactly_one_token(self):
+        remap = self._build(denovo=False)
+        self.assertNotIn("--denovo", remap)
+        # The only difference from the frozen de-novo command is that token:
+        # mounts, timer, options, digest and all paths stay byte-identical.
+        denovo = list(self.argv)
+        denovo[denovo.index("--name") + 1] = "podman-name-remap-test"
+        denovo.remove("--denovo")
+        self.assertEqual(remap, denovo)
+        self.assertEqual(launcher.MICALL_TAIL_REMAP,
+                         tuple(t for t in launcher.MICALL_TAIL_DENOVO
+                               if t != "--denovo"))
+        for mode in (True, False):
+            allowed, sources = self._allowlists(
+                remap if not mode else list(self.argv))
+            self.assertTrue(launcher.assert_reference_blind(
+                remap if not mode else self.argv, allowed_values=allowed,
+                expected_sources=sources, denovo=mode))
+
+    def test_reference_based_argv_fails_closed_on_leaks_and_mode_mismatch(self):
+        remap = self._build(denovo=False)
+        allowed, sources = self._allowlists(remap)
+        # Reintroducing --denovo with a de-novo allowlist is a mode mismatch;
+        # the remap validator rejects it even if a caller allows the token.
+        reintroduced = list(remap)
+        reintroduced.insert(reintroduced.index("--keep_scratch"), "--denovo")
+        with self.assertRaises(launcher.UnsafeCommand):
+            launcher.assert_reference_blind(
+                reintroduced, allowed_values=frozenset(allowed | {"--denovo"}),
+                expected_sources=sources, denovo=False)
+        for leak in ("/reads/haplotypes.fa", "/reads/reference.fasta",
+                     "/reads/hidden-truth/haplotypes.fasta"):
+            altered = list(remap)
+            altered[altered.index("/reads/R1.fastq.gz")] = leak
+            allowed_leak, sources_leak = self._allowlists(altered)
+            with self.assertRaises(launcher.ReferenceLeak):
+                launcher.assert_reference_blind(
+                    altered, allowed_values=allowed_leak,
+                    expected_sources=sources_leak, denovo=False)
+        extra = list(remap)
+        extra.extend(("-v", f"{self.root}:/panel:ro"))
+        with self.assertRaises(launcher.UnsafeCommand):
+            launcher.assert_reference_blind(
+                extra, allowed_values=allowed, expected_sources=sources,
+                denovo=False)
+        with self.assertRaises(launcher.UnsafeCommand):
+            self._build(denovo="false")
+
+    def test_original_read_basenames_parametrized_without_relaxing_guard(self):
+        reads = ("S001_L001_R1_001.fastq.gz", "S001_L001_R2_001.fastq.gz")
+        argv = launcher.build_command(
+            image="sha256:" + "a" * 64,
+            reads_dir=self.reads, attempt_dir=self.attempt, timer=self.timer,
+            cidfile=self.attempt / "cid", storage_root=self.store,
+            runroot=self.runroot, name="podman-name-remap-original",
+            denovo=False, reads=reads)
+        for name in reads:
+            self.assertIn("/reads/" + name, argv)
+        self.assertNotIn("/reads/R1.fastq.gz", argv)
+        self.assertNotIn("--denovo", argv)
+        mounts = [argv[i + 1] for i, token in enumerate(argv[:-1]) if token == "-v"]
+        allowed = frozenset(t for t in argv if t not in mounts)
+        sources = frozenset(m.rsplit(":", 2)[0] for m in mounts)
+        self.assertTrue(launcher.assert_reference_blind(
+            argv, allowed_values=allowed, expected_sources=sources,
+            denovo=False, reads=reads))
+        with self.assertRaises(launcher.UnsafeCommand):
+            launcher.build_command(
+                image="sha256:" + "a" * 64, reads_dir=self.reads,
+                attempt_dir=self.attempt, timer=self.timer,
+                cidfile=self.attempt / "cid", storage_root=self.store,
+                runroot=self.runroot, name="podman-name-remap-original",
+                denovo=False, reads=("../escape.fastq.gz", reads[1]))
+        self.assertEqual(len(launcher.micall_tail(denovo=True, reads=reads)) -
+                         len(launcher.micall_tail(denovo=False, reads=reads)), 1)
+
+    def test_remap_receipt_binds_distinct_argv(self):
+        launcher.setup_bad_cycles(self.attempt)
+        remap = self._build(denovo=False)
+        receipt = launcher.write_receipt(
+            self.attempt, case="R001", attempt_id="remap-R001-1", argv=remap)
+        self.assertEqual(receipt["qualification_claim"], "NONE")
+        self.assertNotEqual(receipt["argv_sha256"], launcher.sha256_bytes(
+            json.dumps(self.argv, sort_keys=True).encode()))
+        self.assertEqual(launcher.verify_receipt(
+            self.attempt, case="R001", attempt_id="remap-R001-1",
+            argv=remap)["status"], "attempted")
+        with self.assertRaises(launcher.UnsafeCommand):
+            launcher.verify_receipt(
+                self.attempt, case="R001", attempt_id="remap-R001-1",
+                argv=self.argv)
+
 
 if __name__ == "__main__":
     unittest.main()

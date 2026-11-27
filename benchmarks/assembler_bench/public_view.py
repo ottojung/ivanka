@@ -15,6 +15,7 @@ import re
 from .current_inputs import PANEL, PHYSICAL_MANIFEST
 from .current_validation_v2 import V6_COHORT_SHA
 from .public_psi import public_matrix
+from . import px_cohort_scheduler as sched
 from . import px_timing_semantics as timing
 from .public_vocabulary import find_tokens
 from .px_ram_semantics import (COMPARABLE_KEY, LAUNCHER_DIAGNOSTIC, METHOD_KEY,
@@ -256,6 +257,24 @@ def _join_scores(run, assemblers, joined):
                     sample["failures"].append(tool)
                 sample["score"][tool] = None
                 sample["outcome"] = "failure"
+            elif case.get("superseded"):
+                # An authorized retry replaced only a prior infrastructure
+                # failure. Retire that failure from the public row but keep
+                # its full evidence under measurement_evidence.
+                for prior in case["superseded"]:
+                    if (not isinstance(prior, dict)
+                            or prior.get("outcome") != "failure"
+                            or prior.get("failure_reason")
+                            not in sched.INFRASTRUCTURE_FAILURE_REASONS):
+                        raise ValueError(
+                            "only infrastructure failures may be superseded")
+                failures = sample.setdefault("failures", [])
+                if tool in failures:
+                    failures.remove(tool)
+                if not failures and any(
+                        value is not None
+                        for value in sample.get("score", {}).values()):
+                    sample["outcome"] = "success"
             arm = sample.setdefault("diagnostics", {}).setdefault(tool, {})
             if isinstance(case.get("diagnostics"), dict) and case["diagnostics"]:
                 arm.update(case["diagnostics"])
@@ -276,7 +295,8 @@ def _join_scores(run, assemblers, joined):
                         "input_sha256", "output_sha256", "exact_coverage",
                         "method", "scorer_source_sha256", "source_commit",
                         "adapter_commit", "image_sha256", "outcome",
-                        "failure_reason", timing.RUNTIME_KEY,
+                        "failure_reason", "attempt", "superseded",
+                        "retry_authorization_sha256", timing.RUNTIME_KEY,
                         timing.LAUNCHER_KEY, *timing.PROOF_KEYS):
                 if key in case:
                     evidence_row[key] = case[key]
@@ -321,7 +341,8 @@ def merge_evidence(report, evidence):
                 # Canonicalize previously published orders, without dropping
                 # unknown/duplicate entries that validation must still reject.
                 order = {tool: index for index, tool in enumerate(tools)}
-                sample["failures"].sort(key=lambda tool: (order.get(tool, len(order)), tool))
+                sample["failures"].sort(
+                    key=lambda tool: (order.get(tool, len(order)), tool))
         for tool in tools:
             item = by_id.get(tool, {})
             cases = [case for case in item.get("cases", [])

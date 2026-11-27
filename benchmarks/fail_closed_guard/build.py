@@ -1,6 +1,7 @@
 """Build-mode identity: no container CID, so bind the launcher tree."""
 import os
 import signal
+import time
 
 from . import identity, proc, tree
 from .errors import GuardExceeded, TeardownError
@@ -38,3 +39,36 @@ def stop_group(binding, proc_handle, timeout=5):
     except ProcessLookupError:
         return {"process_group": pgid, "stopped": True}
     raise TeardownError("build_group_survived")
+
+
+def stop_group_by_id(pgid, *, snapshot=None, sleep=None, clock=None,
+                     timeout=5, verify=None, absent=None):
+    """Signal only an exactly verified live group; prove absence conservatively.
+
+    ``verify(pgid, table)`` must confirm the bound immutable identity before
+    every signal and ``absent(pgid, table)`` must confirm it is gone before a
+    proof is claimed. With either callback missing the call refuses, so a
+    reused PGID is never signalled or reported as reaped.
+    """
+    pgid = int(pgid)
+    if pgid <= 0 or verify is None or absent is None:
+        raise TeardownError("identity_unverified")
+    now = clock if clock is not None else time.monotonic
+    nap = sleep if sleep is not None else time.sleep
+    take = snapshot if snapshot is not None else proc.snapshot
+    deadline = now() + timeout
+    table = take()
+    if not verify(pgid, table):
+        raise TeardownError("identity_lost_before_signal")
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    while True:
+        table = take()
+        if absent(pgid, table) and not verify(pgid, table):
+            return {"process_group": pgid, "stopped": True,
+                    "method": "verified_exact_group", "kernel_enforcement": False}
+        if now() >= deadline:
+            raise TeardownError("build_group_survived")
+        nap(min(0.1, max(0.0, deadline - now())))

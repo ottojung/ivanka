@@ -112,7 +112,7 @@ class SupervisorTests(unittest.TestCase):
     def fake_runner(self, calls, stop_after=None):
         seen = {"n": 0}
 
-        def runner(arm, case):
+        def runner(arm, case, *, reserve_bytes):
             calls.append(sched.receipt_id(arm))
             seen["n"] += 1
             if stop_after is not None and seen["n"] >= stop_after:
@@ -236,12 +236,35 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(result["status"], "stopped")
         self.assertEqual(calls, [])
 
+    def test_runner_type_error_after_side_effect_is_never_replayed(self):
+        calls = []
+
+        def runner(arm, case, *, reserve_bytes=None):
+            calls.append(reserve_bytes)
+            raise TypeError("guarded runner internal failure")
+
+        supervisor = self.supervisor(runner)
+        with self.assertRaisesRegex(TypeError, "guarded runner internal failure"):
+            supervisor._run_runner({}, None, 3 * 1024**3)
+        self.assertEqual(calls, [3 * 1024**3])
+
+    def test_runner_without_reservation_keyword_is_rejected_without_execution(self):
+        calls = []
+
+        def runner(arm, case):
+            calls.append((arm, case))
+
+        supervisor = self.supervisor(runner)
+        with self.assertRaises(TypeError):
+            supervisor._run_runner({}, None, 3 * 1024**3)
+        self.assertEqual(calls, [])
+
     def test_unclassified_runner_failure_is_rejected(self):
         registry = self.registry()
         self.handoff_all(registry)
         calls = []
 
-        def bad(arm, case):
+        def bad(arm, case, *, reserve_bytes):
             calls.append(1)
             return {"outcome": "failure", "failure_reason": "spurious",
                     "alias": arm["alias"], "cohort": arm["cohort"],
@@ -255,7 +278,7 @@ class SupervisorTests(unittest.TestCase):
         registry = self.registry()
         self.handoff_all(registry)
 
-        def wrong_alias(arm, case):
+        def wrong_alias(arm, case, *, reserve_bytes):
             return {"outcome": "success", "output_path": self.out,
                     "alias": "PX-R053", "cohort": arm["cohort"],
                     "input_sha256": arm["input_sha256"], "seconds": 1.0}

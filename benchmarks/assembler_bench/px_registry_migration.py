@@ -224,10 +224,12 @@ class InjectedCaseSource:
                 _InjectedCase(alias, cohort, self.hashes[(cohort, alias)]))
         self.validate()
 
-    def validate(self):
+    def validate(self, *, collect_hashes=False):
         coverage = sum(len(cases) for cases in self._cases.values())
         if coverage != sched.PHYSICAL_COUNT + sched.SYNTHETIC_COUNT:
             raise MigrationError("case source coverage changed")
+        return ({key: dict(value) for key, value in self.hashes.items()}
+                if collect_hashes else None)
 
     def cases(self, cohort):
         return list(self._cases[cohort])
@@ -251,15 +253,8 @@ def _receipt_case_hashes(root):
 
 def _source_case_hashes(source):
     """Hash every planned case from the real source; never trust plan input."""
-    source.validate()
-    hashes = {}
-    for cohort in sched.COHORTS:
-        for case in source.cases(cohort):
-            key = cohort + "," + case.alias
-            value = case.input_hashes()
-            if key in hashes and hashes[key] != value:
-                raise MigrationError("conflicting source case hashes: " + key)
-            hashes[key] = value
+    hashes = {cohort + "," + alias: value for (cohort, alias), value
+              in source.validate(collect_hashes=True).items()}
     expected = {
         cohort + ",PX-" + prefix + f"{position:03d}"
         for cohort, count, prefix in (

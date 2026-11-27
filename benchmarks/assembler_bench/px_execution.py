@@ -156,15 +156,30 @@ def classify(state):
     return "error"
 
 
+def _verify_case_binding(arm, case):
+    """Never attribute an execution or diagnostic to a different input pair."""
+    if case.alias != arm["alias"] or case.cohort != arm["cohort"]:
+        raise ValueError("PX case identity differs from dispatched arm")
+    hashes = case.input_hashes()
+    if hashes != arm["input_sha256"]:
+        raise ValueError("PX input hash differs from dispatched arm")
+    return hashes
+
+
 def run_guarded(registry, baseline, arm, case, output_dir, operate,
                 reserve_bytes=RESERVE_BYTES):
     """Delegate ONE case to the locked launcher; never loop over a cohort."""
+    _verify_case_binding(arm, case)
     report = {"alias": arm["alias"], "cohort": arm["cohort"],
               "input_sha256": arm["input_sha256"]}
     argv = micall_argv(arm["tool_id"], arm["image_sha256"], case,
                        output_dir)
     state = operate(registry, baseline, arm["tool_id"], "pilot", argv,
                     reserve_bytes)
+    # A changed input invalidates attribution even if the container reported
+    # success. Preserve its raw artifacts; do not create a terminal science
+    # receipt or silently retry a different source.
+    _verify_case_binding(arm, case)
     outcome = classify(state)
     report["runner_receipt_sha256"] = state.get("log_sha256")
     cleanup = state.get("pilot_cleanup")
@@ -217,6 +232,7 @@ def _exact_report(output_dir, case, receipt):
     """Generate an exact-coverage report or fail closed with the reason."""
     from . import exact_cache, px_metrics
 
+    _verify_case_binding(receipt, case)
     report_path = Path(output_dir) / "exact_coverage.json"
     if report_path.is_file():
         return json.loads(report_path.read_bytes())
@@ -245,13 +261,13 @@ def _exact_report(output_dir, case, receipt):
         return {"status": "unavailable",
                 "unavailable_reason": f"exact coverage module unavailable: {exc}"}
     try:
+        hashes = _verify_case_binding(receipt, case)
         temp.replace(csv_path)
         report.update({
             "method": px_metrics.METHOD,
             "source_conseq_sha256": receipt["output_sha256"],
             "source_image_sha256": arm_image(receipt),
-            "source_fastq_sha256": [case.input_hashes()["R1"],
-                                    case.input_hashes()["R2"]],
+            "source_fastq_sha256": [hashes["R1"], hashes["R2"]],
             "micall_exact_coverage_module_sha256": exact_cache.SOURCE_SHA256,
             "exact_coverage_sha256": sched.sha256_file(csv_path),
             "exact_coverage_csv": str(csv_path),
@@ -298,6 +314,7 @@ def _bound_posthoc(root, arm, case, receipt, output_dir, scorer, scorer_sha):
 def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
                                scorer_sha=None):
     """Seal posthoc measurements; the supervisor retires with teardown proof."""
+    _verify_case_binding(arm, case)
     output_dir = Path(root) / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
     if scorer is None:
         from .px_posthoc import build_default_scorer
@@ -310,7 +327,7 @@ def posthoc_extract_and_retain(root, arm, case, receipt, *, scorer=None,
     path, digest = sched.write_results(root, arm, result)
     Path(str(path) + ".sha256").write_text(digest + "\n")
     exact = _exact_report(output_dir, case, receipt)
-    hashes = case.input_hashes()
+    hashes = _verify_case_binding(arm, case)
     px_metrics.record(root, arm, output_dir,
                       fastq_sha256=[hashes["R1"], hashes["R2"]],
                       exact_report=exact)
@@ -336,8 +353,7 @@ def reconcile_terminal(root, registry, source, *, scorer=None, scorer_sha=None,
             continue
         receipt = sched.verify_receipt(root, parsed)
         case = source.case(parsed["cohort"], parsed["alias"])
-        if case.input_hashes() != parsed["input_sha256"]:
-            raise ValueError("terminal receipt input hash differs from source")
+        _verify_case_binding(parsed, case)
         _reconcile_arm(root, parsed, case, receipt, active=None,
                        active_sha=None, scorer=scorer, scorer_sha=scorer_sha,
                        reconciled=reconciled, failures=failures)
@@ -363,10 +379,11 @@ def _reconcile_arm(root, parsed, case, receipt, *, active, active_sha,
                             active, active_sha)
     path, digest = sched.write_results(root, parsed, result)
     Path(str(path) + ".sha256").write_text(digest + "\n")
-    hashes = case.input_hashes()
+    exact = _exact_report(output, case, receipt)
+    hashes = _verify_case_binding(parsed, case)
     px_metrics.record(root, parsed, output,
                       fastq_sha256=[hashes["R1"], hashes["R2"]],
-                      exact_report=_exact_report(output, case, receipt))
+                      exact_report=exact)
     reconciled.append({"alias": parsed["alias"], "cohort": parsed["cohort"],
                        "result_sha256": digest})
 
@@ -490,16 +507,13 @@ def main():
                                     aliases=args.aliases)
         print(json.dumps(result, sort_keys=True))
         return
-    plan = sched.build_plan(args.registry, source, args.root)
     if args.plan:
+        plan = sched.build_plan(args.registry, source, args.root)
         print(json.dumps({"tools": plan["tools"], "total": plan["total_arms"],
                           "pending": plan["pending_arms"]}, sort_keys=True))
         return
-    if not plan["tools"]:
-        parser.error("no source-bound image/pilot proof for any explorer")
-    for tool in plan["tools"]:
-        if not sup.verify_handoff(args.root, args.registry, tool):
-            raise sup.HandoffRequired("missing verified handoff for " + tool)
+    # BackgroundSupervisor.start is the authoritative fresh plan/handoff
+    # check. Hashing the entire cohort here as well adds no new protection.
     baseline = checked_baseline(args.root, exploratory_policy.checked(args.registry))
     if baseline is None:
         raise ValueError("missing or changed PX storage baseline")

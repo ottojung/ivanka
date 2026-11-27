@@ -216,6 +216,9 @@ def extract(root, arm, output_dir, *, fastq_sha256, exact_report=None):
             or sched.sha256_file(artifact) != receipt["output_sha256"]):
         raise ValueError("final MAX output is missing or changed since receipt")
     reads = _assert_fastqs(fastq_sha256)
+    expected = receipt["input_sha256"]
+    if reads != [expected.get("R1"), expected.get("R2")]:
+        raise ValueError("diagnostic FASTQ hashes differ from terminal receipt")
     final_metric, lengths = _final_max_metric(artifact, receipt["output_sha256"])
     diagnostics = {
         "schema": SCHEMA, "tool_id": arm["tool_id"], "cohort": arm["cohort"],

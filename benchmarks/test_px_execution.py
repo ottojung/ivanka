@@ -215,6 +215,50 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(report["seconds"], 12.5)
         self.assertEqual(report["alias"], case.alias)
 
+    def test_run_guarded_refuses_changed_input_before_launch(self):
+        case = exe.load_physical(self.physical)[0]
+        arm = {"tool_id": "skesa", "cohort": case.cohort,
+               "alias": case.alias, "input_sha256": case.input_hashes(),
+               "source_commit": "a" * 40, "adapter_commit": "a" * 40,
+               "image_sha256": "b" * 64}
+        case.r1.write_bytes(b"changed after plan")
+        calls = []
+        with self.assertRaisesRegex(ValueError, "input hash differs"):
+            exe.run_guarded("reg", "base", arm, case, self.px / "out",
+                            lambda *args: calls.append(args))
+        self.assertEqual(calls, [])
+
+    def test_run_guarded_refuses_drift_after_execution(self):
+        case = exe.load_physical(self.physical)[0]
+        arm = {"tool_id": "skesa", "cohort": case.cohort,
+               "alias": case.alias, "input_sha256": case.input_hashes(),
+               "source_commit": "a" * 40, "adapter_commit": "a" * 40,
+               "image_sha256": "b" * 64}
+        calls = []
+
+        def operate(*args):
+            calls.append(args)
+            case.r2.write_bytes(b"changed during execution")
+            return {"status": "finished"}
+
+        with self.assertRaisesRegex(ValueError, "input hash differs"):
+            exe.run_guarded("reg", "base", arm, case, self.px / "out", operate)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(list((self.px / "receipts").glob("*.json")), [])
+
+    def test_run_guarded_refuses_other_alias_even_with_identical_read_bytes(self):
+        case, other = exe.load_physical(self.physical)[:2]
+        self.assertEqual(case.input_hashes(), other.input_hashes())
+        arm = {"tool_id": "skesa", "cohort": case.cohort,
+               "alias": case.alias, "input_sha256": case.input_hashes(),
+               "source_commit": "a" * 40, "adapter_commit": "a" * 40,
+               "image_sha256": "b" * 64}
+        calls = []
+        with self.assertRaisesRegex(ValueError, "case identity differs"):
+            exe.run_guarded("reg", "base", arm, other, self.px / "out",
+                            lambda *args: calls.append(args))
+        self.assertEqual(calls, [])
+
     def test_run_guarded_seals_pinned_in_container_clock(self):
         case = exe.load_physical(self.physical)[0]
         arm = {"tool_id": "skesa", "cohort": "physical",
@@ -583,6 +627,30 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn("no final MAX", record["metrics"]["exact_coverage"]["unavailable_reason"])
         self.assertEqual(digest, sched.sha256_file(path))
         self.assertTrue((Path(str(path) + ".sha256")).is_file())
+
+    def test_diagnostics_refuse_read_hashes_not_bound_to_receipt(self):
+        plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)
+        arm = plan["pending"][0]
+        output = self._arm_output(arm)
+        self._record_success(arm, output)
+        with self.assertRaisesRegex(ValueError, "FASTQ hashes differ"):
+            exe.extract_diagnostics(self.px, arm, output,
+                                    fastq_sha256=["0" * 64, "1" * 64])
+        self.assertFalse((self.px / "diagnostics").exists())
+
+    def test_posthoc_refuses_changed_input_before_scoring(self):
+        source = self.source()
+        plan = sched.build_plan(self.promoted_registry(), source, self.px)
+        arm = plan["pending"][0]
+        case = source.case(arm["cohort"], arm["alias"])
+        output = self._arm_output(arm)
+        receipt = self._record_success(arm, output)
+        case.r1.write_bytes(b"changed after terminal receipt")
+        with patch.object(exe, "_bound_posthoc") as scorer:
+            with self.assertRaisesRegex(ValueError, "input hash differs"):
+                exe.posthoc_extract_and_retain(self.px, arm, case, receipt)
+            scorer.assert_not_called()
+        self.assertFalse((self.px / "results").exists())
 
     def test_retention_refuses_without_complete_diagnostics(self):
         plan = sched.build_plan(self.promoted_registry(), self.source(), self.px)

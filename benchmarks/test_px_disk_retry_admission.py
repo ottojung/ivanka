@@ -94,7 +94,7 @@ class DiskRetryAdmissionTests(unittest.TestCase):
         return sched.build_plan(self.registry, self.source, self.px)["pending"][0]
 
     def disk_failure(self, calls):
-        def runner(case_arm, case):
+        def runner(case_arm, case, *, reserve_bytes):
             calls.append(case_arm["alias"])
             return {"outcome": "failure", "failure_reason": "disk_stop",
                     "alias": case_arm["alias"], "cohort": case_arm["cohort"],
@@ -199,7 +199,7 @@ class DiskRetryAdmissionTests(unittest.TestCase):
         arm = self.first_arm()
         calls = []
 
-        def runner(case_arm, case):
+        def runner(case_arm, case, *, reserve_bytes):
             calls.append(case_arm["alias"])
             if len(calls) == 1:
                 return {"outcome": "failure", "failure_reason": "disk_stop",

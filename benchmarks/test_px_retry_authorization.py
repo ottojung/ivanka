@@ -363,7 +363,7 @@ class SupervisorRetryTests(unittest.TestCase):
                              failure_reason=reason)
 
     def success_runner(self, calls, seen=None):
-        def runner(arm, case):
+        def runner(arm, case, *, reserve_bytes):
             calls.append(sched.receipt_id(arm))
             output = self.px / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
             if seen is not None:
@@ -394,7 +394,7 @@ class SupervisorRetryTests(unittest.TestCase):
     def test_failure_then_stop_archives_output_before_resume_launch(self):
         calls = []
 
-        def failing(arm, case):
+        def failing(arm, case, *, reserve_bytes):
             calls.append(sched.receipt_id(arm))
             output = self.px / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
             output.mkdir(parents=True, exist_ok=True)
@@ -566,7 +566,7 @@ class OneShotDispatchTests(unittest.TestCase):
         marker = authz.dispatch_path(self.px, self.arm)
         calls = []
 
-        def interrupted(arm, case):
+        def interrupted(arm, case, *, reserve_bytes):
             self.assertTrue(marker.is_file())
             self.assertIsNone(authz.verify(self.px, arm))
             calls.append(sched.receipt_id(arm))

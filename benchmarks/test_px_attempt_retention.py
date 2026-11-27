@@ -6,6 +6,8 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from assembler_bench import px_attempt_retention as retention
 from assembler_bench import px_cohort_scheduler as sched
@@ -32,6 +34,11 @@ class AttemptRetentionTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve()
+        capacity = mock.patch.object(
+            retention.os, "statvfs",
+            return_value=SimpleNamespace(f_bavail=1 << 50, f_frsize=1))
+        capacity.start()
+        self.addCleanup(capacity.stop)
         self.arm = {
             "tool_id": "skesa", "cohort": "physical", "alias": "PX-R001",
             "input_sha256": {"R1": "a" * 64, "R2": "b" * 64},
@@ -154,6 +161,44 @@ class AttemptRetentionTests(unittest.TestCase):
         self.assertEqual(before, {p: p.read_bytes() for p in self.kept})
         self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
 
+    def test_crash_after_frame_rename_before_proof_is_repaired(self):
+        """Simulate the os.replace window: plain intact, frame published."""
+        before = {p: p.read_bytes() for p in self.kept}
+        frame, proof = codec.prepare_scratch(self.reads)
+        os.replace(frame, self.reads.with_name(
+            self.reads.name + codec.ZST_SUFFIX))
+        result = self.run_retire(True)
+        self.assertEqual(result["skipped"], [])
+        self.assertFalse(self.reads.exists())
+        meta = self.reads.with_name(self.reads.name + codec.META_SUFFIX)
+        self.assertTrue(meta.is_file())
+        self.assertEqual(codec.logical_digest(
+            self.reads, format=codec.SCRATCH_FORMAT),
+            (proof["original_sha256"], proof["original_size"]))
+        self.assertEqual(before, {p: p.read_bytes() for p in self.kept})
+
+    def test_crash_after_proof_before_frame_is_repaired(self):
+        _, proof = codec.prepare_scratch(self.reads)
+        self.reads.with_name(self.reads.name + codec.META_SUFFIX).write_text(
+            json.dumps(proof, sort_keys=True, indent=2) + "\n")
+        result = self.run_retire(True)
+        self.assertEqual(result["skipped"], [])
+        self.assertFalse(self.reads.exists())
+        self.assertTrue(self.reads.with_name(
+            self.reads.name + codec.ZST_SUFFIX).is_file())
+        self.assertEqual(codec.logical_digest(
+            self.reads, format=codec.SCRATCH_FORMAT),
+            (proof["original_sha256"], proof["original_size"]))
+
+    def test_incomplete_pair_without_plain_fails_closed(self):
+        self.run_retire(True)
+        self.reads.with_name(self.reads.name + codec.META_SUFFIX).unlink()
+        result = self.run_retire(True)
+        self.assertTrue(result["skipped"])
+        self.assertFalse(self.reads.exists())
+        self.assertFalse(self.reads.with_name(
+            self.reads.name + codec.META_SUFFIX).exists())
+
     def test_truncated_staged_frame_is_refused(self):
         frame, proof = codec.prepare_scratch(self.reads)
         stored = self.reads.with_name(self.reads.name + codec.ZST_SUFFIX)
@@ -272,19 +317,29 @@ class AttemptRetentionTests(unittest.TestCase):
 
     def test_restore_requires_headroom(self):
         self.run_retire(True)
-        def tight(path):
-            class S:
-                f_bavail = 1
-                f_frsize = 1
-            return S()
-        original = retention.os.statvfs
-        retention.os.statvfs = tight
-        try:
+        with mock.patch.object(retention.os, "statvfs", return_value=SimpleNamespace(
+                f_bavail=1, f_frsize=1)):
             result = self.run_restore()
-        finally:
-            retention.os.statvfs = original
         self.assertTrue(result["skipped"])
         self.assertFalse(self.reads.exists())
+
+    def test_archive_preflight_refuses_tight_capacity(self):
+        with mock.patch.object(retention.os, "statvfs", return_value=SimpleNamespace(
+                f_bavail=1, f_frsize=1)):
+            result = self.run_retire(True)
+        self.assertEqual(result["reclaimed_bytes"], 0)
+        self.assertTrue(result["skipped"])
+        self.assert_untouched()
+        self.assertEqual(list(self.archive.rglob("*.tmp.*")), [])
+        self.assertEqual(list(self.archive.rglob("*.zst")), [])
+
+    def test_delete_mode_is_idempotent(self):
+        first = self.run_retire(True, mode=retention.DELETE_MODE)
+        self.assertGreater(first["reclaimed_bytes"], 0)
+        second = self.run_retire(True, mode=retention.DELETE_MODE)
+        self.assertEqual(second["reclaimed_bytes"], 0)
+        self.assertEqual(second["skipped"], [])
+        self.assertTrue(all(not p.exists() for p in self.files))
 
     def test_archived_variant_symlink_refused(self):
         self.run_retire(True)

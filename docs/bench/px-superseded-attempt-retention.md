@@ -45,12 +45,18 @@ On apply the module seals the original failure, source digests and every
 candidate's logical digest and size before any file changes. Every source is
 reverified immediately before compression or deletion; each frame is verified
 by compressed digest and full decompressed readback before it replaces the
-plain file. An interrupted operation resumes from the same seal: a plain file
-that reappears is re-verified, and a complete pair with no plain file is
-accepted only when both variants prove the sealed digest. A frame without its
-proof, a changed proof, or a missing source fails closed. Receipts, results,
-logs, native outputs and every other scientific file are never rewritten or
-removed. Cleanup failures do not invalidate terminal science.
+plain file. Workspace headroom is preflighted from the source size plus a
+bounded codec expansion allowance, then rechecked with the measured frame
+size, so the shared reserve is not breached while a temporary frame is built.
+An interrupted operation resumes from the same seal: a plain file that
+reappears is re-verified, and a complete pair with no plain file is accepted
+only when both variants prove the sealed digest. A crash between publishing
+the frame and its proof is repaired only while the plain source remains; a
+partial pair without its source fails closed for operator recovery. A changed
+proof, symlinked or multiply linked variant, or a missing source is refused.
+Receipts, results, logs, native outputs and every other scientific file are
+never rewritten or removed. Cleanup failures do not invalidate terminal
+science.
 
 Delete mode (`--mode delete`) is an explicit operator action for cases where
 no reversible frame is wanted. It uses the same binding, seal and revalidation

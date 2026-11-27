@@ -22,6 +22,7 @@ from benchmarks.retained_artifacts import (
     INTERMEDIATE_CSV, _load_sealed_evidence, logical_name, seal_terminal_evidence)
 
 from . import px_cohort_scheduler as sched
+from .exploratory_policy import MIN_WORKSPACE_FREE_BYTES
 from .px_retention import _observed_dead
 
 ARCHIVE = re.compile(r"([a-z0-9-]+)-(PX-[RH][0-9]{3})\.attempt-001\Z")
@@ -31,7 +32,6 @@ INDEX_SUFFIXES = {".bt2", ".bt2i", ".bt2b", ".ebwt"}
 ARCHIVE_MODE = "archive"
 DELETE_MODE = "delete"
 MODES = frozenset((ARCHIVE_MODE, DELETE_MODE))
-MIN_WORKSPACE_FREE_BYTES = 32 * 1024**3
 
 
 def _fsync_dir(directory):
@@ -43,9 +43,15 @@ def _fsync_dir(directory):
 
 
 def _require_headroom(root, needed_bytes):
-    free = os.statvfs(root).f_bavail * os.statvfs(root).f_frsize
+    stats = os.statvfs(root)
+    free = stats.f_bavail * stats.f_frsize
     if free - needed_bytes < MIN_WORKSPACE_FREE_BYTES:
         raise ValueError("insufficient workspace headroom for scratch archival")
+
+
+def _temp_bound(source_bytes):
+    """Bound one temporary frame: source bytes, codec expansion and proof."""
+    return source_bytes + (source_bytes >> 8) + codec.CHUNK + 4096
 
 
 def _regular(path):
@@ -211,16 +217,35 @@ def _regular_variant(path):
     return path
 
 
-def _archived_state(path, item):
-    """Verify an already-archived pair against the immutable sealed digest."""
+def _pair_state(path):
     frame = path.with_name(path.name + codec.ZST_SUFFIX)
     meta = path.with_name(path.name + codec.META_SUFFIX)
     has_frame = frame.exists() or frame.is_symlink()
     has_meta = meta.exists() or meta.is_symlink()
+    return frame, meta, has_frame, has_meta
+
+
+def _discard_partial_pair(path):
+    """Repair an interrupted install while the verified plain source remains."""
+    frame, meta, has_frame, has_meta = _pair_state(path)
+    if has_frame and has_meta:
+        raise ValueError("complete scratch proof cannot be repaired")
+    for variant in (frame, meta):
+        if variant.exists() or variant.is_symlink():
+            _regular_variant(variant)
+            variant.unlink()
+    _fsync_dir(path.parent)
+
+
+def _archived_state(path, item):
+    """Verify an already-archived pair against the immutable sealed digest."""
+    frame, meta, has_frame, has_meta = _pair_state(path)
     if not has_frame and not has_meta:
         return None
     if not has_frame or not has_meta:
-        raise ValueError("incomplete scratch proof")
+        raise ValueError(
+            "incomplete scratch proof without plain source; "
+            "operator recovery required")
     _regular_variant(frame)
     _regular_variant(meta)
     if codec.logical_digest(path, format=codec.SCRATCH_FORMAT) != _expected(item):
@@ -236,8 +261,14 @@ def _entry_state(path, item, mode):
         if info.st_nlink != 1:
             raise ValueError("multiply linked scratch file")
         if mode == ARCHIVE_MODE:
-            digest, size = codec.logical_digest(
-                path, format=codec.SCRATCH_FORMAT)
+            _, _, has_frame, has_meta = _pair_state(path)
+            # An interrupted install leaves one variant without its proof; the
+            # plain source is authoritative and the pair is repaired on apply.
+            if has_frame != has_meta:
+                digest, size = _sha(path), info.st_size
+            else:
+                digest, size = codec.logical_digest(
+                    path, format=codec.SCRATCH_FORMAT)
         else:
             digest, size = _sha(path), info.st_size
         if (digest, size) != expected:
@@ -247,6 +278,11 @@ def _entry_state(path, item, mode):
         state = _archived_state(path, item)
         if state is not None:
             return state
+    if mode == DELETE_MODE:
+        _, _, has_frame, has_meta = _pair_state(path)
+        if has_frame or has_meta:
+            raise ValueError("archived scratch variant in delete mode")
+        return "deleted"
     raise ValueError("sealed disposable file is missing")
 
 
@@ -296,18 +332,23 @@ def _verify_all(archive, planned, mode):
 
 def _archive_one(path, item, root):
     expected = _expected(item)
-    frame_path = path.with_name(path.name + codec.ZST_SUFFIX)
-    meta_path = path.with_name(path.name + codec.META_SUFFIX)
-    if meta_path.exists() or frame_path.exists() or meta_path.is_symlink() or frame_path.is_symlink():
-        if not (frame_path.is_file() and meta_path.is_file()):
-            raise ValueError("incomplete scratch proof")
-        _regular_variant(frame_path)
-        _regular_variant(meta_path)
-        if codec.logical_digest(path, format=codec.SCRATCH_FORMAT) != expected:
-            raise ValueError("archived scratch changed")
-        path.unlink()
-        _fsync_dir(path.parent)
-        return
+    frame, meta, has_frame, has_meta = _pair_state(path)
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("plain scratch missing before archival")
+    if has_frame or has_meta:
+        if has_frame and has_meta:
+            _regular_variant(frame)
+            _regular_variant(meta)
+            if codec.logical_digest(
+                    path, format=codec.SCRATCH_FORMAT) != expected:
+                raise ValueError("archived scratch changed")
+            path.unlink()
+            _fsync_dir(path.parent)
+            return
+        _discard_partial_pair(path)
+    # Preflight the whole temporary frame before allocating any of it: zstd
+    # expansion plus the proof must fit above the shared workspace reserve.
+    _require_headroom(root, _temp_bound(item["bytes"]))
     frame, proof = codec.prepare_scratch(path)
     try:
         if (proof["original_sha256"], proof["original_size"]) != expected:
@@ -333,7 +374,7 @@ def _apply(archive, prior, cid, source, dead, root, *, mode):
     reclaimed = 0
     for path, item in sorted(planned.items()):
         state = states[path]
-        if state == "archived":
+        if state in ("archived", "deleted"):
             continue
         before = path.stat().st_blocks * 512
         if mode == ARCHIVE_MODE:
@@ -373,7 +414,7 @@ def _scan(root, *, apply, only, dead, mode):
                     continue
                 planned = _planned_entries(archive, prior, source, mode)
                 states = _verify_all(archive, planned, mode)
-                if all(s == "archived" for s in states.values()):
+                if all(s in ("archived", "deleted") for s in states.values()):
                     continue
                 size = sum(planned[p]["bytes"] for p, s in states.items()
                            if s == "plain")
@@ -425,8 +466,14 @@ def _restore_entries(archive, evidence, root):
         if path.exists() or path.is_symlink():
             if not path.is_file() or path.is_symlink():
                 raise ValueError("unsafe restored scratch target")
-            if codec.logical_digest(
-                    path, format=codec.SCRATCH_FORMAT) != expected:
+            _, _, has_frame, has_meta = _pair_state(path)
+            if has_frame != has_meta:
+                _discard_partial_pair(path)
+                digest, size = _sha(path), path.stat().st_size
+            else:
+                digest, size = codec.logical_digest(
+                    path, format=codec.SCRATCH_FORMAT)
+            if (digest, size) != expected:
                 raise ValueError("archived scratch changed")
             continue
         meta_path = path.with_name(path.name + codec.META_SUFFIX)

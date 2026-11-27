@@ -75,8 +75,9 @@ class ExecutionArchiveTests(unittest.TestCase):
         offsets=[page.index('class="'+section+'"') for section in
                  ("compare","dominance","samples","provenance")]
         self.assertEqual(offsets,sorted(offsets))
-        self.assertIn("03 / ALL-VERSUS-ALL",page)
-        self.assertIn("04 / CASE-LEVEL VALUES",page)
+        self.assertIn("02 / COMPARISONS",page)
+        self.assertIn("03 / CASE-LEVEL VALUES",page)
+        self.assertIn("04 / REPRODUCIBILITY",page)
         script=(SITE/"app.js").read_text()
         self.assertIn('fetch("./data/history.json"',script)
         self.assertIn('state.data.runs.push(...history.runs)',script)

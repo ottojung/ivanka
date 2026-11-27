@@ -80,6 +80,7 @@ const vm=require('node:vm');
 const subjectJs=fs.readFileSync(process.argv[1],'utf8');
 const appJs=fs.readFileSync(process.argv[2],'utf8')
   .replace(/\bmain\(\);\s*$/,'');
+const ranksJs=fs.readFileSync(process.argv[3],'utf8');
 const nodes={};
 function node(){
   return {textContent:'',innerHTML:'',className:'',hidden:false,value:'',
@@ -96,6 +97,7 @@ const sandbox=vm.createContext({document,console,
   BenchOverview:{notice(){return null;},summary(){return {};},
     coverage(){return '';}},BenchDistribution:{}});
 vm.runInContext(subjectJs,sandbox);
+vm.runInContext(ranksJs,sandbox);
 vm.runInContext(appJs,sandbox);
 
 // Opaque new tools are shown from the roster, never from a fixed seven.
@@ -133,7 +135,8 @@ assert.equal((html.match(/dom-self/g)||[]).length,3);
 console.log('NEUTRAL_BROWSER_ROSTER_OK');
 """
         result = subprocess.run(
-            [node, "-e", code, str(SITE / "subjects.js"), str(SITE / "app.js")],
+            [node, "-e", code, str(SITE / "subjects.js"), str(SITE / "app.js"),
+             str(SITE / "rankings.js")],
             capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("NEUTRAL_BROWSER_ROSTER_OK", result.stdout)

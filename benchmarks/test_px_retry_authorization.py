@@ -461,7 +461,13 @@ class GuardPinAndDigestTests(unittest.TestCase):
         guard = guard_source.verify()
         self.assertEqual(record["guard_commit"], guard_source.GUARD_COMMIT)
         self.assertEqual(record["guard_commit"],
-                         "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(record["guard_control_source_sha256"],
+                         guard_source.CONTROL_RETRY_SHA256)
+        self.assertEqual(record["guard_control_source_sha256"],
+                         "0ba6009b3bb63411e92b159d54e7cb7e62bef9fb7d0cc31113b5320792acb3e6")
+        self.assertEqual(record["guard_identity_sha256"],
+                         guard_source.IDENTITY_SHA256)
         self.assertEqual(record["reserve_origin_commit"],
                          guard_source.RESERVE_COMMIT)
         self.assertEqual(record["guard_source_sha256"],
@@ -471,12 +477,14 @@ class GuardPinAndDigestTests(unittest.TestCase):
                       record["guard_stack_sha256"])
         for path in guard_source.NATURAL_EXIT:
             self.assertIn(path, record["guard_stack_sha256"])
-        self.assertEqual(len(record["guard_stack_sha256"]), 14)
+        for path in guard_source.WATCHDOG:
+            self.assertIn(path, record["guard_stack_sha256"])
+        self.assertEqual(len(record["guard_stack_sha256"]), 19)
         with patch.object(guard_source, "EXPECTED",
                           {guard_source.RESERVE_SOURCE: "0" * 64}):
-            with self.assertRaisesRegex(ValueError, "guard source drift"):
+            with self.assertRaisesRegex(ValueError, "drift"):
                 authz.authorize(self.root, self.arm)
-            with self.assertRaisesRegex(ValueError, "guard source drift"):
+            with self.assertRaisesRegex(ValueError, "drift"):
                 authz.verify(self.root, self.arm)
 
     def test_watchdog_source_drift_fails_closed(self):
@@ -485,7 +493,7 @@ class GuardPinAndDigestTests(unittest.TestCase):
         drifted = dict(guard_source.EXPECTED)
         drifted[watchdog] = "0" * 64
         with patch.object(guard_source, "EXPECTED", drifted):
-            with self.assertRaisesRegex(ValueError, "guard source drift"):
+            with self.assertRaisesRegex(ValueError, "drift"):
                 authz.verify(self.root, self.arm)
 
     def test_natural_exit_monitor_drift_fails_closed(self):
@@ -494,18 +502,17 @@ class GuardPinAndDigestTests(unittest.TestCase):
             drifted = dict(guard_source.EXPECTED)
             drifted[path] = "0" * 64
             with patch.object(guard_source, "EXPECTED", drifted):
-                with self.assertRaisesRegex(ValueError, "guard source drift"):
+                with self.assertRaisesRegex(ValueError, "drift"):
                     authz.verify(self.root, self.arm)
 
-    def test_guard_pins_match_deployed_watchdog_tree(self):
-        deployed = Path("/workspace/ivanka-guard-pr536-staged-20261126")
-        if not deployed.is_dir():
-            self.skipTest("deployed watchdog checkout not present")
-        guard = _REAL_GUARD_VERIFY(root=deployed)
+    def test_guard_pins_match_reviewed_fixture_tree(self):
+        # Source-only: the reviewed fixture carries the same manifest bytes the
+        # operator will place in the immutable deployment checkout at cutover.
+        guard = _REAL_GUARD_VERIFY(root=_FIXTURE_ROOT)
         self.assertEqual(guard, dict(guard_source.EXPECTED))
         for name, digest in guard.items():
             self.assertEqual(
-                hashlib.sha256((deployed / name).read_bytes()).hexdigest(),
+                hashlib.sha256((_FIXTURE_ROOT / name).read_bytes()).hexdigest(),
                 digest, name)
 
     def test_every_preserved_attempt_digest_is_bound(self):

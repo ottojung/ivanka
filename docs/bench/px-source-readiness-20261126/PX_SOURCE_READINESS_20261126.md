@@ -11,7 +11,7 @@ no additional large cache. Ten tools remain NONQUALIFYING; issue stays OPEN.
 |---|---|
 | `Dockerfile.assembler-bench.unicycler.corrected` | Fix `TOOL_BINARY_SHA256` misapplied to `spades-core`; require separate attested `SPADES_CORE_SHA256` |
 | `Dockerfile.assembler-bench.savage.donor-pinned.corrected` | CPython 2.7.18 + NumPy 1.16.6 + SciPy 1.2.3 from hash-pinned sources; no apt python2.7; `ViralQuasispecies` hash gate |
-| `Dockerfile.assembler-bench.penguin.corrected` | Stray-brace fix (prior turn), retained unchanged |
+| `Dockerfile.assembler-bench.penguin.corrected` | Stray-brace fix plus enforced in-image `TOOL_BINARY_SHA256` verification of `/usr/local/bin/penguin` (`sha256sum -c`, fail closed); the digest is no longer label-only |
 | `Dockerfile.assembler-bench.savage.corrected` | Stray-brace fix (prior turn), retained unchanged; superseded for builds by donor-pinned recipe |
 | `numpy_1_16_6_attestation.json` | Official PyPI metadata + one-time independently recomputed SHA-256/MD5 of `numpy-1.16.6.zip` (honest limitation recorded) |
 | `numpy_1_16_6_pypi_metadata.json` | Retained external PyPI JSON artifact used by the verifier (25 KB) |

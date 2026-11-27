@@ -1,4 +1,5 @@
 import json
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,6 +8,32 @@ import p1_full_stage_intervals as stage
 
 
 class FullStageTests(unittest.TestCase):
+    def assert_summary_equal(self, observed, expected):
+        """Exact structure/counts, microsecond absolute tolerance for sums.
+
+        Python 3.12 changed float summation; retained Python 3.11 results
+        must not require identical last-bit rounding on every interpreter.
+        """
+        self.assertIs(type(observed), type(expected))
+        if isinstance(expected, dict):
+            self.assertEqual(observed.keys(), expected.keys())
+            for key in expected:
+                self.assert_summary_equal(observed[key], expected[key])
+        elif isinstance(expected, float):
+            self.assertTrue(math.isfinite(observed) and math.isfinite(expected))
+            self.assertAlmostEqual(observed, expected, delta=1e-6)
+        else:
+            self.assertEqual(observed, expected)
+
+    def test_summary_tolerance_does_not_hide_material_drift(self):
+        self.assert_summary_equal({"n": 1, "seconds": 0.1 + 0.2},
+                                  {"n": 1, "seconds": 0.3})
+        with self.assertRaises(AssertionError):
+            self.assert_summary_equal({"n": 1, "seconds": 0.3001},
+                                      {"n": 1, "seconds": 0.3})
+        with self.assertRaises(AssertionError):
+            self.assert_summary_equal({"n": 2}, {"n": 1})
+
     def test_ledger_digest_refusal(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "results.jsonl"
@@ -53,13 +80,13 @@ class FullStageTests(unittest.TestCase):
                 self.assertAlmostEqual(r["stage_delta_seconds"][name],
                                        r["candidate"]["stage_intervals_seconds"][name]
                                        - r["frozen"]["stage_intervals_seconds"][name])
-        self.assertEqual(stage.summarize(rows), report["summaries"]["all"])
+        self.assert_summary_equal(stage.summarize(rows), report["summaries"]["all"])
         identical = [r for r in rows if r["same_conseq_bytes"] and r["same_ordered_unstitched"]]
         self.assertEqual(len(identical), 322)
-        self.assertEqual(stage.summarize(identical),
+        self.assert_summary_equal(stage.summarize(identical),
                          report["summaries"]["output_identity:(True, True)"])
         self.assertTrue(all(r["same_score"] for r in rows if r["same_conseq_bytes"]))
-        self.assertEqual(stage.summarize([r for r in identical if r["family"] != "ultradeep"]),
+        self.assert_summary_equal(stage.summarize([r for r in identical if r["family"] != "ultradeep"]),
                          report["summaries"]["identical_excluding_ultradeep"])
 
 

@@ -36,6 +36,7 @@ class AttestationHarness(unittest.TestCase):
         self.base = Path(tmp.name)
         self.project = self.base / "project"
         self.project.mkdir()
+        self.registry = self.project / "registry.json"
         self.s6 = self.base / "s6"
         self.proc = self.base / "proc"
         self.head = live.OLD_HEAD
@@ -98,7 +99,7 @@ class AttestationHarness(unittest.TestCase):
             _line("PX_CODE", root, head),
             'git -C "$PX_CODE" diff --quiet HEAD || exit 1',
             "export PX_ROOT=" + str(self.project),
-            "export PX_REGISTRY=" + str(self.project / "registry.json"),
+            "export PX_REGISTRY=" + str(self.registry),
             "export WATCHDOG_ARMED=1",
             'exec /bin/sh "$PX_CODE/scripts/px_cohort_s6_service.sh"',
         ]) + "\n"
@@ -125,8 +126,11 @@ class AttestationHarness(unittest.TestCase):
         common_env = {
             "PYTHONPATH": expected["root"] + ":" + expected["root"] + "/benchmarks",
         }
-        wd_env = dict(common_env, WATCHDOG_CODE=expected["root"])
-        sup_env = dict(common_env, PX_CODE=expected["root"])
+        wd_env = dict(common_env, WATCHDOG_CODE=expected["root"],
+                      WATCHDOG_ROOT=str(self.project),
+                      WATCHDOG_GRAPHROOT=str(live.GRAPHROOT))
+        sup_env = dict(common_env, PX_CODE=expected["root"],
+                       PX_ROOT=str(self.project), PX_REGISTRY=str(self.registry))
         self.proc_entry(WATCHDOG,
                         "python3 -m fail_closed_guard.watchdog_cli --root %s --graphroot %s"
                         % (self.project, live.GRAPHROOT), wd_env)
@@ -134,7 +138,7 @@ class AttestationHarness(unittest.TestCase):
             self.proc_entry(SUPERVISOR,
                             "python3 -m assembler_bench.px_execution --registry %s "
                             "--root %s --supervise --armed"
-                            % (self.project / "registry.json", self.project), sup_env)
+                            % (self.registry, self.project), sup_env)
         finger = alive_fingerprint or [START, NS]
         (self.project / ".watchdog-alive.json").write_text(json.dumps({
             "schema": heartbeat.ALIVE_SCHEMA, "at_utc": 1000.0,
@@ -156,7 +160,8 @@ class AttestationHarness(unittest.TestCase):
                                  "cmdline_sha": "b", "rss": 1}
         return dict(paths, project_root=self.project, s6_root=self.s6,
                     proc_root=self.proc, global_lock=self.project / ".global-worker.lock",
-                    worker_journal=journal, snapshot=lambda: table,
+                    worker_journal=journal, registry=self.registry,
+                    snapshot=lambda: table,
                     lock_probe=lambda _path: self.locked, now=lambda: self.now,
                     **self.reader_opts())
 
@@ -302,6 +307,98 @@ class PostCutoverTests(AttestationHarness):
     def test_stop_sentinel_is_blocker(self):
         blocked = self.attest("post_cutover", supervisor="running", stop=True)
         self.assertIn("foreign_stop", blocked["blockers"])
+
+
+class SupervisorArgvBindingTests(AttestationHarness):
+    def _supervisor_cmd(self, root, registry):
+        return ("python3 -m assembler_bench.px_execution --registry %s "
+                "--root %s --supervise --armed" % (registry, root))
+
+    def _supervisor_env(self, root, registry):
+        return {
+            "PYTHONPATH": "%s:%s/benchmarks" % (root, root),
+            "PX_CODE": root, "PX_ROOT": str(root), "PX_REGISTRY": str(registry),
+        }
+
+    def test_wrong_supervisor_root_argv_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        self.proc_entry(SUPERVISOR,
+                        self._supervisor_cmd("/foreign/root", self.registry),
+                        self._supervisor_env(live.NEW_ROOT, self.registry))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("option_value_mismatch:supervisor:--root", blocked["blockers"])
+
+    def test_wrong_supervisor_registry_argv_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        self.proc_entry(SUPERVISOR,
+                        self._supervisor_cmd(self.project, "/foreign/registry.json"),
+                        self._supervisor_env(live.NEW_ROOT, self.registry))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("option_value_mismatch:supervisor:--registry", blocked["blockers"])
+
+    def test_duplicate_supervisor_root_option_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        cmd = self._supervisor_cmd(self.project, self.registry).replace(
+            "--root " + str(self.project),
+            "--root " + str(self.project) + " --root /foreign/root")
+        self.proc_entry(SUPERVISOR, cmd,
+                        self._supervisor_env(live.NEW_ROOT, self.registry))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("option_count_mismatch:supervisor:--root", blocked["blockers"])
+
+    def test_duplicate_supervise_flag_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        self.proc_entry(SUPERVISOR,
+                        self._supervisor_cmd(self.project, self.registry)
+                        + " --supervise",
+                        self._supervisor_env(live.NEW_ROOT, self.registry))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("flag_count_mismatch:supervisor:--supervise", blocked["blockers"])
+
+    def test_wrong_px_root_env_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        env = self._supervisor_env(live.NEW_ROOT, self.registry)
+        env["PX_ROOT"] = "/foreign/root"
+        self.proc_entry(SUPERVISOR,
+                        self._supervisor_cmd(self.project, self.registry), env)
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("env_mismatch:supervisor:PX_ROOT", blocked["blockers"])
+
+    def test_wrong_px_registry_env_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        env = self._supervisor_env(live.NEW_ROOT, self.registry)
+        env["PX_REGISTRY"] = "/foreign/registry.json"
+        self.proc_entry(SUPERVISOR,
+                        self._supervisor_cmd(self.project, self.registry), env)
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("env_mismatch:supervisor:PX_REGISTRY", blocked["blockers"])
+
+    def test_foreign_registry_script_pin_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        for key in ("persistent_supervisor", "runtime_supervisor"):
+            opts[key].write_text(opts[key].read_text().replace(
+                str(self.registry), "/foreign/registry.json"))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertTrue(any("foreign_registry_pin" in b for b in blocked["blockers"]),
+                        blocked["blockers"])
+
+    def test_wrong_watchdog_root_argv_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        self.proc_entry(WATCHDOG,
+                        "python3 -m fail_closed_guard.watchdog_cli --root /foreign/root "
+                        "--graphroot " + str(live.GRAPHROOT),
+                        {"PYTHONPATH": "%s:%s/benchmarks" % (live.NEW_ROOT, live.NEW_ROOT),
+                         "WATCHDOG_CODE": live.NEW_ROOT,
+                         "WATCHDOG_ROOT": str(self.project),
+                         "WATCHDOG_GRAPHROOT": str(live.GRAPHROOT)})
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("option_value_mismatch:watchdog:--root", blocked["blockers"])
+
+    def test_noncanonical_worker_journal_is_refused(self):
+        opts = self.build("post_cutover", supervisor="running")
+        opts["worker_journal"] = self.project / "other.jsonl"
+        with self.assertRaisesRegex(ValueError, "canonical lease journal"):
+            live.attest(phase="post_cutover", **opts)
 
 
 if __name__ == "__main__":

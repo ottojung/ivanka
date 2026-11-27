@@ -80,7 +80,7 @@ records `guard_control_source_sha256` and `guard_identity_sha256`.
 PYTHONPATH=.:benchmarks python3 -m pytest -q \
   benchmarks/test_px_live_attestation.py benchmarks/test_px_guard_source.py \
   benchmarks/test_px_retry_authorization.py
-# 20 + 16 + 24 passed
+# 29 + 16 + 24 passed
 
 PYTHONPATH=.:benchmarks python3 -m pytest -q \
   benchmarks/test_px_cohort_scheduler.py benchmarks/test_px_supervisor.py \
@@ -116,8 +116,10 @@ The module includes injection points and `benchmarks/test_px_live_attestation.py
 proves adversarial cases hermetically: foreign/old script heads, runtime vs
 persistent script drift, wrong code root, module-byte drift, ALIVE fingerprint
 and age failures, foreign release/reconciled events that must not hide an
-active lease, STOP sentinels, busy/missing lock, down s6 services and a process
-present at an idle boundary.
+active lease, STOP sentinels, busy/missing lock, down s6 services, a process
+present at an idle boundary, and exact supervisor `--root`/`--registry` argv
+values, duplicate options/flags, PX_ROOT/PX_REGISTRY environment, foreign
+registry script pins and non-canonical worker journals.
 
 Observed pre-cutover state on marceline-dev: watchdog pid 139 runs old code
 with matching old pins and readiness, but the PX supervisor is running and the

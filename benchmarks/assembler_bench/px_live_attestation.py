@@ -30,6 +30,7 @@ OLD_ROOT = "/workspace/ivanka-guard-pr536-staged-20261126"
 NEW_ROOT = "/workspace/ivanka-guard-pr535-staged-20261127"
 PROJECT_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121")
 GRAPHROOT = Path("/workspace/ivanka-exploratory-podman-20261121/store")
+REGISTRY = PROJECT_ROOT / "private-frozen-ten-pilot-registry-20gib-20261124.json"
 S6_ROOT = Path("/run/s6/legacy-services")
 
 # Reviewed bytes of the old live guard (14-file PR536 map). Kept as explicit
@@ -106,8 +107,9 @@ def _proc(pid, proc_root):
     if not entry.is_dir():
         return None
     try:
-        cmd = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(
-            errors="replace").strip()
+        raw = (entry / "cmdline").read_bytes()
+        cmd = raw.replace(b"\0", b" ").decode(errors="replace").strip()
+        argv = [part.decode(errors="replace") for part in raw.split(b"\0") if part]
         env = {}
         for item in (entry / "environ").read_bytes().split(b"\0"):
             if b"=" in item:
@@ -116,7 +118,8 @@ def _proc(pid, proc_root):
         cwd = os.readlink(entry / "cwd")
     except OSError:
         return None
-    return {"pid": int(pid), "cmdline": cmd, "cwd": cwd, "environ": env}
+    return {"pid": int(pid), "cmdline": cmd, "argv": argv,
+            "cwd": cwd, "environ": env}
 
 
 def _flock_locked(path):
@@ -200,9 +203,53 @@ def _check_code_root(label, code, table, pid, expected, checks, blockers,
     return check
 
 
+def _check_argv(label, argv, *, module, values, flags, checks, blockers):
+    """Bind exact option values, flag counts and the module; no duplicates."""
+    check = {"argv": argv}
+    ok = True
+    if argv.count("-m") != 1 or (argv[argv.index("-m") + 1:argv.index("-m") + 2]
+                                 or [None])[0] != module:
+        _block(blockers, "module_argv_mismatch:" + label)
+        ok = False
+    for option, expected in values.items():
+        count = argv.count(option)
+        check[option] = {"count": count}
+        if count != 1:
+            _block(blockers, "option_count_mismatch:%s:%s" % (label, option))
+            ok = False
+            continue
+        actual = argv[argv.index(option) + 1:argv.index(option) + 2]
+        actual = actual[0] if actual else None
+        check[option]["value"] = actual
+        if actual != expected:
+            _block(blockers, "option_value_mismatch:%s:%s" % (label, option))
+            ok = False
+    for flag in flags:
+        count = argv.count(flag)
+        check[flag] = count
+        if count != 1:
+            _block(blockers, "flag_count_mismatch:%s:%s" % (label, flag))
+            ok = False
+    checks[label + "_argv_values"] = check
+    return ok
+
+
+def _check_env(label, env, expected_env, checks, blockers):
+    check = {}
+    ok = True
+    for key, expected in expected_env.items():
+        actual = env.get(key)
+        check[key] = actual
+        if actual != expected:
+            _block(blockers, "env_mismatch:%s:%s" % (label, key))
+            ok = False
+    checks[label + "_env"] = check
+    return ok
+
+
 def _check_service(label, *, service, expected, presence, variable, module,
-                   args, proc_root, s6_root, table, checks, blockers,
-                   module_reader, head_reader, git_present):
+                   values, flags, env_expected, proc_root, s6_root, table,
+                   checks, blockers, module_reader, head_reader, git_present):
     s6_pid = _s6_pid(Path(s6_root) / service)
     check = {"s6_pid": s6_pid}
     if presence == "absent":
@@ -230,9 +277,10 @@ def _check_service(label, *, service, expected, presence, variable, module,
     check["pythonpath_head"] = proc["environ"].get("PYTHONPATH", "").split(":")[0]
     if proc["environ"].get("PYTHONPATH", "").split(":")[0] != expected["root"]:
         _block(blockers, "pythonpath_mismatch:" + label)
-    if module not in proc["cmdline"] or any(token not in proc["cmdline"] for token in args):
-        _block(blockers, "cmdline_mismatch:" + label)
     check["cmdline"] = proc["cmdline"]
+    _check_argv(label, proc["argv"], module=module, values=values, flags=flags,
+                checks=checks, blockers=blockers)
+    _check_env(label, proc["environ"], env_expected, checks, blockers)
     check.update(_check_code_root(label, code, table, s6_pid, expected,
                                   checks, blockers, module_reader=module_reader,
                                   head_reader=head_reader, git_present=git_present))
@@ -244,7 +292,8 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
            proc_root="/proc", persistent_watchdog="/etc/services.d/ivanka-watchdog/run",
            runtime_watchdog=None, persistent_supervisor="/etc/services.d/px-cohort-supervisor/run",
            runtime_supervisor=None, global_lock=None, worker_journal=None,
-           snapshot=None, lock_probe=None, now=None, module_reader=None,
+           registry=REGISTRY, snapshot=None, lock_probe=None, now=None,
+           module_reader=None,
            head_reader=None, git_present=None):
     """Return a read-only, fail-closed verdict for one exact cutover phase."""
     if phase not in PHASES:
@@ -256,6 +305,8 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
     runtime_supervisor = runtime_supervisor or str(s6_root / "px-cohort-supervisor" / "run")
     global_lock = Path(global_lock or root / ".global-worker.lock")
     worker_journal = Path(worker_journal or root / lease.JOURNAL_NAME)
+    if worker_journal.name != lease.JOURNAL_NAME:
+        raise ValueError("worker journal must be the canonical lease journal")
     take_snapshot = snapshot or proc.snapshot
     table = take_snapshot()
     module_reader = module_reader or (
@@ -265,8 +316,9 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
     git_present = git_present or (lambda path: (path / ".git").exists())
     clock = now or (lambda: __import__("time").time())
     blockers = []
+    registry = Path(registry)
     checks = {"phase": phase, "expected_root": expected["root"],
-              "expected_head": expected["head"]}
+              "expected_head": expected["head"], "expected_registry": str(registry)}
 
     wd_persist = _read(persistent_watchdog)
     wd_runtime = _read(runtime_watchdog)
@@ -287,6 +339,13 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
                   sup_markers, checks, blockers)
     _check_script("runtime_supervisor", sup_runtime, expected, "PX_CODE",
                   sup_markers, checks, blockers)
+    for label, text in (("persistent_supervisor", sup_persist),
+                        ("runtime_supervisor", sup_runtime)):
+        found = re.search(r"export PX_REGISTRY=(\S+)", text or "")
+        actual = found.group(1) if found else None
+        checks[label + "_registry_pin"] = actual
+        if actual != str(registry):
+            _block(blockers, "foreign_registry_pin:" + label)
     for label, a, b in (("watchdog", wd_persist, wd_runtime),
                         ("supervisor", sup_persist, sup_runtime)):
         if a is not None and b is not None and a != b:
@@ -301,17 +360,23 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
         if str(graphroot) != str(GRAPHROOT):
             _block(blockers, "foreign_graphroot")
 
-    watchdog_pid, watchdog_proc = _check_service(
+    watchdog_pid, _ = _check_service(
         "watchdog", service="ivanka-watchdog", expected=expected,
-        presence="running", variable="WATCHDOG_CODE", module="fail_closed_guard.watchdog_cli",
-        args=["--root", str(root)], proc_root=proc_root, s6_root=s6_root,
-        table=table, checks=checks, blockers=blockers,
-        module_reader=module_reader, head_reader=head_reader,
-        git_present=git_present)
+        presence="running", variable="WATCHDOG_CODE",
+        module="fail_closed_guard.watchdog_cli",
+        values={"--root": str(root)}, flags=(),
+        env_expected={"WATCHDOG_ROOT": str(root),
+                      "WATCHDOG_GRAPHROOT": str(graphroot)},
+        proc_root=proc_root, s6_root=s6_root, table=table,
+        checks=checks, blockers=blockers, module_reader=module_reader,
+        head_reader=head_reader, git_present=git_present)
     _check_service(
         "supervisor", service="px-cohort-supervisor", expected=expected,
-        presence=expected["supervisor"], variable="PX_CODE", module="assembler_bench.px_execution",
-        args=["--registry", "--root", "--supervise", "--armed"],
+        presence=expected["supervisor"], variable="PX_CODE",
+        module="assembler_bench.px_execution",
+        values={"--registry": str(registry), "--root": str(root)},
+        flags=("--supervise", "--armed"),
+        env_expected={"PX_ROOT": str(root), "PX_REGISTRY": str(registry)},
         proc_root=proc_root, s6_root=s6_root, table=table,
         checks=checks, blockers=blockers, module_reader=module_reader,
         head_reader=head_reader, git_present=git_present)
@@ -337,7 +402,7 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
             _block(blockers, "watchdog_readiness_failed")
 
     try:
-        events = lease.events(root)
+        events = lease.events(worker_journal.parent)
         latest = lease.latest(events)
         active = {name: row for name, row in latest.items()
                   if row.get("state") not in lease.CLOSED}

@@ -59,10 +59,14 @@ supplied delta list. None of them reads site data.
    appends the method to the run roster, publishes the label and method type,
    joins only rows whose alias/read hashes/manifest match that mapping, is
    idempotent for exact same-run rows, and fails closed on duplicate or
-   conflicting bindings. It recomputes the tool-neutral Ψ matrix and refuses
-   any change to the published PSI certificate. The input report, registry,
-   rows, frozen manifests, attested evidence and private gates are never
-   mutated. Empty opt-in leaves the report byte-identical.
+   conflicting bindings. A canonical digest of the validated rows is recorded
+   with each method entry: one run identity may publish exactly one digest and
+   exactly one cohort across the whole report, so a conflicting re-delivery or
+   a status flip under a reused run id is rejected. Publishing a measured case
+   clears any stale failure marker for that arm. It recomputes the tool-neutral
+   Ψ matrix and refuses any change to the published PSI certificate. The input
+   report, registry, rows, frozen manifests, attested evidence and private
+   gates are never mutated. Empty opt-in leaves the report byte-identical.
 
 `qualification_view` removes the method from every known decision input:
 private `comparators`, public run rosters/case rows/progress/images/matrix,

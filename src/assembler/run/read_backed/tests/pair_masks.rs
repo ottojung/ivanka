@@ -29,4 +29,8 @@ fn each_original_fragment_has_one_mask_of_supported_components() {
     let evidence = scoring::count(&contigs, &reads, &index::build(&contigs));
     assert_eq!(evidence.pair_masks, vec![1, 2, 3]);
     assert_eq!(evidence.pairs, vec![2, 2]);
+    // The same paired reads also carry discriminating 31-mers: the mixed
+    // mate pair votes for both candidates, so the two halves cannot fake one
+    // phase when the related-component rule consumes these masks.
+    assert_eq!(evidence.exclusive_masks, vec![1, 2, 3]);
 }

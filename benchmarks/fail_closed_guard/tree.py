@@ -1,6 +1,10 @@
 """Namespace-complete membership and conservative RSS summation."""
 from .errors import GuardExceeded
 
+# /proc/<pid>/stat field 3. A zombie has already released its resident pages;
+# only a state positively read as Z may contribute a zero RSS observation.
+ZOMBIE_STATE = "Z"
+
 
 def descendants(table, root):
     members = {root}
@@ -42,8 +46,28 @@ def members(table, anchor_pid, finger=None):
 
 
 def rss_bytes(table, pids):
-    """Conservative sum: one unreadable/null RSS makes the whole sample null."""
-    values = [table[pid].get("rss") for pid in pids if pid in table]
-    if not values or any(value is None for value in values):
+    """Conservative sum: only a proven zombie may contribute zero RSS.
+
+    A null RSS from ``proc.snapshot`` is a measurement gap, not a zero-byte
+    reading, and still fails closed. The sole exception is a member whose
+    ``state`` was actually read from /proc stat as ``Z``: a zombie has no
+    resident pages, so counting it as zero neither hides live memory nor
+    admits a fabricated observation. A live, unreadable, or ambiguous member
+    (missing/unknown state) keeps the whole sample ``measurement_unavailable``.
+    """
+    total = 0
+    measured = False
+    for pid in pids:
+        record = table.get(pid)
+        if record is None:
+            continue
+        value = record.get("rss")
+        if value is None:
+            if record.get("state") != ZOMBIE_STATE:
+                raise GuardExceeded("measurement_unavailable")
+            value = 0
+        total += value
+        measured = True
+    if not measured:
         raise GuardExceeded("measurement_unavailable")
-    return sum(values)
+    return total

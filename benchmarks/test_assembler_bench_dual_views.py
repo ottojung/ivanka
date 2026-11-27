@@ -49,7 +49,7 @@ const html=V.sampleTable(run,snapshot,'R002','ivanka','iva');
 assert(html.includes('Clipped reads')&&html.includes('Primary mapped SAM records'));
 assert(html.includes('Ivanka')&&html.includes('IVA'));
 assert.equal((html.match(/<summary>/g)||[]).length,3);
-assert(html.includes('— means unavailable, not zero'));
+assert(html.includes('N/A means unavailable, not zero'));
 assert(!html.includes('table-scroll'));
 const subjects=[
  {key:'alignment',direction:'higher',label:'Alignment'},
@@ -87,6 +87,52 @@ console.log('PAIRED_VIEWS_OK');
             capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PAIRED_VIEWS_OK", result.stdout)
+
+    def test_plain_unavailable_legend_and_na_zero_distinction(self):
+        """The unavailability legend stays plain and N/A is never a zero.
+
+        A missing measurement is displayed as ``N/A`` and a measured zero as
+        ``0``. The legend must remain a plain sentence so the distinction is
+        readable without markup, and must not fall back to the old em dash.
+        """
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node unavailable")
+        script = r"""
+const assert=require('node:assert/strict');
+const D=require(process.argv[1]),V=require(process.argv[2]);
+const catalog={clips:{label:'Clipped reads',unit:'reads',stage:'Mapping',
+ description:'Count CIGAR soft clipping in the sample, not unmapped bases.',
+ denominator:'Primary mapped SAM records',suggested_direction:'lower'}};
+const samples=[1,2].map(i=>({
+ alias:'R00'+i,failures:[],
+ score:{ivanka:10*i,iva:i===1?0:18*i},
+ seconds:{ivanka:5+i,iva:6+i},
+ diagnostics:{ivanka:{clips:0},iva:{clips:i===1?null:i+3}}
+}));
+const run={id:'fixture',cohort:'real',tools:['ivanka','iva'],
+ hxb2_truth_verified:false,expected_sample_count:2,sample_count:2,samples};
+const snapshot={metric_catalog:catalog,run_id:'fixture'};
+const html=V.sampleTable(run,snapshot,'R001','ivanka','iva');
+const legend=html.match(/<p class="subtle">([^<]*)<\/p>/);
+assert(legend,'plain legend paragraph is missing');
+assert.equal(legend[1],
+  '3 of 3 metrics have at least one recorded value. N/A means unavailable, not zero.');
+const cells=[...html.matchAll(/<td class="number">([^<]*)<\/td>/g)]
+  .map(m=>m[1]);
+assert.deepEqual(cells,['10','0','6','7','0','N/A'],cells);
+assert(cells.includes('0'),'a measured zero must stay visible as 0');
+assert(cells.includes('N/A'),'a missing value must be shown as N/A');
+assert(!cells.includes('—'),'missing value must not use the old em dash');
+assert(!html.includes('— means unavailable'),'stale legend wording returned');
+console.log('PLAIN_NA_LEGEND_OK');
+"""
+        result = subprocess.run(
+            [node, "-e", script, str(ROOT / "site/bench/distribution.js"),
+             str(ROOT / "site/bench/compare_views.js")],
+            capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PLAIN_NA_LEGEND_OK", result.stdout)
 
     def test_modal_controls_and_no_obsolete_progress(self):
         html = (ROOT / "site/bench/index.html").read_text()

@@ -8,6 +8,7 @@ from pathlib import Path
 from .public_fork_provenance import check as check_fork_provenance
 from .public_validation import check_public_site
 from .publication import SCHEMA
+from .remap_diagnostic import validate_display_contract
 from .site_validation import check_mapping_snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -127,6 +128,16 @@ def validate_public_site(site=SITE):
             'params.set("psi_r",state.psiExponent)' not in js or
             'params.set("psi_metric",state.psiMetric)' not in js):
         raise ValueError("matrix lacks checked-metric Ψ(0,1,2) numeric views")
+    if any(token not in js for token in ("function toolLabelHtml(",
+                                          "function na(",
+                                          "function methodNotes(")):
+        raise ValueError("method type and N/A display contract missing")
+    views_text = (source / "compare_views.js").read_text()
+    if ("label(run," not in views_text
+            or "N/A means unavailable" not in views_text):
+        raise ValueError("case detail must show published labels and N/A")
+    if ".method-badge" not in (source / "style.css").read_text():
+        raise ValueError("method type badge style missing")
     if 'fetch("./data/runs.json"' not in js:
         raise ValueError("client must fetch same-origin relative data")
     if any(token in js for token in ("setInterval(", "setTimeout(",
@@ -139,6 +150,7 @@ def validate_public_site(site=SITE):
     if report.get("schema") != SCHEMA or not isinstance(report.get("runs"), list):
         raise ValueError("unsupported public result schema")
     checked = check_public_site(source)
+    validate_display_contract(report)
     for run in report["runs"]:
         if not RUN.fullmatch(run["id"]):
             raise ValueError("invalid public run identifier")

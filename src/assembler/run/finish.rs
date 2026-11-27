@@ -1,9 +1,9 @@
+#[cfg(feature = "ouj-funnel-trace")]
+use super::funnel;
 use super::{
     append_preserving_diversity, canonical_kmer, select_supported_contigs,
     select_supported_contigs_with_kmers, write_snv_audit,
 };
-#[cfg(feature = "ouj-funnel-trace")]
-use super::funnel;
 use std::error::Error;
 
 // Selection uses only read-supported contigs. The ordinary FASTA is

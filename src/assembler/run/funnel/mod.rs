@@ -10,7 +10,11 @@ const MAX_ENTRIES: usize = 32;
 const MAX_BASES: usize = 65536;
 
 fn open(path: PathBuf) -> io::Result<std::fs::File> {
-    OpenOptions::new().create(true).append(true).mode(0o600).open(path)
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(path)
 }
 
 fn hash(data: &[u8]) -> String {
@@ -43,7 +47,11 @@ pub(super) fn emit(out: &str, stage: &str, entries: &[(usize, &[u8], usize)]) ->
             write!(private, ",")?;
             write!(summary, ",")?;
         }
-        write!(private, "{head},\"seq\":\"{}\"}}", String::from_utf8_lossy(&seq[..stored]))?;
+        write!(
+            private,
+            "{head},\"seq\":\"{}\"}}",
+            String::from_utf8_lossy(&seq[..stored])
+        )?;
         write!(summary, "{head}}}")?;
     }
     writeln!(private, "]}}")?;

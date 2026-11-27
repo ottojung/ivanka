@@ -48,6 +48,9 @@ fn repeat_emission_is_byte_identical_and_private_file_is_0600() {
         fs::read(format!("{a}.ouj-funnel-summary.jsonl")).unwrap(),
         fs::read(format!("{b}.ouj-funnel-summary.jsonl")).unwrap()
     );
-    let mode = fs::metadata(format!("{a}.ouj-funnel-private.jsonl")).unwrap().permissions().mode();
+    let mode = fs::metadata(format!("{a}.ouj-funnel-private.jsonl"))
+        .unwrap()
+        .permissions()
+        .mode();
     assert_eq!(mode & 0o777, 0o600);
 }

@@ -51,7 +51,11 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
         funnel::emit(
             path,
             "readback_additional",
-            &[(candidate, contigs[candidate].as_slice(), statistics.pairs[candidate])],
+            &[(
+                candidate,
+                contigs[candidate].as_slice(),
+                statistics.pairs[candidate],
+            )],
         )?;
         selection(contigs.len(), candidate, &statistics);
         selected.extend(output::component(contigs, reads, &statistics, candidate));

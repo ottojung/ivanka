@@ -36,8 +36,11 @@ class FunnelContractTests(unittest.TestCase):
     def test_no_raw_sequence_in_published_summary(self):
         text = (ROOT / 'src/assembler/run/funnel/mod.rs').read_text()
         self.assertEqual(text.count('\\"seq\\"'), 1)
-        self.assertIn('write!(private, "{head},\\"seq\\"', text)
-        self.assertNotIn('write!(summary, "{head},\\"seq\\"', text)
+        # rustfmt may reflow the write! macro; compare without whitespace so
+        # the contract tracks the destination file, not the source layout.
+        normalized = ''.join(text.split())
+        self.assertIn('write!(private,"{head},\\"seq\\"', normalized)
+        self.assertNotIn('write!(summary,"{head},\\"seq\\"', normalized)
 
     def test_bounds_and_truncation_constants(self):
         text = (ROOT / 'src/assembler/run/funnel/mod.rs').read_text()

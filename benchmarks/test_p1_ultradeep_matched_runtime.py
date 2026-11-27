@@ -202,7 +202,7 @@ class GuardTest(unittest.TestCase):
         self.assertEqual(plan.DEPLOYED_PINS["deployed_root_head"],
                          "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
         self.assertEqual(plan.DEPLOYED_PINS["px_service_head"],
-                         "c3798910cb1d884ddea33cd1d0f405d7e0c31e2b")
+                         "b8720600c9f10e71472b2b55210badeabc257a81")
 
     def test_output_root_guards(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

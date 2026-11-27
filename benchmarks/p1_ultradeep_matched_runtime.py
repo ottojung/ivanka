@@ -119,7 +119,7 @@ DEPENDENCIES = {name: pin["head"] for name, pin in SOURCE_PINS.items()}
 DEPLOYED_PINS = {
     "guard_source_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
     "deployed_root_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
-    "px_service_head": "c3798910cb1d884ddea33cd1d0f405d7e0c31e2b",
+    "px_service_head": "b8720600c9f10e71472b2b55210badeabc257a81",
     "watchdog_service_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
     "guard_sha256": {
         "natural_exit_sha256":

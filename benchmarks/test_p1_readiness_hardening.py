@@ -448,43 +448,89 @@ class PortableArtifactPlanTests(unittest.TestCase):
         tmp.close()
         return tmp.name
 
-    def test_plan_is_pinned_pending_and_covers_both_candidates(self):
+    def test_plan_pins_produced_portable_bytes_not_built_images(self):
         proof = r.verify_portable_plan()
         self.assertEqual(proof["schema"], "ivanka.p1.portable-artifact-plan.v1")
         self.assertEqual(proof["candidates"], 2)
-        self.assertFalse(proof["produced"])
+        self.assertEqual(proof["produced"], 2)
         self.assertFalse(proof["build_executed"])
         doc = r.load_portable_plan()
+        self.assertEqual(doc["status"], "PORTABLE_BYTES_PRODUCED_NOT_IMAGE_BUILT")
+        self.assertEqual(doc["materialization_receipt"]["sha256"],
+                         "e4cb0b07dc466a3656ab06816b2d457aa958088cb883e5b4bbb549a4061c1d51")
+        self.assertEqual(doc["materialization_receipt"]["independent_elf_evidence_sha256"],
+                         "f67550650d08d3fc7cb11516dbe224a2a9a6675b5b7f35c4037428618bf9c2ef")
         native = [row["native_binary_sha256"] for row in doc["candidates"]]
         self.assertEqual(native, [
             "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786",
             "ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563"])
+        portable = [row["portable_binary_sha256"] for row in doc["candidates"]]
+        self.assertEqual(portable, [
+            "a3c3181be82a87bb823917e74d9e265b1afc0bd981c65d92b6db7cb2ea66a0bf",
+            "de62b9f59f323090e7f2ba03890f33a2bb11c6dc1487a4cb22cca7a93efd8c16"])
         self.assertTrue(all("/gnu/store/" in row["native_interp"]
                             for row in doc["candidates"]))
+        self.assertTrue(all(row["portable_image"] is None
+                            and row["image_built"] is False
+                            and row["image_identity_verified"] is False
+                            and row["copy_only_build"]["executed"] is False
+                            for row in doc["candidates"]))
+
+    def test_actual_portable_bytes_match_pins_and_dynamic_contract(self):
+        doc = r.load_portable_plan()
+        for row in doc["candidates"]:
+            path = Path(row["portable_binary_path"])
+            if not path.exists():
+                self.skipTest(f"portable artifact not mounted: {path}")
+            self.assertEqual(r.sha256(path), row["portable_binary_sha256"])
+            info = r.inspect_elf_portability(path)
+            self.assertEqual(info["interp"], r.PORTABLE_INTERP)
+            self.assertFalse(info["guix_store_runpath"])
+            self.assertEqual(info["needed"], list(r.PORTABLE_NEEDED))
+            self.assertLessEqual(max(info["glibc_minor_versions"]), 34)
+            proof = r.verify_portable_binary(
+                path, source_commit=row["source_commit"])
+            self.assertTrue(proof["portable"])
 
     def test_guix_interpreter_refused_no_silent_substitution(self):
         path = self._write(self._elf(
-            "/gnu/store/m31vlvwm79m89fk3xk0z4h7snk61y510-glibc-2.41/lib/ld-linux-x86-64.so.2"))
+            "/gnu/store/m31vlvwm79m89fk3xk0z4h7snk61y510-glibc-2.41/lib/ld-linux-x86-64.so.2",
+            needed=r.PORTABLE_NEEDED))
         with self.assertRaises(ValueError):
             r.verify_portable_binary(path)
+
+    def test_native_pinned_binary_is_not_treated_as_portable(self):
+        doc = r.load_portable_plan()
+        row = doc["candidates"][0]
+        native = Path(row["native_binary_path"])
+        if not native.exists():
+            self.skipTest(f"native artifact not mounted: {native}")
+        with self.assertRaisesRegex(ValueError, "no silent substitution"):
+            r.verify_portable_binary(native, source_commit=row["source_commit"])
 
     def test_portable_interp_without_exact_pin_refused(self):
         path = self._write(self._elf(r.PORTABLE_INTERP,
                                      needed=r.PORTABLE_NEEDED))
-        with self.assertRaises(ValueError):
-            r.verify_portable_binary(path)
+        with self.assertRaisesRegex(ValueError, "not produced/pinned"):
+            r.verify_portable_binary(path, source_commit=r.SOURCE_COMMIT)
 
     def test_guix_runpath_and_future_glibc_refused(self):
         guix = self._write(self._elf(
             r.PORTABLE_INTERP, needed=r.PORTABLE_NEEDED,
             runpath="/gnu/store/m31vlvwm79m89fk3xk0z4h7snk61y510-glibc-2.41/lib"))
         with self.assertRaises(ValueError):
-            r.verify_portable_binary(guix)
+            r.verify_portable_binary(guix, source_commit=r.SOURCE_COMMIT)
         future = self._write(self._elf(
             r.PORTABLE_INTERP, needed=r.PORTABLE_NEEDED,
             glibc=b"GLIBC_2.36\0"))
         with self.assertRaises(ValueError):
-            r.verify_portable_binary(future)
+            r.verify_portable_binary(future, source_commit=r.SOURCE_COMMIT)
+
+    def test_post_build_image_identity_gate_fails_closed(self):
+        row = r.load_portable_plan()["candidates"][0]
+        with self.assertRaisesRegex(ValueError, "not verified post-build"):
+            r.require_portable_image_identity_verified(
+                row["source_commit"], "0" * 64)
 
 
 class SeparatePcrCandidateTests(unittest.TestCase):

@@ -341,7 +341,7 @@ def verify_copy_overlay_admission_pins(bench_dir=None):
 # Guix PT_INTERP that does not exist in the frozen base image; a portable
 # artifact must be retargeted and newly pinned, never silently substituted.
 PORTABLE_PLAN = Path(__file__).with_name("p1_pilot_portable_image_manifest.json")
-PORTABLE_PLAN_SHA256 = "3f5eec61b5f9dbdea4028236461d89cb6ccce6ed8150e5ce07dc343eff33eb1e"
+PORTABLE_PLAN_SHA256 = "cda9e1a836f789c257e8480651681dcefa3ea2105e609bef2e8de41d98c71cc0"
 PORTABLE_INTERP = "/lib64/ld-linux-x86-64.so.2"
 PORTABLE_NEEDED = ("libgcc_s.so.1", "libc.so.6", "ld-linux-x86-64.so.2")
 PORTABLE_MAX_GLIBC_MINOR = 34
@@ -361,30 +361,56 @@ def load_portable_plan(expected_sha=None):
 
 
 def verify_portable_plan(plan=None):
-    """Validate the portability contract without producing any artifact."""
+    """Validate the portability contract for planned or produced portable bytes.
+
+    Produced portable bytes are allowed only when their exact path/SHA are
+    pinned and the image remains unbuilt/unverified. No silent native
+    substitution and no image-build/arm claim are permitted here.
+    """
     doc = plan or load_portable_plan()
     contract = doc.get("contract") or {}
     if not doc.get("prepared_only") or doc.get("build_executed") is not False:
         raise ValueError("portable plan must be prepared-only and unexecuted")
     if contract.get("pt_interp_required") != PORTABLE_INTERP:
         raise ValueError("portable plan interpreter pin differs")
-    if (not contract.get("guix_store_path_forbidden")
+    if (not contract.get("guix_store_runpath_forbidden")
             or not contract.get("needed_unchanged")
             or not contract.get("native_artifact_retained")
-            or not contract.get("silent_substitution_forbidden")):
+            or not contract.get("silent_substitution_forbidden")
+            or not contract.get("verify_before_arm")
+            or not contract.get("post_build_image_identity_gate_required")):
         raise ValueError("portable plan contract weakened")
     candidates = doc.get("candidates")
     if not isinstance(candidates, list) or len(candidates) != 2:
         raise ValueError("portable plan must cover both exact candidates")
+    produced = 0
     for row in candidates:
-        if (len(row.get("native_binary_sha256", "")) != 64
-                or len(row.get("source_commit", "")) < 7
-                or "/gnu/store/" not in row.get("native_interp", "")
-                or row.get("portable_binary_sha256") is not None
-                or row.get("portable_image") is not None):
-            raise ValueError("portable plan candidate pin incomplete or substituted")
+        native = row.get("native_binary_sha256")
+        commit = row.get("source_commit")
+        if (len(native or "") != 64 or len(commit or "") < 7
+                or "/gnu/store/" not in row.get("native_interp", "")):
+            raise ValueError("portable plan candidate pin incomplete")
+        portable = row.get("portable_binary_sha256")
+        image = row.get("portable_image")
+        built = row.get("image_built")
+        verified = row.get("image_identity_verified")
+        if portable is None:
+            if image is not None or built or verified:
+                raise ValueError("portable plan image state without portable bytes")
+            continue
+        if (len(portable) != 64
+                or not isinstance(row.get("portable_binary_path"), str)
+                or not row["portable_binary_path"]):
+            raise ValueError("portable plan portable pin incomplete")
+        if portable == native:
+            raise ValueError("portable plan silently substitutes native artifact")
+        if built not in (False, None) or verified not in (False, None):
+            raise ValueError("portable plan may not claim image build/verification")
+        if image is not None:
+            raise ValueError("portable image identity must be null before verified build")
+        produced += 1
     return {"schema": doc["schema"], "candidates": len(candidates),
-            "produced": False, "build_executed": False}
+            "produced": produced, "build_executed": False}
 
 
 def inspect_elf_portability(path):
@@ -496,6 +522,29 @@ def verify_portable_binary(path, source_commit=None, *, plan=None):
         raise ValueError("portable artifact not produced/pinned")
     return {"source_commit": row["source_commit"], "sha256": digest,
             "image": row["portable_image"], "portable": True}
+
+
+def require_portable_image_identity_verified(source_commit, image_digest,
+                                             *, plan=None):
+    """Fail closed until a guarded COPY-only build produced a verified image.
+
+    Portable bytes may be pinned before an image exists, but no arm may use
+    them until the exact image identity is verified post-build.
+    """
+    doc = plan or load_portable_plan()
+    verify_portable_plan(doc)
+    if not isinstance(image_digest, str) or len(image_digest) != 64:
+        raise ValueError("portable image digest must be a full sha256")
+    rows = [row for row in doc["candidates"]
+            if row["source_commit"] == source_commit]
+    if len(rows) != 1:
+        raise ValueError("portable plan candidate not uniquely selected")
+    row = rows[0]
+    if (not row.get("image_built") or not row.get("image_identity_verified")
+            or row.get("portable_image") != image_digest):
+        raise ValueError("portable image identity not verified post-build")
+    return {"source_commit": source_commit, "image": image_digest,
+            "verified": True}
 
 
 def pinned_podman_env(storage_conf=None, *, expected_sha=None):

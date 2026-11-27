@@ -103,6 +103,31 @@ def operator_environment(storage_conf: pathlib.Path,
     return env
 
 
+def observe_starting_container_cpu_max(
+    cidfile: str, env: dict[str, str], *, attempts: int = 20,
+    interval: float = 0.1, observer: Callable[[dict[str, str], str], str | None] | None = None,
+) -> str | None:
+    """Observe the live container quota while the launcher is still running.
+
+    Podman writes the pinned cidfile before the arm exits; a post-run inspect
+    often finds no container because the reviewed argv uses --rm. A failed
+    observation stays None and fails closed in comparability rather than being
+    reported as proof.
+    """
+    inspect = observer or observe_container_cpu_max
+    for _ in range(attempts):
+        try:
+            cid = pathlib.Path(cidfile).read_text().strip()
+        except (OSError, ValueError):
+            cid = ""
+        if cid:
+            observed = inspect(env, cid)
+            if observed is not None:
+                return observed
+        time.sleep(interval)
+    return None
+
+
 def production_podman_spawn(argv: list[str], cidfile: str, env: dict[str, str],
                             arm_dir: pathlib.Path) -> subprocess.Popen[str]:
     """Spawn a real podman arm with the guard-owned cidfile.
@@ -172,6 +197,8 @@ def build_production_arm_runner(
         def wrapped_spawn(cidfile, spawn_env, *, argv, arm_dir):
             proc = production_podman_spawn(argv, cidfile, spawn_env, arm_dir)
             inner_holder["proc"] = proc
+            inner_holder["observed_container_cpu_max"] = observe_starting_container_cpu_max(
+                cidfile, run_env)
             return proc
 
         local_runner = guarded_podman_arm_runner(
@@ -190,19 +217,19 @@ def build_production_arm_runner(
             measure=_measure,
         )
         result = local_runner(step, argv, arm_dir, deadline=deadline)
-        cidfiles = result.get("pinned_cidfiles") or []
-        if cidfiles:
-            try:
-                cid = pathlib.Path(cidfiles[0]).read_text().strip()
-                observed = observe_container_cpu_max(run_env, cid)
-                if observed is not None:
-                    result["observed_container_cpu_max"] = observed
-                    if observed != "200000 100000":
-                        raise Refusal("observed container cpu.max mismatch: " + observed)
-            except Refusal:
-                raise
-            except Exception:
-                pass
+        observed = inner_holder.get("observed_container_cpu_max")
+        if observed is None:
+            cidfiles = result.get("pinned_cidfiles") or []
+            if cidfiles:
+                try:
+                    cid = pathlib.Path(cidfiles[0]).read_text().strip()
+                    observed = observe_container_cpu_max(run_env, cid)
+                except Exception:
+                    observed = None
+        if observed is not None:
+            result["observed_container_cpu_max"] = observed
+            if observed != "200000 100000":
+                raise Refusal("observed container cpu.max mismatch: " + observed)
         return result
 
     return _runner

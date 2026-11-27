@@ -197,6 +197,22 @@ class ExecutorTest(unittest.TestCase):
             self.assertEqual(payload["execution"], "refused")
             self.assertIn("missing required args", payload["reason"])
 
+    def test_starting_quota_observation_retries_until_cidfile_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cidfile = pathlib.Path(tmp) / "cid"
+            calls = []
+
+            def observer(env, cid):
+                calls.append(cid)
+                return "200000 100000" if len(calls) >= 2 else None
+
+            cidfile.write_text("abcdef\n")
+            observed = ex.observe_starting_container_cpu_max(
+                str(cidfile), {"PATH": "/usr/bin"}, attempts=5, interval=0.001,
+                observer=observer)
+            self.assertEqual(observed, "200000 100000")
+            self.assertEqual(calls, ["abcdef", "abcdef"])
+
     def test_operator_environment_is_real_and_store_pinned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             conf = pathlib.Path(tmp) / "storage.conf"

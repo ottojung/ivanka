@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
@@ -29,8 +30,8 @@ from pathlib import Path
 
 from . import guarded_canary_launcher as launcher
 from .px_ram_semantics import (
-    COMPARABLE_METHOD, COMPARABLE_METHOD_VERSION, COMPARABLE_SCOPE,
-    METHOD_KEY, SCOPE_KEY, UNAVAILABLE_KEY, VERSION_KEY,
+    COMPARABLE_KEY, COMPARABLE_METHOD, COMPARABLE_METHOD_VERSION,
+    COMPARABLE_SCOPE, METHOD_KEY, SCOPE_KEY, UNAVAILABLE_KEY, VERSION_KEY,
 )
 
 TOOL_ID = "micall-remap"
@@ -256,22 +257,68 @@ def capacity_decision(free_bytes: int) -> dict:
     }
 
 
-def attested_ram(resource: dict) -> dict:
-    """Attach only a whole-container attestation, never launcher bytes."""
+CID64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _finite_number(value):
+    return (type(value) in (int, float)
+            and not isinstance(value, bool)
+            and math.isfinite(value))
+
+
+def validate_whole_container_observation(resource: dict, *, guard: dict) -> dict:
+    """Accept only an ended, whole-container process-tree observation.
+
+    Launcher-process-group bytes, unattested scopes, missing CID binding, or
+    unfinished observations are never promoted to the comparable RAM metric.
+    """
     if not isinstance(resource, dict):
         raise ValueError("resource observation must be a record")
+    method = resource.get(METHOD_KEY)
+    version = resource.get(VERSION_KEY)
+    scope = resource.get(SCOPE_KEY)
+    if method != COMPARABLE_METHOD or version != COMPARABLE_METHOD_VERSION or scope != COMPARABLE_SCOPE:
+        raise ValueError("resource observation lacks attested whole-container scope")
+    cid = resource.get("bound_cid") or resource.get("cid")
+    if not isinstance(cid, str) or not CID64.fullmatch(cid):
+        raise ValueError("resource observation lacks exact bound CID")
+    if resource.get("observation_ended") is not True:
+        raise ValueError("resource observation is not ended")
+    samples = resource.get("samples")
+    if not isinstance(samples, int) or isinstance(samples, bool) or samples < 2:
+        raise ValueError("resource observation lacks enough samples")
+    peak = resource.get("peak_rss_bytes")
+    if not isinstance(peak, int) or isinstance(peak, bool) or peak < 0:
+        raise ValueError("resource observation peak_rss_bytes is invalid")
+    if peak > guard["rss_limit_bytes"]:
+        raise ValueError("resource observation exceeds guard RSS limit")
+    return {
+        "bound_cid": cid,
+        "observation_ended": True,
+        "samples": samples,
+        "peak_rss_bytes": peak,
+    }
+
+
+def attested_ram(resource: dict) -> dict:
+    """Attach only a validated whole-container attestation.
+
+    Any missing/invalid field forces comparable RAM to null with an explicit
+    unavailable reason; launcher-group scope is never promoted.
+    """
     diagnostics = {
+        COMPARABLE_KEY: None,
         METHOD_KEY: COMPARABLE_METHOD,
         VERSION_KEY: COMPARABLE_METHOD_VERSION,
         SCOPE_KEY: COMPARABLE_SCOPE,
+        UNAVAILABLE_KEY: "No valid ended whole-container RSS observation",
     }
-    peak = resource.get("peak_rss_bytes")
-    if type(peak) is int and 0 <= peak <= GUARD["rss_limit_bytes"]:
-        diagnostics["peak_ram_observed_mib"] = round(peak / 1048576, 6)
-    else:
-        diagnostics["peak_ram_observed_mib"] = None
-        diagnostics[UNAVAILABLE_KEY] = (
-            "No valid ended whole-container RSS observation in this attempt")
+    try:
+        valid = validate_whole_container_observation(resource, guard=GUARD)
+    except Exception:
+        return diagnostics
+    diagnostics[COMPARABLE_KEY] = round(valid["peak_rss_bytes"] / 1048576, 6)
+    diagnostics.pop(UNAVAILABLE_KEY, None)
     return diagnostics
 
 
@@ -292,15 +339,43 @@ def build_receipt(plan: dict, *, status: str, diagnostics: dict | None = None,
             raise ValueError("unavailable remap metric carries a fabricated value")
     if resource is not None:
         values.update(attested_ram(resource))
+    resource_record = dict(resource or {})
+    guard_receipt = resource_record.get("guard_receipt") or {}
     if status == "measured":
-        if type(score) not in (int, float) or type(seconds) not in (int, float):
-            raise ValueError("measured remap case needs genuine score and runtime")
+        if not _finite_number(score) or not _finite_number(seconds):
+            raise ValueError("measured remap case needs finite score and runtime")
         if score < 0 or not 0 < seconds <= GUARD["wall_seconds"]:
             raise ValueError("measured remap case violates the resource contract")
+        if not isinstance(outputs, dict) or not outputs:
+            raise ValueError("measured remap case lacks output evidence")
+        if not SHA64.fullmatch(str(outputs.get("conseq_csv_sha256", ""))):
+            raise ValueError("measured remap case lacks conseq output hash")
+        validate_whole_container_observation(resource_record, guard=GUARD)
+        if not isinstance(guard_receipt, dict):
+            raise ValueError("measured remap case lacks guard receipt")
+        bound_cid = guard_receipt.get("bound_cid") or guard_receipt.get("cid")
+        if not isinstance(bound_cid, str) or not CID64.fullmatch(bound_cid):
+            raise ValueError("measured remap case lacks guard receipt bound CID")
+        if bound_cid != resource_record.get("bound_cid") and bound_cid != resource_record.get("cid"):
+            raise ValueError("guard receipt CID does not bind resource observation")
+        expected_guard = {
+            "rss_limit_bytes": GUARD["rss_limit_bytes"],
+            "wall_seconds": GUARD["wall_seconds"],
+            "cpu_allocation": GUARD["cpu_allocation"],
+        }
+        for key, value in expected_guard.items():
+            if guard_receipt.get(key) != value:
+                raise ValueError(f"guard receipt {key} does not match exact bound")
+        if guard_receipt.get("kernel_enforcement") is not False:
+            raise ValueError("guard receipt kernel_enforcement must be false")
     elif score is not None or seconds is not None:
         raise ValueError("unmeasured remap case fabricates a measurement")
     if status != "measured" and not failure_reason:
         raise ValueError("unmeasured remap case needs an explicit reason")
+    receipt_resource = dict(resource or {})
+    if receipt_resource.get("bound_cid") or receipt_resource.get("cid"):
+        cid = receipt_resource.get("bound_cid") or receipt_resource.get("cid")
+        receipt_resource["bound_cid"] = cid
     receipt = {
         "schema": RECEIPT_SCHEMA,
         "run_id": plan["run_id"],
@@ -314,11 +389,12 @@ def build_receipt(plan: dict, *, status: str, diagnostics: dict | None = None,
         "invocation": INVOCATION,
         "argv_sha256": plan["argv_sha256"],
         "guard_bounds": dict(GUARD),
+        "guard_receipt": dict((resource_record.get("guard_receipt") or {})),
         "source": dict(plan["source"]),
         "image": dict(plan["image"]),
         "reference": dict(plan["reference"]),
         "inputs": dict(plan["inputs"]),
-        "resource": dict(resource or {}),
+        "resource": receipt_resource,
         "outputs": dict(outputs or {}, unstitched_contigs="not-applicable"),
         "diagnostics": values,
         "unavailable": unavailable,

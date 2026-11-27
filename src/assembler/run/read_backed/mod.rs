@@ -10,6 +10,8 @@ mod tests;
 mod tiling;
 mod trimming;
 
+#[cfg(feature = "ouj-funnel-trace")]
+pub(super) use super::funnel;
 use super::{encode, Reads, K};
 use std::io;
 
@@ -26,12 +28,26 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
     let hits = index::build(contigs);
     let statistics = scoring::count(contigs, reads, &hits);
     let chosen = ranking::best(contigs, &statistics);
+    #[cfg(feature = "ouj-funnel-trace")]
+    funnel::emit_all(path, "readback_before", contigs, &statistics.pairs)?;
+    #[cfg(feature = "ouj-funnel-trace")]
+    funnel::emit_one(path, "component_before", contigs, &statistics.pairs, chosen)?;
     selection(contigs.len(), chosen, &statistics);
     let mut selected = output::component(contigs, reads, &statistics, chosen);
     for candidate in ranking::additional(contigs, &statistics, chosen) {
+        #[cfg(feature = "ouj-funnel-trace")]
+        funnel::emit_one(
+            path,
+            "readback_additional",
+            contigs,
+            &statistics.pairs,
+            candidate,
+        )?;
         selection(contigs.len(), candidate, &statistics);
         selected.extend(output::component(contigs, reads, &statistics, candidate));
     }
+    #[cfg(feature = "ouj-funnel-trace")]
+    funnel::emit_selected(path, "tiling_after", &selected)?;
     output::write(path, &selected)?;
     Ok(selected.len())
 }

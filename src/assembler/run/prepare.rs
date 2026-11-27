@@ -1,3 +1,5 @@
+#[cfg(feature = "ouj-funnel-trace")]
+use super::funnel;
 use super::{assemble_candidates, balanced_seed_candidates, rescue_short, seeds, Config, Reads};
 use std::error::Error;
 
@@ -32,6 +34,8 @@ pub(super) fn assemble(config: &Config) -> Result<Prepared, Box<dyn Error>> {
         config.max_pairs,
         &contigs,
     )?;
+    #[cfg(feature = "ouj-funnel-trace")]
+    funnel::emit_all(&config.output, "native", &contigs, &supporting_counts)?;
     eprintln!(
         concat!(
             "Ivanka ranking {} candidates by read-support density ",

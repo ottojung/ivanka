@@ -1,4 +1,6 @@
 mod finish;
+#[cfg(feature = "ouj-funnel-trace")]
+mod funnel;
 mod prepare;
 mod read_backed;
 mod seed_duplicates;

@@ -124,6 +124,12 @@ def validate_registry(registry):
     return registry
 
 
+def _alias_cohort(alias):
+    if isinstance(alias, str) and ALIAS.fullmatch(alias):
+        return "real" if alias.startswith("R") else "synthetic"
+    return None
+
+
 def validate_rows(rows):
     """Validate one runner delivery: authentic inputs, honest missingness."""
     if not isinstance(rows, dict) or rows.get("schema") != ROWS_SCHEMA:
@@ -154,6 +160,8 @@ def validate_rows(rows):
         alias = case.get("alias")
         if not isinstance(alias, str) or not ALIAS.fullmatch(alias):
             raise ValueError("remap case lacks a canonical cohort alias")
+        if _alias_cohort(alias) != rows["cohort"]:
+            raise ValueError("remap case alias does not match row cohort")
         if alias in aliases:
             raise ValueError("duplicate remap case alias")
         aliases.add(alias)
@@ -195,8 +203,13 @@ def validate_rows(rows):
             if key in diagnostics and not isinstance(diagnostics[key], str):
                 raise ValueError("remap RAM attestation fields must be strings")
         if case["status"] == "measured":
-            if not _number(case.get("score")) or not _number(case.get("seconds")):
+            score = case.get("score")
+            seconds = case.get("seconds")
+            if not _number(score):
                 raise ValueError("measured remap case lacks score or runtime")
+            if (type(seconds) not in (int, float) or not math.isfinite(seconds)
+                    or not 0 < seconds <= 2400):
+                raise ValueError("measured remap seconds must be >0 and <=2400")
         else:
             if case.get("score") is not None or case.get("seconds") is not None:
                 raise ValueError("unmeasured remap case fabricates a measurement")
@@ -324,10 +337,112 @@ def _roster_entry(rows, registry):
     }
 
 
-def merge_diagnostic_report(report, registry, rows):
+def _case_read_pairs(case):
+    mates = case.get("read_sha256") or case.get("input_sha256") or {}
+    if set(mates) == {"R1", "R2"} and all(_hash(mates[k]) for k in ("R1", "R2")):
+        return {"R1": mates["R1"], "R2": mates["R2"]}
+    return None
+
+
+def _normalize_attested_inputs(attested_inputs, cohort):
+    """Index independently attested input identities by canonical alias."""
+    if attested_inputs is None:
+        raise ValueError("remap merge requires independently attested input mapping")
+    if isinstance(attested_inputs, dict) and "cases" in attested_inputs:
+        records = attested_inputs["cases"]
+    elif isinstance(attested_inputs, dict):
+        records = [{"alias": k, **v} if isinstance(v, dict) else v
+                   for k, v in attested_inputs.items()]
+    elif isinstance(attested_inputs, list):
+        records = attested_inputs
+    else:
+        raise ValueError("remap attested input mapping must be a dict or list")
+    index = {}
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("remap attested input record must be an object")
+        alias = record.get("alias") or record.get("canonical_alias")
+        if not isinstance(alias, str) or not ALIAS.fullmatch(alias):
+            raise ValueError("remap attested input lacks a canonical alias")
+        record_cohort = record.get("cohort", cohort)
+        if record_cohort != cohort:
+            continue
+        if alias in index:
+            raise ValueError("duplicate attested remap input alias")
+        reads = record.get("read_sha256") or record.get("input_sha256")
+        if not isinstance(reads, dict) or set(reads) != {"R1", "R2"}:
+            raise ValueError("remap attested input lacks paired read hashes")
+        if any(not _hash(reads[k]) for k in ("R1", "R2")):
+            raise ValueError("remap attested input read hash invalid")
+        manifest = record.get("canonical_manifest_sha256")
+        if not _hash(manifest):
+            raise ValueError("remap attested input manifest hash invalid")
+        paired = record.get("paired_input_sha256")
+        if paired is not None and not _hash(paired):
+            raise ValueError("remap attested paired input hash invalid")
+        index[alias] = {
+            "alias": alias,
+            "cohort": record_cohort,
+            "canonical_manifest_sha256": manifest,
+            "read_sha256": {"R1": reads["R1"], "R2": reads["R2"]},
+            "paired_input_sha256": paired,
+        }
+    return index
+
+
+def _assert_case_binding(case, rows, registry, attested):
+    alias = case["alias"]
+    cohort = rows["cohort"]
+    if _alias_cohort(alias) != cohort:
+        raise ValueError("remap case alias does not match row cohort")
+    expected_panel = registry["reference_panel_sha256"]
+    expected_manifest = registry["inputs"][cohort]
+    if case["canonical_manifest_sha256"] != expected_manifest:
+        raise ValueError("remap case uses a different cohort manifest")
+    if case["reference_panel_sha256"] != expected_panel:
+        raise ValueError("remap case uses a different reference panel")
+    ref = attested.get(alias)
+    if ref is None:
+        raise ValueError("remap case is not in attested input mapping")
+    if ref["canonical_manifest_sha256"] != case["canonical_manifest_sha256"]:
+        raise ValueError("remap case manifest disagrees with attested input")
+    reads = _case_read_pairs(case)
+    if reads is None or reads != ref["read_sha256"]:
+        raise ValueError("remap case read pair disagrees with attested input")
+    paired = case.get("paired_input_sha256")
+    if (_hash(paired) and _hash(ref.get("paired_input_sha256"))
+            and paired != ref["paired_input_sha256"]):
+        raise ValueError("remap case paired hash disagrees with attested input")
+    return ref
+
+
+def _tool_note(rows):
+    cohort = rows.get("cohort")
+    if cohort == "synthetic":
+        scoring = ("synthetic hidden-truth post-hoc scoring; truth is never "
+                   "mounted into reconstruction")
+    else:
+        scoring = ("physical scoring against the ordinary frozen reference "
+                   "panel")
+    return (f"Reference-based method; {scoring}; shared attested frozen image, "
+            f"distinct run identity {rows['run_id']}")
+
+
+def _merge_tool_note(existing, rows):
+    note = _tool_note(rows)
+    if not existing:
+        return note
+    if note in existing:
+        return existing
+    return existing + " " + note
+
+
+def merge_diagnostic_report(report, registry, rows, attested_inputs=None):
     """Return an augmented copy of a public report for diagnostic display.
 
-    Callers must opt in through the registry. The frozen input document, its
+    Callers must opt in through the registry. ``attested_inputs`` must be an
+    independently attested alias->read-pair/manifest mapping; rows are joined
+    only when they match that mapping exactly. The frozen input document, its
     PSI certificate and every private gate input remain untouched.
     """
     validate_registry(registry)
@@ -337,16 +452,14 @@ def merge_diagnostic_report(report, registry, rows):
     if (rows["image_sha256"] != registry["image"]["sha256"]
             or rows["frozen_master_commit"] != registry["frozen_master_commit"]):
         raise ValueError("remap rows disagree with the registered frozen base")
+    attested = _normalize_attested_inputs(attested_inputs, rows["cohort"])
     result = copy.deepcopy(report)
     if result.get("schema") != "ivanka.assembler-bench.public.v1":
         raise ValueError("unsupported public report schema")
     original_psi = copy.deepcopy(result.get("psi", {}))
     cases_by_cohort = {"real": [], "synthetic": []}
     for case in rows["cases"]:
-        if case["alias"].startswith("R"):
-            cases_by_cohort["real"].append(case)
-        else:
-            cases_by_cohort["synthetic"].append(case)
+        cases_by_cohort[rows["cohort"]].append(case)
     joined = 0
     for run in result.get("runs", []):
         cohorts = (("real", "synthetic") if run.get("cohort") == "combined"
@@ -355,28 +468,43 @@ def merge_diagnostic_report(report, registry, rows):
                       for case in cases_by_cohort.get(cohort, [])]
         if not applicable:
             continue
+        methods = run.setdefault("diagnostic_methods", [])
+        if any(m.get("id") == TOOL_ID and m.get("run_id") == rows["run_id"]
+               for m in methods):
+            # Idempotent for exact same run_id; conflicting re-merge with
+            # different contents is detected below by per-case checks.
+            pass
+        elif any(m.get("id") == TOOL_ID and m.get("run_id") != rows["run_id"]
+                 and m.get("cohort") == rows.get("cohort") for m in methods):
+            # Same cohort cannot have two different remap run identities.
+            raise ValueError("remap diagnostic method already present for cohort")
         run.setdefault("tools", [])
         if TOOL_ID not in run["tools"]:
             run["tools"].append(TOOL_ID)
-        run.setdefault("roster", []).append(_roster_entry(rows, registry))
+        roster = run.setdefault("roster", [])
+        if not any(item.get("id") == TOOL_ID for item in roster):
+            roster.append(_roster_entry(rows, registry))
         run.setdefault("tool_labels", {})[TOOL_ID] = LABEL
+        mode_description = (
+            "Ordinary frozen MiCall without --denovo; final MAX sequences "
+            "scored by the cohort's ordinary post-hoc scorer. Physical "
+            "reference-panel alignment may reflect the shared reference "
+            "family and is diagnostic, not reference-blind assembly evidence."
+        )
         run.setdefault("tool_modes", {})[TOOL_ID] = {
             "kind": METHOD_KIND, "de_novo": False,
-            "description": ("Ordinary frozen MiCall without --denovo; final "
-                            "MAX sequences scored against the ordinary "
-                            "reference panel. A favorable alignment can "
-                            "reflect the shared reference family and is a "
-                            "diagnostic observation, not reference-blind "
-                            "assembly performance.")}
-        run.setdefault("tool_notes", {})[TOOL_ID] = (
-            "Reference-based method; shared attested frozen image, distinct "
-            "run identity " + rows["run_id"])
+            "description": mode_description}
+        notes = run.setdefault("tool_notes", {})
+        notes[TOOL_ID] = _merge_tool_note(notes.get(TOOL_ID), rows)
         run.setdefault("images", {})[TOOL_ID] = registry["image"]["sha256"]
-        run.setdefault("diagnostic_methods", []).append({
-            "id": TOOL_ID, "label": LABEL, "method": METHOD_KIND,
-            "run_id": rows["run_id"],
-            "reference_panel_sha256": registry["reference_panel_sha256"],
-        })
+        if not any(m.get("id") == TOOL_ID and m.get("run_id") == rows["run_id"]
+                   for m in methods):
+            methods.append({
+                "id": TOOL_ID, "label": LABEL, "method": METHOD_KIND,
+                "run_id": rows["run_id"],
+                "cohort": rows["cohort"],
+                "reference_panel_sha256": registry["reference_panel_sha256"],
+            })
         index = {}
         for sample in run.get("samples", []):
             alias = sample.get("alias", "")
@@ -384,14 +512,18 @@ def merge_diagnostic_report(report, registry, rows):
                 alias = alias[2:]
             index[alias] = sample
         for case in applicable:
-            expected_panel = registry["reference_panel_sha256"]
-            if (case["reference_panel_sha256"] != expected_panel
-                    or case["canonical_manifest_sha256"]
-                    != registry["inputs"][rows["cohort"]]):
-                raise ValueError("remap case uses a different cohort or panel")
+            _assert_case_binding(case, rows, registry, attested)
             sample = index.get(case["alias"])
             if sample is None:
                 continue
+            existing_score = sample.get("score", {}).get(TOOL_ID)
+            existing_seconds = sample.get("seconds", {}).get(TOOL_ID)
+            if existing_score is not None or existing_seconds is not None:
+                # Idempotent only when identical.
+                if (existing_score == case.get("score")
+                        and existing_seconds == case.get("seconds")):
+                    continue
+                raise ValueError("duplicate remap case conflicts with published value")
             sample.setdefault("score", {})[TOOL_ID] = case.get("score")
             sample.setdefault("seconds", {})[TOOL_ID] = case.get("seconds")
             diagnostics = sample.setdefault("diagnostics", {}).setdefault(
@@ -424,11 +556,14 @@ def merge_diagnostic_report(report, registry, rows):
                 sample["outcome"] = "failure"
             joined += 1
         expected = run.get("expected_sample_count", run.get("sample_count", 0))
+        finished = sum(1 for s in run.get("samples", [])
+                       if isinstance((s.get("score") or {}).get(TOOL_ID),
+                                     (int, float))
+                       or TOOL_ID in (s.get("failures") or []))
+        failed = sum(1 for s in run.get("samples", [])
+                     if TOOL_ID in (s.get("failures") or []))
         run.setdefault("tool_progress", {})[TOOL_ID] = {
-            "expected": expected,
-            "finished": sum(case["status"] == "measured"
-                            for case in applicable),
-            "failed": sum(case["status"] == "failed" for case in applicable),
+            "expected": expected, "finished": finished, "failed": failed,
         }
         run["dominance_matrix"] = public_matrix(run)
     if result.get("psi", {}) != original_psi:

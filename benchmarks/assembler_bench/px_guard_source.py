@@ -33,10 +33,10 @@ COMMIT = re.compile(r"^[a-f0-9]{40}$")
 CONTROL_ROOT = Path("/workspace/ivanka-px-control-cutover")
 CONTROL_IDENTITY_NAME = "px_control_identity.json"
 CONTROL_IDENTITY_SCHEMA = "ivanka.px.control-source-identity.v1"
-CONTROL_IDENTITY_SHA256 = "436d7744869a4f6628267f9731a53d0962806e34a29beffef3306fa3546c1910"
+CONTROL_IDENTITY_SHA256 = "4f9a1c80716a8794e63cd1ed1ed5f541e57a18ebba2aadb6fdbd37ff15644b05"
 CONTROL_RETRY_SOURCE = "benchmarks/assembler_bench/px_retry_authorization.py"
 CONTROL_RETRY_SHA256 = "0ba6009b3bb63411e92b159d54e7cb7e62bef9fb7d0cc31113b5320792acb3e6"
-CONTROL_GUARD_SOURCE_SHA256 = "d8dca1f3ead2ad391a1e3a3325a863b9215e47961635eac76231cb1d698746b7"
+CONTROL_GUARD_SOURCE_SHA256 = "6f5c1e95fe822c4a8f58b509f48e42d5499726ddb49ee7bef5bf16ca5eae3fe7"
 
 # Immutable guard deployment checkout (reviewed PR535 merge). Preserve .git.
 DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr535-staged-20261127")

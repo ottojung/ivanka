@@ -5,6 +5,7 @@ be the PR411 exclusive single-worker launcher. The supervisor is inert until an
 image-agent handoff is attested and tests have passed, so importing this module
 can never start a competing benchmark worker.
 """
+import fcntl
 import json
 import logging
 import time
@@ -13,6 +14,7 @@ from pathlib import Path
 
 from . import exploratory_policy
 from . import px_cohort_scheduler as sched
+from . import px_disk_retry_admission as disk_admission
 from . import px_retry_authorization as authz
 
 HANDOFF_SCHEMA = "ivanka.px.supervisor.handoff.v1"
@@ -114,12 +116,17 @@ class BackgroundSupervisor:
 
     def __init__(self, registry, baseline, source, root, runner,
                  reserve_bytes=1024**3, clock=time.monotonic, sleep=time.sleep,
-                 diagnostics=None, retain=None, scorer=None, scorer_sha=None):
+                 diagnostics=None, retain=None, scorer=None, scorer_sha=None,
+                 disk_retry_extra_bytes=disk_admission.DEFAULT_EXTRA_BYTES):
         self.registry = Path(registry)
         self.baseline = json.loads(Path(baseline).read_text())
         self.source, self.root = source, Path(root)
         self.runner = runner
         self.reserve_bytes = reserve_bytes
+        self.disk_retry_extra_bytes = disk_retry_extra_bytes
+        self.disk_retry_reserve_bytes, self.disk_retry_unavailable_reason = (
+            disk_admission.retry_reservation_or_reason(
+                reserve_bytes, disk_retry_extra_bytes))
         self.clock, self.sleep = clock, sleep
         self.diagnostics = diagnostics
         self.retain = retain
@@ -137,14 +144,57 @@ class BackgroundSupervisor:
             if not verify_handoff(self.root, self.registry, tool):
                 raise HandoffRequired("no verified image-agent handoff for " + tool)
         pending = sched.resume(plan, self.root)
-        completed = []
+        completed, deferred = [], []
         for arm in balanced_pending(plan, pending):
             if (self.root / STOP_FILE).is_file():
                 break
-            self._run_arm(arm, plan, completed)
-        return {"status": "stopped" if (self.root / STOP_FILE).is_file()
-                else "idle" if not pending else "advanced",
-                "completed": completed, "remaining": len(pending) - len(completed)}
+            if self._run_arm(arm, plan, completed) == "deferred":
+                deferred.append(sched.receipt_id(arm))
+        status = "stopped" if (self.root / STOP_FILE).is_file() else (
+            "deferred" if deferred else "idle" if not pending else "advanced")
+        return {"status": status, "completed": completed, "deferred": deferred,
+                "remaining": len(pending) - len(completed)}
+
+    def _dispatch_reserve(self, arm, attempt):
+        """Extra headroom for disk_stop retries; base reserve otherwise.
+
+        The larger reservation is checked again under the actual launcher lock
+        by passing it to the guarded runner/operate path before any child spawn.
+        """
+        prior = sched.verify_receipt(self.root, arm)
+        if not (attempt > 1 and isinstance(prior, dict)
+                and prior.get("failure_reason") == "disk_stop"):
+            return self.reserve_bytes, None
+        if self.disk_retry_reserve_bytes is None:
+            return None, {
+                "schema": disk_admission.ADMISSION_SCHEMA,
+                "action": "defer",
+                "base_reservation_bytes": self.reserve_bytes,
+                "extra_headroom_bytes": 0,
+                "proposed_reservation_bytes": None,
+                "reason": self.disk_retry_unavailable_reason,
+            }
+        decision = disk_admission.evaluate(
+            self.registry, self.baseline, self.root, self.reserve_bytes,
+            extra_bytes=self.disk_retry_extra_bytes)
+        if decision["action"] != "retry":
+            return None, decision
+        return self.disk_retry_reserve_bytes, decision
+
+    def _locked_admit(self, reserve_bytes):
+        """Recheck admission under the same worker lock used by operate()."""
+        lock_path = self.root / ".global-worker.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            sched.admit_arm(self.registry, self.baseline, self.root,
+                            reserve_bytes)
+
+    def _run_runner(self, arm, case, reserve_bytes):
+        try:
+            return self.runner(arm, case, reserve_bytes=reserve_bytes)
+        except TypeError:
+            return self.runner(arm, case)
 
     def _run_arm(self, arm, plan, completed):
         existing = sched.verify_receipt(self.root, arm)
@@ -155,18 +205,34 @@ class BackgroundSupervisor:
                         or authz.verify(self.root, arm) is None):
                     break
             prior = sched.verify_receipt(self.root, arm)
+            dispatch_reserve, disk_decision = self._dispatch_reserve(arm, attempt)
+            if dispatch_reserve is None:
+                if prior is not None:
+                    disk_admission.record_deferred(
+                        self.root, arm, disk_decision, prior=prior)
+                    logging.warning("PX disk_stop retry deferred for %s: %s",
+                                    sched.receipt_id(arm),
+                                    disk_decision["reason"])
+                return "deferred"
             if prior is not None:
                 # Every dispatch after a failure, including resume after STOP
                 # or a rejected admission, must archive the failed output first.
                 self._prepare_retry(arm, prior, attempt - 1)
+            # Pre-lock admission is fail-closed; the guarded runner rechecks the
+            # same reservation under the actual worker lock before spawn.
             sched.admit_arm(self.registry, self.baseline, self.root,
-                            self.reserve_bytes)
+                            dispatch_reserve)
             case = self.source.case(arm["cohort"], arm["alias"])
+            if dispatch_reserve != self.reserve_bytes:
+                # Extra disk_stop headroom must be verified under the actual
+                # worker lock before claim/spawn; fail closed before consuming
+                # any one-shot authorization.
+                self._locked_admit(dispatch_reserve)
             if attempt > sched.MAX_INFRA_ATTEMPTS:
                 # Consume the one-shot durably before any child can spawn; an
                 # interrupted dispatch must not be dispatchable again.
                 authz.claim(self.root, arm)
-            report = self.runner(arm, case)
+            report = self._run_runner(arm, case, dispatch_reserve)
             receipt = self._record(arm, report)
             # Publish observed RAM for EVERY terminal arm, including failures;
             # a null measurement remains null rather than being fabricated.

@@ -404,11 +404,12 @@ class SupervisedRunner:
         self.registry, self.baseline, self.operate = registry, baseline, operate
         self.root, self.reserve_bytes = Path(root), reserve_bytes
 
-    def __call__(self, arm, case):
+    def __call__(self, arm, case, reserve_bytes=None):
         output = self.root / "outputs" / (arm["tool_id"] + "-" + arm["alias"])
         output.mkdir(parents=True, exist_ok=True)
+        reserve = self.reserve_bytes if reserve_bytes is None else reserve_bytes
         return run_guarded(self.registry, self.baseline, arm, case, output,
-                           self.operate, self.reserve_bytes)
+                           self.operate, reserve)
 
 
 def checked_baseline(root, registry):

@@ -40,6 +40,7 @@ class AttestationHarness(unittest.TestCase):
         self.s6 = self.base / "s6"
         self.proc = self.base / "proc"
         self.head = live.OLD_HEAD
+        self.heads = {}
         self.locked = False
         self.now = 1000.0
         self.mods = self.base / "mods"
@@ -81,7 +82,7 @@ class AttestationHarness(unittest.TestCase):
         return {
             "module_reader": lambda _base, name: (
                 (self.mods / name).read_text() if (self.mods / name).is_file() else None),
-            "head_reader": lambda _base: self.head,
+            "head_reader": lambda base: self.heads.get(str(base), self.head),
             "git_present": lambda _base: True,
         }
 
@@ -101,11 +102,13 @@ class AttestationHarness(unittest.TestCase):
 
     def scripts(self, phase, root=None, head=None):
         expected = live.PHASES[phase]
-        root = root or expected["root"]
-        head = head or expected["head"]
+        wd_exp = expected["watchdog"]
+        ctl_exp = expected["control"]
+        wd_root = root or wd_exp["root"]
+        wd_head = head or wd_exp["head"]
         wd = "\n".join([
-            "export WATCHDOG_CODE=" + root,
-            _line("WATCHDOG_CODE", root, head),
+            "export WATCHDOG_CODE=" + wd_root,
+            _line("WATCHDOG_CODE", wd_root, wd_head),
             'git -C "$WATCHDOG_CODE" diff --quiet HEAD || exit 1',
             "export WATCHDOG_ROOT=" + str(self.project),
             "export WATCHDOG_STORAGE_CONF=" + str(self.project / "storage.conf"),
@@ -116,8 +119,8 @@ class AttestationHarness(unittest.TestCase):
             'exec env PYTHONPATH="$CODE:$CODE/benchmarks" python3 -m fail_closed_guard.watchdog_cli',
         ]) + "\n"
         sup = "\n".join([
-            "export PX_CODE=" + root,
-            _line("PX_CODE", root, head),
+            "export PX_CODE=" + ctl_exp["root"],
+            _line("PX_CODE", ctl_exp["root"], ctl_exp["head"]),
             'git -C "$PX_CODE" diff --quiet HEAD || exit 1',
             "export PX_ROOT=" + str(self.project),
             "export PX_REGISTRY=" + str(self.registry),
@@ -137,21 +140,27 @@ class AttestationHarness(unittest.TestCase):
     def build(self, phase, *, supervisor="absent", active=None, stop=False,
               lock=None, alive_fingerprint=None, events=None):
         expected = live.PHASES[phase]
-        self.code_root(expected["root"])
-        head = expected["head"]
-        self.head = head
-        self.modules(expected["root"], expected["modules"])
+        wd_exp = expected["watchdog"]
+        ctl_exp = expected["control"]
+        self.code_root(wd_exp["root"])
+        self.modules(wd_exp["root"], wd_exp["modules"])
+        self.code_root(ctl_exp["root"])
+        self.modules(ctl_exp["root"], ctl_exp["modules"])
+        self.head = wd_exp["head"]
+        self.heads = {wd_exp["root"]: wd_exp["head"],
+                      ctl_exp["root"]: ctl_exp["head"]}
         paths = self.scripts(phase)
         self.s6_status("ivanka-watchdog", WATCHDOG)
         self.s6_status("px-cohort-supervisor", SUPERVISOR if supervisor == "running" else 0)
         common_env = {
-            "PYTHONPATH": expected["root"] + ":" + expected["root"] + "/benchmarks",
+            "PYTHONPATH": wd_exp["root"] + ":" + wd_exp["root"] + "/benchmarks",
         }
-        wd_env = dict(common_env, WATCHDOG_CODE=expected["root"],
+        wd_env = dict(common_env, WATCHDOG_CODE=wd_exp["root"],
                       WATCHDOG_ROOT=str(self.project),
                       WATCHDOG_GRAPHROOT=str(live.GRAPHROOT))
-        sup_env = dict(common_env, PX_CODE=expected["root"],
-                       PX_ROOT=str(self.project), PX_REGISTRY=str(self.registry))
+        sup_env = {"PYTHONPATH": ctl_exp["root"] + ":" + ctl_exp["root"] + "/benchmarks",
+                   "PX_CODE": ctl_exp["root"], "PX_ROOT": str(self.project),
+                   "PX_REGISTRY": str(self.registry)}
         self.proc_entry(WATCHDOG,
                         "python3 -m fail_closed_guard.watchdog_cli --root %s --graphroot %s"
                         % (self.project, live.GRAPHROOT), wd_env)
@@ -324,17 +333,67 @@ class PostCutoverTests(AttestationHarness):
 
     def test_old_script_pins_are_blocker(self):
         opts = self.build("post_cutover", supervisor="running")
-        for path in [opts["persistent_watchdog"], opts["runtime_watchdog"],
-                     opts["persistent_supervisor"], opts["runtime_supervisor"]]:
+        for path in (opts["persistent_watchdog"], opts["runtime_watchdog"]):
             text = path.read_text().replace(live.guard_source.DEPLOYED_HEAD, live.OLD_HEAD)
-            text = text.replace(live.NEW_ROOT, live.OLD_ROOT)
-            path.write_text(text)
+            path.write_text(text.replace(live.NEW_ROOT, live.OLD_ROOT))
+        for path in (opts["persistent_supervisor"], opts["runtime_supervisor"]):
+            text = path.read_text().replace(live.CONTROL_HEAD, live.OLD_HEAD)
+            path.write_text(text.replace(live.CONTROL_ROOT, live.OLD_ROOT))
         blocked = live.attest(phase="post_cutover", **opts)
         self.assertTrue(any("script_pin" in b for b in blocked["blockers"]))
 
     def test_stop_sentinel_is_blocker(self):
         blocked = self.attest("post_cutover", supervisor="running", stop=True)
         self.assertIn("foreign_stop", blocked["blockers"])
+
+    def test_split_roots_are_both_bound(self):
+        result = self.attest("post_cutover", supervisor="running")
+        self.assertTrue(result["ready"], result["blockers"])
+        self.assertNotEqual(live.CONTROL_ROOT, live.NEW_ROOT)
+        self.assertEqual(result["checks"]["expected_watchdog_root"], live.NEW_ROOT)
+        self.assertEqual(result["checks"]["expected_control_root"], live.CONTROL_ROOT)
+
+    def test_wrong_control_root_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        for key in ("persistent_supervisor", "runtime_supervisor"):
+            opts[key].write_text(opts[key].read_text().replace(
+                live.CONTROL_ROOT, live.NEW_ROOT))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertTrue(any(("script_pin_mismatch" in b
+                             or "foreign_script_pin" in b)
+                            and "persistent_supervisor" in b
+                            for b in blocked["blockers"]), blocked["blockers"])
+
+    def test_wrong_control_head_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        opts["head_reader"] = lambda base: (
+            live.OLD_HEAD if str(base) == live.CONTROL_ROOT else self.heads.get(
+                str(base), self.head))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("code_head_mismatch:supervisor", blocked["blockers"])
+
+    def test_mixed_roots_are_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        for key in ("persistent_watchdog", "runtime_watchdog"):
+            opts[key].write_text(opts[key].read_text().replace(
+                live.NEW_ROOT, live.CONTROL_ROOT))
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertTrue(any("watchdog" in b and (
+            "script_pin_mismatch" in b or "foreign_script_pin" in b)
+            for b in blocked["blockers"]), blocked["blockers"])
+
+    def test_control_module_drift_is_blocker(self):
+        opts = self.build("post_cutover", supervisor="running")
+        original = opts["module_reader"]
+
+        def drift(base, name):
+            if name == "benchmarks/assembler_bench/px_supervisor.py":
+                return "drift"
+            return original(base, name)
+
+        opts["module_reader"] = drift
+        blocked = live.attest(phase="post_cutover", **opts)
+        self.assertIn("module_bytes_mismatch:supervisor", blocked["blockers"])
 
 
 class SupervisorArgvBindingTests(AttestationHarness):
@@ -352,7 +411,7 @@ class SupervisorArgvBindingTests(AttestationHarness):
         opts = self.build("post_cutover", supervisor="running")
         self.proc_entry(SUPERVISOR,
                         self._supervisor_cmd("/foreign/root", self.registry),
-                        self._supervisor_env(live.NEW_ROOT, self.registry))
+                        self._supervisor_env(live.CONTROL_ROOT, self.registry))
         blocked = live.attest(phase="post_cutover", **opts)
         self.assertIn("option_value_mismatch:supervisor:--root", blocked["blockers"])
 
@@ -360,7 +419,7 @@ class SupervisorArgvBindingTests(AttestationHarness):
         opts = self.build("post_cutover", supervisor="running")
         self.proc_entry(SUPERVISOR,
                         self._supervisor_cmd(self.project, "/foreign/registry.json"),
-                        self._supervisor_env(live.NEW_ROOT, self.registry))
+                        self._supervisor_env(live.CONTROL_ROOT, self.registry))
         blocked = live.attest(phase="post_cutover", **opts)
         self.assertIn("option_value_mismatch:supervisor:--registry", blocked["blockers"])
 
@@ -370,7 +429,7 @@ class SupervisorArgvBindingTests(AttestationHarness):
             "--root " + str(self.project),
             "--root " + str(self.project) + " --root /foreign/root")
         self.proc_entry(SUPERVISOR, cmd,
-                        self._supervisor_env(live.NEW_ROOT, self.registry))
+                        self._supervisor_env(live.CONTROL_ROOT, self.registry))
         blocked = live.attest(phase="post_cutover", **opts)
         self.assertIn("option_count_mismatch:supervisor:--root", blocked["blockers"])
 
@@ -379,7 +438,7 @@ class SupervisorArgvBindingTests(AttestationHarness):
         self.proc_entry(SUPERVISOR,
                         self._supervisor_cmd(self.project, self.registry)
                         + " --supervise",
-                        self._supervisor_env(live.NEW_ROOT, self.registry))
+                        self._supervisor_env(live.CONTROL_ROOT, self.registry))
         blocked = live.attest(phase="post_cutover", **opts)
         self.assertIn("flag_count_mismatch:supervisor:--supervise", blocked["blockers"])
 
@@ -388,7 +447,7 @@ class SupervisorArgvBindingTests(AttestationHarness):
         self.proc_entry(SUPERVISOR,
                         self._supervisor_cmd(self.project, self.registry)
                         + " --unknown-flag",
-                        self._supervisor_env(live.NEW_ROOT, self.registry))
+                        self._supervisor_env(live.CONTROL_ROOT, self.registry))
         blocked = live.attest(phase="post_cutover", **opts)
         self.assertFalse(blocked["ready"], blocked["blockers"])
         self.assertTrue(any("unexpected_argv_token:supervisor" in b
@@ -396,7 +455,7 @@ class SupervisorArgvBindingTests(AttestationHarness):
 
     def test_wrong_px_root_env_is_blocker(self):
         opts = self.build("post_cutover", supervisor="running")
-        env = self._supervisor_env(live.NEW_ROOT, self.registry)
+        env = self._supervisor_env(live.CONTROL_ROOT, self.registry)
         env["PX_ROOT"] = "/foreign/root"
         self.proc_entry(SUPERVISOR,
                         self._supervisor_cmd(self.project, self.registry), env)
@@ -405,7 +464,7 @@ class SupervisorArgvBindingTests(AttestationHarness):
 
     def test_wrong_px_registry_env_is_blocker(self):
         opts = self.build("post_cutover", supervisor="running")
-        env = self._supervisor_env(live.NEW_ROOT, self.registry)
+        env = self._supervisor_env(live.CONTROL_ROOT, self.registry)
         env["PX_REGISTRY"] = "/foreign/registry.json"
         self.proc_entry(SUPERVISOR,
                         self._supervisor_cmd(self.project, self.registry), env)

@@ -20,13 +20,18 @@ import json
 import pathlib
 import sys
 
+# Import contract for a directly executed benchmark script: the script
+# directory provides the top-level plan module and the guard packages, while
+# the repository root is required by the absolute ``benchmarks.*`` imports used
+# transitively by px_execution. Both roots must be present before these imports,
+# so the ordering below is deliberate, not an accidental late import.
 _HERE = pathlib.Path(__file__).parent
 sys.path.insert(0, str(_HERE))
 sys.path.insert(0, str(_HERE.parent))
 
-import p1_ultradeep_matched_runtime as plan
-from assembler_bench import px_execution
-from fail_closed_guard import p1_harness
+import p1_ultradeep_matched_runtime as plan  # noqa: E402
+from assembler_bench import px_execution  # noqa: E402
+from fail_closed_guard import p1_harness  # noqa: E402
 
 CONTROLLER_SCHEMA = "ivanka.p1.ultradeep-matched-run-controller.v1"
 REAL_TEMPLATE = "assembler_bench.px_execution.micall_argv"

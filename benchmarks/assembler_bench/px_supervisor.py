@@ -13,6 +13,7 @@ from pathlib import Path
 
 from . import exploratory_policy
 from . import px_cohort_scheduler as sched
+from . import px_disk_retry_admission as disk_admission
 from . import px_retry_authorization as authz
 
 HANDOFF_SCHEMA = "ivanka.px.supervisor.handoff.v1"
@@ -114,12 +115,15 @@ class BackgroundSupervisor:
 
     def __init__(self, registry, baseline, source, root, runner,
                  reserve_bytes=1024**3, clock=time.monotonic, sleep=time.sleep,
-                 diagnostics=None, retain=None, scorer=None, scorer_sha=None):
+                 diagnostics=None, retain=None, scorer=None, scorer_sha=None,
+                 disk_retry_extra_bytes=disk_admission.DEFAULT_EXTRA_BYTES):
         self.registry = Path(registry)
         self.baseline = json.loads(Path(baseline).read_text())
         self.source, self.root = source, Path(root)
         self.runner = runner
         self.reserve_bytes = reserve_bytes
+        self.disk_retry_reserve_bytes = disk_admission.proposed_reservation(
+            reserve_bytes, disk_retry_extra_bytes)
         self.clock, self.sleep = clock, sleep
         self.diagnostics = diagnostics
         self.retain = retain
@@ -137,14 +141,16 @@ class BackgroundSupervisor:
             if not verify_handoff(self.root, self.registry, tool):
                 raise HandoffRequired("no verified image-agent handoff for " + tool)
         pending = sched.resume(plan, self.root)
-        completed = []
+        completed, deferred = [], []
         for arm in balanced_pending(plan, pending):
             if (self.root / STOP_FILE).is_file():
                 break
-            self._run_arm(arm, plan, completed)
-        return {"status": "stopped" if (self.root / STOP_FILE).is_file()
-                else "idle" if not pending else "advanced",
-                "completed": completed, "remaining": len(pending) - len(completed)}
+            if self._run_arm(arm, plan, completed) == "deferred":
+                deferred.append(sched.receipt_id(arm))
+        status = "stopped" if (self.root / STOP_FILE).is_file() else (
+            "deferred" if deferred else "idle" if not pending else "advanced")
+        return {"status": status, "completed": completed, "deferred": deferred,
+                "remaining": len(pending) - len(completed)}
 
     def _run_arm(self, arm, plan, completed):
         existing = sched.verify_receipt(self.root, arm)
@@ -156,6 +162,23 @@ class BackgroundSupervisor:
                     break
             prior = sched.verify_receipt(self.root, arm)
             if prior is not None:
+                # A disk_stop retry needs strictly more verified headroom than
+                # the ordinary arm reservation. Deciding BEFORE preserving the
+                # failed output keeps the original attempt intact and spends
+                # neither the second attempt nor a one-shot authorization on a
+                # transient low-headroom moment. The arm stays pending.
+                if (attempt > 1 and prior.get("failure_reason") == "disk_stop"):
+                    decision = disk_admission.evaluate(
+                        self.registry, self.baseline, self.root,
+                        self.reserve_bytes,
+                        extra_bytes=max(1, self.disk_retry_reserve_bytes
+                                        - self.reserve_bytes))
+                    if decision["action"] == "defer":
+                        disk_admission.record_deferred(
+                            self.root, arm, decision, prior=prior)
+                        logging.warning("PX disk_stop retry deferred for %s: %s",
+                                        sched.receipt_id(arm), decision["reason"])
+                        return "deferred"
                 # Every dispatch after a failure, including resume after STOP
                 # or a rejected admission, must archive the failed output first.
                 self._prepare_retry(arm, prior, attempt - 1)

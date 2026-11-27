@@ -191,10 +191,10 @@ class BackgroundSupervisor:
                             reserve_bytes)
 
     def _run_runner(self, arm, case, reserve_bytes):
-        try:
-            return self.runner(arm, case, reserve_bytes=reserve_bytes)
-        except TypeError:
-            return self.runner(arm, case)
+        # The reservation is part of the guarded execution contract. An
+        # exception may occur after side effects; never retry an invocation
+        # by changing its signature or dropping its admitted reservation.
+        return self.runner(arm, case, reserve_bytes=reserve_bytes)
 
     def _run_arm(self, arm, plan, completed):
         existing = sched.verify_receipt(self.root, arm)

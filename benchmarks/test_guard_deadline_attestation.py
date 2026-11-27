@@ -148,7 +148,7 @@ class ReceiptAttestationTests(unittest.TestCase):
         baseline = self.root / "baseline.json"
         baseline.write_text("{}")
         self.supervisor = sup.BackgroundSupervisor(
-            self.root, baseline, None, self.root, lambda arm, case: {})
+            self.root, baseline, None, self.root, lambda arm, case, *, reserve_bytes: {})
 
     def arm(self, alias="PX-R001"):
         return {"tool_id": "skesa", "cohort": "physical", "alias": alias,

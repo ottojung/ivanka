@@ -585,5 +585,84 @@ class RemapPilotCliTests(unittest.TestCase):
         self.assertEqual(result["original_input_binding"]["alias"], "R001")
 
 
+class LiveProbeImageTests(unittest.TestCase):
+    IMAGE_ID = runner.IMAGE_ID
+    IMAGE_DIGEST = runner.IMAGE_DIGEST
+
+    def setUp(self):
+        self.probe = cli.LiveProbes()
+        self.storage_conf = Path("/tmp/fake-storage.conf")
+
+    def _run(self, stdout="", returncode=0):
+        class R:
+            pass
+        r = R()
+        r.stdout = stdout
+        r.stderr = ""
+        r.returncode = returncode
+        return r
+
+    def test_normalize_image_id_accepts_full_hex_and_sha256_prefix(self):
+        full = self.IMAGE_ID
+        self.assertEqual(self.probe._normalize_image_id(full), full)
+        self.assertEqual(self.probe._normalize_image_id("sha256:" + full), full)
+        self.assertIsNone(self.probe._normalize_image_id(full[:12]))
+        self.assertIsNone(self.probe._normalize_image_id("sha256:" + full[:12]))
+        self.assertIsNone(self.probe._normalize_image_id("not-a-digest"))
+
+    def test_image_probe_uses_no_trunc_and_requires_exact_match(self):
+        full_line = f"sha256:{self.IMAGE_ID} {self.IMAGE_DIGEST} localhost/micall:x\n"
+        with patch.object(cli, "_storage_paths", return_value=("/g", "/r")):
+            with patch.object(cli.subprocess, "run",
+                              return_value=self._run(full_line)) as run:
+                report = self.probe.image(self.IMAGE_ID, self.IMAGE_DIGEST,
+                                          self.storage_conf)
+        self.assertTrue(report["present"])
+        self.assertEqual(report["image_id"], self.IMAGE_ID)
+        cmd = run.call_args.args[0]
+        self.assertIn("--no-trunc", cmd)
+        self.assertIn("--digests", cmd)
+        self.assertEqual(cmd[-2:], ["--format", "{{.ID}} {{.Digest}}"])
+
+    def test_image_probe_rejects_truncated_id_even_with_matching_digest(self):
+        truncated = f"{self.IMAGE_ID[:12]} {self.IMAGE_DIGEST} localhost/micall:x\n"
+        with patch.object(cli, "_storage_paths", return_value=("/g", "/r")):
+            with patch.object(cli.subprocess, "run",
+                              return_value=self._run(truncated)):
+                report = self.probe.image(self.IMAGE_ID, self.IMAGE_DIGEST,
+                                          self.storage_conf)
+        self.assertFalse(report["present"])
+        self.assertEqual(report["reason"], "image_missing_or_digest_drift")
+
+    def test_image_probe_rejects_wrong_digest(self):
+        wrong_digest = "sha256:" + "0" * 64
+        line = f"sha256:{self.IMAGE_ID} {wrong_digest} localhost/micall:x\n"
+        with patch.object(cli, "_storage_paths", return_value=("/g", "/r")):
+            with patch.object(cli.subprocess, "run",
+                              return_value=self._run(line)):
+                report = self.probe.image(self.IMAGE_ID, self.IMAGE_DIGEST,
+                                          self.storage_conf)
+        self.assertFalse(report["present"])
+        self.assertEqual(report["reason"], "image_missing_or_digest_drift")
+
+    def test_image_probe_rejects_prefix_id_match(self):
+        other = "ab" + self.IMAGE_ID[2:]
+        line = f"sha256:{other} {self.IMAGE_DIGEST} localhost/micall:x\n"
+        with patch.object(cli, "_storage_paths", return_value=("/g", "/r")):
+            with patch.object(cli.subprocess, "run",
+                              return_value=self._run(line)):
+                report = self.probe.image(self.IMAGE_ID, self.IMAGE_DIGEST,
+                                          self.storage_conf)
+        self.assertFalse(report["present"])
+        self.assertEqual(report["reason"], "image_missing_or_digest_drift")
+
+    def test_image_probe_rejects_invalid_expected_identity(self):
+        with patch.object(cli, "_storage_paths", return_value=("/g", "/r")):
+            report = self.probe.image(self.IMAGE_ID[:12], self.IMAGE_DIGEST,
+                                      self.storage_conf)
+        self.assertFalse(report["present"])
+        self.assertEqual(report["reason"], "image_identity_invalid")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -186,18 +186,40 @@ class LiveProbes:
             return {"ready": False, "reason": "watchdog_unavailable",
                     "detail": type(exc).__name__}
 
+    @staticmethod
+    def _normalize_image_id(value):
+        """Normalize a podman image ID to a 64-hex digest.
+
+        Podman may emit IDs as 64-hex or as sha256:<64-hex> with --no-trunc.
+        Truncated IDs are rejected to prevent false identity matches.
+        """
+        text = str(value).strip()
+        if text.startswith("sha256:"):
+            text = text[len("sha256:"):]
+        if len(text) != 64:
+            return None
+        try:
+            int(text, 16)
+        except ValueError:
+            return None
+        return text.lower()
+
     def image(self, image_id, image_digest, storage_conf) -> dict:
         try:
             graphroot, runroot = _storage_paths(storage_conf)
         except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
             return {"present": False, "reason": "storage_conf_unreadable",
                     "detail": type(exc).__name__}
+        expected_id = self._normalize_image_id(image_id)
+        expected_digest = str(image_digest).strip()
+        if expected_id is None or not expected_digest.startswith("sha256:"):
+            return {"present": False, "reason": "image_identity_invalid"}
         env = dict(os.environ)
         env["CONTAINERS_STORAGE_CONF"] = str(storage_conf)
         command = [
             "podman", "--root", graphroot, "--runroot", runroot,
             "--storage-driver", "overlay", "images", "--digests",
-            "--format", "{{.ID}} {{.Digest}}",
+            "--no-trunc", "--format", "{{.ID}} {{.Digest}}",
         ]
         try:
             result = subprocess.run(
@@ -208,8 +230,15 @@ class LiveProbes:
             return {"present": False, "reason": "image_inspection_failed"}
         for line in result.stdout.splitlines():
             parts = line.split()
-            if len(parts) >= 2 and parts[0].startswith(image_id) and parts[1] == image_digest:
-                return {"present": True, "digest": image_digest}
+            if len(parts) < 2:
+                continue
+            observed_id = self._normalize_image_id(parts[0])
+            observed_digest = parts[1].strip()
+            if observed_id is None:
+                continue
+            if observed_id == expected_id and observed_digest == expected_digest:
+                return {"present": True, "digest": expected_digest,
+                        "image_id": expected_id}
         return {"present": False, "reason": "image_missing_or_digest_drift"}
 
     def environment(self, storage_conf) -> dict:

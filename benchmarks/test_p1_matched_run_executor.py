@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -195,6 +196,20 @@ class ExecutorTest(unittest.TestCase):
             payload = json.loads(completed.stdout)
             self.assertEqual(payload["execution"], "refused")
             self.assertIn("missing required args", payload["reason"])
+
+    def test_operator_environment_is_real_and_store_pinned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = pathlib.Path(tmp) / "storage.conf"
+            conf.write_text('[storage]\ndriver = "overlay"\ngraphroot = "/tmp/graph"\nrunroot = "/tmp/run"\n')
+            env = ex.operator_environment(
+                conf, base_env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                                "HOME": "/home/lubko", "CONTAINERS_CONF": "/foreign"})
+            self.assertIn("PATH", env)
+            self.assertIn("HOME", env)
+            self.assertNotIn("CONTAINERS_CONF", env)
+            self.assertEqual(env["CONTAINERS_STORAGE_CONF"], str(conf))
+            with self.assertRaises(plan.Refusal):
+                ex.operator_environment(conf, base_env={"HOME": "/home/lubko"})
 
     def test_comparability_check_accepts_case_count(self) -> None:
         records = []

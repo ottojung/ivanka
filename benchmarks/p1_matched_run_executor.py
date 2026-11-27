@@ -22,7 +22,9 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import time
@@ -78,6 +80,27 @@ def observe_container_cpu_max(env: dict[str, str], cid: str) -> str | None:
     if quota <= 0:
         return "max " + str(period)
     return str(quota) + " " + str(period)
+
+
+def operator_environment(storage_conf: pathlib.Path,
+                         base_env: dict[str, str] | None = None) -> dict[str, str]:
+    """Build the real Podman environment used by spawn and shared-guard inspect.
+
+    An empty environment makes both the launcher and the guard's exact-CID
+    inspection fail before any arm can be measured. Inherit the operator shell
+    only for the executable search path and home, then pin the project storage
+    namespace through the reviewed shared helper so no inherited store config
+    can redirect the arm.
+    """
+    source = dict(os.environ if base_env is None else base_env)
+    for key in ("PATH", "HOME"):
+        if not source.get(key):
+            raise Refusal("operator environment missing " + key)
+    from fail_closed_guard import store
+    env = store.pin_env(source, storage_conf=storage_conf)
+    if shutil.which("podman", path=env.get("PATH")) is None:
+        raise Refusal("podman not found in operator PATH")
+    return env
 
 
 def production_podman_spawn(argv: list[str], cidfile: str, env: dict[str, str],
@@ -561,6 +584,8 @@ def main() -> None:
     parser.add_argument("--lock-path", type=pathlib.Path)
     parser.add_argument("--watchdog-path", type=pathlib.Path)
     parser.add_argument("--watchdog-graphroot", type=pathlib.Path)
+    parser.add_argument("--storage-conf", type=pathlib.Path,
+                        help="reviewed Podman storage.conf; required for --arm-runner production")
     args = parser.parse_args()
     cases = tuple(c.strip() for c in args.cases.split(",") if c.strip())
     try:
@@ -577,6 +602,7 @@ def main() -> None:
                 "--watchdog-path": args.watchdog_path,
                 "--watchdog-graphroot": args.watchdog_graphroot,
                 "--attestation": args.attestation,
+                "--storage-conf": args.storage_conf,
             }
             missing = [k for k, v in required.items() if v is None]
             if missing:
@@ -590,6 +616,7 @@ def main() -> None:
                 watchdog_path=args.watchdog_path,
                 watchdog_graphroot=args.watchdog_graphroot,
                 attestation=args.attestation,
+                env=operator_environment(args.storage_conf),
             )
         else:
             runner = default_arm_runner

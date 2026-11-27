@@ -18,7 +18,6 @@ RECEIPT = (
 
 def fake_arm_runner(step, argv, arm_dir, *, deadline=None):
     arm_dir.mkdir(parents=True, exist_ok=True)
-    case = step["case"]
     arm = step["arm"]
     seconds = 100.0 + (0.1 if arm == "candidate" else 0.0)
     timing = {"seconds": seconds, "timing_origin": "micall_in_container_monotonic_v1", "exit_code": 0}

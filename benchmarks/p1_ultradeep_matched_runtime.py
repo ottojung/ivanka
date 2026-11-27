@@ -71,6 +71,7 @@ FULL_STAGE_INTERVALS_SHA256 = "62ac208258e8427730ab08ff806811c258b08f073c5bea192
 CONTROL_HISTORICAL = {
     "ultradeep-s002": {
         "source": "docs/bench/diagnostics/p1-ultradeep-runtime-20261126.json",
+        "source_sha256": RECEIPT_SHA256,
         "candidate_seconds": 186.855614907,
         "frozen_seconds": 139.86058835,
         "ordered_unstitched_sequences_identical": True,
@@ -359,6 +360,11 @@ def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
     not deployed, readiness stays blocked: a merge record is not a deployment
     and must never be reported as ready. Even a ready-shaped record leaves
     execution='blocked' with no execute mode.
+
+    A later cutover may only be recognised by a reviewed change to these exact
+    pins plus a fresh live attestation of the deployed stack. Attestation text
+    alone cannot rebind the deployed truth, and this function never deletes or
+    relaxes a guard block to make a run possible.
     """
     all_blocked = sorted(SOURCE_PINS)
     if attestation is None or not attestation.is_file():
@@ -584,13 +590,9 @@ def build_plan(
     unknown = [c for c in requested if c not in READ_SHA256]
     if unknown:
         raise Refusal("unknown case: " + ", ".join(unknown))
-    receipt_cases = tuple(c for c in requested if c in CASES or c in {
-        row["case"] for row in json.loads(receipt_path.read_bytes()).get("cases", [])
-    } if receipt_path.is_file())
-    # Always validate the ultradeep receipt; it pins the tail cases.
-    receipt = load_receipt(receipt_path, cases=tuple(c for c in requested if c in {
-        row["case"] for row in json.loads(receipt_path.read_bytes()).get("cases", [])
-    }))
+    # Verify the immutable receipt once, before reading any value from it.
+    # It pins all four tail cases regardless of which controls are requested.
+    receipt = load_receipt(receipt_path, cases=CASES)
     gate = readiness(attestation)
     steps = alternating_schedule(requested)
     rows = {row["case"]: row for row in receipt.get("cases", [])}

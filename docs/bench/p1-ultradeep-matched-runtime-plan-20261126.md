@@ -127,14 +127,27 @@ delta, identical outputs). Control read pins are recorded in
 `62ac208258e8427730ab08ff806811c258b08f073c5bea1927bbe300070059ee`). The
 default 4-case plan remains unchanged.
 
-`benchmarks/p1_matched_run_executor.py` provides an operator-ready, fail-closed
-executor. It refuses by default, refuses when dependencies are not ready, and
-requires an explicit arm runner. The guarded runner factory wires each arm
-through `fail_closed_guard.p1_harness.run_prospective`; tests inject fake
-runners. Executed arms write fresh host-evidence and a receipt with stage
-timing/log SHA attribution, sampled RSS/CPU quota, contention/comparability
-checks, and no historical mutation. No live container is started by import or
-CLI default.
+`benchmarks/p1_matched_run_executor.py` provides a fail-closed executor. It
+refuses by default, refuses when dependencies are not ready, and requires an
+explicit arm runner. The CLI deliberately has no runner and exits 2 with a
+`refused` record. `guarded_podman_arm_runner` wires every arm through the
+reviewed shared guard `fail_closed_guard.p1_harness.run_prospective` with
+operator-supplied STOP/lease/watchdog/disk inputs and spawn, liveness,
+measurement, process-table, binding and teardown callbacks; the guard, not this
+module, owns admission. An operator must also attest the container `cpu.max`
+(the runner refuses anything other than the pinned 2-CPU quota) and may supply
+a host-evidence sampler. Schedule order and every `argv` are re-verified
+against the reviewed template immediately before each arm, so a tampered plan
+is refused before any runner is called.
+
+Executed arms write exclusively-created `argv.json`, `timing.json`,
+`podman.log` and `host-evidence.json` plus an aggregate receipt. Each record
+carries stage intervals, signed official-minus-logged gap (marked descriptive,
+not causal), log SHA-256, the guard's sampled RSS and lease/teardown outcome,
+host contention before/after, and comparability. A `tail_vs_control` section
+computes candidate-minus-frozen deltas from fresh records only; it never
+substitutes a historical time, computes Ψ, or claims qualification. No live
+container is started by import, plan emission or CLI default.
 
 ## Tests and limitations
 
@@ -151,8 +164,23 @@ shared-guard reuse, and inert source-only emission that stays blocked.
 `benchmarks/test_p1_matched_run_executor.py` covers default refusal, unready
 refusal, mocked execution with fresh receipt/stage/log attribution, 12-arm
 control schedule, and comparability with case count.
+`benchmarks/test_p1_matched_run_executor_integration.py` exercises the real
+shared guard end to end through the executor with hermetic seams: successful
+arms (STOP re-armed per arm, lease retired, callback counts, stage/log/RSS
+attribution, exclusively-created evidence), and fail-closed refusals for a
+missing STOP, an unready watchdog, a disk shortfall, a tampered `argv`, a
+non-fresh output root and the CLI default, plus a summary that refuses to
+substitute a missing arm. No container, image or shared state is touched.
 
-Limitations: this is a plan, not a measurement. No host-contention causal
+Limitations: this is executable code, not a measurement, and it is not
+authorization to run. The current `readiness()` pins still describe the older
+deployed PR536 guard stack and intentionally keep PR535 blocked; recognising a
+later cutover requires a reviewed change to those exact pins plus a fresh live
+attestation of the deployed stack, never attestation text alone. An operator
+also needs an idle PX/P1/remap slot, an owned STOP/lease/watchdog boundary and
+at least the shared disk reserve. With those absent, admission stays closed and
+no arm may be run. Strict all-r Ψ on real prospective paired measurements
+remains binding and is not computed by this artifact. This is a plan, not a measurement. No host-contention causal
 claim is made; plan-time loadavg was about 21 with host `cpu.max = max 100000`
 and `cpuset.cpus.effective = 0-31`, so container-level CPU allocation must be
 verified per arm in a future guarded run. PX was active at the 20:19Z guard

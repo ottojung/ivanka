@@ -113,15 +113,14 @@ SOURCE_PINS = {
 # Retained for callers that only need the exact source heads (never deployment).
 DEPENDENCIES = {name: pin["head"] for name, pin in SOURCE_PINS.items()}
 
-# Still-old deployed truth, read from the live s6 run scripts and the staged
-# tree. The reviewed guard source head, the deployed root HEAD and the two
-# service pins are separate immutable values; they are checked separately rather
-# than assumed equal. These digests were recomputed in that deployed tree.
+# Reviewed actual deployed roots, read from live s6 run scripts and staged
+# trees. Guard source/root and service pins are separate immutable values and
+# must be attested separately. Digests are recomputed from the deployed tree.
 DEPLOYED_PINS = {
-    "guard_source_head": "6e6886a824a7cb0f1b812f1c24c233f8100a9d8b",
-    "deployed_root_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
-    "px_service_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
-    "watchdog_service_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
+    "guard_source_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
+    "deployed_root_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
+    "px_service_head": "c3798910cb1d884ddea33cd1d0f405d7e0c31e2b",
+    "watchdog_service_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
     "guard_sha256": {
         "natural_exit_sha256":
             "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
@@ -396,19 +395,19 @@ def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
 
     deployed = record.get("deployed_sources") if isinstance(
         record.get("deployed_sources"), dict) else {}
-    # Source merge facts and deployed guard identity are separate. PR535 is a
-    # merged source pin; no deployed head is pinned for it in this guard stack,
-    # so a true deployed claim cannot be verified and must fail closed.
-    pr535_deployed = deployed.get("PR535", False)
-    if not isinstance(pr535_deployed, bool):
+    # Source merge facts and deployed guard identity are separate. The deployed
+    # guard identity below is authoritative; deployed_sources must be honest.
+    for name in SOURCE_PINS:
+        value = deployed.get(name, False)
+        if not isinstance(value, bool):
+            blocked.append(name)
+            reasons.append(name + " deployed state not boolean")
+    if deployed.get("PR535") is not True:
         blocked.append("PR535")
-        reasons.append("PR535 deployed state not boolean")
-    elif pr535_deployed is True:
-        blocked.append("PR535")
-        reasons.append("PR535 deployed claim has no pinned deployed head")
-    if deployed.get("PR536") is not True:
+        reasons.append("PR535 deployed truth not attested")
+    if "PR536" in deployed and not isinstance(deployed.get("PR536"), bool):
         blocked.append("PR536")
-        reasons.append("PR536 deployed truth not attested")
+        reasons.append("PR536 deployed state not boolean")
 
     guard = record.get("deployed_guard")
     if not isinstance(guard, dict):

@@ -25,14 +25,14 @@ def host(load: float = 1.0, cpu_max: str = "200000 100000",
 
 
 def attestation() -> dict:
-    """Truthful record: exact merged sources, still-old PR536 deployment."""
+    """Truthful record: exact merged sources and reviewed deployed guard pins."""
     return {
         "schema": plan.ATTESTATION_SCHEMA,
         "PR535": {"state": "merged", "head": plan.SOURCE_PINS["PR535"]["head"],
                   "merge_commit": plan.SOURCE_PINS["PR535"]["merge_commit"]},
         "PR536": {"state": "merged", "head": plan.SOURCE_PINS["PR536"]["head"],
                   "merge_commit": plan.SOURCE_PINS["PR536"]["merge_commit"]},
-        "deployed_sources": {"PR535": False, "PR536": True},
+        "deployed_sources": {"PR535": True, "PR536": True},
         "deployed_guard": {
             "source_head": plan.DEPLOYED_PINS["guard_source_head"],
             "root_head": plan.DEPLOYED_PINS["deployed_root_head"],
@@ -186,8 +186,8 @@ class GuardTest(unittest.TestCase):
                 lambda r: r["deployed_guard"].update(watchdog_alive_fresh=False),
                 lambda r: r["deployed_guard"].update(lease_clear=False),
                 lambda r: r["deployed_guard"].update(idle_boundary_attested=False),
-                lambda r: r["deployed_sources"].update(PR535=True),
-                lambda r: r["deployed_sources"].update(PR536=False),
+                lambda r: r["deployed_sources"].update(PR535=False),
+                lambda r: r["deployed_sources"].update(PR535="yes"),
                 lambda r: r.update(schema="wrong"),
             ):
                 record = attestation()
@@ -199,10 +199,10 @@ class GuardTest(unittest.TestCase):
                          "39317f021f4e5c00f5da859bcdcf755de4c6d353")
         self.assertEqual(plan.SOURCE_PINS["PR535"]["merge_commit"],
                          "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(plan.DEPLOYED_PINS["deployed_root_head"],
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
         self.assertEqual(plan.DEPLOYED_PINS["px_service_head"],
-                         plan.DEPLOYED_PINS["deployed_root_head"])
-        self.assertNotEqual(plan.DEPLOYED_PINS["guard_source_head"],
-                            plan.DEPLOYED_PINS["deployed_root_head"])
+                         "c3798910cb1d884ddea33cd1d0f405d7e0c31e2b")
 
     def test_output_root_guards(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

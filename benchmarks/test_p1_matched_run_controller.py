@@ -81,7 +81,7 @@ class ControllerTest(unittest.TestCase):
                           "merge_commit": plan.SOURCE_PINS["PR535"]["merge_commit"]},
                 "PR536": {"state": "merged", "head": plan.SOURCE_PINS["PR536"]["head"],
                           "merge_commit": plan.SOURCE_PINS["PR536"]["merge_commit"]},
-                "deployed_sources": {"PR535": False, "PR536": True},
+                "deployed_sources": {"PR535": True, "PR536": True},
                 "deployed_guard": {
                     "source_head": plan.DEPLOYED_PINS["guard_source_head"],
                     "root_head": plan.DEPLOYED_PINS["deployed_root_head"],

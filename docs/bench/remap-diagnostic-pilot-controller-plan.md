@@ -8,12 +8,15 @@ duplicating their code.
 
 ## Scope
 
-PR548 (`remap_runner.py`) provides the exact frozen-base reference-based
-plan, immutable receipt, additive rows, capacity gate and read isolation.
-PR549 (`remap_diagnostic.py`) provides the opt-in publication boundary and
-display isolation. This change adds the missing guarded pilot controller,
-posthoc canonical scoring wiring and retention plan so an independently
-reviewed execution can be wired after preconditions are satisfied.
+PR548 (`remap_runner.py`, hardened head `8d7bd1d`) provides the exact
+frozen-base reference-based plan, immutable receipt with validated
+ended whole-container RAM/guard CID binding, additive rows, capacity gate
+and read isolation. PR549 (`remap_diagnostic.py`, head `fecff32`) provides
+the opt-in publication boundary, display isolation and independently
+attested input mapping requirement. This change adds the missing guarded
+pilot controller, posthoc canonical scoring wiring and retention plan so
+an independently reviewed execution can be wired after preconditions are
+satisfied.
 
 ## Existing runner functions audited
 
@@ -94,6 +97,24 @@ assembler container and never used as a qualification gate.
 - Missing/failing image attestation or rebuilt image: no execution.
 - Missing attested reads or hash drift: no execution.
 - Truth/reference mount leak: no execution.
+
+## Integration contract at updated heads
+
+- PR548 hardened receipts: a measured receipt requires an ended whole-container
+  observation (`observation_ended`, `samples>=2`, exact bound CID, attested
+  method/version/scope, peak within 4e9) plus a guard receipt carrying the
+  same CID and exact 2400s / 4e9 / 2-CPU / `kernel_enforcement=false` bounds.
+  Nonfinite scores/runtimes and missing `conseq_csv_sha256` output evidence
+  are refused. The controller forwards these fields from the guarded runner
+  unchanged and fails closed when they are absent; it never fabricates a CID,
+  sample count or guard observation.
+- PR549 join binding: `merge_diagnostic_report(..., attested_inputs=...)` is
+  supplied by `remap_pilot_controller.attested_input_mapping(plans)`, derived
+  only from attested plan reads and canonical manifests. The controller's
+  `require_independent_attested_mapping` refuses rows-derived mappings and
+  verifies the mapping envelope digest; diagnostic rows never self-attest.
+- Row ingestion path: `remap_runner.build_rows` after receipt emission; posthoc
+  scoring metadata is placed inside the receipt before its digest is computed.
 
 ## Non-goals
 

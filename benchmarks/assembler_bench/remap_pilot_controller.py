@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -41,6 +42,7 @@ PREFLIGHT_SCHEMA = "ivanka.remap-diagnostic.preflight.v1"
 EXECUTION_SCHEMA = "ivanka.remap-diagnostic.execution.v1"
 SCORING_SCHEMA = "ivanka.remap-diagnostic.posthoc-score.v1"
 RETENTION_SCHEMA = "ivanka.remap-diagnostic.retention.v1"
+ATTESTED_INPUTS_SCHEMA = "ivanka.remap-diagnostic.attested-inputs.v1"
 
 # Guarded execution is only the frozen 40m wall / 4e9 RSS diagnostic contract.
 WALL_SECONDS = remap_runner.GUARD["wall_seconds"]
@@ -384,8 +386,20 @@ def _copy_log(source: Path | None, dest: Path) -> str | None:
 
 def collect_resource_evidence(*, peak_rss_bytes=None, samples=None,
                               observation_ended=None, wall_seconds=None,
-                              exit_status=None) -> dict:
-    resource = {}
+                              exit_status=None, bound_cid=None,
+                              guard_receipt=None) -> dict:
+    """Bind only real, ended whole-container observations to a receipt.
+
+    PR548's hardened boundary rejects launcher-group/unattested/unended RAM
+    and any measured case without an exact guard receipt bound to the same
+    CID. This controller forwards those fields unchanged; it never fabricates
+    a CID, sample count or guard observation.
+    """
+    resource = {
+        METHOD_KEY: COMPARABLE_METHOD,
+        VERSION_KEY: COMPARABLE_METHOD_VERSION,
+        SCOPE_KEY: COMPARABLE_SCOPE,
+    }
     if peak_rss_bytes is not None:
         resource["peak_rss_bytes"] = int(peak_rss_bytes)
     if samples is not None:
@@ -396,6 +410,10 @@ def collect_resource_evidence(*, peak_rss_bytes=None, samples=None,
         resource["wall_seconds"] = float(wall_seconds)
     if exit_status is not None:
         resource["exit_status"] = int(exit_status)
+    if bound_cid is not None:
+        resource["bound_cid"] = str(bound_cid)
+    if guard_receipt is not None:
+        resource["guard_receipt"] = dict(guard_receipt)
     return resource
 
 
@@ -483,6 +501,8 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
         observation_ended=run.get("observation_ended"),
         wall_seconds=run.get("wall_seconds"),
         exit_status=returncode,
+        bound_cid=run.get("bound_cid"),
+        guard_receipt=run.get("guard_receipt"),
     )
     diagnostics = {}
     unavailable = list(remap_runner.NA_METRICS)
@@ -491,10 +511,24 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
     scoring_payload = None
 
     if status == "measured":
-        score_fn = scorer or (lambda p, c, o: posthoc_score(p, c, o))
         try:
+            remap_runner.validate_whole_container_observation(resource, guard=remap_runner.GUARD)
+            guard_receipt = resource.get("guard_receipt")
+            bound_cid = resource.get("bound_cid")
+            if (not isinstance(guard_receipt, dict)
+                    or (guard_receipt.get("bound_cid") or guard_receipt.get("cid")) != bound_cid
+                    or guard_receipt.get("rss_limit_bytes") != remap_runner.GUARD["rss_limit_bytes"]
+                    or guard_receipt.get("wall_seconds") != remap_runner.GUARD["wall_seconds"]
+                    or guard_receipt.get("cpu_allocation") != remap_runner.GUARD["cpu_allocation"]
+                    or guard_receipt.get("kernel_enforcement") is not False):
+                raise ValueError("no exact guard receipt bound to observed CID")
+            score_fn = scorer or (lambda p, c, o: posthoc_score(p, c, o))
             scoring_payload = score_fn(plan, pilot_case, output_dir)
             score = float(scoring_payload["score"])
+            if not math.isfinite(score) or score < 0:
+                raise ValueError("posthoc score is not finite and non-negative")
+            if seconds is None or not math.isfinite(seconds) or not 0 < seconds <= WALL_SECONDS:
+                raise ValueError("wall runtime is not finite and bounded")
             _write_json(attempt_dir / "posthoc-score.json", scoring_payload)
             # Multitruth diagnostic is posthoc-only metadata; never mounted.
             if scoring_payload.get("multitruth") is not None:
@@ -525,6 +559,17 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
     if final_max is not None:
         outputs["conseq_csv_sha256"] = sha256_file(final_max)
         outputs["final_max_path_retained"] = str(final_max)
+    if scoring_payload is not None:
+        # Posthoc metadata must be inside the digested receipt bytes; adding
+        # it after build_receipt would break receipt_sha256 verification.
+        outputs["posthoc_scoring"] = {
+            "schema": scoring_payload.get("schema"),
+            "method": scoring_payload.get("method"),
+            "reference_panel_sha256": scoring_payload.get("reference_panel_sha256"),
+            "truth_sha256": scoring_payload.get("truth_sha256"),
+            "reference_count": scoring_payload.get("reference_count"),
+            "qualification_claim": "NONE",
+        }
 
     receipt = remap_runner.build_receipt(
         plan,
@@ -537,17 +582,79 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
         score=score,
         seconds=seconds if status == "measured" else None,
     )
-    if scoring_payload is not None:
-        receipt["posthoc_scoring"] = {
-            "schema": scoring_payload.get("schema"),
-            "method": scoring_payload.get("method"),
-            "reference_panel_sha256": scoring_payload.get("reference_panel_sha256"),
-            "truth_sha256": scoring_payload.get("truth_sha256"),
-            "reference_count": scoring_payload.get("reference_count"),
-            "qualification_claim": "NONE",
-        }
     retain_case_artifacts(attempt_dir=attempt_dir, receipt=receipt, logs=log_paths)
     return receipt
+
+
+def attested_input_mapping(plans) -> dict:
+    """Export an independently attested alias->read-pair mapping for PR549.
+
+    The mapping is derived ONLY from remap plans (which carry attested read
+    digests and canonical manifests), never from diagnostic rows, scores or
+    receipts. PR549's ``merge_diagnostic_report(..., attested_inputs=...)``
+    must receive this mapping to join a case.
+    """
+    records = []
+    seen = set()
+    for plan in plans:
+        if plan.get("schema") != remap_runner.PLAN_SCHEMA:
+            raise ValueError("attested mapping requires remap plans")
+        inputs = plan.get("inputs") or {}
+        alias = plan.get("alias")
+        cohort = plan.get("cohort")
+        if not remap_runner.ALIAS.fullmatch(str(alias or "")):
+            raise ValueError("attested mapping alias is not canonical")
+        if cohort not in PILOT_COHORTS or alias in seen:
+            raise ValueError("attested mapping alias/cohort is invalid")
+        seen.add(alias)
+        reads = inputs.get("read_sha256") or {}
+        if set(reads) != {"R1", "R2"}:
+            raise ValueError("attested mapping read pair is missing")
+        _require_sha256(reads["R1"], "R1")
+        _require_sha256(reads["R2"], "R2")
+        manifest = inputs.get("canonical_manifest_sha256")
+        _require_sha256(manifest, "canonical_manifest_sha256")
+        paired = inputs.get("paired_input_sha256")
+        _require_sha256(paired, "paired_input_sha256")
+        records.append({
+            "alias": alias,
+            "cohort": cohort,
+            "canonical_manifest_sha256": manifest,
+            "read_sha256": {"R1": reads["R1"], "R2": reads["R2"]},
+            "paired_input_sha256": paired,
+        })
+    if not records:
+        raise ValueError("attested mapping has no cases")
+    records.sort(key=lambda item: item["alias"])
+    return {
+        "schema": ATTESTED_INPUTS_SCHEMA,
+        "source": "controller_attested_preflight_reads",
+        "rows_derived": False,
+        "mapping_sha256": digest(records),
+        "cases": records,
+    }
+
+
+def require_independent_attested_mapping(mapping, rows=None) -> dict:
+    """Reject self-attestation from rows and verify the mapping envelope."""
+    if (not isinstance(mapping, dict)
+            or mapping.get("schema") != ATTESTED_INPUTS_SCHEMA
+            or mapping.get("rows_derived") is not False
+            or not re.fullmatch(r"controller_attested_preflight_reads",
+                                str(mapping.get("source")))):
+        raise ValueError("attested inputs are not controller preflight attested")
+    cases = mapping.get("cases")
+    if not isinstance(cases, list) or digest(cases) != mapping.get("mapping_sha256"):
+        raise ValueError("attested input mapping digest mismatch")
+    if rows is not None and isinstance(rows, dict):
+        # A rows object carries score/receipt fields; an independent input
+        # mapping must never inherit them.
+        if any(key in mapping for key in ("score", "receipt_sha256", "seconds")):
+            raise ValueError("attested input mapping is rows-derived")
+        row_aliases = {case.get("alias") for case in rows.get("cases", [])}
+        if row_aliases and not {c["alias"] for c in cases} >= row_aliases:
+            raise ValueError("attested input mapping does not cover rows")
+    return mapping
 
 
 def build_pilot_plan(*, physical_cases: list[PilotCase],

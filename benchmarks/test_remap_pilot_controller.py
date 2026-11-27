@@ -1,4 +1,6 @@
+import copy
 import json
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,6 +8,7 @@ from pathlib import Path
 from assembler_bench import guarded_canary_launcher as launcher
 from assembler_bench import remap_pilot_controller as ctl
 from assembler_bench import remap_runner as runner
+from assembler_bench import remap_diagnostic as display
 
 STAMP = "20261127T120000000000Z"
 TOKEN = "deadbeef"
@@ -133,6 +136,14 @@ class ExecuteCaseTests(unittest.TestCase):
                 "observation_ended": True,
                 "wall_seconds": wall_seconds,
                 "timed_out": timed_out,
+                "bound_cid": "a" * 64,
+                "guard_receipt": {
+                    "bound_cid": "a" * 64,
+                    "rss_limit_bytes": 4_000_000_000,
+                    "wall_seconds": 2400,
+                    "cpu_allocation": 2,
+                    "kernel_enforcement": False,
+                },
                 "log_paths": {"container.log": str(log)},
             }
         return run
@@ -229,6 +240,110 @@ class ExecuteCaseTests(unittest.TestCase):
         self.assertFalse(ref["truth_mounted"])
         self.assertFalse(ref["synthetic_truth_mounted"])
         self.assertFalse(ref["scoring_panel_mounted"])
+
+
+class HardenedContractTests(unittest.TestCase):
+    """Integration with PR548 hardened receipt and PR549 attested inputs."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def base(self, cohort="real", alias="R001"):
+        case, plan = make_plan(self.root / cohort, alias=alias, cohort=cohort)
+        pre = ctl.preflight(plan, free_bytes=40 * 1024**3, exclusive_slot=True)
+        return case, plan, pre
+
+    def scorer(self, score):
+        return lambda p, c, o: {
+            "schema": ctl.SCORING_SCHEMA, "method": "posthoc",
+            "cohort": p["cohort"], "score": score,
+            "reference_panel_sha256": "f" * 64,
+            "best_reference": "x", "multitruth": None,
+        }
+
+    def test_measured_receipt_carries_attested_ram_and_guard_binding(self):
+        case, plan, pre = self.base()
+        receipt = ctl.execute_case(
+            ctl.PilotCase(case=case), plan=plan, preflight_result=pre,
+            runner=ExecuteCaseTests.fake_runner(self), output_dir=self.root / "o",
+            attempt_dir=self.root / "a", scorer=self.scorer(123.5))
+        self.assertEqual(receipt["status"], "measured")
+        self.assertEqual(receipt["resource"]["bound_cid"], "a" * 64)
+        self.assertEqual(receipt["diagnostics"]["peak_ram_observed_mib"],
+                         round(3_000_000_000 / 1048576, 6))
+        self.assertNotIn("peak_ram_unavailable_reason", receipt["diagnostics"])
+
+    def test_missing_guard_receipt_fails_closed(self):
+        case, plan, pre = self.base()
+        def bad_runner(*args, **kwargs):
+            result = ExecuteCaseTests.fake_runner(self)(*args, **kwargs)
+            result.pop("guard_receipt")
+            return result
+        receipt = ctl.execute_case(
+            ctl.PilotCase(case=case), plan=plan, preflight_result=pre,
+            runner=bad_runner, output_dir=self.root / "o",
+            attempt_dir=self.root / "a", scorer=self.scorer(1.0))
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["failure_reason"],
+                         "posthoc_scoring_error:ValueError")
+        self.assertIsNone(receipt["score"])
+
+    def test_nonfinite_score_is_rejected(self):
+        case, plan, pre = self.base()
+        receipt = ctl.execute_case(
+            ctl.PilotCase(case=case), plan=plan, preflight_result=pre,
+            runner=ExecuteCaseTests.fake_runner(self), output_dir=self.root / "o",
+            attempt_dir=self.root / "a", scorer=self.scorer(math.nan))
+        self.assertEqual(receipt["status"], "failed")
+        self.assertIsNone(receipt["score"])
+
+    def test_attested_mapping_is_not_rows_derived_and_joins_display(self):
+        case, plan, pre = self.base()
+        receipt = ctl.execute_case(
+            ctl.PilotCase(case=case), plan=plan, preflight_result=pre,
+            runner=ExecuteCaseTests.fake_runner(self), output_dir=self.root / "o",
+            attempt_dir=self.root / "a", scorer=self.scorer(77.0))
+        rows = runner.build_rows([receipt], run_id=plan["run_id"], cohort="real")
+        mapping = ctl.attested_input_mapping([plan])
+        ctl.require_independent_attested_mapping(mapping, rows)
+        # A rows object used as attested_inputs is self-attestation and must
+        # be refused by the controller boundary.
+        with self.assertRaises(ValueError):
+            ctl.require_independent_attested_mapping(rows, rows)
+        registry = {
+            "schema": display.REGISTRY_SCHEMA, "tool_id": display.TOOL_ID,
+            "label": display.LABEL, "method_kind": display.METHOD_KIND,
+            "de_novo": False,
+            "invocation": "micall analyze sample --all_projects --keep_scratch",
+            "image": {"sha256": runner.IMAGE_ID, "reuse": "frozen-clinical-base"},
+            "source_commit": runner.SOURCE_COMMIT,
+            "frozen_master_commit": runner.SOURCE_COMMIT,
+            "reference_panel_sha256": runner.PANEL_SHA256,
+            "inputs": {"real": plan["inputs"]["canonical_manifest_sha256"],
+                       "synthetic": "e" * 64},
+            "guard": {"max_wall_seconds": 2400, "max_rss_bytes": 4_000_000_000,
+                      "cpu_allocation": 2, "exclusive_execution_slot": True,
+                      "kernel_enforcement": False, "minimum_free_bytes": 32 * 1024**3},
+            "acceptance_effect": "none", "enabled": True,
+        }
+        report = {
+            "schema": "ivanka.assembler-bench.public.v1", "title": "fixture",
+            "runs": [{"id": "fixture-real", "cohort": "real",
+                      "tools": ["iva", "ivanka"], "roster": [],
+                      "tool_labels": {"iva": "IVA", "ivanka": "Ivanka"},
+                      "expected_sample_count": 1, "sample_count": 1,
+                      "samples": [{"alias": "R001", "score": {},
+                                   "seconds": {}, "diagnostics": {},
+                                   "failures": [], "outcome": "success"}],
+                      "dominance_matrix": {}}],
+        }
+        merged, joined = display.merge_diagnostic_report(
+            report, registry, rows, attested_inputs=mapping)
+        self.assertEqual(joined, 1)
+        arm = merged["runs"][0]["samples"][0]["diagnostics"][display.TOOL_ID]
+        self.assertIsNone(arm["final_contig_count"])
 
 
 class PilotPlanTests(unittest.TestCase):

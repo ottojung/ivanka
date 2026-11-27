@@ -189,11 +189,20 @@ PYTHONPATH=.:benchmarks python3 -m expanded.p1_bounded_pilot_runner \
   --check \
   --out /workspace/ivanka-p1-pilot-950fe331-20261126/evidence/<run-id> \
   --image <64-hex-built-candidate-digest> \
+  --portable-postbuild-receipt <sha-pinned-postbuild-receipt-path> \
+  --portable-postbuild-receipt-sha256 <receipt-sha256> \
   --watchdog-path /workspace/ivanka-exploratory-ten-20261121/.watchdog-alive.json \
   --storage-conf /workspace/ivanka-exploratory-ten-20261121/storage.conf
 # writes prepared_manifest.json (with shared_px_boundary proof) + check_summary.json;
 # spawned=false; no lock acquired, no lease/STOP written
 ```
+
+The two `--portable-postbuild-receipt*` flags are **mandatory** at the merged
+PR531 head for either produced portable candidate: `prepare()` rejects a
+produced portable candidate when the receipt is absent, and
+`load_portable_postbuild_receipt()` refuses a missing, symlinked or unpinned
+receipt. Never pass a native binary digest or a placeholder image ID; the
+digest must be the post-build verified portable image identity.
 
 Live run — **only after watchdog deployment and exact slot grant**:
 ```sh
@@ -201,6 +210,8 @@ PYTHONPATH=.:benchmarks python3 -m expanded.p1_bounded_pilot_runner \
   --armed --slot <exact-token-from-operator-slot.json> \
   --out /workspace/ivanka-p1-pilot-950fe331-20261126/evidence/<run-id> \
   --image <64-hex-built-candidate-digest> \
+  --portable-postbuild-receipt <sha-pinned-postbuild-receipt-path> \
+  --portable-postbuild-receipt-sha256 <receipt-sha256> \
   --watchdog-path /workspace/ivanka-exploratory-ten-20261121/.watchdog-alive.json \
   --cases equal_strains-s000,equal_strains-s002,equal_strains-s006,equal_strains-s015,clonal-s000,coverage_hole-s002,physical-canary-R042
 ```

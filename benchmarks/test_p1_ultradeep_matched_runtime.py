@@ -25,21 +25,26 @@ def host(load: float = 1.0, cpu_max: str = "200000 100000",
 
 
 def attestation() -> dict:
+    """Truthful record: exact merged sources, still-old PR536 deployment."""
     return {
         "schema": plan.ATTESTATION_SCHEMA,
-        "PR535": {"state": "deployed", "head": plan.DEPENDENCIES["PR535"]},
-        "PR536": {"state": "deployed", "head": plan.DEPENDENCIES["PR536"]},
+        "PR535": {"state": "merged", "head": plan.SOURCE_PINS["PR535"]["head"],
+                  "merge_commit": plan.SOURCE_PINS["PR535"]["merge_commit"]},
+        "PR536": {"state": "merged", "head": plan.SOURCE_PINS["PR536"]["head"],
+                  "merge_commit": plan.SOURCE_PINS["PR536"]["merge_commit"]},
+        "deployed_sources": {"PR535": False, "PR536": True},
         "deployed_guard": {
-            "head": plan.GUARD_IDENTITY["PR536"], "tree_clean": True,
-            "guard_sha256": {key: value for key, value in plan.GUARD_IDENTITY.items()
-                             if key != "PR536"},
-            "px_service_head": plan.GUARD_IDENTITY["PR536"],
-            "watchdog_service_head": plan.GUARD_IDENTITY["PR536"],
+            "source_head": plan.DEPLOYED_PINS["guard_source_head"],
+            "root_head": plan.DEPLOYED_PINS["deployed_root_head"],
+            "tree_clean": True,
+            "guard_sha256": dict(plan.DEPLOYED_PINS["guard_sha256"]),
+            "px_service_head": plan.DEPLOYED_PINS["px_service_head"],
+            "watchdog_service_head": plan.DEPLOYED_PINS["watchdog_service_head"],
             "watchdog_alive_fresh": True, "lease_clear": True,
             "idle_boundary_attested": True,
         },
         "attested_by": "operator",
-        "attested_at_utc": "2026-11-26T19:41:30Z",
+        "attested_at_utc": "2026-11-26T20:30:00Z",
     }
 
 
@@ -150,30 +155,53 @@ class HostEvidenceTest(unittest.TestCase):
 class GuardTest(unittest.TestCase):
     def test_merged_only_attestation_stays_blocked(self) -> None:
         record = attestation()
-        for name in plan.DEPENDENCIES:
-            record[name] = {"state": "merged", "head": plan.DEPENDENCIES[name]}
+        for name in plan.SOURCE_PINS:
+            record[name] = {"state": "deployed", "head": plan.SOURCE_PINS[name]["head"]}
         with tempfile.TemporaryDirectory() as tmp:
             gate = plan.readiness(write_attestation(pathlib.Path(tmp), record))
         self.assertFalse(gate["ready"])
-        self.assertEqual(gate["blocked_by"], ["PR535", "PR536"])
+        self.assertIn("PR535", gate["blocked_by"])
+        self.assertIn("PR536", gate["blocked_by"])
 
-    def test_deployed_identity_is_required(self) -> None:
+    def test_truthful_still_old_deployment_is_not_reported_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gate = plan.readiness(write_attestation(pathlib.Path(tmp)))
+        self.assertFalse(gate["ready"])
+        self.assertEqual(gate["blocked_by"], ["PR535"])
+        self.assertIn("PR535 merged source is still not deployed", gate["reasons"])
+
+    def test_deployed_pins_are_separate_and_exact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             folder = pathlib.Path(tmp)
-            self.assertTrue(plan.readiness(write_attestation(folder))["ready"])
             for mutate in (
+                lambda r: r["PR535"].update(head="b" * 64),
+                lambda r: r["PR535"].update(merge_commit="b" * 64),
                 lambda r: r["PR536"].update(head="b" * 64),
-                lambda r: r["deployed_guard"].update(head="b" * 64),
+                lambda r: r["deployed_guard"].update(source_head="b" * 64),
+                lambda r: r["deployed_guard"].update(root_head="b" * 64),
                 lambda r: r["deployed_guard"]["guard_sha256"].update(watch_sha256="b" * 64),
                 lambda r: r["deployed_guard"].update(px_service_head="b" * 64),
+                lambda r: r["deployed_guard"].update(watchdog_service_head="b" * 64),
                 lambda r: r["deployed_guard"].update(watchdog_alive_fresh=False),
                 lambda r: r["deployed_guard"].update(lease_clear=False),
                 lambda r: r["deployed_guard"].update(idle_boundary_attested=False),
+                lambda r: r["deployed_sources"].update(PR535=True),
+                lambda r: r["deployed_sources"].update(PR536=False),
                 lambda r: r.update(schema="wrong"),
             ):
                 record = attestation()
                 mutate(record)
                 self.assertFalse(plan.readiness(write_attestation(folder, record))["ready"])
+
+    def test_exact_source_heads_replaced_stale_pins(self) -> None:
+        self.assertEqual(plan.SOURCE_PINS["PR535"]["head"],
+                         "39317f021f4e5c00f5da859bcdcf755de4c6d353")
+        self.assertEqual(plan.SOURCE_PINS["PR535"]["merge_commit"],
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(plan.DEPLOYED_PINS["px_service_head"],
+                         plan.DEPLOYED_PINS["deployed_root_head"])
+        self.assertNotEqual(plan.DEPLOYED_PINS["guard_source_head"],
+                            plan.DEPLOYED_PINS["deployed_root_head"])
 
     def test_output_root_guards(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -188,19 +216,20 @@ class GuardTest(unittest.TestCase):
             with self.assertRaises(plan.Refusal):
                 plan.check_output_root(plan.PROTECTED_ROOTS[0] / "new-root")
 
-    def test_plan_is_inert_and_gate_neutral_even_when_ready(self) -> None:
+    def test_plan_is_inert_with_truthful_still_old_attestation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp) / "out"
             attestation_path = write_attestation(pathlib.Path(tmp))
             built = plan.build_plan(RECEIPT, root, attestation=attestation_path)
-            self.assertTrue(built["dependencies"]["ready"])
-            self.assertEqual(built["dependencies"]["blocked_by"], [])
+            self.assertFalse(built["dependencies"]["ready"])
+            self.assertEqual(built["dependencies"]["blocked_by"], ["PR535"])
             self.assertEqual(built["execution"], "blocked")
             self.assertFalse(built["scientific_gates_changed"])
             self.assertFalse(built["formal_qualification"])
             self.assertTrue(built["strong_evidence_not_causal_proof"])
             self.assertEqual(len(built["schedule"]), 8)
-            self.assertEqual(built["deployed_guard_identity"], plan.GUARD_IDENTITY)
+            self.assertEqual(built["source_pins"], plan.SOURCE_PINS)
+            self.assertEqual(built["deployed_pins"], plan.DEPLOYED_PINS)
             self.assertEqual(built["comparability_plan"]["required_container_effective_cpus"], 2.0)
             self.assertFalse(root.exists())
             self.assertNotIn("execute", built)

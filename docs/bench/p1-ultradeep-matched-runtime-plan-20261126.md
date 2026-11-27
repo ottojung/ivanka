@@ -4,7 +4,8 @@
 live deployment, benchmark edit, frozen-artifact write or qualification claim.
 Historical receipts stay immutable and their scores are never recoded. There is
 deliberately no `--execute` mode: every emitted plan carries `execution:
-"blocked"` even when its dependency description reports ready.
+"blocked"` regardless of its dependency description, which is itself blocked
+while the live deployment is still old.
 
 ## Motivation (read from PR539, not re-measured)
 
@@ -34,6 +35,15 @@ directory. The exact candidate is `12d8c72f01f305b7f81db26193ec5fc213ba55bf`
 with image `6fba7095…`; the frozen arm uses image `da795bbb…`. No truth,
 reference, panel or score token enters the plan.
 
+The emitted MiCall tail is verified against the real PX template
+(`assembler_bench.px_execution.micall_argv`) and every argv passes that module's
+reference-blind validator; the stricter network/memory/stop-timeout flags are
+plan-only hardening and do not change reads, timer or image identity. The
+source-only controller (`benchmarks/p1_matched_run_controller.py`) reuses the
+same shared guard (`fail_closed_guard.p1_harness`) and the plan's own readiness
+and output-root checks rather than duplicating them. It emits a controller
+record with `execution: "blocked"` and never builds, runs, locks or deploys.
+
 Per-arm durable evidence is specified as `argv.json`, `timing.json`,
 `host-evidence.json` and output hashes under a fresh output root. Host
 evidence is **aggregate only**: load averages, cgroup `cpu.max` and its
@@ -53,23 +63,34 @@ hard-cap claim.
 
 ### Deployment identity gate
 
-`readiness()` requires an **explicit deployed-guard attestation**, not a merge
-record. PR536 `6e6886a…` merged at `091f5627…` and was genuinely deployed on
-marceline-dev at the 20:19Z cutover: both persistent and runtime s6 run scripts
-pin `/workspace/ivanka-guard-pr536-staged-20261126`, watchdog identity readiness
-passed with a fresh ALIVE record (the live PID is derived from that record at
-admission, never hardcoded), and PX was restarted active with no lease,
-supervisor or container at that boundary. The earlier merged-but-PR530-deployed
-state made a merged-only attestation unsafe; it still stays blocked. An
-attestation must name both exact deployed dependency heads, the exact deployed
-guard head, a clean target tree, the five reviewed guard-file digests
-(natural_exit, watch, monitor, p1_helper, p1_harness), matching PX and watchdog
-service HEAD pins, a fresh watchdog ALIVE record, a clear shared lease and an
-attested idle boundary, plus attestor and UTC timestamp. It must be re-derived
-for the then-current deployment at admission; this cutover note is historical,
-not a runtime check. PR535 remains open/NO-GO (`c7356b58…`), so readiness stays
-blocked on that dependency. This describes eligibility only; it cannot authorize
-an arm.
+Source pins and deployment pins are deliberately separate. The exact source
+now on main is PR535's merged head `39317f021f4e5c00f5da859bcdcf755de4c6d353`
+(merge commit `165a86b38c0bc29b4f8e0281a39ca59b909a6563`) and PR536's head
+`6e6886a824a7cb0f1b812f1c24c233f8100a9d8b` (merge commit
+`091f56275ae823cb3291b81dbdf016fcf16c3ea0`). These replace the earlier stale
+NO-GO/source pins; a merge is still only a source fact, never a deployment.
+
+The **live deployment truth remains the older PR536 guard stack**. Both the
+persistent and runtime s6 scripts pin
+`/workspace/ivanka-guard-pr536-staged-20261126`, whose HEAD is the PR536 merge
+commit `091f5627…` and whose tree is clean. The reviewed guard *source* head
+`6e6886a…`, the deployed root HEAD `091f5627…`, and the two immutable service
+pins (PX `091f5627…`, watchdog `091f5627…`) are separate values, each checked
+on its own rather than assumed equal. The five reviewed guard-file digests
+(natural_exit, watch, monitor, p1_helper, p1_harness) were recomputed in that
+deployed tree and match the pins byte-for-byte.
+
+An attestation must name both exact merged source heads and merge commits, the
+truthful deployed-source state (PR535 merged-only/not deployed, PR536 deployed),
+the separate guard/source/root/service pins, a clean tree, the five digests, a
+fresh watchdog ALIVE record (the live PID is derived from that record at
+admission, never hardcoded), a clear shared lease and an attested idle boundary,
+plus attestor and UTC timestamp. It must be re-derived for the then-current
+deployment at admission; this note is historical, not a runtime check. Because
+no deployed PR535 head is pinned while the live stack is still PR536, **no
+attestation can report readiness here**: readiness stays blocked on PR535's
+still-undeployed source, and a false "deployed" claim is rejected too. This
+describes eligibility only; it cannot authorize an arm.
 
 ### Contention abort plan
 
@@ -100,9 +121,13 @@ clear lease at that later boundary.
 `benchmarks/test_p1_ultradeep_matched_runtime.py` covers receipt pin and
 mutation refusal, deterministic AB/BA order, one-template equivalence of argv,
 effective-cpu/cpuset parsing, aggregate-only host evidence and privacy,
-merged-only refusal, exact deployed-guard identity, sampled RSS/quota records,
-contention and comparability aborts, output-root guards and inert, gate-neutral
-plan emission.
+merged-only refusal, exact merged source and separate immutable
+guard/service pins, refusal of a false "PR535 deployed" claim, sampled
+RSS/quota records, contention and comparability aborts, output-root guards and
+inert, gate-neutral plan emission.
+`benchmarks/test_p1_matched_run_controller.py` covers retained original inputs,
+timer and image identities, real CLI-template and reference-blind validation,
+shared-guard reuse, and inert source-only emission that stays blocked.
 
 Limitations: this is a plan, not a measurement. No host-contention causal
 claim is made; plan-time loadavg was about 21 with host `cpu.max = max 100000`

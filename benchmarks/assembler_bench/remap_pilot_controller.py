@@ -16,23 +16,18 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
 import shutil
-import subprocess
-import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import guarded_canary_launcher as launcher
-from . import px_ram_semantics, remap_runner
+from . import remap_guarded_exec, remap_runner
 from .px_ram_semantics import (
     COMPARABLE_METHOD,
     COMPARABLE_METHOD_VERSION,
     COMPARABLE_SCOPE,
     METHOD_KEY,
     SCOPE_KEY,
-    UNAVAILABLE_KEY,
     VERSION_KEY,
 )
 
@@ -458,14 +453,15 @@ def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
 
 
 def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
-                 runner, output_dir: Path, attempt_dir: Path,
-                 scorer=None) -> dict:
-    """Execute one guarded remap pilot case with injected runner.
+                 output_dir: Path, attempt_dir: Path,
+                 runner=None, original_manifest=None, scorer=None) -> dict:
+    """Execute one guarded remap pilot case.
 
-    ``runner`` is callable: runner(plan, output_dir, attempt_dir) -> dict with
-    keys returncode, peak_rss_bytes, samples, observation_ended, wall_seconds,
-    timed_out, log_paths (dict), stdout_path/stderr_path optional. Tests inject
-    a fake runner; production wiring uses a guarded podman launcher.
+    By default this calls the REAL guarded execution path
+    (``remap_guarded_exec.run_guarded_case``) with an independently attested
+    original input manifest. ``runner`` exists only as a source-test seam and
+    is never used by production callers. Posthoc scoring runs only after the
+    guard reports exact-CID unmount/teardown.
     """
     output_dir = Path(output_dir)
     attempt_dir = Path(attempt_dir)
@@ -482,7 +478,21 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
         retain_case_artifacts(attempt_dir=attempt_dir, receipt=receipt)
         return receipt
 
-    run = runner(plan, output_dir, attempt_dir) or {}
+    if runner is None:
+        manifest = original_manifest or remap_guarded_exec.load_original_input_manifest()
+        run = remap_guarded_exec.run_guarded_case(
+            plan, manifest, output_dir=output_dir, attempt_dir=attempt_dir) or {}
+    else:
+        # Even injected source-test runners must bind to original reads when a
+        # manifest is supplied; the real path always supplies one.
+        if original_manifest is not None:
+            remap_guarded_exec.bind_plan_to_original_manifest(plan, original_manifest)
+        run = runner(plan, output_dir, attempt_dir) or {}
+    _write_json(attempt_dir / "guarded-execution.json", {
+        key: run.get(key) for key in (
+            "schema", "status", "capacity", "original_input_binding",
+            "bound_cid", "unmount_verified", "failure_reason", "guard_receipt")
+        if key in run})
     returncode = run.get("returncode")
     timed_out = bool(run.get("timed_out"))
     log_paths = dict(run.get("log_paths") or {})
@@ -495,15 +505,19 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
         returncode=returncode, final_max_exists=final_max is not None,
         timed_out=timed_out,
     )
-    resource = collect_resource_evidence(
-        peak_rss_bytes=run.get("peak_rss_bytes"),
-        samples=run.get("samples"),
-        observation_ended=run.get("observation_ended"),
-        wall_seconds=run.get("wall_seconds"),
-        exit_status=returncode,
-        bound_cid=run.get("bound_cid"),
-        guard_receipt=run.get("guard_receipt"),
-    )
+    if isinstance(run.get("resource"), dict):
+        # Real guard evidence: forwarded unchanged from the watcher/teardown.
+        resource = dict(run["resource"])
+    else:
+        resource = collect_resource_evidence(
+            peak_rss_bytes=run.get("peak_rss_bytes"),
+            samples=run.get("samples"),
+            observation_ended=run.get("observation_ended"),
+            wall_seconds=run.get("wall_seconds"),
+            exit_status=returncode,
+            bound_cid=run.get("bound_cid"),
+            guard_receipt=run.get("guard_receipt"),
+        )
     diagnostics = {}
     unavailable = list(remap_runner.NA_METRICS)
     score = None
@@ -512,6 +526,11 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
 
     if status == "measured":
         try:
+            proof = run.get("unmount_proof") or {}
+            if (run.get("unmount_verified") is not True
+                    or proof.get("fresh_absence_check") is not True
+                    or proof.get("unmount_verified") is not True):
+                raise ValueError("posthoc scoring requires exact unmount proof")
             remap_runner.validate_whole_container_observation(resource, guard=remap_runner.GUARD)
             guard_receipt = resource.get("guard_receipt")
             bound_cid = resource.get("bound_cid")
@@ -551,6 +570,8 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
         "final_max_present": final_max is not None,
         "final_max_sha256": sha256_file(final_max) if final_max else None,
         "resource": resource,
+        "unmount_verified": run.get("unmount_verified") is True,
+        "original_input_binding": run.get("original_input_binding"),
         "failure_reason": failure_reason,
     }
     _write_json(attempt_dir / "execution.json", execution)

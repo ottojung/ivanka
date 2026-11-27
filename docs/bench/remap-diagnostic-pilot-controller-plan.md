@@ -8,7 +8,8 @@ duplicating their code.
 
 ## Scope
 
-PR548 (`remap_runner.py`, hardened head `8d7bd1d`) provides the exact
+PR548 (`remap_runner.py`, corrected head `f783d16`; lint fix on
+`8d7bd1d`) provides the exact
 frozen-base reference-based plan, immutable receipt with validated
 ended whole-container RAM/guard CID binding, additive rows, capacity gate
 and read isolation. PR549 (`remap_diagnostic.py`, head `fecff32`) provides
@@ -66,17 +67,46 @@ Synthetic multitruth diagnostic is computed posthoc from retained final MAX
 and pinned per-case truth manifest/hashes; it is never mounted into the
 assembler container and never used as a qualification gate.
 
+## Real guarded execution (not a mock)
+
+`benchmarks/assembler_bench/remap_guarded_exec.py` is the default execution
+path used by `execute_case` (no injected runner in production). It:
+
+1. re-checks the 32 GiB reserve immediately before ownership or process spawn
+   and refuses to start below reserve;
+2. takes the shared exclusive slot lock and durable worker lease, refusing
+   contention or an uncleared prior lease;
+3. validates plan aliases and both FASTQ digests against the independently
+   attested original read-pair manifest
+   `/workspace/ivanka-storage-recovery-20261126/remap-input-attestation-20261126/readback.json`
+   (SHA-256 `01c59cf…`, 198 physical + 464 synthetic, `truth_opened=false`),
+   never a rows/receipt-derived mapping;
+4. launches the exact frozen non-de-novo argv under the common fail-closed
+   watcher (`monitor.watch`), binding the exact issued CID and sampling whole
+   container RSS;
+5. maps real guard evidence to the receipt contract without fabrication:
+   `peak_rss_bytes` from the watcher peak, `samples` from actual heartbeat
+   observations, `observation_ended` from watcher termination, attested
+   method/version/scope from the sampler, and a guard receipt carrying the
+   same bound CID and exact 2400 s / 4e9 / 2-CPU bounds;
+6. requires an exact-CID fresh-absence (unmount) proof before the controller
+   may call the posthoc scorer. No unmount proof means no score.
+
+Injected runners exist only as source-test seams; a real manifest is still
+required when they are used.
+
 ## Execution wiring
 
 `remap_pilot_controller.execute_case`:
 
 1. Write plan and preflight records.
 2. Fail closed if preflight is not admitted.
-3. Run injected guarded runner (production wiring: exclusive-slot guarded
-   launcher/runtime with CID-bound monitoring and reserve checks).
+3. Run the real guarded execution path above (or an injected source-test
+   double) and retain its plan/manifest binding and guard records.
 4. Classify outcome from exit status, wall limit and presence of final MAX.
-5. If measured, run posthoc canonical scorer outside container; on scoring
-   error fail closed with no fabricated score.
+5. If measured, verify exact unmount proof, then run posthoc canonical
+   scorer outside the container; on scoring or unmount error fail closed
+   with no fabricated score.
 6. Emit `remap_runner.build_receipt` with resource attestation, null
    unavailable metrics, distinct digest, and posthoc metadata.
 7. Retain logs and receipt files under attempt directory.

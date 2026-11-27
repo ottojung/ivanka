@@ -1,5 +1,4 @@
 import copy
-import json
 import math
 import tempfile
 import unittest
@@ -9,6 +8,9 @@ from assembler_bench import guarded_canary_launcher as launcher
 from assembler_bench import remap_pilot_controller as ctl
 from assembler_bench import remap_runner as runner
 from assembler_bench import remap_diagnostic as display
+from assembler_bench import remap_guarded_exec as gexec
+from assembler_bench import px_ram_semantics
+from unittest.mock import patch
 
 STAMP = "20261127T120000000000Z"
 TOKEN = "deadbeef"
@@ -137,6 +139,13 @@ class ExecuteCaseTests(unittest.TestCase):
                 "wall_seconds": wall_seconds,
                 "timed_out": timed_out,
                 "bound_cid": "a" * 64,
+                "unmount_verified": True,
+                "unmount_proof": {
+                    "fresh_absence_check": True,
+                    "unmount_verified": True,
+                    "container_removed": False,
+                    "pilot_container_id": "a" * 64,
+                },
                 "guard_receipt": {
                     "bound_cid": "a" * 64,
                     "rss_limit_bytes": 4_000_000_000,
@@ -369,3 +378,206 @@ class PilotPlanTests(unittest.TestCase):
         self.assertEqual(guards["rss_limit_bytes"], 4_000_000_000)
         self.assertTrue(guards["exclusive_slot_required"])
         self.assertTrue(guards["no_truth_mounted"])
+
+
+class RealGuardedExecutionTests(unittest.TestCase):
+    """Source-only proof that the default execution path is the real guard."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.case, self.plan = make_plan(self.root / "real", alias="R001", cohort="real")
+        self.pre = ctl.preflight(self.plan, free_bytes=40 * 1024**3, exclusive_slot=True)
+        self.manifest = {
+            "schema": gexec.BINDING_SCHEMA,
+            "manifest_sha256": gexec.ORIGINAL_MANIFEST_SHA256,
+            "physical_manifest_sha256": "1" * 64,
+            "synthetic_cohort_sha256": "2" * 64,
+            "truth_opened": False,
+            "cases": [{
+                "alias": "R001", "cohort": "real",
+                "read_sha256": dict(self.plan["inputs"]["read_sha256"]),
+                "source_verified": True,
+            }],
+        }
+
+    @staticmethod
+    def realistic_run(plan, output_dir, attempt_dir):
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "conseq.csv").write_text("name,consensus\nA,ACGT\n")
+        cid = "a" * 64
+        return {
+            "schema": gexec.EXECUTION_SCHEMA, "status": "finished",
+            "returncode": 0, "wall_seconds": 12.5, "bound_cid": cid,
+            "unmount_verified": True,
+            "unmount_proof": {"fresh_absence_check": True,
+                              "unmount_verified": True,
+                              "container_removed": False,
+                              "pilot_container_id": cid},
+            "original_input_binding": {"alias": plan["alias"],
+                                       "source_verified": True},
+            "guard_receipt": {"bound_cid": cid, "rss_limit_bytes": 4_000_000_000,
+                              "wall_seconds": 2400, "cpu_allocation": 2,
+                              "kernel_enforcement": False},
+            "resource": {"peak_rss_bytes": 3_000_000_000, "samples": 5,
+                         "observation_ended": True, "bound_cid": cid,
+                         px_ram_semantics.METHOD_KEY: px_ram_semantics.COMPARABLE_METHOD,
+                         px_ram_semantics.VERSION_KEY: px_ram_semantics.COMPARABLE_METHOD_VERSION,
+                         px_ram_semantics.SCOPE_KEY: px_ram_semantics.COMPARABLE_SCOPE,
+                         "guard_receipt": {
+                             "bound_cid": cid,
+                             "rss_limit_bytes": 4_000_000_000,
+                             "wall_seconds": 2400,
+                             "cpu_allocation": 2,
+                             "kernel_enforcement": False}},
+            "log_paths": {"launcher.stdout.log": str(Path(attempt_dir) / "launcher.stdout.log"),
+                          "launcher.stderr.log": str(Path(attempt_dir) / "launcher.stderr.log")},
+        }
+
+    def test_default_execute_case_uses_real_guarded_path(self):
+        calls = {}
+        def fake_real(plan, manifest, **kwargs):
+            calls["plan"] = plan
+            calls["manifest"] = manifest
+            return self.realistic_run(plan, kwargs["output_dir"], kwargs["attempt_dir"])
+        with patch.object(gexec, "run_guarded_case", side_effect=fake_real):
+            receipt = ctl.execute_case(
+                ctl.PilotCase(case=self.case), plan=self.plan,
+                preflight_result=self.pre, output_dir=self.root / "o",
+                attempt_dir=self.root / "a", original_manifest=self.manifest,
+                scorer=lambda p, c, o: {"schema": ctl.SCORING_SCHEMA,
+                                        "method": "m", "cohort": "real",
+                                        "score": 9.0,
+                                        "reference_panel_sha256": runner.PANEL_SHA256,
+                                        "best_reference": "x", "multitruth": None})
+        self.assertEqual(calls["plan"]["run_id"], self.plan["run_id"])
+        self.assertIs(calls["manifest"], self.manifest)
+        self.assertEqual(receipt["status"], "measured", receipt.get("failure_reason"))
+        self.assertTrue((self.root / "a" / "guarded-execution.json").is_file())
+
+    def test_scoring_requires_unmount_proof(self):
+        run = self.realistic_run(self.plan, self.root / "o", self.root / "a")
+        run.pop("unmount_proof")
+        with patch.object(gexec, "run_guarded_case", return_value=run):
+            receipt = ctl.execute_case(
+                ctl.PilotCase(case=self.case), plan=self.plan,
+                preflight_result=self.pre, output_dir=self.root / "o",
+                attempt_dir=self.root / "unmount", original_manifest=self.manifest,
+                scorer=lambda *a: self.fail("scorer ran without unmount proof"))
+        self.assertEqual(receipt["status"], "failed")
+        self.assertIsNone(receipt["score"])
+
+    def test_real_original_manifest_verifies_read_only(self):
+        manifest = gexec.load_original_input_manifest()
+        self.assertEqual(manifest["schema"], gexec.BINDING_SCHEMA)
+        self.assertEqual(manifest["manifest_sha256"], gexec.ORIGINAL_MANIFEST_SHA256)
+        self.assertFalse(manifest["truth_opened"])
+        self.assertEqual(len(manifest["cases"]), 662)
+        aliases = {case["alias"] for case in manifest["cases"]}
+        self.assertIn("R001", aliases)
+        self.assertIn("H464", aliases)
+
+    def test_manifest_binding_rejects_read_drift(self):
+        bad = copy.deepcopy(self.manifest)
+        bad["cases"][0]["read_sha256"]["R1"] = "f" * 64
+        with self.assertRaises(ValueError):
+            gexec.bind_plan_to_original_manifest(self.plan, bad)
+
+    def test_manifest_loader_rejects_truth_opened_and_digest_drift(self):
+        with patch.object(gexec, "load_original_input_manifest",
+                          side_effect=ValueError("manifest changed")):
+            with self.assertRaises(ValueError):
+                gexec.load_original_input_manifest()
+        # Real loader verifies the on-disk SHA before any parse.
+        with self.assertRaises(ValueError):
+            gexec.load_original_input_manifest(path=self.root / "missing.json")
+
+    def test_real_runner_refuses_below_reserve_before_spawn(self):
+        def forbidden(*args, **kwargs):
+            self.fail("process spawned below reserve")
+        with (patch.object(gexec.exploratory_space, "available",
+                           return_value=32 * 1024**3 - 1),
+              patch.object(gexec.lease, "require_clear") as require_clear):
+            state = gexec.run_guarded_case(
+                self.plan, self.manifest,
+                output_dir=self.root / "below-o",
+                attempt_dir=self.root / "below-a",
+                spawn=forbidden, watch=forbidden, guard_root=self.root / "below-root")
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(state["failure_reason"], "reserve_below_32gib")
+        require_clear.assert_not_called()
+
+    def test_real_runner_wires_lock_guard_watch_and_unmount(self):
+        """Drive the real runner with injected process/watch doubles."""
+        root = self.root / "guard-root"
+        root.mkdir(parents=True)
+        cid = "a" * 64
+        plan = dict(self.plan)
+        argv = list(plan["argv"])
+        cid_index = argv.index("--cidfile")
+        cidfile = self.root / "real-case.cid"
+        argv[cid_index + 1] = str(cidfile)
+        plan["argv"] = argv
+        events = []
+
+        fake_proc = type("P", (), {"pid": 4242})()
+
+        def fake_spawn(argv, **kwargs):
+            events.append(("spawn", list(argv)))
+            return fake_proc
+
+        def fake_watch(proc, cfg, on_bind=None):
+            events.append(("watch", cfg["cidfile"], cfg["rss_bytes"],
+                           cfg["wall_seconds"]))
+            on_bind({"cid": cid, "pid": 4242, "fingerprint": [1, 2]})
+            cfg["heartbeat"]()
+            cfg["heartbeat"]()
+            return {"peak_rss": 3_000_000_000, "cid": cid,
+                    "teardown": {"container_removed": True, "cid": cid},
+                    px_ram_semantics.METHOD_KEY: px_ram_semantics.COMPARABLE_METHOD,
+                    px_ram_semantics.VERSION_KEY: px_ram_semantics.COMPARABLE_METHOD_VERSION,
+                    px_ram_semantics.SCOPE_KEY: px_ram_semantics.COMPARABLE_SCOPE}
+
+        def fake_absent(groot, env, bound_cid, proof=None):
+            events.append(("absent", bound_cid))
+            return {"fresh_absence_check": True, "container_removed": False,
+                    "pilot_container_id": bound_cid}
+
+        class FakeEmitter:
+            def __init__(self, groot, ident): events.append(("emitter", ident))
+            def before_spawn(self): events.append(("before_spawn",))
+            def bound(self, bound_cid): events.append(("bound", bound_cid))
+            def refresh(self): return {}
+
+        with (patch.object(gexec.exploratory_space, "available", return_value=40 * 1024**3),
+              patch.object(gexec.heartbeat, "Emitter", FakeEmitter),
+              patch.object(gexec.lease, "require_clear") as require_clear,
+              patch.object(gexec.lease, "acquire") as acquire,
+              patch.object(gexec.lease, "bind_cid") as bind_cid,
+              patch.object(gexec.lease, "release") as release,
+              patch.object(gexec.pilot, "prove_pilot_absent", side_effect=fake_absent),
+              patch.object(gexec.terminate, "group", return_value=0)):
+            state = gexec.run_guarded_case(
+                plan, self.manifest, output_dir=self.root / "guard-out",
+                attempt_dir=self.root / "guard-attempt", spawn=fake_spawn,
+                watch=fake_watch, guard_root=root)
+
+        self.assertEqual(state["status"], "finished")
+        self.assertTrue(state["unmount_verified"])
+        self.assertEqual(state["resource"]["samples"], 2)
+        self.assertEqual(state["resource"]["peak_rss_bytes"], 3_000_000_000)
+        self.assertEqual(state["guard_receipt"]["bound_cid"], cid)
+        require_clear.assert_called_once()
+        acquire.assert_called_once()
+        bind_cid.assert_called_once()
+        release.assert_called_once()
+        kinds = [event[0] for event in events]
+        self.assertEqual(kinds, ["emitter", "before_spawn", "spawn", "watch",
+                                 "bound", "absent"])
+        self.assertNotIn("--denovo", events[2][1])
+
+
+if __name__ == "__main__":
+    unittest.main()

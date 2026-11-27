@@ -17,6 +17,7 @@ fn stats(primary: u32, alt: u32, primary_pairs: usize, alt_pairs: usize) -> Stat
         pairs: vec![primary_pairs, alt_pairs],
         coverage: vec![POS; 2],
         pair_masks: Vec::new(),
+        exclusive_masks: Vec::new(),
         spans: Vec::new(),
     }
 }
@@ -48,8 +49,7 @@ fn single_substitution_is_not_a_phased_branch() {
 #[test]
 fn duplicate_contigs_are_not_bounded_branches() {
     let evidence = stats(60, 60, 5000, 5000);
-    assert!(!ok(&[], &evidence));
-    assert!(!ok(&[(0, LEN)], &evidence));
+    assert!(!ok(&[], &evidence) && !ok(&[(0, LEN)], &evidence));
 }
 
 #[test]

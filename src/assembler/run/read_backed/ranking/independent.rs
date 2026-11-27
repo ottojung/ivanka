@@ -1,9 +1,12 @@
-use super::{balanced, private, retained, Statistics, K};
+use super::{balanced, private, related, retained, Statistics, K};
 
 // Independent original fragments, rather than the length of a competing
 // genome, determine whether a second densely covered component is useful.
 // Homologous strains share most fragments, so a read-supported private
 // stretch can establish a distinct branch where no fragment votes alone.
+// When even the private stretches are shared, discriminating original-pair
+// 31-mers supply a second, reference-blind qualification for a genuinely
+// distinct, co-abundant haplotype.
 pub(in super::super) fn additional(
     contigs: &[Vec<u8>],
     stats: &Statistics,
@@ -12,12 +15,13 @@ pub(in super::super) fn additional(
     if contigs.len() < 2 {
         return Vec::new();
     }
-    let supported = stats.pair_masks.iter().filter(|&&mask| mask != 0).count();
-    let minimum = supported.div_ceil(10).max(20);
+    let minimum = related::minimum(&stats.pair_masks);
+    let related_minimum = related::minimum(&stats.exclusive_masks);
     let mut selected = 1u16 << primary;
     let mut additional = Vec::new();
     loop {
-        let counts = independent_counts(&stats.pair_masks, selected, contigs.len());
+        let counts = related::counts(&stats.pair_masks, selected, contigs.len());
+        let related = related::counts(&stats.exclusive_masks, selected, contigs.len());
         let chosen = (0..contigs.len())
             .filter(|&i| selected & (1 << i) != 0)
             .collect::<Vec<_>>();
@@ -29,27 +33,24 @@ pub(in super::super) fn additional(
                 if selected & (1 << i) != 0 || !covered || stats.pairs[i] < minimum {
                     return false;
                 }
-                let strong = counts[i] >= minimum && counts[i] * 5 >= stats.pairs[i] * 4
-                    || balanced::qualifies(contigs, stats, selected, primary, i);
+                let pairs = stats.pairs[i];
+                let depth = stats.depth.get(i).map_or(&[][..], Vec::as_slice);
+                let strong = counts[i] >= minimum && counts[i] * 5 >= pairs * 4
+                    || balanced::qualifies(contigs, stats, selected, primary, i)
+                    || related::qualifies(related[i], related_minimum, pairs, depth);
                 private::qualifies(evidence[i], positions, strong)
             })
             .max_by_key(|&i| {
-                let (private, _, _) = evidence[i];
-                (counts[i], private, stats.coverage[i], std::cmp::Reverse(i))
+                (
+                    counts[i],
+                    evidence[i].0,
+                    stats.coverage[i],
+                    std::cmp::Reverse(i),
+                )
             });
         let Some(next) = next else { break };
         selected |= 1 << next;
         additional.push(next);
     }
     additional
-}
-
-fn independent_counts(masks: &[u16], selected: u16, count: usize) -> Vec<usize> {
-    let mut counts = vec![0; count];
-    for &mask in masks.iter().filter(|&&mask| mask & selected == 0) {
-        for i in (0..count).filter(|&i| mask & (1 << i) != 0) {
-            counts[i] += 1;
-        }
-    }
-    counts
 }

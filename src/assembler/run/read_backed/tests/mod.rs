@@ -20,6 +20,7 @@ fn private_stats(coverage: Vec<usize>, depth: Vec<Vec<u32>>) -> scoring::Statist
         pairs,
         coverage,
         pair_masks: masks,
+        exclusive_masks: Vec::new(),
         spans,
     }
 }

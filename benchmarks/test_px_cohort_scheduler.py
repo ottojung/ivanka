@@ -324,6 +324,27 @@ class PlannerTests(unittest.TestCase):
         self.assertNotIn(sched.receipt_id(first), remaining)
         self.assertNotIn(sched.receipt_id(second), remaining)
 
+    def test_legacy_preserved_attempt_without_index_stays_resumable(self):
+        registry = self.promoted_registry()
+        arm = sched.build_plan(registry, self.source(), self.px)["pending"][0]
+        sched.record_outcome(self.px, arm, None, "failure",
+                             failure_reason="disk_stop")
+        terminal = sched.record_outcome(self.px, arm, None, "failure",
+                                        failure_reason="disk_stop")
+        self.assertEqual(terminal["attempt"], 2)
+        preserved = sched.attempt_path(self.px, arm, 1)
+        legacy = json.loads(preserved.read_text())
+        legacy.pop("attempt")
+        write_json(preserved, legacy)
+        # The exact historical shape (no attempt key, disk_stop, attempt-001)
+        # is bound to its path and does not block a legitimate retry.
+        self.assertEqual(sched.verify_receipt(self.px, arm)["attempt"], 2)
+        # Strict classification still applies to the legacy file.
+        legacy["failure_reason"] = "timeout"
+        write_json(preserved, legacy)
+        with self.assertRaisesRegex(ValueError, "only infrastructure failures"):
+            sched.verify_receipt(self.px, arm)
+
     def test_outcomes_fail_closed(self):
         registry = self.promoted_registry()
         arm = sched.build_plan(registry, self.source(), self.px)["pending"][0]

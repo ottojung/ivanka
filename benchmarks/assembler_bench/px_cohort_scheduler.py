@@ -398,7 +398,15 @@ def verify_receipt(root, arm):
         if not preserved.is_file():
             raise ValueError("versioned retry missing preserved original failure")
         prior = _verify_receipt_data(json.loads(preserved.read_bytes()), arm)
-        if (prior.get("attempt") != prior_attempt
+        # A few preserved original failures predate the explicit attempt
+        # field. Bind such a legacy file only to the canonical attempt-001
+        # slot; every strict outcome/reason/hash check still applies.
+        recorded_attempt = prior.get("attempt")
+        if recorded_attempt is None:
+            if prior_attempt != 1:
+                raise ValueError("only infrastructure failures may be retried")
+            recorded_attempt = prior_attempt
+        if (recorded_attempt != prior_attempt
                 or prior.get("outcome") != "failure"
                 or prior.get("failure_reason") not in INFRASTRUCTURE_FAILURE_REASONS):
             raise ValueError("only infrastructure failures may be retried")

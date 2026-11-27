@@ -64,10 +64,16 @@ def _sha256_file(path: os.PathLike[str] | str) -> str:
     return launcher.sha256_file(path)
 
 
-def load_original_input_manifest(path=ORIGINAL_MANIFEST) -> dict:
-    """Verify the independently attested original 198+464 read-pair manifest."""
+def load_original_input_manifest(path=ORIGINAL_MANIFEST, *,
+                                 expected_sha=ORIGINAL_MANIFEST_SHA256) -> dict:
+    """Verify the independently attested original 198+464 read-pair manifest.
+
+    ``expected_sha`` is injectable ONLY for hermetic synthetic fixtures in
+    source tests. Production callers keep the pinned private-manifest digest;
+    no fixture or private manifest is ever published in the repository.
+    """
     source = Path(path)
-    if not source.is_file() or _sha256_file(source) != ORIGINAL_MANIFEST_SHA256:
+    if not source.is_file() or _sha256_file(source) != expected_sha:
         raise ValueError("original remap input manifest digest changed")
     manifest = json.loads(source.read_bytes())
     if (manifest.get("schema") != MANIFEST_SCHEMA
@@ -110,7 +116,7 @@ def load_original_input_manifest(path=ORIGINAL_MANIFEST) -> dict:
     return {
         "schema": BINDING_SCHEMA,
         "manifest_path": str(source),
-        "manifest_sha256": ORIGINAL_MANIFEST_SHA256,
+        "manifest_sha256": expected_sha,
         "physical_manifest_sha256": manifest["physical_manifest_sha256"],
         "synthetic_cohort_sha256": manifest["synthetic_cohort_sha256"],
         "truth_opened": False,

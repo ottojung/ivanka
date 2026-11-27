@@ -7,7 +7,6 @@ Run: python3 verify_px_admission_readiness.py
 from pathlib import Path
 import hashlib
 import json
-import re
 import shutil
 import subprocess
 import unittest

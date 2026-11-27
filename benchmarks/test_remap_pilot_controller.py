@@ -1,4 +1,6 @@
 import copy
+import hashlib
+import json
 import math
 import os
 import tempfile
@@ -472,15 +474,79 @@ class RealGuardedExecutionTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "failed")
         self.assertIsNone(receipt["score"])
 
+    @staticmethod
+    def synthetic_manifest(root: Path, **mutations):
+        """Hermetic 198+464 fixture; never contains private host reads."""
+        cases = []
+        for prefix, count in (("R", 198), ("H", 464)):
+            for number in range(1, count + 1):
+                alias = f"PX-{prefix}{number:03d}"
+                cases.append({
+                    "alias": alias,
+                    "cohort": "physical" if prefix == "R" else "synthetic",
+                    "reads": {
+                        mate: {
+                            "sha256": hashlib.sha256(
+                                f"{alias}:{mate}".encode()).hexdigest(),
+                            "bytes": 1024,
+                            "source_verified": True,
+                        } for mate in ("R1", "R2")
+                    },
+                })
+        doc = {
+            "schema": gexec.MANIFEST_SCHEMA,
+            "physical_manifest_sha256": "1" * 64,
+            "synthetic_cohort_sha256": "2" * 64,
+            "counts": {"physical": 198, "synthetic": 464},
+            "truth_opened": False,
+            "errors": [],
+            "cases": cases,
+            "elapsed_seconds": 0.0,
+        }
+        doc.update(mutations)
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / "synthetic-readback.json"
+        data = (json.dumps(doc, sort_keys=True, indent=2) + "\n").encode()
+        path.write_bytes(data)
+        return path, hashlib.sha256(data).hexdigest()
+
+    def test_hermetic_manifest_success_path(self):
+        path, sha = self.synthetic_manifest(self.root)
+        manifest = gexec.load_original_input_manifest(path, expected_sha=sha)
+        self.assertEqual(manifest["schema"], gexec.BINDING_SCHEMA)
+        self.assertEqual(manifest["manifest_sha256"], sha)
+        self.assertFalse(manifest["truth_opened"])
+        self.assertEqual(len(manifest["cases"]), 662)
+        aliases = {case["alias"] for case in manifest["cases"]}
+        self.assertIn("R001", aliases)
+        self.assertIn("H464", aliases)
+
+    def test_manifest_tamper_fails_closed(self):
+        for mutation in ({"truth_opened": True},
+                         {"counts": {"physical": 1, "synthetic": 1}},
+                         {"errors": ["R001"]}):
+            path, sha = self.synthetic_manifest(self.root, **mutation)
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(ValueError):
+                    gexec.load_original_input_manifest(path, expected_sha=sha)
+        path, sha = self.synthetic_manifest(self.root / "wrong-digest")
+        with self.assertRaises(ValueError):
+            gexec.load_original_input_manifest(path, expected_sha="f" * 64)
+        bad = json.loads(path.read_bytes())
+        bad["cases"][0]["reads"]["R1"]["source_verified"] = False
+        path.write_bytes((json.dumps(bad, sort_keys=True, indent=2) + "\n").encode())
+        with self.assertRaises(ValueError):
+            gexec.load_original_input_manifest(path,
+                                               expected_sha=hashlib.sha256(path.read_bytes()).hexdigest())
+
+    @unittest.skipUnless(Path(gexec.ORIGINAL_MANIFEST).is_file(),
+                         "private host manifest unavailable on public CI")
     def test_real_original_manifest_verifies_read_only(self):
         manifest = gexec.load_original_input_manifest()
         self.assertEqual(manifest["schema"], gexec.BINDING_SCHEMA)
         self.assertEqual(manifest["manifest_sha256"], gexec.ORIGINAL_MANIFEST_SHA256)
         self.assertFalse(manifest["truth_opened"])
         self.assertEqual(len(manifest["cases"]), 662)
-        aliases = {case["alias"] for case in manifest["cases"]}
-        self.assertIn("R001", aliases)
-        self.assertIn("H464", aliases)
 
     def test_manifest_binding_rejects_read_drift(self):
         bad = copy.deepcopy(self.manifest)

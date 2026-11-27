@@ -137,7 +137,7 @@ class PublicAssemblerBenchTests(unittest.TestCase):
         js=(SITE/"app.js").read_text()
         for text in ('id="dominanceMatrix"', 'id="dominanceSubjects"',
                      'id="subjectSearch"', 'id="diagnosticExplanation"',
-                     'id="firstTool"'):
+                     'id="metricControls"'):
             self.assertIn(text,page)
         self.assertIn("function drawDominance()",js)
         self.assertIn("function drawDiagnostics()",js)

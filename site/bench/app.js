@@ -11,7 +11,7 @@ const fmtPsi = x => {
   if(x===0)return "0";
   const abs=Math.abs(x);
   const value=(abs<0.0001||abs>=1000000)
-    ?x.toExponential(2).replace("e+","e")
+    ?x.toExponential(3).replace("e+","e")
     :x.toLocaleString("en",{maximumSignificantDigits:4});
   return x>0?"+"+value:value;
 };
@@ -58,15 +58,24 @@ function methodNotes() {
 }
 const state = {data:null,run:null,metric:"score",firstTool:null,tool:null,
   sort:"id",reverse:false,rows:[],diagnostics:null,
-  direction:"higher",psiExponent:"all",psiMetric:"alignment",
+  direction:"higher",psiExponent:"1",
   distributionTool:null};
 
 function metricInfo() {
   return BenchRanks.definition(state.metric,state.diagnostics?.metric_catalog);
 }
+function primarySubject() {
+  const key=state.metric==="score"?"alignment":state.metric==="seconds"?"runtime":state.metric;
+  return {key,label:metricInfo()?.label||key,direction:state.direction};
+}
+function caseExponent() {
+  return state.psiExponent==="all"?"all":Number(state.psiExponent);
+}
 function currentRows() {
+  if(!state.firstTool||!state.tool){state.rows=[];return [];}
   const all=BenchRanks.pairs(state.run,state.diagnostics,state.metric,
-    state.direction,state.firstTool,state.tool);
+    state.direction,state.firstTool,state.tool).map(row=>
+    ({...row,psi:BenchSubjects.casePsi(row.delta,caseExponent())}));
   const query=el("search").value.trim().toLowerCase();
   const outcome=el("outcomeFilter").value;
   const rows=all.filter(row=>{
@@ -82,7 +91,7 @@ function currentRows() {
     const value=x=>sort==="id"?x.id:x[sort];
     const left=value(a),right=value(b);
     const cmp=sort==="id"?left.localeCompare(right):
-      left===null?right===null?0:1:right===null?-1:left-right;
+      left===null?right===null?0:1:right===null?-1:left===right?0:left<right?-1:1;
     return state.reverse?-cmp:cmp;
   });
   state.rows=rows;
@@ -108,7 +117,7 @@ function metricOptions() {
     select.innerHTML=options.map(([key,label])=>'<option value="'+esc(key)+
       '">'+esc(label)+'</option>').join("");
   }
-  if(!BenchRanks.definition(state.metric,catalog))state.metric="score";
+  if(!BenchRanks.definition(state.metric,catalog)){state.metric="score";state.direction="higher";}
   select.value=state.metric;
   const order=el("singleDirection");
   order.value=state.direction;
@@ -135,7 +144,6 @@ function syncUrl() {
   if(state.tool)params.set("competitor",state.tool);
   if(el("search").value)params.set("search",el("search").value);
   params.set("psi_r",state.psiExponent);
-  if(state.psiExponent!=="all")params.set("psi_metric",state.psiMetric);
   params.set("subjects",selectedSubjects().map(({key,direction})=>
     key+":"+direction).join(","));
   history.replaceState(null,"","?"+params.toString());
@@ -350,48 +358,39 @@ function drawDiagnostics() {
     '<dt>Observed cases</dt><dd>'+ranking.reduce((n,r)=>
       n+Number(r.observed>0),0)+' of '+ranking.length+
     ' methods have measurements in this run</dd></dl>'+
-    methodNotes()+
-    (!BenchRanks.isCore(state.metric)?
-      '<button type="button" id="addDiagnosticSubject" class="outline-button">'+
-      'Include this metric in Ψ subjects</button>':'');
-  if(!BenchRanks.isCore(state.metric)) {
-    el("addDiagnosticSubject").addEventListener("click",()=>{
-      const checkbox=[...el("dominanceSubjects")
-        .querySelectorAll('input[type="checkbox"]')]
-        .find(node=>node.value===state.metric);
-      if(!checkbox)return;
-      checkbox.checked=true;
-      el("subjectSearch").value="";
-      filterSubjects();drawDominance();syncUrl();
-      el("dominanceSubjects").scrollIntoView({behavior:"smooth",block:"nearest"});
-    });
-  }
-
+    methodNotes();
 }
 
 function drawTable() {
   const rows=currentRows();
-  const info=metricInfo();
+  const info=metricInfo(),r=caseExponent();
+  const exponent=r===Infinity?"∞":r==="all"?"All":String(r);
   const suffix=info?.unit==="seconds"?" s":"";
-  el("firstColumn").innerHTML='Assembler Blue · '+toolLabelHtml(state.firstTool)+' <span>↕</span>';
-  el("secondColumn").innerHTML='Assembler Red · '+toolLabelHtml(state.tool)+' <span>↕</span>';
+  const chosen=state.firstTool&&state.tool;
+  el("firstColumn").innerHTML='Assembler Blue'+(chosen?' · '+toolLabelHtml(state.firstTool):'')+' <span>↕</span>';
+  el("secondColumn").innerHTML='Assembler Red'+(chosen?' · '+toolLabelHtml(state.tool):'')+' <span>↕</span>';
+  el("psiColumn").innerHTML='Ψ('+infinityMarkup(esc(exponent))+') <span>↕</span>';
+  el("caseContext").innerHTML=chosen?esc(info.label+" · "+state.direction+" preferred · ")+
+    (r==="all"?"Single-case strict all-r verdict (YES, NO, or tie).":
+      "Each case contributes sign(p) × |p|"+(r===Infinity?" as r → "+infinityMarkup("∞")+" (eventual sign).":'<sup>'+esc(r)+'</sup>.'))+
+    (selectedSubjects().length?" Additional requirements affect the matrix only.":""):
+    "Choose a pair in the matrix above.";
+  el("exportCsv").disabled=!chosen;
   el("resultRows").innerHTML=rows.map(row=>{
-    const tone=row.delta>0?"assembler-blue":
-      row.delta<0?"assembler-red":"neutral";
-    const delta=Number.isFinite(row.delta)?
-      (row.delta!==0&&Math.abs(row.delta)<0.00001?fmtPsi(row.delta):
-        (row.delta>0?"+":"")+na(row.delta))+suffix:"N/A";
+    const tone=row.psi>0?"assembler-blue":row.psi<0?"assembler-red":"neutral";
+    const value=row.psi===null?"N/A":r==="all"?
+      (row.psi>0?"YES":row.psi<0?"NO":"0"):fmtPsi(row.psi);
     return '<tr tabindex="0" role="button" data-alias="'+esc(row.id)+
       '" aria-label="Inspect '+esc(row.id)+'">'+
       '<td class="cell-title">'+esc(row.id)+'</td>'+
       '<td class="number">'+na(row.first)+(Number.isFinite(row.first)?suffix:"")+'</td>'+
       '<td class="number">'+na(row.rival)+(Number.isFinite(row.rival)?suffix:"")+'</td>'+
-      '<td class="number '+tone+'">'+delta+'</td></tr>';
-  }).join("")||'<tr><td colspan="4">No matching measurements.</td></tr>';
-  el("resultCount").textContent=rows.length+" visible of "+
+      '<td class="number '+tone+'">'+infinityMarkup(esc(value))+'</td></tr>';
+  }).join("")||'<tr><td colspan="4">'+(chosen?"No matching measurements.":"Select an assembler pair in the matrix.")+'</td></tr>';
+  el("resultCount").textContent=chosen?rows.length+" visible of "+
     BenchRanks.pairs(state.run,state.diagnostics,state.metric,
       state.direction,state.firstTool,state.tool).length+
-    " available case/family records for "+info.label;
+    " available case/family records for "+info.label:"No pair selected";
   el("resultsTable").querySelectorAll("tr[data-alias]").forEach(node=>{
     const show=()=>showDetail(rows.find(row=>row.id===node.dataset.alias));
     node.addEventListener("click",show);
@@ -400,6 +399,7 @@ function drawTable() {
     });
   });
 }
+
 function showDetail(row) {
   if(!row)return;
   const dialog=el("sampleDialog"),detail=row.detail;
@@ -488,12 +488,7 @@ function drawSubjectControls() {
   const chosen=new Map([...el("dominanceSubjects").querySelectorAll("input:checked")]
     .map(node=>[node.value,node.closest(".subject-option")
       .querySelector("select")?.value]));
-  if(!state.subjectPickerInitialized) {
-    chosen.set("alignment","higher");
-    chosen.set("runtime","lower");
-    state.subjectPickerInitialized=true;
-  }
-  el("dominanceSubjects").innerHTML='<legend>Dominance subjects</legend>'+[...groups].map(([group,items])=>
+  el("dominanceSubjects").innerHTML='<legend>Additional dominance requirements</legend>'+[...groups].map(([group,items])=>
     '<div class="subject-group" data-subject-group="'+esc(group)+'">'+
     '<h3>'+esc(group)+'</h3><div class="subject-options">'+
     items.map(subject=>{
@@ -512,20 +507,20 @@ function drawSubjectControls() {
         '</select>')+'</div>';
     }).join("")+'</div></div>'
   ).join("");
-  // Keep the two independently proven original dimensions as defaults.
   el("dominanceSubjects").querySelectorAll("input[type=checkbox]").forEach(node=>
     node.addEventListener("change",()=>{
-      drawDominance();syncSubjectCount();syncUrl();
+      drawDominance();drawTable();syncSubjectCount();syncUrl();
     }));
   el("dominanceSubjects").querySelectorAll("select").forEach(node=>
     node.addEventListener("change",()=>{
-      drawDominance();syncUrl();
+      drawDominance();drawTable();syncUrl();
     }));
   filterSubjects();
 }
 function selectedSubjects() {
   const catalog=state.diagnostics?.metric_catalog||{};
   return [...el("dominanceSubjects").querySelectorAll("input:checked")]
+    .filter(node=>node.value!==primarySubject().key)
     .map(node=>{
       const key=node.value;
       const core=key==="alignment"||key==="runtime";
@@ -537,12 +532,15 @@ function selectedSubjects() {
 }
 function syncSubjectCount() {
   const total=selectedSubjects().length;
-  el("subjectsCount").textContent=total+" subject"+(total===1?"":"s")+" selected";
+  el("subjectsCount").textContent=total+" additional requirement"+(total===1?"":"s")+" selected";
 }
 function filterSubjects() {
   const query=el("subjectSearch").value.trim().toLowerCase();
   el("dominanceSubjects").querySelectorAll(".subject-option").forEach(node=>{
-    node.hidden=query!==""&&!node.dataset.subjectLabel.includes(query);
+    const checkbox=node.querySelector("input");
+    checkbox.disabled=checkbox.value===primarySubject().key;
+    if(checkbox.disabled)checkbox.checked=false;
+    node.hidden=checkbox.disabled||(query!==""&&!node.dataset.subjectLabel.includes(query));
   });
   el("dominanceSubjects").querySelectorAll(".subject-group").forEach(node=>{
     node.hidden=![...node.querySelectorAll(".subject-option")]
@@ -577,46 +575,30 @@ function proofDescription(entry) {
   return partial+subsetText+
     (entry.reason||"Full-cohort proof unresolved");
 }
-function syncPsiControls(selected) {
-  const numeric=state.psiExponent!=="all";
+function syncPsiControls(numeric, additional) {
   el("psiExponent").value=state.psiExponent;
-  el("psiMetricWrap").hidden=!numeric;
   el("dominanceLegend").hidden=numeric;
   el("momentLegend").hidden=!numeric;
-  const picker=el("psiMetric");
-  if(!selected.some(s=>s.key===state.psiMetric &&
-      s.direction!=="unspecified")) {
-    state.psiMetric=(selected.find(s=>s.direction!=="unspecified")||{}).key;
-  }
-  picker.innerHTML=selected.filter(s=>s.direction!=="unspecified")
-    .map(s=>'<option value="'+esc(s.key)+'">'+esc(s.label)+'</option>')
-    .join("");
-  picker.value=state.psiMetric||"";
+  el("exponentMode").textContent=additional?
+    "Matrix: strict all-r dominance with additional requirements. Exponent still controls the case table.":
+    state.psiExponent==="all"?"Matrix: strict all-r dominance.":"Matrix and cases: selected Ψ exponent.";
 }
 function drawDominance() {
   const holder=el("dominanceMatrix"), details=el("dominanceDetails");
   details.classList.add("is-empty");
   const report=state.run.dominance_matrix||{};
-  const selected=selectedSubjects();
+  const additional=selectedSubjects();
+  const chosen=primarySubject();
+  const selected=[chosen,...additional];
+  const numeric=state.psiExponent!=="all"&&!additional.length;
   syncSubjectCount();
-  syncPsiControls(selected);
-  if(!selected.length) {
-    holder.innerHTML='<p class="hint">Select at least one checkbox to build an all-subjects dominance relation.</p>';
-    details.textContent="The selected subjects form a conjunction: every selected metric must pass its own strict Ψ proof.";return;
-  }
+  syncPsiControls(numeric,additional.length);
   const tools=(Array.isArray(report.tools)&&report.tools.length
     ?report.tools.filter(t=>state.run.tools.includes(t))
     :state.run.tools).filter(t=>state.run.tools.includes(t));
   const matrixTools=tools.length?tools:state.run.tools;
   const snapshot=state.diagnostics?.run_id===state.run.id
     ?state.diagnostics:null;
-  const numeric=state.psiExponent!=="all";
-  const chosen=selected.find(s=>s.key===state.psiMetric);
-  if(numeric&&!chosen) {
-    holder.innerHTML='<p class="hint">Choose a metric with a numeric preference to display Ψ advantages.</p>';
-    details.textContent="Choose a direction for a selected diagnostic metric.";
-    return;
-  }
   const r=numeric?Number(state.psiExponent):null;
   const exponentLabel=r===Infinity?"∞":r;
   const context=numeric
@@ -633,7 +615,7 @@ function drawDominance() {
       ". Row dominates column when strict Ψ(r)>0 for every real r≥0 "+
       "on all selected metrics; missing measurements remain unresolved.";
   el("dominanceContext").innerHTML=infinityMarkup(esc(context));
-  holder.innerHTML='<table class="psi-matrix" style="--matrix-columns:'+matrixTools.length+'"><thead><tr><th>ROW A ↓ / B →</th>'+
+  holder.innerHTML='<table class="psi-matrix" style="--matrix-columns:'+matrixTools.length+'"><thead><tr><th>BLUE ↓ / RED →</th>'+
     matrixTools.map(tool=>'<th scope="col">'+toolLabelHtml(tool)+'</th>').join("")+
     '</tr></thead><tbody>'+
     matrixTools.map(a=>'<tr><th scope="row">'+toolLabelHtml(a)+'</th>'+
@@ -645,23 +627,25 @@ function drawDominance() {
         const reverse=numeric?null:BenchSubjects.observedVerdict(
           BenchSubjects.evaluate(report,b,a,selected,snapshot,state.run));
         const winner=numeric?0:BenchSubjects.winner(verdict,reverse);
-        const shortLabel=winner>0?"YES":winner<0?"NO":"—";
+        const shortLabel=winner>0?"YES":winner<0||verdict.label==="NO"?"NO":"—";
         const moment=numeric?BenchSubjects.moment(
           result.entries.find(e=>e.key===chosen.key),r,{run:state.run,snapshot,a,b}):null;
         const number=moment?.value;
-        const numberClass=number===null?"psi-unavailable":
+        const numberClass=number==null?"psi-unavailable":
           number>0?"psi-positive":number<0?"psi-negative":"psi-zero";
-        const label=numeric?(number===null?"—":fmtPsi(number)):shortLabel;
+        const label=numeric?(number==null?"—":fmtPsi(number)):shortLabel;
         const style=numeric?"psi-number "+numberClass:
           winner>0?"psi-positive":winner<0?"psi-negative":"psi-zero";
         const meaning=numeric?"Ψ("+exponentLabel+") for "+chosen.label+
-          ": "+(number===null?"numeric value unavailable":fmtPsi(number))+
+          ": "+(number==null?"numeric value unavailable":fmtPsi(number))+
           "; "+(moment?.paired||0)+" paired cases":
           (winner>0?a+" dominates "+b:winner<0?b+" dominates "+a:
-          "Neither direction demonstrated strict dominance on all selected metrics")+
+          verdict.label==="NO"?"Row dominance refuted; column dominance not established":
+      "Neither direction demonstrated strict dominance on all selected metrics")+
           " · Row: "+verdict.explanation+" · Column: "+reverse.explanation;
         return '<td class="'+esc(style)+'"><button type="button" data-dominates-a="'+
-          esc(a)+'" data-dominates-b="'+esc(b)+'" title="'+
+          esc(a)+'" data-dominates-b="'+esc(b)+'" aria-pressed="'+
+          (a===state.firstTool&&b===state.tool)+'" title="'+
           esc(meaning)+(evidence.description?' · Observed: '+
           esc(evidence.description):'')+'" aria-label="'+
           esc(a)+' versus '+esc(b)+': '+esc(meaning)+'"><span class="dom-verdict">'+
@@ -671,6 +655,8 @@ function drawDominance() {
   holder.querySelectorAll("button[data-dominates-a]").forEach(button=>{
     button.addEventListener("click",()=>{
       details.classList.remove("is-empty");
+      holder.querySelector('[aria-pressed="true"]')?.setAttribute("aria-pressed","false");
+      button.setAttribute("aria-pressed","true");
       const a=button.dataset.dominatesA,b=button.dataset.dominatesB;
       const result=BenchSubjects.evaluate(report,a,b,selected,snapshot,state.run);
       const verdict=BenchSubjects.observedVerdict(result);
@@ -703,14 +689,12 @@ function drawDominance() {
           '<p>'+esc(proofDescription(item))+'</p></article>').join("")+'</div>'+BenchViews.matrixPlots(
           state.run,state.diagnostics,selected,a,b);
       state.firstTool=a;state.tool=b;
-      el("firstTool").value=a;
-      const choices=state.run.tools.filter(name=>name!==a);
-      el("comparisonTool").innerHTML=choices.map(name=>
-        '<option value="'+esc(name)+'">'+esc(toolLabel(name))+'</option>').join("");
-      el("comparisonTool").value=b;
       drawCompare();drawTable();syncUrl();
     });
   });
+  const active=[...holder.querySelectorAll("button[data-dominates-a]")].find(
+    button=>button.dataset.dominatesA===state.firstTool&&button.dataset.dominatesB===state.tool);
+  if(active)active.click();
 }
 
 function render() {
@@ -721,17 +705,11 @@ function render() {
     el("globalNotice").textContent="Selected cohort declares no assembler roster.";
     return;
   }
-  if(!roster.includes(state.firstTool))state.firstTool=roster[0];
-  const tools=roster.filter(tool=>tool!==state.firstTool);
-  if(!tools.includes(state.tool))state.tool=tools[0]||roster[0];
+  if(!roster.includes(state.firstTool)||!roster.includes(state.tool)||
+      state.firstTool===state.tool){state.firstTool=null;state.tool=null;}
   el("runSelect").value=run.id;
-  el("firstTool").innerHTML=roster.map(tool=>
-    '<option value="'+esc(tool)+'">'+esc(toolLabel(tool))+'</option>').join("");
-  el("firstTool").value=state.firstTool;
-  el("comparisonTool").innerHTML=tools.map(tool=>
-    '<option value="'+esc(tool)+'">'+esc(toolLabel(tool))+'</option>').join("");
-  if(state.tool)el("comparisonTool").value=state.tool;
   metricOptions();
+  filterSubjects();
   el("outcomeFilter").querySelector('[value="floor"]').disabled=
     state.metric!=="score";
   if(state.metric!=="score"&&el("outcomeFilter").value==="floor")
@@ -749,19 +727,21 @@ function render() {
    published run or separate file, are ordinary roster members in that cohort. */
 
 function exportCsv() {
-  const info=metricInfo();
+  const info=metricInfo(),r=caseExponent();
+  if(!state.firstTool||!state.tool)return;
   const header=["alias",state.firstTool+"_"+state.metric,
-    state.tool+"_"+state.metric,"assembler_blue_advantage",
+    state.tool+"_"+state.metric,"psi","psi_exponent",
     "metric_unit","numeric_preference"];
   const csv=x=>'"'+String(x??"").replace(/"/g,'""')+'"';
   const rows=[header.map(csv).join(",")].concat(state.rows.map(row=>
-    [row.id,row.first,row.rival,row.delta,
+    [row.id,row.first,row.rival,r==="all"&&row.psi!==null?
+      (row.psi>0?"YES":row.psi<0?"NO":"0"):row.psi,state.psiExponent,
       info.unit,state.direction].map(csv).join(",")));
   const href=URL.createObjectURL(new Blob([rows.join("\n")+"\n"],
     {type:"text/csv"}));
   const link=document.createElement("a");
   link.href=href;
-  link.download=state.run.id+"-"+state.metric+".csv";
+  link.download=state.run.id+"-"+state.metric+"-psi-"+state.psiExponent+".csv";
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -792,30 +772,20 @@ function bind() {
     state.direction=el("singleDirection").value;
     render();
   });
-  el("firstTool").addEventListener("change",()=>{
-    state.firstTool=el("firstTool").value;state.tool=null;render();
-  });
-  el("comparisonTool").addEventListener("change",()=>{
-    state.tool=el("comparisonTool").value;render();
-  });
   el("psiExponent").addEventListener("change",()=>{
     state.psiExponent=el("psiExponent").value;
-    drawDominance();syncUrl();
-  });
-  el("psiMetric").addEventListener("change",()=>{
-    state.psiMetric=el("psiMetric").value;
-    drawDominance();syncUrl();
+    drawDominance();drawTable();syncUrl();
   });
   el("subjectSearch").addEventListener("input",filterSubjects);
   el("selectSubjects").addEventListener("click",()=>{
     el("dominanceSubjects").querySelectorAll("input[type=checkbox]")
-      .forEach(node=>{node.checked=true;});
-    drawDominance();syncSubjectCount();syncUrl();
+      .forEach(node=>{if(!node.disabled)node.checked=true;});
+    drawDominance();drawTable();syncSubjectCount();syncUrl();
   });
   el("clearSubjects").addEventListener("click",()=>{
     el("dominanceSubjects").querySelectorAll("input[type=checkbox]")
       .forEach(node=>{node.checked=false;});
-    drawDominance();syncSubjectCount();syncUrl();
+    drawDominance();drawTable();syncSubjectCount();syncUrl();
   });
   el("outcomeFilter").addEventListener("change",drawTable);
   el("search").addEventListener("input",()=>{drawTable();syncUrl();});
@@ -835,6 +805,10 @@ function runOptions() {
 }
 async function main() {
   bind();
+  const bar=el("metricControls"),workspace=el("metricWorkspace");
+  const resize=()=>workspace.style.setProperty("--metric-bar-height",bar.getBoundingClientRect().height+"px");
+  new ResizeObserver(resize).observe(bar);
+  resize();
   try {
     const response=await fetch("./data/runs.json",{cache:"no-store"});
     if(!response.ok)throw new Error("HTTP "+response.status);
@@ -858,7 +832,7 @@ async function main() {
     const latest=state.data.runs.find(r=>r.cohort==="combined")||
       state.data.runs[0];
     state.run=state.data.runs.find((r)=>r.id===params.get("run"))||latest;
-    const requested=params.get("metric")||params.get("diagnostic");
+    const requested=params.get("metric")||params.get("diagnostic")||params.get("psi_metric");
     state.metric=requested==="runtime"?"seconds":
       requested==="alignment"||!requested?"score":requested;
     state.direction=["higher","lower"].includes(params.get("order"))
@@ -867,8 +841,7 @@ async function main() {
     state.tool=params.get("competitor");
     el("search").value=params.get("search")||"";
     state.psiExponent=["all","0","1","2","Infinity"].includes(params.get("psi_r"))
-      ?params.get("psi_r"):"all";
-    state.psiMetric=params.get("psi_metric")||"alignment";
+      ?params.get("psi_r"):"1";
     drawSubjectControls();
     const selected=params.get("subjects");
     if(selected!==null) {

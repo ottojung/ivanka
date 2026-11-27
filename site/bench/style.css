@@ -177,7 +177,7 @@ section.dominance,section.diagnostics{margin-top:61px}
 .psi-view-controls select{min-height:38px;min-width:94px;padding:8px;
   background:var(--surface);color:var(--text);border:1px solid var(--border);
   border-radius:7px;font-size:13px}
-.psi-view-controls #psiMetric{max-width:240px}
+
 .psi-matrix .psi-positive .dom-verdict{color:var(--blue)}
 .psi-matrix .psi-negative .dom-verdict{color:var(--red)}
 .psi-matrix .psi-zero .dom-verdict,
@@ -299,8 +299,8 @@ section.dominance,section.diagnostics{margin-top:61px}
 .psi-matrix th[scope] .method-badge{color:inherit}
 
 /* The case table uses the same blue (row/first) and red (column/second) roles as Ψ. */
-.samples .assembler-blue,.samples #firstTool,.sample-metric-table .assembler-blue{color:var(--blue)}
-.samples .assembler-red,.samples #comparisonTool,.sample-metric-table .assembler-red{color:var(--red)}
+.samples .assembler-blue,.sample-metric-table .assembler-blue{color:var(--blue)}
+.samples .assembler-red,.sample-metric-table .assembler-red{color:var(--red)}
 .samples #resultsTable th button.assembler-blue span,.samples #resultsTable th button.assembler-red span,
 .samples #resultsTable th button .method-badge{color:inherit}
 
@@ -314,3 +314,30 @@ section.dominance,section.diagnostics{margin-top:61px}
   font-family:"DejaVu Sans","Segoe UI Symbol",sans-serif}
 .psi-view-controls #psiExponent option:not([value="Infinity"]){font-size:13px}
 .psi-matrix .dom-verdict:has(.infinity-symbol){font-size:16px;line-height:1.1;white-space:nowrap}
+
+
+/* Both sticky bars share the workspace boundary (sections 02 through 04). */
+.metric-workspace{--metric-bar-height:74px;display:flow-root}
+.metric-workspace>section.compare,.metric-workspace>section.dominance{display:contents}
+.metric-workspace>.compare>.section-heading,.metric-workspace>.dominance>.section-heading{margin-top:61px}
+.sticky-metric-controls,.sticky-exponent-controls{position:sticky;z-index:12;
+  background:var(--bg);padding:10px 12px;border:1px solid var(--border);
+  border-radius:8px;box-shadow:0 5px 10px #060a1060;margin-bottom:14px}
+.sticky-metric-controls{top:0}
+.sticky-exponent-controls{top:var(--metric-bar-height);z-index:11}
+.sticky-exponent-controls label{display:flex;flex-direction:column;gap:7px;
+  font-size:11px;letter-spacing:.09em;color:var(--muted)}
+.sticky-exponent-controls #exponentMode{flex:1;min-width:180px;font-size:12px;margin:0}
+.subject-panel>h3{margin:0 0 7px;font-size:17px}
+.samples .filters{grid-template-columns:minmax(150px,2fr) minmax(140px,1fr)}
+.psi-matrix button[aria-pressed="true"]{outline:2px solid var(--cyan);outline-offset:-2px}
+.samples #psiColumn{white-space:nowrap}
+@media(max-width:470px){
+  .sticky-metric-controls{grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:7px;padding:7px}
+  .sticky-metric-controls label:first-child{grid-column:auto}
+  .sticky-metric-controls label{min-width:0}
+  .sticky-metric-controls select{padding:7px 4px;min-height:38px}
+  .sticky-exponent-controls{flex-wrap:nowrap;padding:7px;gap:8px}
+  .sticky-exponent-controls #exponentMode{min-width:0;font-size:11px}
+  .samples .filters{grid-template-columns:1fr}
+}

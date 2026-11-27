@@ -43,11 +43,11 @@ def validate_public_site(site=SITE):
                  'id="sampleDialog"', 'id="sampleDialogMetrics"',
                  'id="sampleDialogClose"', 'id="dominanceMatrix"',
                  'id="dominanceSubjects"', 'id="subjectSearch"',
-                 'id="subjectsCount"', 'id="firstTool"',
+                 'id="subjectsCount"', 'id="metricControls"',
                  'id="diagnosticMetric"',
                  'id="diagnosticExplanation"',
                  'id="singleDirection"', 'id="psiExponent"',
-                 'id="psiMetric"', 'id="momentLegend"',
+                 'id="exponentControls"', 'id="momentLegend"',
                  ):
         if link not in html:
             raise ValueError(f"missing standalone Pages asset/control: {link}")
@@ -94,6 +94,8 @@ def validate_public_site(site=SITE):
     if (not (html.index('class="compare"') < html.index('class="dominance"')
              < html.index('class="samples"'))):
         raise ValueError("single-metric, Ψ matrix, and case table out of order")
+    if any(f'id="{name}"' in html for name in ("psiMetric", "firstTool", "comparisonTool")):
+        raise ValueError("duplicate metric or assembler selectors are forbidden")
     if "id=\"scoreView\"" in html or "id=\"timeView\"" in html:
         raise ValueError("alignment/runtime-only comparison controls forbidden")
     subjects = (source / "subjects.js").read_text()
@@ -119,16 +121,16 @@ def validate_public_site(site=SITE):
                                'class="dom-scope-label"'))):
         raise ValueError("matrix must show a compact verdict and preserve detailed evidence")
     if (any(option not in html for option in
-            ('<option value="all" selected>All</option>',
+            ('<option value="all">All</option>',
              '<option value="0">0</option>',
-             '<option value="1">1</option>',
+             '<option value="1" selected>1</option>',
              '<option value="2">2</option>',
              '<option value="Infinity">∞</option>')) or
             'function moment(entry, exponent, context)' not in subjects or
             'BenchSubjects.moment(' not in js or
             'params.set("psi_r",state.psiExponent)' not in js or
-            'params.set("psi_metric",state.psiMetric)' not in js):
-        raise ValueError("matrix lacks checked-metric Ψ(0,1,2,∞) numeric views")
+            'function primarySubject()' not in js):
+        raise ValueError("matrix lacks shared-metric Ψ(0,1,2,∞) numeric views")
     if any(token not in js for token in ("function toolLabelHtml(",
                                           "function na(",
                                           "function methodNotes(")):

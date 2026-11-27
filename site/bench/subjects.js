@@ -45,7 +45,12 @@ const BenchSubjects = (() => {
       return {status:"unresolved", paired:0, expected:report.expected_samples,
         proof:null, reason:"No beneficial direction was chosen"};
     }
-    const entry = report.metrics?.[key]?.[a]?.[b];
+    // Core proofs are published in their canonical directions. Reversing
+    // the preference is exactly equivalent to exchanging the two arms.
+    const flipped=(subject==="alignment"&&direction==="lower")||
+      (subject==="runtime"&&direction==="higher");
+    const entry = flipped?report.metrics?.[key]?.[b]?.[a]:
+      report.metrics?.[key]?.[a]?.[b];
     if (entry) return entry;
     if(subject!=="alignment" && subject!=="runtime") {
       const paired=pairedDiagnostics(
@@ -194,6 +199,13 @@ const BenchSubjects = (() => {
       entry.direction==="lower"?other.get(x.id)-x.value:x.value-other.get(x.id));
     return differences.length===entry.paired?tailSign(differences):null;
   }
+  function casePsi(delta, exponent) {
+    if(!Number.isFinite(delta))return null;
+    if(delta===0)return 0;
+    if(exponent===Infinity)return Math.sign(delta)*Infinity;
+    if(exponent===0||exponent==="all")return Math.sign(delta);
+    return Math.sign(delta)*Math.pow(Math.abs(delta),exponent);
+  }
   function winner(result, reverse) {
     const wins=x=>["full-yes","observed-yes"].includes(x.kind)&&x.label==="YES";
     return wins(result)&&!wins(reverse)?1:wins(reverse)&&!wins(result)?-1:0;
@@ -237,6 +249,6 @@ const BenchSubjects = (() => {
     }));
     return {status:conjunction(entries), entries};
   }
-  return {criterion,conjunction,evaluate,verdict,observedVerdict,evidence,moment,winner,tailSign};
+  return {criterion,conjunction,evaluate,verdict,observedVerdict,evidence,moment,winner,tailSign,casePsi};
 })();
 if (typeof module !== "undefined") module.exports = BenchSubjects;

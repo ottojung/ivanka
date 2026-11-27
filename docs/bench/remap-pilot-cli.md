@@ -173,4 +173,5 @@ PYTHONPATH=.:benchmarks python3 -m pytest -q \
   change.
 - No live pilot until capacity is restored, the exclusive slot is free and
   an operator explicitly authorizes the reviewed controller execution path.
-  This CLI cannot start that path.
+  This CLI does not start that path without explicit case-bound authorization
+  and a fresh admitted gate.

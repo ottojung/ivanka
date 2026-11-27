@@ -30,7 +30,8 @@ import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from fail_closed_guard import disk, errors as guard_errors, heartbeat, p1_harness, proc, stop
+from fail_closed_guard import (disk, errors as guard_errors, heartbeat, p1_harness,
+                               proc, stop, watchdog_contract)
 
 from . import remap_guarded_exec as gexec
 from . import remap_pilot_controller as ctl
@@ -450,14 +451,22 @@ def _watchdog_checker(path, *, config, graphroot, snapshot=None,
                 or type(pid_ns) is not int or pid_ns <= 0):
             raise ValueError("watchdog_checker_identity")
         at = record.get("at_utc")
-        if (type(at) not in (int, float) or isinstance(at, bool)
-                or (clock or time.time)() - at > heartbeat.ALIVE_MAX_AGE):
+        age = (clock or time.time)() - at if type(at) in (int, float) \
+            and not isinstance(at, bool) else -1
+        if not 0 <= age <= heartbeat.ALIVE_MAX_AGE:
             raise ValueError("watchdog_checker_stale")
-        alive = json.loads(Path(config.watchdog_path).read_text())
-        if (alive.get("schema") != heartbeat.ALIVE_SCHEMA
-                or alive.get("graphroot") != str(graphroot)
-                or alive.get("fingerprint") != [starttime, pid_ns]):
+        # The injected checker is only an adapter: the real ALIVE record must
+        # still satisfy the shared contract's freshness, namespace and live
+        # identity checks before a spawn may be admitted.
+        try:
+            bound = watchdog_contract.require_watchdog_readiness(
+                config.watchdog_path, graphroot=graphroot,
+                snapshot=snapshot or proc.snapshot, wall=clock or time.time)
+        except guard_errors.GuardExceeded as exc:
+            raise ValueError("watchdog_checker_alive_" + exc.reason) from exc
+        if (bound["starttime"], bound["pid_ns"]) != (starttime, pid_ns):
             raise ValueError("watchdog_checker_alive_mismatch")
+        alive = json.loads(Path(config.watchdog_path).read_text())
         observed = (snapshot or proc.snapshot)().get(alive.get("pid"))
         if (observed is None
                 or (observed.get("starttime"), observed.get("pid_ns"))

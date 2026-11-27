@@ -443,6 +443,30 @@ class RemapPilotCliTests(unittest.TestCase):
                 self.assertFalse(report["executed"])
                 self.assertEqual(calls, [])
 
+    def test_execute_rejects_stale_alive_and_future_checker(self):
+        original = self.watchdog_path.read_text()
+        alive = json.loads(original)
+        alive["at_utc"] = time.time() - 3600
+        self.watchdog_path.write_text(json.dumps(alive, sort_keys=True))
+        calls = []
+        rc, report = self.run_execute(calls)
+        self.assertEqual(rc, cli.EXIT_BLOCKED)
+        self.assertFalse(report["executed"])
+        self.assertTrue(report["blockers"])
+        self.assertEqual(calls, [])
+        checker = cli._watchdog_checker(
+            self.checker_file, config=self.config, graphroot=self.graphroot,
+            snapshot=lambda: self.snapshot)
+        with self.assertRaises(ValueError):
+            checker()
+        self.watchdog_path.write_text(original)
+        self._write_checker(at_utc=time.time() + 3600)
+        calls = []
+        rc, report = self.run_execute(calls)
+        self.assertEqual(rc, cli.EXIT_BLOCKED)
+        self.assertFalse(report["executed"])
+        self.assertEqual(calls, [])
+
     def test_execute_rejects_panel_drift_and_synthetic_alias(self):
         self.panel.write_bytes(b'{"hermetic":"tampered"}')
         calls = []

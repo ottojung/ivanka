@@ -17,6 +17,8 @@ Two invariants are enforced here:
   failed and outlier remap rows and require an identical verdict.
 """
 import copy
+import hashlib
+import json
 import math
 import re
 
@@ -437,6 +439,19 @@ def _merge_tool_note(existing, rows):
     return existing + " " + note
 
 
+def _rows_digest(rows):
+    """Canonical digest of a validated delivery, stable across file readback.
+
+    A run identity is a claim that one exact set of observations was
+    published. Comparing this digest on re-merge catches every conflicting
+    re-delivery (status, values, diagnostics, availability and provenance)
+    without trusting any single displayed field.
+    """
+    canonical = json.dumps(rows, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def merge_diagnostic_report(report, registry, rows, attested_inputs=None):
     """Return an augmented copy of a public report for diagnostic display.
 
@@ -449,6 +464,7 @@ def merge_diagnostic_report(report, registry, rows, attested_inputs=None):
     if not registry["enabled"]:
         return copy.deepcopy(report), 0
     validate_rows(rows)
+    digest = _rows_digest(rows)
     if (rows["image_sha256"] != registry["image"]["sha256"]
             or rows["frozen_master_commit"] != registry["frozen_master_commit"]):
         raise ValueError("remap rows disagree with the registered frozen base")
@@ -456,6 +472,26 @@ def merge_diagnostic_report(report, registry, rows, attested_inputs=None):
     result = copy.deepcopy(report)
     if result.get("schema") != "ivanka.assembler-bench.public.v1":
         raise ValueError("unsupported public report schema")
+    # A run identity belongs to one cohort across the whole report, not just
+    # within a single run's methods list. Without this report-wide binding a
+    # combined run could publish a second cohort under the first one's label.
+    cohort_by_run = {}
+    for published_run in result.get("runs", []):
+        for method in published_run.get("diagnostic_methods", []):
+            if method.get("id") != TOOL_ID:
+                continue
+            published_run_id = method.get("run_id")
+            published_cohort = method.get("cohort")
+            if published_cohort not in COHORTS or not isinstance(
+                    published_run_id, str):
+                raise ValueError("published remap method lacks a run/cohort binding")
+            if (published_run_id in cohort_by_run
+                    and cohort_by_run[published_run_id] != published_cohort):
+                raise ValueError("remap run identity is bound to another cohort")
+            cohort_by_run[published_run_id] = published_cohort
+    if (rows["run_id"] in cohort_by_run
+            and cohort_by_run[rows["run_id"]] != rows["cohort"]):
+        raise ValueError("remap run identity is bound to another cohort")
     original_psi = copy.deepcopy(result.get("psi", {}))
     cases_by_cohort = {"real": [], "synthetic": []}
     for case in rows["cases"]:
@@ -469,15 +505,25 @@ def merge_diagnostic_report(report, registry, rows, attested_inputs=None):
         if not applicable:
             continue
         methods = run.setdefault("diagnostic_methods", [])
-        if any(m.get("id") == TOOL_ID and m.get("run_id") == rows["run_id"]
-               for m in methods):
-            # Idempotent for exact same run_id; conflicting re-merge with
-            # different contents is detected below by per-case checks.
-            pass
-        elif any(m.get("id") == TOOL_ID and m.get("run_id") != rows["run_id"]
-                 and m.get("cohort") == rows.get("cohort") for m in methods):
-            # Same cohort cannot have two different remap run identities.
+        same_run = [m for m in methods
+                    if m.get("id") == TOOL_ID
+                    and m.get("run_id") == rows["run_id"]]
+        other_run_same_cohort = [
+            m for m in methods
+            if m.get("id") == TOOL_ID and m.get("cohort") == rows["cohort"]
+            and m.get("run_id") != rows["run_id"]]
+        if other_run_same_cohort:
+            # One cohort cannot advertise two different remap run identities.
             raise ValueError("remap diagnostic method already present for cohort")
+        if same_run:
+            if any(m.get("cohort") != rows["cohort"] for m in same_run):
+                raise ValueError("remap run identity is bound to another cohort")
+            if any(m.get("rows_digest") != digest for m in same_run):
+                # A status flip or any other content change under one run id
+                # would leave two contradictory states in the same run.
+                raise ValueError("conflicting remap rows reuse the same run identity")
+            # Exact re-delivery: there is nothing new to publish.
+            continue
         run.setdefault("tools", [])
         if TOOL_ID not in run["tools"]:
             run["tools"].append(TOOL_ID)
@@ -503,6 +549,7 @@ def merge_diagnostic_report(report, registry, rows, attested_inputs=None):
                 "id": TOOL_ID, "label": LABEL, "method": METHOD_KIND,
                 "run_id": rows["run_id"],
                 "cohort": rows["cohort"],
+                "rows_digest": digest,
                 "reference_panel_sha256": registry["reference_panel_sha256"],
             })
         index = {}
@@ -549,8 +596,15 @@ def merge_diagnostic_report(report, registry, rows, attested_inputs=None):
                         "input_sha256"):
                 if key in case:
                     evidence[key] = case[key]
-            if case["status"] != "measured":
-                failures = sample.setdefault("failures", [])
+            failures = sample.setdefault("failures", [])
+            if case["status"] == "measured":
+                # A published measurement and a published failure cannot
+                # describe the same arm at once.
+                if TOOL_ID in failures:
+                    failures.remove(TOOL_ID)
+                if sample.get("outcome") == "failure" and not failures:
+                    sample["outcome"] = "success"
+            else:
                 if TOOL_ID not in failures:
                     failures.append(TOOL_ID)
                 sample["outcome"] = "failure"

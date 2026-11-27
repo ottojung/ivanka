@@ -28,6 +28,18 @@ from . import px_guard_source as guard_source
 OLD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
 OLD_ROOT = "/workspace/ivanka-guard-pr536-staged-20261126"
 NEW_ROOT = "/workspace/ivanka-guard-pr535-staged-20261127"
+
+# The supervisor loads control code (px_execution, px_supervisor, retry and disk
+# retry admission); the immutable guard root predates those modules. A correct
+# post-cutover deployment therefore runs the watchdog from the guard root and
+# the supervisor from the separately reviewed control checkout, each bound to
+# its own exact module chain. The control HEAD is an exact reviewed commit, not
+# a self-referential future commit.
+CONTROL_ROOT = str(guard_source.CONTROL_ROOT)
+CONTROL_HEAD = "fffa4a0f001c3dbb5d9c9d53a7454da9b731b6fa"
+CONTROL_MODULES = dict(guard_source._read_control_identity()["sources"])
+CONTROL_MODULES.update(guard_source.EXPECTED)
+
 PROJECT_ROOT = Path("/workspace/ivanka-exploratory-ten-20261121")
 GRAPHROOT = Path("/workspace/ivanka-exploratory-podman-20261121/store")
 REGISTRY = PROJECT_ROOT / "private-frozen-ten-pilot-registry-20gib-20261124.json"
@@ -76,11 +88,18 @@ OLD_MODULES = {
 PHASES = {
     "pre_cutover": {
         "root": OLD_ROOT, "head": OLD_HEAD, "modules": OLD_MODULES,
+        "watchdog": {"root": OLD_ROOT, "head": OLD_HEAD, "modules": OLD_MODULES},
+        "control": {"root": OLD_ROOT, "head": OLD_HEAD, "modules": OLD_MODULES},
         "supervisor": "absent", "idle_required": True,
     },
     "post_cutover": {
+        # Top-level keys describe the immutable watchdog guard for compatibility.
         "root": NEW_ROOT, "head": guard_source.DEPLOYED_HEAD,
         "modules": dict(guard_source.EXPECTED),
+        "watchdog": {"root": NEW_ROOT, "head": guard_source.DEPLOYED_HEAD,
+                     "modules": dict(guard_source.EXPECTED)},
+        "control": {"root": CONTROL_ROOT, "head": CONTROL_HEAD,
+                    "modules": dict(CONTROL_MODULES)},
         "supervisor": "running", "idle_required": False,
     },
 }
@@ -161,8 +180,10 @@ def _check_script(label, text, expected, variable, markers, checks, blockers):
     check["pins"] = {line: line in text for line in pins}
     if not all(check["pins"].values()):
         _block(blockers, "script_pin_mismatch:" + label)
-    roots = set(re.findall(r"/workspace/ivanka-guard-[A-Za-z0-9._-]+", text))
-    heads = set(re.findall(r"\b[a-f0-9]{40}\b", text))
+    # Only the CODE variables are configuration sources; binding their exact
+    # values and exact HEAD pins lets both the guard and control roots coexist.
+    roots = set(re.findall(r"(?:WATCHDOG_CODE|PX_CODE)=(\S+)", text))
+    heads = set(re.findall(r'rev-parse HEAD\)" = ([a-f0-9]{40})', text))
     check["roots"] = sorted(roots)
     check["heads"] = sorted(heads)
     if roots != {expected["root"]} or heads != {expected["head"]}:
@@ -363,7 +384,11 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
     blockers = []
     registry = Path(registry)
     checks = {"phase": phase, "expected_root": expected["root"],
-              "expected_head": expected["head"], "expected_registry": str(registry)}
+              "expected_head": expected["head"],
+              "expected_watchdog_root": expected["watchdog"]["root"],
+              "expected_control_root": expected["control"]["root"],
+              "expected_control_head": expected["control"]["head"],
+              "expected_registry": str(registry)}
 
     wd_persist = _read(persistent_watchdog)
     wd_runtime = _read(runtime_watchdog)
@@ -376,14 +401,14 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
     sup_markers = ("export PX_ROOT=", "export PX_REGISTRY=",
                    'exec /bin/sh "$PX_CODE/scripts/px_cohort_s6_service.sh"',
                    "export WATCHDOG_ARMED=1")
-    _check_script("persistent_watchdog", wd_persist, expected, "WATCHDOG_CODE",
-                  wd_markers, checks, blockers)
-    _check_script("runtime_watchdog", wd_runtime, expected, "WATCHDOG_CODE",
-                  wd_markers, checks, blockers)
-    _check_script("persistent_supervisor", sup_persist, expected, "PX_CODE",
-                  sup_markers, checks, blockers)
-    _check_script("runtime_supervisor", sup_runtime, expected, "PX_CODE",
-                  sup_markers, checks, blockers)
+    _check_script("persistent_watchdog", wd_persist, expected["watchdog"],
+                  "WATCHDOG_CODE", wd_markers, checks, blockers)
+    _check_script("runtime_watchdog", wd_runtime, expected["watchdog"],
+                  "WATCHDOG_CODE", wd_markers, checks, blockers)
+    _check_script("persistent_supervisor", sup_persist, expected["control"],
+                  "PX_CODE", sup_markers, checks, blockers)
+    _check_script("runtime_supervisor", sup_runtime, expected["control"],
+                  "PX_CODE", sup_markers, checks, blockers)
     for label, text in (("persistent_supervisor", sup_persist),
                         ("runtime_supervisor", sup_runtime)):
         found = re.search(r"export PX_REGISTRY=(\S+)", text or "")
@@ -406,7 +431,7 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
             _block(blockers, "foreign_graphroot")
 
     watchdog_pid, _ = _check_service(
-        "watchdog", service="ivanka-watchdog", expected=expected,
+        "watchdog", service="ivanka-watchdog", expected=expected["watchdog"],
         presence="running", variable="WATCHDOG_CODE",
         module="fail_closed_guard.watchdog_cli",
         values={"--root": str(root), "--graphroot": str(graphroot)}, flags=(),
@@ -417,7 +442,7 @@ def attest(*, phase, project_root=PROJECT_ROOT, s6_root=S6_ROOT,
         checks=checks, blockers=blockers, module_reader=module_reader,
         head_reader=head_reader, git_present=git_present)
     _check_service(
-        "supervisor", service="px-cohort-supervisor", expected=expected,
+        "supervisor", service="px-cohort-supervisor", expected=expected["control"],
         presence=expected["supervisor"], variable="PX_CODE",
         module="assembler_bench.px_execution",
         values={"--registry": str(registry), "--root": str(root)},

@@ -1,0 +1,26 @@
+# SEPARATE source-pinned, binary-only candidate: combined PCR integration
+# documented at exact 19386765b40a4d57dce15c0984a731486b69121e over 950fe331.
+# PREPARED ONLY. This does NOT build, import, retag, overwrite or delete any
+# existing image, and MUST NOT change the 950fe331 pin/manifest/recipe.
+#
+# Build context: exactly one staged file `new-candidate` (SHA256
+# ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563), mode
+# 0755, from /workspace/ivanka-pcr-integration-950fe331-20261126/binaries.
+# No source tree, truth, cohort, receipt or frozen result enters the context.
+#
+# COPY-ONLY: no RUN (a RUN would add a second layer). Host verify_binary_stage()
+# and independent verify_binary_layer_entries() must pass before use.
+
+FROM da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad
+
+ARG SOURCE_COMMIT=19386765b40a4d57dce15c0984a731486b69121e
+ARG BINARY_SHA256=ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563
+ARG FROZEN_MANIFEST_SHA256=9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f
+
+COPY new-candidate /usr/local/bin/ivanka
+
+LABEL org.ottojung.ivanka.source-commit="${SOURCE_COMMIT}"
+LABEL org.ottojung.micall.frozen-image-id="da795bbdbfbdd3c735c59d0ee008dae1781c68268b24298235e6b2cfe50a23ad"
+LABEL org.ottojung.ivanka.frozen-manifest-sha256="${FROZEN_MANIFEST_SHA256}"
+LABEL org.ottojung.ivanka.binary-sha256="${BINARY_SHA256}"
+LABEL org.ottojung.ivanka.pilot-role="bounded-prospective-p1-pcr-19386765"

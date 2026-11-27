@@ -1,0 +1,76 @@
+{
+  "candidate_source_commit": "950fe331dfcd857011bfd63f9eeca92462708545",
+  "cases": {
+    "clonal-s000": {
+      "role": "control",
+      "sha256": {
+        "hidden-truth/haplotypes.fasta": "19e27f04d39b3a96106e3cc236e6a34ed474a885b2713295a7ba81c7b9b9f97a",
+        "reads/R1.fastq.gz": "10d01655fb67a7a9e5f93a6da581977214b5b605b81048c84cb4f14346bf55ad",
+        "reads/R2.fastq.gz": "5bf0a4c57946f2bcb139399d3e71e0b643a3f021e3dcccf0d8c37d330ad8c486"
+      }
+    },
+    "coverage_hole-s002": {
+      "role": "control",
+      "sha256": {
+        "hidden-truth/haplotypes.fasta": "67d21ac2f110d8e44ad0d2b108473b5e8852ca2a3ecc461a3b55f73ebdd0f8bd",
+        "reads/R1.fastq.gz": "81e3351f1063610d3804658a210810c9164e3dc6f94522de29e501f5bfab8d4b",
+        "reads/R2.fastq.gz": "9852bfe0bc735ad0e58e4ceacca759a5a81bd38edee9dff43b6982f128030ea2"
+      }
+    },
+    "equal_strains-s000": {
+      "role": "residual",
+      "sha256": {
+        "hidden-truth/haplotypes.fasta": "99a7aaa73c89c95ed064793130910db26c00699bd012c7ac31d1d30933d986f6",
+        "reads/R1.fastq.gz": "4c1e066873fd4bb587b9f9c03dddd2a3bcd7b1e828386f0a6f68466b976388cd",
+        "reads/R2.fastq.gz": "71efedca76e1d3fa2833b789f1312be36b5c26b382312f8579940cd0f864ad83"
+      }
+    },
+    "equal_strains-s002": {
+      "role": "residual",
+      "sha256": {
+        "hidden-truth/haplotypes.fasta": "4cd4f83891f024599982c1059ec672633934c56dd5862d0ac7f53f5aa8168bc5",
+        "reads/R1.fastq.gz": "8691ef798a287dcb1983acc6b9f226edf0dde9e05a22d98c22cfbcf4bdc475df",
+        "reads/R2.fastq.gz": "908cff252fbc28080e01b941b41ef3a42f8a5e6768f1d83518e15a0b9a2bb0b6"
+      }
+    },
+    "equal_strains-s006": {
+      "role": "residual",
+      "sha256": {
+        "hidden-truth/haplotypes.fasta": "2a64b0dcccdfa61d773c9c7dab329505209ae5b4f90a27ed5f0b2796246e3970",
+        "reads/R1.fastq.gz": "f0161dec8df4067e56fd0717e77e70228433b27a949821b706a5509782c85c71",
+        "reads/R2.fastq.gz": "f8ad3f70a50ae1ba9901bb07467bb967c9e5c47a4e782d3b043b295740fa3654"
+      }
+    },
+    "equal_strains-s015": {
+      "role": "residual",
+      "sha256": {
+        "hidden-truth/haplotypes.fasta": "938b357fd680259589394a044a015f45af900d212e194638390a617f080b4276",
+        "reads/R1.fastq.gz": "0ad2651622cebb018c291ebfc2190d614c05101fb24c4bfe31bc66f58321d139",
+        "reads/R2.fastq.gz": "e0013fa95696675f5f25ed32fec89a1b572e80f54810d326914d6b1227c00af5"
+      }
+    }
+  },
+  "cohort_sha256": "90990f6109553347d37f7754cde63398a4dce57c388f90c2ce4b648530bfdfe4",
+  "control_cases": [
+    "clonal-s000",
+    "coverage_hole-s002"
+  ],
+  "data_root": "/workspace/ivanka-synthetic-abundance15-464-20261117",
+  "no_full464_rerun": true,
+  "physical_canary": {
+    "case_id": "physical-canary-R042",
+    "sample": "63902A-V3-3-V3LOOP_S39",
+    "spec_path": "/workspace/ivanka-p1-canary-guardrun-20261124/physical-spec.attested.json",
+    "spec_sha256": "478c1b7b68943ac5e1ef565c257fd96ba6871184425ace80b026dd2b18cf8f87"
+  },
+  "rationale": "Residual: four equal_strains cases where the combined candidate improves on PR506 but retains residual score deficit (post-hoc FASTA diagnostic only). Control: two unchanged-family cases (clonal, coverage_hole) that must remain byte-identical to PR506; coverage_hole also exercises the PR506 flank guard. Physical canary: separately attested R042 physical sample, run last, no truth mounted in any assembler container.",
+  "residual_cases": [
+    "equal_strains-s000",
+    "equal_strains-s002",
+    "equal_strains-s006",
+    "equal_strains-s015"
+  ],
+  "schema": "ivanka.p1.bounded-pilot-cases.v1",
+  "status": "ATTEMPTED_NOT_QUALIFIED",
+  "truth_used_at_assembly_time": false
+}

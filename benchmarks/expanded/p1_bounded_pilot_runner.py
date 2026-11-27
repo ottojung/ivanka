@@ -73,6 +73,7 @@ STATUS = "ATTEMPTED_NOT_QUALIFIED"
 SOURCE_COMMIT = "950fe331dfcd857011bfd63f9eeca92462708545"
 BINARY_SHA = "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786"
 PARENT_IMAGE = ORIGINAL_IVANKA_IMAGE
+FROZEN_MANIFEST_SHA256 = "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f"
 INTEGRATION_BASE = "07231fa1a06b2cdd7d43d9896935f5050b7df4f5"
 
 CASES_MANIFEST = Path(__file__).with_name("p1_pilot_cases.json")
@@ -524,27 +525,124 @@ def verify_portable_binary(path, source_commit=None, *, plan=None):
             "image": row["portable_image"], "portable": True}
 
 
+PORTABLE_POSTBUILD_SCHEMA = "ivanka.p1.portable-postbuild-receipt.v1"
+
+
+def normalize_digest(value):
+    if isinstance(value, str):
+        bare = value.strip().removeprefix("sha256:").lower()
+        if len(bare) == 64 and all(c in "0123456789abcdef" for c in bare):
+            return bare
+    raise ValueError("invalid digest")
+
+
+def load_portable_postbuild_receipt(path, *, expected_sha=None):
+    target = Path(path)
+    if target.is_symlink() or not target.is_file():
+        raise ValueError("portable postbuild receipt missing or symlink")
+    actual = sha256(target)
+    if expected_sha is not None and actual != expected_sha:
+        raise ValueError(f"portable postbuild receipt pin mismatch: {actual}")
+    doc = json.loads(target.read_text())
+    if doc.get("schema") != PORTABLE_POSTBUILD_SCHEMA:
+        raise ValueError("unknown portable postbuild receipt schema")
+    return doc, actual
+
+
+def verify_portable_postbuild_receipt(path, *, expected_sha=None,
+                                      source_commit=None, plan=None):
+    """Validate an authenticated postbuild receipt against copy_overlay evidence.
+
+    The prebuild plan remains immutable; this separate receipt may only be
+    accepted when it binds the exact plan/candidate/portable bytes to a real
+    copy_overlay image receipt (digest, labels, base layers, one-layer overlay)
+    and a verified post-build image identity. No manual manifest build claim.
+    """
+    doc, receipt_sha = load_portable_postbuild_receipt(
+        path, expected_sha=expected_sha)
+    prebuild = plan or load_portable_plan()
+    verify_portable_plan(prebuild)
+    if doc.get("prebuild_plan_sha256") != PORTABLE_PLAN_SHA256:
+        raise ValueError("portable postbuild receipt not bound to prebuild plan")
+    if not doc.get("build_executed") or not doc.get("image_identity_verified"):
+        raise ValueError("portable postbuild receipt missing verified build evidence")
+    commit = doc.get("source_commit")
+    if source_commit is not None and commit != source_commit:
+        raise ValueError("portable postbuild receipt source commit differs")
+    rows = [row for row in prebuild["candidates"]
+            if row["source_commit"] == commit]
+    if len(rows) != 1:
+        raise ValueError("portable postbuild receipt candidate not uniquely selected")
+    row = rows[0]
+    portable_sha = doc.get("portable_binary_sha256")
+    if (portable_sha != row["portable_binary_sha256"]
+            or doc.get("native_binary_sha256") != row["native_binary_sha256"]
+            or doc.get("portable_binary_path") != row["portable_binary_path"]):
+        raise ValueError("portable postbuild receipt portable pin mismatch")
+    image = normalize_digest(doc.get("image_digest"))
+    if image != normalize_digest(doc.get("portable_image")):
+        raise ValueError("portable postbuild receipt image digest mismatch")
+
+    evidence = doc.get("copy_overlay_image_receipt")
+    if not isinstance(evidence, dict):
+        raise ValueError("portable postbuild receipt missing copy_overlay evidence")
+    if evidence.get("one_layer_overlay") is not True:
+        raise ValueError("portable postbuild receipt missing one-layer evidence")
+    if normalize_digest(evidence.get("image")) != image:
+        raise ValueError("portable postbuild receipt image evidence mismatch")
+    base_layers = evidence.get("base_layers")
+    layers = evidence.get("layers")
+    if (not isinstance(base_layers, list) or not base_layers
+            or not isinstance(layers, list)
+            or [normalize_digest(x) for x in layers[:-1]] != [normalize_digest(x) for x in base_layers]
+            or len(layers) != len(base_layers) + 1
+            or normalize_digest(layers[-1]) == normalize_digest(base_layers[-1])):
+        raise ValueError("portable postbuild receipt layer evidence invalid")
+    labels = evidence.get("labels")
+    expected_labels = {
+        "org.ottojung.ivanka.source-commit": commit,
+        "org.ottojung.micall.frozen-image-id": PARENT_IMAGE,
+        "org.ottojung.ivanka.binary-sha256": portable_sha,
+        "org.ottojung.ivanka.frozen-manifest-sha256": FROZEN_MANIFEST_SHA256,
+    }
+    if not isinstance(labels, dict):
+        raise ValueError("portable postbuild receipt labels missing")
+    for key, value in expected_labels.items():
+        if labels.get(key) != value:
+            raise ValueError(f"portable postbuild receipt label mismatch: {key}")
+    # The role label must be present and bound to the planned candidate.
+    if labels.get("org.ottojung.ivanka.pilot-role") != row["role"]:
+        raise ValueError("portable postbuild receipt role label mismatch")
+
+    return {"schema": doc["schema"], "receipt_sha256": receipt_sha,
+            "source_commit": commit, "image": image,
+            "portable_binary_sha256": portable_sha,
+            "image_identity_verified": True, "build_executed": True,
+            "copy_overlay_image_receipt": evidence}
+
+
 def require_portable_image_identity_verified(source_commit, image_digest,
-                                             *, plan=None):
+                                             *, plan=None, postbuild_receipt=None,
+                                             postbuild_receipt_sha256=None):
     """Fail closed until a guarded COPY-only build produced a verified image.
 
     Portable bytes may be pinned before an image exists, but no arm may use
-    them until the exact image identity is verified post-build.
+    them until an authenticated postbuild receipt binds the exact prebuild
+    plan and portable bytes to copy_overlay build evidence and verified image
+    identity. No manual manifest build claim is accepted.
     """
-    doc = plan or load_portable_plan()
-    verify_portable_plan(doc)
+    prebuild = plan or load_portable_plan()
+    verify_portable_plan(prebuild)
     if not isinstance(image_digest, str) or len(image_digest) != 64:
         raise ValueError("portable image digest must be a full sha256")
-    rows = [row for row in doc["candidates"]
-            if row["source_commit"] == source_commit]
-    if len(rows) != 1:
-        raise ValueError("portable plan candidate not uniquely selected")
-    row = rows[0]
-    if (not row.get("image_built") or not row.get("image_identity_verified")
-            or row.get("portable_image") != image_digest):
+    if postbuild_receipt is None:
         raise ValueError("portable image identity not verified post-build")
-    return {"source_commit": source_commit, "image": image_digest,
-            "verified": True}
+    verified = verify_portable_postbuild_receipt(
+        postbuild_receipt, expected_sha=postbuild_receipt_sha256,
+        source_commit=source_commit, plan=prebuild)
+    if verified["image"] != normalize_digest(image_digest):
+        raise ValueError("portable image identity not verified post-build")
+    return verified
 
 
 def pinned_podman_env(storage_conf=None, *, expected_sha=None):
@@ -1193,6 +1291,33 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
     if unknown:
         raise ValueError(f"unknown case(s): {', '.join(unknown)}")
 
+    portable_postbuild = None
+    portable_plan = load_portable_plan()
+    verify_portable_plan(portable_plan)
+    portable_candidate = next(
+        (row for row in portable_plan["candidates"]
+         if row["source_commit"] == args.commit), None)
+    if getattr(args, "portable_postbuild_receipt", None):
+        provisional = verify_portable_postbuild_receipt(
+            args.portable_postbuild_receipt,
+            source_commit=args.commit, plan=portable_plan)
+        expected_image = (args.image
+                          if args.image not in (None, "", "PENDING_CANDIDATE_IMAGE_DIGEST")
+                          else provisional["image"])
+        portable_postbuild = require_portable_image_identity_verified(
+            args.commit, expected_image,
+            plan=portable_plan,
+            postbuild_receipt=args.portable_postbuild_receipt)
+        if (args.image not in (None, "", "PENDING_CANDIDATE_IMAGE_DIGEST")
+                and normalize_digest(args.image) != portable_postbuild["image"]):
+            raise ValueError("portable postbuild receipt image differs from --image")
+        args = argparse.Namespace(**{**vars(args),
+                                     "image": portable_postbuild["image"],
+                                     "commit": portable_postbuild["source_commit"]})
+    elif (portable_candidate is not None
+          and portable_candidate.get("portable_binary_sha256") is not None):
+        raise ValueError("portable postbuild receipt required for produced portable candidate")
+
     verify_pins(Path(args.data), Path(args.frozen_results), Path(args.timer))
     guard_pins = verify_guard_source_pins()
     admission_pins = verify_copy_overlay_admission_pins()
@@ -1225,6 +1350,7 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         "integration_base": INTEGRATION_BASE,
         "reviewed_guard_pins": guard_pins,
         "copy_overlay_admission_pins": admission_pins,
+        "portable_postbuild_receipt": portable_postbuild,
         "candidate_source_commit": SOURCE_COMMIT,
         "candidate_image": args.image,
         "candidate_image_contract": contract,
@@ -1431,6 +1557,8 @@ def main(argv=None):
     parser.add_argument("--out", type=Path, default=Path(DEFAULT_EVIDENCE_ROOT))
     parser.add_argument("--image", default="PENDING_CANDIDATE_IMAGE_DIGEST")
     parser.add_argument("--commit", default=SOURCE_COMMIT)
+    parser.add_argument("--portable-postbuild-receipt", type=Path, default=None,
+                        help="separate authenticated postbuild receipt for a portable COPY-only build")
     parser.add_argument("--storage-conf", type=Path, default=Path(DEFAULT_STORAGE_CONF))
     parser.add_argument("--lock", default=DEFAULT_LOCK)
     parser.add_argument("--stop", default=DEFAULT_STOP)

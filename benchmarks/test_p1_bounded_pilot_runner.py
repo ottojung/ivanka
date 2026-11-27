@@ -485,6 +485,41 @@ class PrepareTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.out = self.root / "evidence"
 
+    def write_postbuild_receipt(self, *, image=IMAGE):
+        plan = runner.load_portable_plan()
+        row = next(c for c in plan["candidates"]
+                   if c["source_commit"] == runner.SOURCE_COMMIT)
+        base_layers = ["sha256:" + "a" * 64]
+        layers = base_layers + ["sha256:" + "b" * 64]
+        receipt = {
+            "schema": runner.PORTABLE_POSTBUILD_SCHEMA,
+            "prebuild_plan_sha256": runner.PORTABLE_PLAN_SHA256,
+            "build_executed": True,
+            "image_identity_verified": True,
+            "source_commit": row["source_commit"],
+            "native_binary_sha256": row["native_binary_sha256"],
+            "portable_binary_sha256": row["portable_binary_sha256"],
+            "portable_binary_path": row["portable_binary_path"],
+            "image_digest": image,
+            "portable_image": image,
+            "copy_overlay_image_receipt": {
+                "image": image,
+                "one_layer_overlay": True,
+                "base_layers": base_layers,
+                "layers": layers,
+                "labels": {
+                    "org.ottojung.ivanka.source-commit": row["source_commit"],
+                    "org.ottojung.micall.frozen-image-id": runner.PARENT_IMAGE,
+                    "org.ottojung.ivanka.binary-sha256": row["portable_binary_sha256"],
+                    "org.ottojung.ivanka.frozen-manifest-sha256": runner.FROZEN_MANIFEST_SHA256,
+                    "org.ottojung.ivanka.pilot-role": row["role"],
+                },
+            },
+        }
+        path = self.root / "portable-postbuild.json"
+        path.write_text(json.dumps(receipt))
+        return path
+
     def args(self):
         return mock.Mock(
             data=self.root / "data", frozen_results=self.root / "frozen.jsonl",
@@ -493,7 +528,8 @@ class PrepareTests(unittest.TestCase):
             lock=runner.DEFAULT_LOCK, stop=runner.DEFAULT_STOP,
             lease_root=runner.DEFAULT_LEASE_ROOT, disk_path=self.root,
             watchdog_path=self.root / "alive.json", owner="test-owner",
-            cases=None, check=True, armed=False, slot=runner.PENDING_SLOT)
+            cases=None, check=True, armed=False, slot=runner.PENDING_SLOT,
+            portable_postbuild_receipt=self.write_postbuild_receipt())
 
     def test_check_mode_writes_prepared_manifest_without_spawn(self):
         args = self.args()
@@ -520,6 +556,7 @@ class PrepareTests(unittest.TestCase):
         manifest = json.loads((self.out / "prepared_manifest.json").read_text())
         self.assertFalse(manifest["spawned"])
         self.assertFalse(manifest["qualified"])
+        self.assertTrue(manifest["portable_postbuild_receipt"]["image_identity_verified"])
         self.assertEqual(manifest["storage"]["graphroot"], graphroot)
         self.assertEqual(manifest["design"]["residual"],
                          ["equal_strains-s000", "equal_strains-s002",

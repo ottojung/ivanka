@@ -7,7 +7,7 @@ before any action) | repository: `https://github.com/ottojung/ivanka.git` (SSH a
 This is Ivanka work on the authorized host. No Viche / billy-dev work, no shared checkout
 edited, no scheduler-provisioned worktree. All repository work is in a fresh
 `--no-hardlinks` isolated clone under
-`/tmp/opencode/3jQaV1X67UgBZ2bB4UeEay-inherited-v9ro-20261127/repo` on the new topic branch
+`isolated clone (path withheld)` on the new topic branch
 `agent/3jQaV1X67UgB-v9ro-registry-evidence-20261127`.
 
 Every terminal handoff and the 23:15Z registry-advancement comment were treated as
@@ -22,8 +22,8 @@ is owned by another agent; this agent does not contend with it.
 | Fact | Verified value |
 |---|---|
 | Post-cutover attestation | `ready=true`, `blockers=[]`, `kernel_enforcement=false` |
-| Watchdog code root / head | `/workspace/ivanka-guard-pr535-staged-20261127` @ `165a86b38c0bc29b4f8e0281a39ca59b909a6563` |
-| Supervisor control root / head | `/workspace/ivanka-px-control-cutover` @ `b8720600c9f10e71472b2b55210badeabc257a81` |
+| Watchdog code root / head | `guard root (path withheld)` @ `165a86b38c0bc29b4f8e0281a39ca59b909a6563` |
+| Supervisor control root / head | `control root (path withheld)` @ `b8720600c9f10e71472b2b55210badeabc257a81` |
 | Global worker lock | present, **locked** |
 | Active lease | exactly one: `soapdenovo2-1795822263147226741` (observed during verification) |
 | Live registry | `private-frozen-ten-pilot-registry-20gib-20261124.json`, sha256 `98de47a3eb76b45d3c09b4f3aa62a299b57f67b30642c18541a062c2dc720a7a` |
@@ -71,7 +71,7 @@ paired pilot receipt, the native ELF on disk, and the bound podman store):
 | Source repo / pin | `https://github.com/soedinglab/plass` @ `ac83d8fa2fd315738afe675609a3dea05837cfea` | `px_frozen_ten_attestation.json` + live registry |
 | Adapter branch / head | `bench/frozen-8458f9e5-penguin-20261123` @ `8e7c55a3ebcaa4584cb09b1ac743bb5320bd1257` | attestation + `adapter_branch_commits` |
 | Native ELF | `a175c7af8bed75b9add8229b30ee57380eaa4ffb67e351a8f5e91e43584bec0a` | sha256 of retained `native/penguin-image/penguin` matches attestation and image receipt |
-| OCI image | `sha256:458ff3d095ecf7db1b3622b56dafb9eec0947f2c3e567fcc3da3ea69f7dba924` | image receipt; `podman --root /workspace/ivanka-exploratory-podman-20261121/store image exists` rc=0 |
+| OCI image | `sha256:458ff3d095ecf7db1b3622b56dafb9eec0947f2c3e567fcc3da3ea69f7dba924` | image receipt; `podman image exists` against the bound store (path withheld) returned rc=0 |
 | Image receipt | `5ab7651c768aa29da9346cd5fa51a89d5d14ff757fbdff23e16eefbf6e7af7c1` | recomputed sha256; identical to live `receipts/image-penguin-….json` |
 | Paired pilot receipt | `37d24d30b5e96c9faa51ab7f9f29d8f1e29d4fa5eadc80690c158a7d8881a6bc` | recomputed sha256 of durable `proposed-receipts/pilot-penguin-paired-canonical-proposed-20261126.json` |
 | Physical run | `success`, alias `PX-R053`, CID `39b57480d6faf49c2e866f3e5232527a3a2f0326146ee2ccc13c1aafb6e09a01`; run receipt `55d4644a894eabb84b19e0aa51c32c91c0913c155c7ff226d4c8112601e33a0a` | durable `run-penguin-1795549407618791948.json`, exit 0, paired reads, `conseq.csv` retained |
@@ -89,6 +89,15 @@ was produced (`stitched_contigs.fasta` empty). `kernel_enforcement=false`; the
 and not a scored RSS. A later manual-followup receipt
 (`19b5403066bfce99fd5b5a765b71e645db5e5f3e86de182393f52bf0b4cf6242`) proves exact-CID
 teardown but is explicitly *not* a pilot arm and *not* scored.
+
+**Failure classification (from the repo's own taxonomy):** `INFRASTRUCTURE_FAILURE_REASONS`
+is `disk_stop`, `measurement_unavailable`, `identity_lost`, `binding_unavailable`; the
+single extra attempt is authorized only after two exhausted infrastructure attempts.
+The PenguiN synthetic trip is guard-limited (equivalent to `observed_rss_limit`), was
+attempt 1 of a historical paired pilot, and is not a cohort arm — so it is **terminal, not
+recoverable by authorized retry**. A re-run would be a new pilot arm requiring a named
+slot, not a retry, and must never be reported as a scored measurement. Exact-CID teardown
+is proved by the manual followup and is not itself a pilot arm.
 
 There is **no score, no proxy zero and no scoring attestation** for PenguiN. The candidate
 keeps `qualifying:false` and `seven_way_psi_release_inclusion:false`. Residual gap, recorded
@@ -115,19 +124,31 @@ either would require inventing evidence.
   `QC_BINARIES_BUILD_SHA256` from a reviewed armed build, an attested image, and a paired
   pilot.
 
+**Concrete prerequisites re-verified (read-only):** exact-commit fetches from the public
+upstreams confirmed `rrwick/Unicycler@1429301e…`, `ablab/spades@896694ce…` (tag v3.15.5),
+`HaploConduct/HaploConduct@24e4d9fc…` and `soedinglab/plass@ac83d8fa…`. The reviewed build
+plans require `SPADES_BINARY_SHA256` (Unicycler) and build-attested
+`VIRAL_QUASISPECIES_BUILD_SHA256` plus `QC_BINARIES_BUILD_SHA256` (SAVAGE); the corrected
+recipes fail closed on those gates and on the pinned CPython 2.7.18 / NumPy 1.16.6 /
+SciPy 1.2.3 donor archives (NumPy must be staged by the operator). No live image build is
+permitted until a reviewed armed build guard attests those digests. Machine-readable
+detail is in `evidence.json`; no separate report is introduced.
+
 ## 5. Artifacts on this branch
 
 - `docs/bench/px-registry-advancement-nonslot-20261127.md` — this report.
 - `docs/bench/px-registry-advancement-nonslot-20261127/evidence.json` — machine-readable
   per-tool pins, adapter heads, digests, case-receipt counts and the typed verdict.
-- `docs/bench/px-registry-advancement-nonslot-20261127/penguin-pilot-candidate-registry.json`
-  — exact verified copy of the candidate (sha256 `af634259…`); **not applied live**.
-- `docs/bench/px-registry-advancement-nonslot-20261127/migrate_penguin_pilot.py` and
-  `verify_penguin_proposal.py` — exact reviewed copies (sha256 `14bc3abb…` and
-  `b1ac72b7…`) retained so a future owner can apply the change only at a genuine,
-  granted idle boundary.
-- `docs/bench/px-registry-advancement-nonslot-20261127/SHA256SUMS` — hashes of the above
-  three copied artifacts.
+- `docs/bench/px-registry-advancement-nonslot-20261127/penguin-advancement-descriptor.json`
+  — **public-safe, content-addressed** advancement record: artifact basenames and SHA-256
+  digests only, no host paths, no private identifiers, no credentials. **Not applied live.**
+- The raw candidate registry (sha256 `af634259…`) and the reviewed migration/verifier
+  scripts (sha256 `14bc3abb…` / `b1ac72b7…`) are **deliberately withheld** from this public
+  branch: they carry absolute host paths. They stay at the owner's private durable location
+  and must be used through the reviewed migration only at a granted idle boundary.
+- Sections 2-4 and `evidence.json` now carry the concrete upstream pin checks, exact build
+  prerequisites for Unicycler/SAVAGE, and the typed PenguiN failure classification; no
+  additional report is introduced.
 
 ## Verdict
 

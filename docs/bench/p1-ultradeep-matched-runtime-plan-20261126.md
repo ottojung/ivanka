@@ -97,8 +97,8 @@ describes eligibility only; it cannot authorize an arm.
 `contention_check()` rejects any aggregate snapshot with missing loadavg or
 `cpu.stat`, fewer than 2 effective host CPUs (from `cpu.max`, falling back to
 `cpuset.cpus.effective`), loadavg-per-CPU above 1.0, or `nr_throttled /
-nr_periods` above 0.05. `comparability_check()` requires a complete eight-arm
-AB/BA evidence set, matching 2-CPU container quota and memory limit on every
+nr_periods` above 0.05. `comparability_check()` requires a complete
+AB/BA evidence set for the requested cases, matching 2-CPU container quota and memory limit on every
 arm, no per-arm contention abort, and a host-load ratio between arms at most
 1.5. Those thresholds are copied into every plan as `comparability_plan`; a
 future guarded executor must apply them and abort on any failure.

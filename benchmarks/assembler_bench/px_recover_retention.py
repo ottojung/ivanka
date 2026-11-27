@@ -30,7 +30,7 @@ import os
 from pathlib import Path
 
 from benchmarks import compressed_tables as codec
-from benchmarks.retained_artifacts import _load_sealed_evidence, seal_terminal_evidence
+from benchmarks.retained_artifacts import _load_sealed_evidence
 
 from . import px_attempt_retention as retention
 from . import px_cohort_scheduler as sched
@@ -67,6 +67,8 @@ def _maintenance_headroom(root, needed_bytes):
 def _review(root, path, name):
     """An independent, source-bound approval is mandatory before apply."""
     candidate = Path(path)
+    if not candidate.is_absolute():
+        raise ValueError("review attestation path must be absolute")
     if not candidate.is_file() or candidate.is_symlink() or candidate.resolve() != candidate:
         raise ValueError("review attestation must be a regular file")
     data = json.loads(candidate.read_bytes())
@@ -75,11 +77,18 @@ def _review(root, path, name):
     if data.get("module_sha256") != _module_sha256():
         raise ValueError("review does not describe this maintenance source")
     allowed = data.get("attempts")
-    if allowed != ["*"] and name not in (allowed or []):
+    if (not isinstance(allowed, list) or not allowed
+            or any(not isinstance(item, str) or not item or "*" in item
+                   for item in allowed)):
+        raise ValueError("review must name explicit attempts")
+    if name not in allowed:
         raise ValueError("attempt not covered by review")
+    reviewer = data.get("reviewer")
+    if not isinstance(reviewer, str) or not reviewer.strip():
+        raise ValueError("review must name a reviewer")
     return {"review_file": candidate.name,
             "review_sha256": sched.sha256_file(candidate),
-            "reviewer": data.get("reviewer")}
+            "reviewer": reviewer}
 
 
 def _bind_unresolved(root, archive, reports, leases):
@@ -173,7 +182,11 @@ def _apply_one(archive, prior, cid, source, dead, root, review_path):
     review = _review(root, review_path, archive.name)
     retention._seal(archive, prior, RECOVER_MODE, source)
     planned = retention._planned_entries(archive, prior, source, RECOVER_MODE)
-    states = retention._verify_all(archive, planned, RECOVER_MODE)
+    # An interrupted apply can already have archived some entries while others
+    # remain plain. Archive-mode verification accepts both states against the
+    # same seal; recover-mode lacks an archived branch and would reject the
+    # whole archive, leaving the remaining plain scratch untouched on retry.
+    states = retention._verify_all(archive, planned, retention.ARCHIVE_MODE)
     reclaimed = 0
     for path, item in sorted(planned.items()):
         if states[path] in ("archived", "deleted"):
@@ -218,7 +231,6 @@ def _scan(root, *, apply, only, dead, review_path):
                                     review_path)
                 output["reclaimed_bytes"] += result["reclaimed_bytes"]
                 output["applied"].append(result)
-            evidence = {"failure": prior}
             output["eligible"].append({
                 "archive": archive.name,
                 "allocated_bytes": allocated,

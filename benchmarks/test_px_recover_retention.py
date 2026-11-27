@@ -88,11 +88,12 @@ class RecoverMaintenanceTests(unittest.TestCase):
                      sched.receipt_path(self.root, self.arm),
                      sched.attempt_path(self.root, self.arm, 1))
 
-    def review(self, *, approved=True, module=None, attempts=None):
+    def review(self, *, approved=True, module=None, attempts=None,
+               reviewer="independent-review-test"):
         data = {"approved": approved,
                 "module_sha256": module or recover._module_sha256(),
                 "attempts": attempts or [self.archive.name],
-                "reviewer": "independent-review-test"}
+                "reviewer": reviewer}
         return record(self.root / recover.REVIEW_NAME, data)
 
     def run_recover(self, *, apply=False, dead=True):
@@ -222,6 +223,53 @@ class RecoverMaintenanceTests(unittest.TestCase):
         result = self.run_apply(self.review())
         self.assertTrue(result["skipped"])
         self.assertTrue(self.reads.exists())
+
+    def test_mixed_state_resume_completes_without_data_loss(self):
+        review = self.review()
+        archive_one = recover._archive_one
+
+        def fail_after_first(path, item, root):
+            if path.name == "temp.sam":
+                raise ValueError("injected mid-loop failure")
+            return archive_one(path, item, root)
+
+        with mock.patch.object(recover, "_archive_one", side_effect=fail_after_first):
+            interrupted = self.run_apply(review)
+        self.assertEqual(interrupted["applied"], [])
+        self.assertEqual(len(interrupted["skipped"]), 1)
+        self.assertIn("injected mid-loop failure", interrupted["skipped"][0]["reason"])
+        self.assertFalse(self.mates.exists())
+        self.assertTrue(self.reads.exists())
+
+        retry = self.run_apply(review)
+        self.assertEqual(retry["skipped"], [])
+        self.assertEqual(len(retry["applied"]), 1)
+        self.assertGreater(retry["applied"][0]["reclaimed_bytes"], 0)
+        for path, original in self.originals.items():
+            self.assertFalse(path.exists())
+            self.assertEqual(
+                codec.logical_digest(path, format=codec.SCRATCH_FORMAT),
+                (hashlib.sha256(original).hexdigest(), len(original)))
+        self.assertEqual(len(self.run_recover()["already_archived"]), 1)
+
+    def test_review_rejects_blanket_attempts(self):
+        result = self.run_apply(self.review(attempts=["*"]))
+        self.assertTrue(result["skipped"])
+        self.assertIn("explicit attempts", result["skipped"][0]["reason"])
+        self.assertEqual({p: p.read_bytes() for p in self.files}, self.originals)
+
+    def test_review_requires_named_reviewer(self):
+        result = self.run_apply(self.review(reviewer=None))
+        self.assertTrue(result["skipped"])
+        self.assertIn("name a reviewer", result["skipped"][0]["reason"])
+        self.assertEqual({p: p.read_bytes() for p in self.files}, self.originals)
+
+    def test_review_requires_absolute_path(self):
+        relative = os.path.relpath(self.review(), Path.cwd())
+        result = self.run_apply(relative)
+        self.assertTrue(result["skipped"])
+        self.assertIn("absolute", result["skipped"][0]["reason"])
+        self.assertEqual({p: p.read_bytes() for p in self.files}, self.originals)
 
 
 if __name__ == "__main__":

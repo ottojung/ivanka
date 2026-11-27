@@ -14,7 +14,7 @@ from assembler_bench import guarded_canary_launcher as launcher
 from assembler_bench import remap_runner as runner
 from assembler_bench.px_ram_semantics import (
     COMPARABLE_KEY, COMPARABLE_METHOD, COMPARABLE_METHOD_VERSION,
-    COMPARABLE_SCOPE, METHOD_KEY, SCOPE_KEY, UNAVAILABLE_KEY, VERSION_KEY,
+    COMPARABLE_SCOPE, METHOD_KEY, SCOPE_KEY, VERSION_KEY,
 )
 
 STAMP = "20261126T223000000000Z"

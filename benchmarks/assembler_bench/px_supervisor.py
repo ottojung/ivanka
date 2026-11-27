@@ -199,11 +199,11 @@ class BackgroundSupervisor:
         try:
             result = retire(self.root, apply=True, only=name)
             if result["skipped"]:
-                logging.warning("PX attempt retention deferred: %s", result["skipped"])
+                logging.warning("PX attempt archival deferred: %s", result["skipped"])
         except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
             # A cleanup refusal must not invalidate a terminal scientific
             # receipt or block subsequent arms. The operator can retry it.
-            logging.warning("PX attempt retention deferred: %s", exc)
+            logging.warning("PX attempt archival deferred: %s", exc)
 
     def _prepare_retry(self, arm, prior, expected_attempt):
         """Fail closed unless the prior receipt authorizes exactly this retry."""

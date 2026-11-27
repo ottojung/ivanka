@@ -3,12 +3,19 @@
 A transient infrastructure failure can leave a large scratch directory even
 when the bounded retry later resolves the case. The archive is not the
 canonical measurement. Its receipt, launcher log, native assemblies, final
-scientific files and diagnostics remain evidence. The retirement module removes
+scientific files and diagnostics remain evidence. The retention module touches
 only explicitly recognized, regenerable reads, mappings and indices, not whole
 scratch trees or unknown native artifacts.
 
-The supervisor calls retention after recording a resolved retry and checkpoint.
-The operator can also inspect or retire older archives:
+The default storage mode archives each eligible file at its original logical
+path: `temp.sam.zst` plus `temp.sam.zst.meta.json`. The proof records the
+SHA-256 and size of the **uncompressed** bytes, so retry, score and sealed
+receipt provenance keep their plain-byte digests. Readers that need the bytes
+ask for the logical path and consume verified, decompressed chunks; a restore
+recreates byte-identical plain files at those paths and removes the frames.
+
+The supervisor archives after recording a resolved retry and checkpoint. The
+operator can also inspect, archive or restore older archives:
 
 ```sh
 PYTHONPATH=.:benchmarks python3 -m benchmarks.assembler_bench.px_attempt_retention \
@@ -16,6 +23,8 @@ PYTHONPATH=.:benchmarks python3 -m benchmarks.assembler_bench.px_attempt_retenti
 # Only at a quiescent worker boundary (the command refuses a busy lock):
 PYTHONPATH=.:benchmarks python3 -m benchmarks.assembler_bench.px_attempt_retention \
   --root "$PX_ROOT" --apply
+PYTHONPATH=.:benchmarks python3 -m benchmarks.assembler_bench.px_attempt_retention \
+  --root "$PX_ROOT" --restore
 ```
 
 Use `--only <exact archive name>` to limit the action. A dry run reports
@@ -27,8 +36,25 @@ a matching second attempt copy, the original classified infrastructure failure,
 a unique matching launcher log hash, matching report and released worker lease.
 A successful superseding receipt also requires its preserved final MAX digest.
 Unresolved infrastructure failures, orphan archives, missing/ambiguous evidence,
-unsafe paths, and multiply linked files are refused. On apply the module seals
-the original failure, source digests and every proposed deletion's digest and
-size before unlinking; a partially completed operation is replayable from the
-same seal. Receipts, results, log files and unknown native outputs are never
-rewritten or removed. Cleanup failures do not invalidate terminal science.
+unsafe paths, and multiply linked files are refused. Compression is refused
+when the proven frame and proof do not reduce the file's apparent size.
+
+On apply the module seals the original failure, source digests and every
+candidate's logical digest and size before any file changes. Every source is
+reverified immediately before compression or deletion; each frame is verified
+by compressed digest and full decompressed readback before it replaces the
+plain file. An interrupted operation resumes from the same seal: a plain file
+that reappears is re-verified, and a complete pair with no plain file is
+accepted only when both variants prove the sealed digest. A frame without its
+proof, a changed proof, or a missing source fails closed. Receipts, results,
+logs, native outputs and every other scientific file are never rewritten or
+removed. Cleanup failures do not invalidate terminal science.
+
+Delete mode (`--mode delete`) is an explicit operator action for cases where
+no reversible frame is wanted. It uses the same binding, seal and revalidation
+rules, but unlinks the verified sources without retaining their bytes.
+
+```sh
+PYTHONPATH=.:benchmarks python3 -m benchmarks.assembler_bench.px_attempt_retention \
+  --root "$PX_ROOT" --apply --mode delete
+```

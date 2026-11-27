@@ -24,9 +24,11 @@ the same frame contract. Select with ``IVANKA_ZSTD_BACKEND=module|cli`` and set
 the CLI location with ``IVANKA_ZSTD_PATH``.
 
 Both a plain and a compressed variant may coexist only when each proves the
-same uncompressed digest and size; any disagreement fails closed. Nothing in
-this module runs an analysis, changes a measurement, or writes to a MiCall
-source or container.
+same uncompressed digest and size; any disagreement fails closed. Disposable
+PX scratch uses the same zstd frame contract under ``ivanka-zstd-scratch/1``:
+a policy layer prepares a proven frame, then installs it only after the frame
+and its full decompressed readback are verified. Nothing in this module runs
+an analysis, changes a measurement, or writes to a MiCall source or container.
 """
 import hashlib
 import io
@@ -38,6 +40,7 @@ import subprocess
 import tempfile
 
 FORMAT = "ivanka-zstd-table/1"
+SCRATCH_FORMAT = "ivanka-zstd-scratch/1"
 ZST_SUFFIX = ".zst"
 META_SUFFIX = ".zst.meta.json"
 ZSTD_LEVEL = 3
@@ -283,7 +286,7 @@ def find_table(*candidates):
     return None
 
 
-def load_meta(meta_path):
+def load_meta(meta_path, *, format=FORMAT):
     path = Path(meta_path)
     if not path.is_file():
         raise MissingProof("no compression proof sidecar: " + path.name)
@@ -291,8 +294,8 @@ def load_meta(meta_path):
         proof = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise InvalidProof("unreadable compression proof: " + path.name) from exc
-    if proof.get("format") != FORMAT:
-        raise InvalidProof("unknown table format: " + path.name)
+    if proof.get("format") != format:
+        raise InvalidProof("unknown storage format: " + path.name)
     if proof.get("codec") != "zstd":
         raise UnsupportedCodec("unsupported codec in " + path.name)
     if (proof.get("level") != ZSTD_LEVEL or proof.get("threads") != ZSTD_THREADS
@@ -327,8 +330,8 @@ def _digest_decompressed(path, proof):
     return digest.hexdigest(), size
 
 
-def _assert_equivalent(plain, compressed, meta_path):
-    proof = load_meta(meta_path)
+def _assert_equivalent(plain, compressed, meta_path, *, format=FORMAT):
+    proof = load_meta(meta_path, format=format)
     _verify_compressed(compressed, proof)
     plain_hash, plain_size = _hash_file(plain)
     compressed_hash, compressed_size = _digest_decompressed(compressed, proof)
@@ -339,15 +342,15 @@ def _assert_equivalent(plain, compressed, meta_path):
                                   + plain.name)
 
 
-def logical_digest(path):
-    """Return ``(sha256, size)`` of the logical uncompressed table bytes."""
+def logical_digest(path, *, format=FORMAT):
+    """Return ``(sha256, size)`` of the logical uncompressed bytes."""
     plain, compressed, meta_path = _paths(path)
     has_plain, has_compressed = plain.is_file(), compressed.is_file()
     if has_plain and has_compressed:
-        _assert_equivalent(plain, compressed, meta_path)
+        _assert_equivalent(plain, compressed, meta_path, format=format)
         return _hash_file(plain)
     if has_compressed:
-        proof = load_meta(meta_path)
+        proof = load_meta(meta_path, format=format)
         _verify_compressed(compressed, proof)
         return _digest_decompressed(compressed, proof)
     if has_plain:
@@ -531,3 +534,119 @@ def compress_table(path, *, keep_plain=False):
     if not keep_plain:
         plain.unlink()
     return compressed
+
+
+def prepare_scratch(path):
+    """Compress one regular scratch file to a temporary proven frame.
+
+    Nothing is installed and the plain file is not touched. The caller owns the
+    returned frame and must discard it unless it later verifies the storage
+    plan and calls :func:`install_scratch`.
+    """
+    plain, compressed, meta_path = _paths(path)
+    if plain.is_symlink() or not plain.is_file():
+        raise TableError("scratch source is not a regular file: " + plain.name)
+    if compressed.exists() or meta_path.exists():
+        raise InvalidProof("scratch already has a compressed variant: "
+                           + plain.name)
+    original_digest, original_size = _hash_file(plain)
+    handle, temp_name = tempfile.mkstemp(
+        prefix=compressed.name + ".tmp.", dir=plain.parent)
+    os.close(handle)
+    frame = Path(temp_name)
+    try:
+        with frame.open("wb") as target, plain.open("rb") as source:
+            if _backend() == "module":
+                _compress_module(source, target)
+            else:
+                _compress_cli(source, target)
+        compressed_digest, compressed_size = _hash_file(frame)
+        proof = {"format": SCRATCH_FORMAT, "codec": "zstd",
+                 "level": ZSTD_LEVEL, "threads": ZSTD_THREADS,
+                 "checksum": True, "original_name": plain.name,
+                 "original_sha256": original_digest,
+                 "original_size": original_size,
+                 "compressed_sha256": compressed_digest,
+                 "compressed_size": compressed_size}
+        _verify_compressed(frame, proof)
+        if _digest_decompressed(frame, proof) != (original_digest, original_size):
+            raise InvalidProof("scratch readback differs from source: "
+                               + plain.name)
+    except Exception:
+        discard_scratch_frame(frame)
+        raise
+    return frame, proof
+
+
+def discard_scratch_frame(frame):
+    """Remove a frame that was prepared but not installed."""
+    Path(frame).unlink(missing_ok=True)
+
+
+def install_scratch(path, frame, proof):
+    """Install a prepared frame and proof, then remove the verified plain file."""
+    plain, compressed, meta_path = _paths(path)
+    _verify_compressed(frame, proof)
+    if _digest_decompressed(frame, proof) != (proof["original_sha256"],
+                                              proof["original_size"]):
+        raise InvalidProof("scratch frame readback differs from proof: "
+                           + plain.name)
+    if plain.is_file():
+        if _hash_file(plain) != (proof["original_sha256"],
+                                  proof["original_size"]):
+            raise ConflictingVariants("plain scratch changed before install: "
+                                      + plain.name)
+    elif not compressed.is_file():
+        raise FileNotFoundError(str(plain))
+    handle, meta_temp_name = tempfile.mkstemp(
+        prefix=meta_path.name + ".tmp.", dir=plain.parent)
+    with os.fdopen(handle, "w", encoding="utf-8") as target:
+        json.dump(proof, target, sort_keys=True, indent=2)
+        target.write("\n")
+        target.flush()
+        os.fsync(target.fileno())
+    meta_temp = Path(meta_temp_name)
+    try:
+        os.replace(frame, compressed)
+        os.replace(meta_temp, meta_path)
+        _fsync_dir(plain.parent)
+    finally:
+        meta_temp.unlink(missing_ok=True)
+    if plain.is_file():
+        plain.unlink()
+    return compressed
+
+
+def compress_scratch(path):
+    """Atomically replace one regular scratch file by a verified compressed pair."""
+    frame, proof = prepare_scratch(path)
+    try:
+        return install_scratch(path, frame, proof)
+    finally:
+        discard_scratch_frame(frame)
+
+
+def logical_bytes(path, *, format=FORMAT):
+    """Yield verified uncompressed bytes from a plain or compressed file."""
+    plain, compressed, meta_path = _paths(path)
+    has_plain, has_compressed = plain.is_file(), compressed.is_file()
+    if has_plain and has_compressed:
+        _assert_equivalent(plain, compressed, meta_path, format=format)
+    if has_compressed:
+        proof = load_meta(meta_path, format=format)
+        _verify_compressed(compressed, proof)
+        digest, size = hashlib.sha256(), 0
+        for block in _decompress_chunks(compressed):
+            digest.update(block)
+            size += len(block)
+            yield block
+        if (digest.hexdigest(), size) != (proof["original_sha256"],
+                                          proof["original_size"]):
+            raise InvalidProof("decompressed bytes differ from proof: "
+                               + plain.name)
+        return
+    if has_plain:
+        with plain.open("rb") as stream:
+            yield from _read_chunks(stream)
+        return
+    raise FileNotFoundError(str(plain))

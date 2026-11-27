@@ -1,12 +1,15 @@
-"""Adversarial tests for superseded PX scratch retirement."""
+"""Adversarial tests for superseded PX scratch archival and retirement."""
 import fcntl
+import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from assembler_bench import px_attempt_retention as retention
 from assembler_bench import px_cohort_scheduler as sched
+from benchmarks import compressed_tables as codec
 
 
 def write(path, contents):
@@ -17,6 +20,11 @@ def write(path, contents):
 
 def record(path, value):
     return write(path, json.dumps(value) + "\n")
+
+
+def body(tag):
+    """A reproducible, well-compressible read-level scratch body."""
+    return "".join("%s read-%d chr1 1 60 6M\n" % (tag, n) for n in range(2000))
 
 
 class AttemptRetentionTests(unittest.TestCase):
@@ -57,10 +65,10 @@ class AttemptRetentionTests(unittest.TestCase):
                            "preserved result")
         sched.record_outcome(self.root, self.arm, self.final, "success", seconds=2)
         self.archive = self.root / "outputs/attempts/skesa-PX-R001.attempt-001"
-        self.reads = write(self.archive / "scratch/trimmed1.fastq", "rebuildable")
-        self.mapping = write(self.archive / "scratch/unstitched_remap.csv", "rows")
+        self.reads = write(self.archive / "scratch/trimmed1.fastq", body("fastq"))
+        self.mapping = write(self.archive / "scratch/unstitched_remap.csv", body("csv"))
         self.nested = write(self.archive / "scratch/assembly_01/both_mates.fastq",
-                            "rebuildable")
+                            body("mates"))
         self.unitigs = write(self.archive / "scratch/assembly_01/unitigs.fastq",
                              "native output")
         self.native = write(self.archive / "scratch/assembly_01/contigs.fasta",
@@ -68,6 +76,7 @@ class AttemptRetentionTests(unittest.TestCase):
         self.metrics = write(self.archive / "scratch/read_summary.csv", "metrics")
         self.error = write(self.archive / "scratch/assembly_01/error.log", "error")
         self.files = (self.reads, self.mapping, self.nested)
+        self.originals = {p: p.read_bytes() for p in self.files}
         self.kept = (self.unitigs, self.native, self.metrics, self.error, self.final,
                      self.report, self.log, self.lease_file,
                      sched.receipt_path(self.root, self.arm),
@@ -78,9 +87,10 @@ class AttemptRetentionTests(unittest.TestCase):
     def write_leases(self):
         write(self.lease_file, "".join(json.dumps(r) + "\n" for r in self.rows))
 
-    def run_retire(self, apply=False, dead=True):
+    def run_retire(self, apply=False, dead=True, mode=retention.ARCHIVE_MODE):
         return retention.retire(self.root, apply=apply,
-                                dead=lambda root, cid: dead and cid == self.cid)
+                                dead=lambda root, cid: dead and cid == self.cid,
+                                mode=mode)
 
     def assert_untouched(self):
         self.assertTrue(all(p.exists() for p in self.files))
@@ -94,9 +104,106 @@ class AttemptRetentionTests(unittest.TestCase):
         self.assertFalse((self.archive / retention.SEAL).exists())
         result = self.run_retire(True)
         self.assertGreater(result["reclaimed_bytes"], 0)
-        self.assertTrue(all(not p.exists() for p in self.files))
+        for path, original in self.originals.items():
+            self.assertFalse(path.exists())
+            frame = path.with_name(path.name + codec.ZST_SUFFIX)
+            meta = path.with_name(path.name + codec.META_SUFFIX)
+            self.assertTrue(frame.is_file())
+            self.assertTrue(meta.is_file())
+            proof = codec.load_meta(meta, format=codec.SCRATCH_FORMAT)
+            self.assertEqual((proof["original_sha256"], proof["original_size"]),
+                             (hashlib.sha256(original).hexdigest(),
+                              len(original)))
+            self.assertEqual(codec.logical_digest(
+                path, format=codec.SCRATCH_FORMAT),
+                (proof["original_sha256"], proof["original_size"]))
+        self.assertEqual(before, {p: p.read_bytes() for p in self.kept})
+        replay = self.run_retire(True)
+        self.assertEqual(replay["reclaimed_bytes"], 0)
+        self.assertEqual(replay["eligible"], [])
+
+    def test_restore_roundtrip(self):
+        self.run_retire(True)
+        result = retention.restore(self.root, only=self.archive.name)
+        self.assertEqual(result["skipped"], [])
+        self.assertEqual(len(result["restored"]), len(self.files))
+        for path, original in self.originals.items():
+            self.assertEqual(path.read_bytes(), original)
+            self.assertFalse(path.with_name(path.name + codec.ZST_SUFFIX).exists())
+            self.assertFalse(path.with_name(path.name + codec.META_SUFFIX).exists())
+        self.run_retire(True)
+
+    def test_interrupted_install_resumes(self):
+        """A proven pair left beside its source is finished, never guessed."""
+        before = {p: p.read_bytes() for p in self.kept}
+        frame, proof = codec.prepare_scratch(self.reads)
+        meta = self.reads.with_name(self.reads.name + codec.META_SUFFIX)
+        meta.write_text(json.dumps(proof, sort_keys=True, indent=2) + "\n")
+        os.replace(frame, self.reads.with_name(
+            self.reads.name + codec.ZST_SUFFIX))
+        result = self.run_retire(True)
+        self.assertEqual(result["skipped"], [])
+        self.assertFalse(self.reads.exists())
+        self.assertEqual(codec.logical_digest(
+            self.reads, format=codec.SCRATCH_FORMAT),
+            (proof["original_sha256"], proof["original_size"]))
         self.assertEqual(before, {p: p.read_bytes() for p in self.kept})
         self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
+
+    def test_truncated_staged_frame_is_refused(self):
+        frame, proof = codec.prepare_scratch(self.reads)
+        stored = self.reads.with_name(self.reads.name + codec.ZST_SUFFIX)
+        meta = self.reads.with_name(self.reads.name + codec.META_SUFFIX)
+        stored.write_bytes(frame.read_bytes()[:-4])
+        meta.write_text(json.dumps(proof, sort_keys=True, indent=2) + "\n")
+        codec.discard_scratch_frame(frame)
+        result = self.run_retire(True)
+        self.assertEqual(result["reclaimed_bytes"], 0)
+        self.assertTrue(result["skipped"])
+        self.assertEqual(self.reads.read_bytes(), self.originals[self.reads])
+
+    def test_lease_gate_requires_prior_active(self):
+        self.rows[:] = [{"schema": "ivanka.worker-lease.v1",
+                         "lease": self.lease, "state": "released",
+                         "cid": self.cid, "proof": self.proof}]
+        self.write_leases()
+        self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
+        self.assert_untouched()
+
+    def test_delete_mode(self):
+        before = {p: p.read_bytes() for p in self.kept}
+        result = self.run_retire(True, mode=retention.DELETE_MODE)
+        self.assertGreater(result["reclaimed_bytes"], 0)
+        self.assertTrue(all(not p.exists() for p in self.files))
+        self.assertFalse(self.reads.with_name(
+            self.reads.name + codec.ZST_SUFFIX).exists())
+        self.assertEqual(before, {p: p.read_bytes() for p in self.kept})
+
+    def test_seal_mode_is_exclusive(self):
+        self.run_retire(True)
+        result = self.run_retire(True, mode=retention.DELETE_MODE)
+        self.assertEqual(result["reclaimed_bytes"], 0)
+        self.assertEqual(result["eligible"], [])
+        self.assertTrue(self.reads.with_name(
+            self.reads.name + codec.ZST_SUFFIX).is_file())
+
+    def test_corrupt_proof_blocks_restore(self):
+        self.run_retire(True)
+        meta = self.reads.with_name(self.reads.name + codec.META_SUFFIX)
+        proof = json.loads(meta.read_text())
+        proof["compressed_sha256"] = "0" * 64
+        meta.write_text(json.dumps(proof) + "\n")
+        result = retention.restore(self.root, only=self.archive.name)
+        self.assertTrue(result["skipped"])
+        self.assertFalse(self.reads.exists())
+
+    def test_missing_proof_blocks_restore(self):
+        self.run_retire(True)
+        meta = self.reads.with_name(self.reads.name + codec.META_SUFFIX)
+        meta.unlink()
+        result = retention.restore(self.root, only=self.archive.name)
+        self.assertTrue(result["skipped"])
+        self.assertFalse(self.reads.exists())
 
     def test_live_cid(self):
         self.assertEqual(self.run_retire(True, dead=False)["reclaimed_bytes"], 0)

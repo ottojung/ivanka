@@ -303,3 +303,14 @@ section.dominance,section.diagnostics{margin-top:61px}
 .samples .assembler-red,.samples #comparisonTool,.sample-metric-table .assembler-red{color:var(--red)}
 .samples #resultsTable th button.assembler-blue span,.samples #resultsTable th button.assembler-red span,
 .samples #resultsTable th button .method-badge{color:inherit}
+
+
+/* Infinity is a mathematical glyph, not a small typographic ornament. */
+.infinity-symbol{display:inline-block;font-family:"DejaVu Sans","Segoe UI Symbol",sans-serif;
+  font-size:1.5em;line-height:.9;vertical-align:-.075em;letter-spacing:0}
+.psi-view-controls #psiExponent:has(option[value="Infinity"]:checked){
+  font-family:"DejaVu Sans","Segoe UI Symbol",sans-serif;font-size:22px;line-height:1.15}
+.psi-view-controls #psiExponent option[value="Infinity"]{font-size:22px;
+  font-family:"DejaVu Sans","Segoe UI Symbol",sans-serif}
+.psi-view-controls #psiExponent option:not([value="Infinity"]){font-size:13px}
+.psi-matrix .dom-verdict:has(.infinity-symbol){font-size:16px;line-height:1.1;white-space:nowrap}

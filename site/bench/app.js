@@ -15,6 +15,9 @@ const fmtPsi = x => {
     :x.toLocaleString("en",{maximumSignificantDigits:4});
   return x>0?"+"+value:value;
 };
+// Apply only to already escaped text, keeping mathematical glyphs legible.
+const infinityMarkup = escaped => escaped.replaceAll("∞",
+  '<span class="infinity-symbol">∞</span>');
 // Display names are presentation only. Roster membership is never read from
 // this map: selectors, matrix axes, plots and headings come from run.tools.
 // A cohort may publish its own labels; opaque ids fall back to a readable form.
@@ -616,7 +619,7 @@ function drawDominance() {
   }
   const r=numeric?Number(state.psiExponent):null;
   const exponentLabel=r===Infinity?"∞":r;
-  el("dominanceContext").textContent=numeric
+  const context=numeric
     ?"Ψ("+exponentLabel+") · "+chosen.label+" ("+chosen.direction+"): "+
       (r===0?"mean sign difference (dimensionless)":
        r===1?"mean paired advantage ("+(
@@ -629,6 +632,7 @@ function drawDominance() {
       selected.map(s=>s.label+" ("+s.direction+")").join("; ")+
       ". Row dominates column when strict Ψ(r)>0 for every real r≥0 "+
       "on all selected metrics; missing measurements remain unresolved.";
+  el("dominanceContext").innerHTML=infinityMarkup(esc(context));
   holder.innerHTML='<table class="psi-matrix" style="--matrix-columns:'+matrixTools.length+'"><thead><tr><th>ROW A ↓ / B →</th>'+
     matrixTools.map(tool=>'<th scope="col">'+toolLabelHtml(tool)+'</th>').join("")+
     '</tr></thead><tbody>'+
@@ -661,7 +665,7 @@ function drawDominance() {
           esc(meaning)+(evidence.description?' · Observed: '+
           esc(evidence.description):'')+'" aria-label="'+
           esc(a)+' versus '+esc(b)+': '+esc(meaning)+'"><span class="dom-verdict">'+
-          esc(label)+'</span></button></td>';
+          infinityMarkup(esc(label))+'</span></button></td>';
       }).join("")+'</tr>').join("")+'</tbody></table>';
   details.textContent="Select a cell to inspect Ψ values and paired-case evidence.";
   holder.querySelectorAll("button[data-dominates-a]").forEach(button=>{
@@ -677,8 +681,8 @@ function drawDominance() {
       const numericEntry=numeric?result.entries.find(
         entry=>entry.key===chosen.key):null;
       const number=numeric?BenchSubjects.moment(numericEntry,r,{run:state.run,snapshot,a,b}):null;
-      const momentDetails=numeric?'<p>Displayed Ψ('+exponentLabel+') on '+
-        esc(chosen.label)+': <strong>'+esc(fmtPsi(number.value))+
+      const momentDetails=numeric?'<p>Displayed Ψ('+infinityMarkup(esc(exponentLabel))+') on '+
+        esc(chosen.label)+': <strong>'+infinityMarkup(esc(fmtPsi(number.value)))+
         '</strong> · '+number.paired+'/'+number.expected+
         ' paired cases.</p>':'';
       details.innerHTML='<h3>'+toolLabelHtml(a)+' versus '+

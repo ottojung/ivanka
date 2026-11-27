@@ -123,7 +123,7 @@ def validate_public_site(site=SITE):
              '<option value="0">0</option>',
              '<option value="1">1</option>',
              '<option value="2">2</option>',
-             '<option value="Infinity">∞ (sign)</option>')) or
+             '<option value="Infinity">∞</option>')) or
             'function moment(entry, exponent, context)' not in subjects or
             'BenchSubjects.moment(' not in js or
             'params.set("psi_r",state.psiExponent)' not in js or

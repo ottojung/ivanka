@@ -242,6 +242,19 @@ assert.equal(calc.winner({kind:'partial-yes',label:'YES'},no),0);
         self.assertIn('color:var(--blue)',css)
         self.assertIn('color:var(--red)',css)
 
+    def test_infinity_glyph_is_unadorned_and_enlarged(self):
+        html=(SITE/"index.html").read_text()
+        app=(SITE/"app.js").read_text()
+        css=(SITE/"style.css").read_text()
+        self.assertIn('<option value="Infinity">∞</option>',html)
+        self.assertNotIn('∞ (sign)</option>',html)
+        self.assertIn('infinityMarkup(esc(label))',app)
+        self.assertIn('infinityMarkup(esc(context))',app)
+        self.assertIn('infinityMarkup(esc(fmtPsi(number.value)))',app)
+        self.assertIn('font-size:1.5em',css)
+        self.assertIn('option[value="Infinity"]',css)
+        self.assertIn('font-size:22px',css)
+
     def test_psi_selector_is_independent_and_shareable(self):
         html=(SITE/"index.html").read_text()
         app=(SITE/"app.js").read_text()

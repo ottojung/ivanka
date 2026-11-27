@@ -223,12 +223,12 @@ class RemapPilotCliTests(unittest.TestCase):
             "--panel-path", str(self.panel),
         ]
 
-    def run_execute(self, calls, *, argv=None):
+    def run_execute(self, calls, *, argv=None, clock=None):
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             rc = cli.main(argv or self.exec_args(), config=self.config,
                           probes=self.probe, execute=self.fake_execute(calls),
-                          snapshot=lambda: self.snapshot)
+                          snapshot=lambda: self.snapshot, clock=clock)
         return rc, json.loads(stdout.getvalue())
 
     def test_positive_admitted_without_execution(self):
@@ -411,6 +411,24 @@ class RemapPilotCliTests(unittest.TestCase):
                 self.assertFalse(report["executed"])
                 self.assertEqual(calls, [])
 
+    def test_execute_rejects_nonfinite_authorization_timestamps(self):
+        for overrides, clock in (
+            ({"expires_at_utc": float("nan")}, None),
+            ({"expires_at_utc": float("inf")}, None),
+            ({"expires_at_utc": float("-inf")}, None),
+            ({}, lambda: float("nan")),
+            ({}, lambda: float("inf")),
+        ):
+            with self.subTest(overrides=overrides, has_clock=clock is not None):
+                self._write_authorization(**overrides)
+                calls = []
+                rc, report = self.run_execute(calls, clock=clock)
+                self.assertEqual(rc, cli.EXIT_BLOCKED)
+                self.assertFalse(report["executed"])
+                self.assertTrue(any(b.startswith("authorization_rejected")
+                                    for b in report["blockers"]))
+                self.assertEqual(calls, [])
+
     def test_execute_rejects_below_reserve_and_held_slot(self):
         for mutate in (lambda: setattr(self.probe, "free",
                                        runner.RESERVE_BYTES - 1),
@@ -490,6 +508,81 @@ class RemapPilotCliTests(unittest.TestCase):
         self.assertEqual(rc, cli.EXIT_BLOCKED)
         self.assertIn("cidfile_not_fresh", report["blockers"])
         self.assertEqual(calls, [])
+
+    def test_execute_report_forwards_full_plan_to_real_controller_path(self):
+        captured = {}
+        manifest = gexec.load_original_input_manifest(
+            self.manifest_path, expected_sha=self.manifest_sha)
+
+        def fake_guarded(plan, original_manifest, **kwargs):
+            captured["plan"] = plan
+            captured["manifest"] = original_manifest
+            captured["kwargs"] = kwargs
+            return {
+                "schema": gexec.EXECUTION_SCHEMA,
+                "status": "failed",
+                "failure_reason": "test_stop_before_spawn",
+                "returncode": 1,
+                "timed_out": False,
+                "log_paths": {},
+                "bound_cid": None,
+                "unmount_verified": False,
+                "guard_receipt": None,
+                "samples": 0,
+                "observation_ended": False,
+                "wall_seconds": 0.1,
+                "peak_rss_bytes": None,
+            }
+
+        with patch.object(gexec, "load_original_input_manifest",
+                          return_value=manifest), \
+             patch.object(gexec, "run_guarded_case", side_effect=fake_guarded):
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                rc = cli.main(self.exec_args(), config=self.config,
+                              probes=self.probe, snapshot=lambda: self.snapshot)
+            report = json.loads(stdout.getvalue())
+        self.assertEqual(rc, cli.EXIT_ADMITTED)
+        self.assertTrue(report["executed"])
+        self.assertEqual(report["receipt"]["status"], "failed")
+        self.assertIn("plan", captured)
+        plan = captured["plan"]
+        for key in ("schema", "inputs", "qualification_claim", "de_novo",
+                    "cohort", "alias", "image", "source", "reference",
+                    "guard", "argv", "run_id"):
+            self.assertIn(key, plan)
+        self.assertEqual(plan["schema"], runner.PLAN_SCHEMA)
+        self.assertRegex(plan["inputs"]["canonical_manifest_sha256"],
+                         r"^[0-9a-f]{64}$")
+        self.assertEqual(report["receipt"]["qualification_claim"], "NONE")
+
+    def test_real_run_guarded_case_pre_spawn_rejects_trimmed_plan(self):
+        manifest = gexec.load_original_input_manifest(
+            self.manifest_path, expected_sha=self.manifest_sha)
+        full_report = self.report()
+        full_plan = dict(full_report["plan"])
+        # Old bug shape: only summary fields, missing inputs/schema/markers.
+        trimmed = {k: full_plan[k] for k in (
+            "run_id", "argv_sha256", "argv", "image", "source",
+            "reference", "guard")}
+        with self.assertRaises(ValueError):
+            gexec.run_guarded_case(trimmed, manifest,
+                                   output_dir=self.root / "out-trimmed",
+                                   attempt_dir=self.root / "att-trimmed",
+                                   owner="operator-test",
+                                   stop_path=self.config.stop_path,
+                                   watchdog_ready=lambda: True,
+                                   guard_root=self.config.guard_root)
+        # Full plan passes manifest binding and fails closed before any spawn
+        # because owner is not armed for this real guard path.
+        result = gexec.run_guarded_case(
+            full_plan, manifest, output_dir=self.root / "out-full",
+            attempt_dir=self.root / "att-full", owner=None,
+            stop_path=self.config.stop_path, watchdog_ready=lambda: True,
+            guard_root=self.config.guard_root)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["failure_reason"], "operator_slot_not_armed")
+        self.assertEqual(result["original_input_binding"]["alias"], "R001")
 
 
 if __name__ == "__main__":

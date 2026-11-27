@@ -21,6 +21,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -334,15 +335,10 @@ def build_readiness_report(*, alias, reads_dir, attempt_dir, cidfile, stamp,
         "canonical_manifest_sha256": manifest_digest,
         "original_input_binding": binding,
     }
-    report["plan"] = {
-        "run_id": plan["run_id"],
-        "argv_sha256": plan["argv_sha256"],
-        "argv": plan["argv"],
-        "image": plan["image"],
-        "source": plan["source"],
-        "reference": plan["reference"],
-        "guard": plan["guard"],
-    }
+    # Store the full execution plan so execute_report can hand it unchanged to
+    # the merged controller/guarded path. Trimming here loses inputs, schema,
+    # qualification/de_novo markers and breaks bind_plan_to_original_manifest.
+    report["plan"] = dict(plan)
 
     # 3) The SAME merged preflight the real controller uses.
     image = probes.image(config.image_id, config.image_digest,
@@ -429,8 +425,10 @@ def _load_authorization(path, *, operator, alias, run_id, token, graphroot,
     if not isinstance(record.get("id"), str) or not record["id"].strip():
         raise ValueError("authorization_id")
     expires = record.get("expires_at_utc")
+    now = (clock or time.time)()
     if (type(expires) not in (int, float) or isinstance(expires, bool)
-            or not expires or expires <= (clock or time.time)()):
+            or not math.isfinite(expires) or not math.isfinite(now)
+            or expires <= now):
         raise ValueError("authorization_expired")
     return record
 

@@ -28,6 +28,11 @@ RUN git clone --recursive --quiet ${TOOL_SOURCE_REPO} /src/plass \
     && make -j 4 && make install \
     && install -m 0755 bin/penguin /usr/local/bin/penguin \
     && rm -rf /src/plass
+# Enforce the attested native digest against the artifact installed above.
+# A wrong or tampered TOOL_BINARY_SHA256 must abort the build (fail closed),
+# not merely be copied into an OCI provenance label.
+RUN test -f /usr/local/bin/penguin \
+    && echo "${TOOL_BINARY_SHA256}  /usr/local/bin/penguin" | sha256sum -c -
 LABEL org.opencontainers.image.source="https://github.com/ottojung/MiCall"
 LABEL org.opencontainers.image.revision="${MICALL_FORK_SOURCE_COMMIT}"
 LABEL org.ottojung.micall.common-base="${FORK_BASE_IMAGE}"

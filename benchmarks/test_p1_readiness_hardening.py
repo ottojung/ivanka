@@ -142,7 +142,11 @@ class LiveFingerprintTests(unittest.TestCase):
         exp = w.default_expected()
         self.assertNotIn("WATCHDOG_CODE", exp)
         self.assertEqual(exp["watchdog_service_head"],
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(w.PREVIOUS_WATCHDOG_SERVICE_HEAD,
                          "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
+        self.assertNotEqual(exp["watchdog_service_head"],
+                            w.PREVIOUS_WATCHDOG_SERVICE_HEAD)
         self.assertNotEqual(exp["watchdog_service_head"],
                             "f861f25b6e62e1266a498340e7d3cf9a09a9087f")
 
@@ -354,10 +358,29 @@ class LiveWatchdogCheckTests(unittest.TestCase):
 class ProspectiveGuardPinTests(unittest.TestCase):
     def test_reviewed_guard_head_pinned_source_only(self):
         proof = r.verify_guard_source_pins()
-        self.assertEqual(proof["head"], "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
+        self.assertEqual(proof["head"], "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(r.PREVIOUS_REVIEWED_GUARD_HEAD,
+                         "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
+        self.assertNotEqual(proof["head"], r.PREVIOUS_REVIEWED_GUARD_HEAD)
         self.assertTrue(proof["prospective"])
         self.assertFalse(proof["deployed"])
         self.assertEqual(len(proof["digests"]), 5)
+
+    def test_new_reviewed_digests_and_unchanged_cli(self):
+        identity = json.loads((Path(__file__).resolve().parent / "fixtures"
+                               / "px_guard_pins" / "px_guard_identity.json")
+                              .read_text())
+        self.assertEqual(identity["source_commit"], r.REVIEWED_GUARD_HEAD)
+        sources = identity["sources"]
+        for name, (relative, digest) in r.REVIEWED_GUARD_DIGESTS.items():
+            key = "benchmarks/" + relative
+            if key in sources:
+                self.assertEqual(sources[key], digest, name)
+        cli = r.COPY_OVERLAY_ADMISSION_DIGESTS["watchdog_cli"][1]
+        self.assertEqual(cli, w.WATCHDOG_CLI_SHA256)
+        self.assertEqual(cli,
+                         "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369")
+        self.assertEqual(sources["benchmarks/fail_closed_guard/watchdog_cli.py"], cli)
 
     def test_mismatched_guard_source_refused(self):
         tmp = tempfile.TemporaryDirectory()

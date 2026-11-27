@@ -266,9 +266,12 @@ AMBIENT_CONTAINER_SELECTORS = ("CONTAINERS_CONF", "CONTAINERS_STORAGE_CONF",
                                "CONTAINERS_STORAGE_DRIVER", "CONTAINERS_ROOTLESS")
 
 
-# Prospective pin to the reviewed, MERGED PR536 guard. Deployment is a
-# separate operator action; this source pin must never imply readiness.
-REVIEWED_GUARD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
+# Prospective pin to the reviewed, MERGED PR535/PR553 combined guard. Deployment
+# is a separate operator action; this source pin must never imply readiness.
+# The previous live PR536 head is retained for old-root verification only: it is
+# not an alternative accepted identity and never bypasses a source or live check.
+PREVIOUS_REVIEWED_GUARD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
+REVIEWED_GUARD_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
 REVIEWED_GUARD_DIGESTS = {
     "natural_exit": ("fail_closed_guard/natural_exit.py",
                      "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6"),
@@ -284,7 +287,7 @@ REVIEWED_GUARD_DIGESTS = {
 
 
 def verify_guard_source_pins(bench_dir=None):
-    """Prove the SOURCE guard matches the reviewed PR536 head (no deploy claim)."""
+    """Prove the SOURCE guard matches the reviewed combined guard head (no deploy claim)."""
     base = Path(bench_dir) if bench_dir else Path(__file__).resolve().parents[1]
     got = {}
     for name, (relative, expected) in REVIEWED_GUARD_DIGESTS.items():

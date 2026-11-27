@@ -92,6 +92,10 @@ class AttemptRetentionTests(unittest.TestCase):
                                 dead=lambda root, cid: dead and cid == self.cid,
                                 mode=mode)
 
+    def run_restore(self, dead=True):
+        return retention.restore(self.root, only=self.archive.name,
+                                 dead=lambda root, cid: dead and cid == self.cid)
+
     def assert_untouched(self):
         self.assertTrue(all(p.exists() for p in self.files))
 
@@ -124,7 +128,7 @@ class AttemptRetentionTests(unittest.TestCase):
 
     def test_restore_roundtrip(self):
         self.run_retire(True)
-        result = retention.restore(self.root, only=self.archive.name)
+        result = self.run_restore()
         self.assertEqual(result["skipped"], [])
         self.assertEqual(len(result["restored"]), len(self.files))
         for path, original in self.originals.items():
@@ -193,7 +197,7 @@ class AttemptRetentionTests(unittest.TestCase):
         proof = json.loads(meta.read_text())
         proof["compressed_sha256"] = "0" * 64
         meta.write_text(json.dumps(proof) + "\n")
-        result = retention.restore(self.root, only=self.archive.name)
+        result = self.run_restore()
         self.assertTrue(result["skipped"])
         self.assertFalse(self.reads.exists())
 
@@ -201,7 +205,7 @@ class AttemptRetentionTests(unittest.TestCase):
         self.run_retire(True)
         meta = self.reads.with_name(self.reads.name + codec.META_SUFFIX)
         meta.unlink()
-        result = retention.restore(self.root, only=self.archive.name)
+        result = self.run_restore()
         self.assertTrue(result["skipped"])
         self.assertFalse(self.reads.exists())
 
@@ -259,6 +263,45 @@ class AttemptRetentionTests(unittest.TestCase):
     def test_orphan_not_retired(self):
         self.archive.rename(self.archive.with_name("skesa-PX-R001.orphan-123"))
         self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
+
+    def test_restore_requires_dead_cid(self):
+        self.run_retire(True)
+        result = self.run_restore(dead=False)
+        self.assertTrue(result["skipped"])
+        self.assertFalse(self.reads.exists())
+
+    def test_restore_requires_headroom(self):
+        self.run_retire(True)
+        def tight(path):
+            class S:
+                f_bavail = 1
+                f_frsize = 1
+            return S()
+        original = retention.os.statvfs
+        retention.os.statvfs = tight
+        try:
+            result = self.run_restore()
+        finally:
+            retention.os.statvfs = original
+        self.assertTrue(result["skipped"])
+        self.assertFalse(self.reads.exists())
+
+    def test_archived_variant_symlink_refused(self):
+        self.run_retire(True)
+        frame = self.reads.with_name(self.reads.name + codec.ZST_SUFFIX)
+        target = self.root / "outside.zst"
+        target.write_bytes(frame.read_bytes())
+        frame.unlink()
+        frame.symlink_to(target)
+        result = self.run_retire(True)
+        self.assertTrue(result["skipped"])
+
+    def test_archived_plain_absent_verified_against_seal(self):
+        self.run_retire(True)
+        # plain is absent, pair present - replay should verify against seal
+        result = self.run_retire(True)
+        self.assertEqual(result["reclaimed_bytes"], 0)
+        self.assertEqual(result["skipped"], [])
 
     def test_seal_conflict(self):
         write(self.archive / retention.SEAL, "{}")

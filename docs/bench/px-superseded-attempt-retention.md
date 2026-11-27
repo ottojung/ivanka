@@ -36,8 +36,10 @@ a matching second attempt copy, the original classified infrastructure failure,
 a unique matching launcher log hash, matching report and released worker lease.
 A successful superseding receipt also requires its preserved final MAX digest.
 Unresolved infrastructure failures, orphan archives, missing/ambiguous evidence,
-unsafe paths, and multiply linked files are refused. Compression is refused
-when the proven frame and proof do not reduce the file's apparent size.
+unsafe paths, and multiply linked files are refused. Restore requires the same
+binding, global worker lock, fresh exact CID absence and workspace headroom.
+Compression is refused when the proven frame and proof do not reduce the file's
+apparent size.
 
 On apply the module seals the original failure, source digests and every
 candidate's logical digest and size before any file changes. Every source is

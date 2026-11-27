@@ -560,6 +560,8 @@ def prepare_scratch(path):
                 _compress_module(source, target)
             else:
                 _compress_cli(source, target)
+            target.flush()
+            os.fsync(target.fileno())
         compressed_digest, compressed_size = _hash_file(frame)
         proof = {"format": SCRATCH_FORMAT, "codec": "zstd",
                  "level": ZSTD_LEVEL, "threads": ZSTD_THREADS,
@@ -598,6 +600,8 @@ def install_scratch(path, frame, proof):
                                       + plain.name)
     elif not compressed.is_file():
         raise FileNotFoundError(str(plain))
+    with frame.open("rb") as source:
+        os.fsync(source.fileno())
     handle, meta_temp_name = tempfile.mkstemp(
         prefix=meta_path.name + ".tmp.", dir=plain.parent)
     with os.fdopen(handle, "w", encoding="utf-8") as target:
@@ -614,6 +618,7 @@ def install_scratch(path, frame, proof):
         meta_temp.unlink(missing_ok=True)
     if plain.is_file():
         plain.unlink()
+        _fsync_dir(plain.parent)
     return compressed
 
 

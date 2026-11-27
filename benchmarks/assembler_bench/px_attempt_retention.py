@@ -31,6 +31,21 @@ INDEX_SUFFIXES = {".bt2", ".bt2i", ".bt2b", ".ebwt"}
 ARCHIVE_MODE = "archive"
 DELETE_MODE = "delete"
 MODES = frozenset((ARCHIVE_MODE, DELETE_MODE))
+MIN_WORKSPACE_FREE_BYTES = 32 * 1024**3
+
+
+def _fsync_dir(directory):
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _require_headroom(root, needed_bytes):
+    free = os.statvfs(root).f_bavail * os.statvfs(root).f_frsize
+    if free - needed_bytes < MIN_WORKSPACE_FREE_BYTES:
+        raise ValueError("insufficient workspace headroom for scratch archival")
 
 
 def _regular(path):
@@ -188,34 +203,51 @@ def _expected(item):
     return item["sha256"], item["bytes"]
 
 
-def _prepare(archive, mode):
-    """Hash and compress all candidates before a plan exists or bytes change."""
-    if mode != ARCHIVE_MODE:
-        return {}
-    prepared = {}
-    try:
-        for path, size, _ in _candidates(archive):
-            frame_path = path.with_name(path.name + codec.ZST_SUFFIX)
-            meta_path = path.with_name(path.name + codec.META_SUFFIX)
-            if frame_path.is_file() or meta_path.is_file():
-                # An interrupted install may leave a completed pair beside its
-                # source. Both variants must still prove the same bytes.
-                if not (frame_path.is_file() and meta_path.is_file()):
-                    raise ValueError("incomplete scratch proof")
-                if codec.logical_digest(
-                        path, format=codec.SCRATCH_FORMAT) != (_sha(path), size):
-                    raise ValueError("archived scratch changed")
-                continue
-            frame, proof = codec.prepare_scratch(path)
-            proof_bytes = len(json.dumps(proof, sort_keys=True).encode()) + 1
-            if proof["compressed_size"] + proof_bytes >= size:
-                raise ValueError("compression does not reduce scratch size")
-            prepared[path] = (frame, proof)
-    except Exception:
-        for frame, _ in prepared.values():
-            codec.discard_scratch_frame(frame)
-        raise
-    return prepared
+def _regular_variant(path):
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("unsafe archived scratch variant")
+    if path.resolve() != path or path.stat().st_nlink != 1:
+        raise ValueError("unsafe archived scratch variant")
+    return path
+
+
+def _archived_state(path, item):
+    """Verify an already-archived pair against the immutable sealed digest."""
+    frame = path.with_name(path.name + codec.ZST_SUFFIX)
+    meta = path.with_name(path.name + codec.META_SUFFIX)
+    has_frame = frame.exists() or frame.is_symlink()
+    has_meta = meta.exists() or meta.is_symlink()
+    if not has_frame and not has_meta:
+        return None
+    if not has_frame or not has_meta:
+        raise ValueError("incomplete scratch proof")
+    _regular_variant(frame)
+    _regular_variant(meta)
+    if codec.logical_digest(path, format=codec.SCRATCH_FORMAT) != _expected(item):
+        raise ValueError("archived scratch changed")
+    return "archived"
+
+
+def _entry_state(path, item, mode):
+    expected = _expected(item)
+    exists = path.exists() or path.is_symlink()
+    if exists:
+        info = _regular(path).stat()
+        if info.st_nlink != 1:
+            raise ValueError("multiply linked scratch file")
+        if mode == ARCHIVE_MODE:
+            digest, size = codec.logical_digest(
+                path, format=codec.SCRATCH_FORMAT)
+        else:
+            digest, size = _sha(path), info.st_size
+        if (digest, size) != expected:
+            raise ValueError("sealed disposable file changed")
+        return "plain"
+    if mode == ARCHIVE_MODE:
+        state = _archived_state(path, item)
+        if state is not None:
+            return state
+    raise ValueError("sealed disposable file is missing")
 
 
 def _seal(archive, prior, mode, source):
@@ -228,8 +260,7 @@ def _seal(archive, prior, mode, source):
                                      "storage_mode": mode}, source, name=SEAL)
 
 
-def _verified_entries(archive, prior, source, mode):
-    """Reload the immutable seal and recheck every remaining source file."""
+def _planned_entries(archive, prior, source, mode):
     evidence = _load_sealed_evidence(archive / SEAL, source)
     if evidence.get("failure") != prior:
         raise ValueError("sealed failure receipt differs")
@@ -253,41 +284,42 @@ def _verified_entries(archive, prior, source, mode):
     present = {p for p, _, _ in _candidates(archive)}
     if not present.issubset(planned):
         raise ValueError("scratch changed after seal")
-    for path in present:
-        if mode == ARCHIVE_MODE:
-            digest, size = codec.logical_digest(path, format=codec.SCRATCH_FORMAT)
-        else:
-            digest, size = _sha(path), path.stat().st_size
-        if (digest, size) != _expected(planned[path]):
-            raise ValueError("sealed disposable file changed")
-    return planned, present
+    return planned
 
 
-def _archive_one(path, item, prepared):
-    """Install a proven frame at the logical path, or finish an interrupted one."""
+def _verify_all(archive, planned, mode):
+    states = {}
+    for path, item in sorted(planned.items()):
+        states[path] = _entry_state(path, item, mode)
+    return states
+
+
+def _archive_one(path, item, root):
     expected = _expected(item)
     frame_path = path.with_name(path.name + codec.ZST_SUFFIX)
     meta_path = path.with_name(path.name + codec.META_SUFFIX)
-    frame, proof = prepared.pop(path, (None, None))
-    if frame is None:
-        if meta_path.is_file() or frame_path.is_file():
-            if not (meta_path.is_file() and frame_path.is_file()):
-                raise ValueError("incomplete scratch proof")
-            if codec.logical_digest(path, format=codec.SCRATCH_FORMAT) != expected:
-                raise ValueError("archived scratch changed")
-            path.unlink()
-            return
-        frame, proof = codec.prepare_scratch(path)
-        try:
-            if (proof["original_sha256"], proof["original_size"]) != expected:
-                raise ValueError("prepared scratch differs from seal")
-            codec.install_scratch(path, frame, proof)
-        finally:
-            codec.discard_scratch_frame(frame)
+    if meta_path.exists() or frame_path.exists() or meta_path.is_symlink() or frame_path.is_symlink():
+        if not (frame_path.is_file() and meta_path.is_file()):
+            raise ValueError("incomplete scratch proof")
+        _regular_variant(frame_path)
+        _regular_variant(meta_path)
+        if codec.logical_digest(path, format=codec.SCRATCH_FORMAT) != expected:
+            raise ValueError("archived scratch changed")
+        path.unlink()
+        _fsync_dir(path.parent)
         return
-    if (proof["original_sha256"], proof["original_size"]) != expected:
-        raise ValueError("prepared scratch differs from seal")
-    codec.install_scratch(path, frame, proof)
+    frame, proof = codec.prepare_scratch(path)
+    try:
+        if (proof["original_sha256"], proof["original_size"]) != expected:
+            raise ValueError("prepared scratch differs from seal")
+        proof_bytes = (len(json.dumps(proof, sort_keys=True, indent=2)) + 1)
+        needed = proof["compressed_size"] + proof_bytes
+        _require_headroom(root, needed)
+        if needed >= item["bytes"]:
+            raise ValueError("compression does not reduce scratch size")
+        codec.install_scratch(path, frame, proof)
+    finally:
+        codec.discard_scratch_frame(frame)
 
 
 def _apply(archive, prior, cid, source, dead, root, *, mode):
@@ -295,26 +327,26 @@ def _apply(archive, prior, cid, source, dead, root, *, mode):
         raise ValueError("unknown storage mode")
     if not dead(root, cid):
         raise ValueError("exact CID absence not freshly observed")
-    prepared = _prepare(archive, mode)
-    try:
-        _seal(archive, prior, mode, source)
-        planned, present = _verified_entries(archive, prior, source, mode)
-        reclaimed = 0
-        for path in sorted(present):
-            before = path.stat().st_blocks * 512
-            if mode == ARCHIVE_MODE:
-                _archive_one(path, planned[path], prepared)
-                after = sum(p.stat().st_blocks * 512 for p in (
-                    path.with_name(path.name + codec.ZST_SUFFIX),
-                    path.with_name(path.name + codec.META_SUFFIX)))
-            else:
-                path.unlink()
-                after = 0
+    _seal(archive, prior, mode, source)
+    planned = _planned_entries(archive, prior, source, mode)
+    states = _verify_all(archive, planned, mode)
+    reclaimed = 0
+    for path, item in sorted(planned.items()):
+        state = states[path]
+        if state == "archived":
+            continue
+        before = path.stat().st_blocks * 512
+        if mode == ARCHIVE_MODE:
+            _archive_one(path, item, root)
+            after = sum(_regular_variant(p).stat().st_blocks * 512 for p in (
+                path.with_name(path.name + codec.ZST_SUFFIX),
+                path.with_name(path.name + codec.META_SUFFIX)))
             reclaimed += before - after
-        return reclaimed
-    finally:
-        for frame, _ in prepared.values():
-            codec.discard_scratch_frame(frame)
+        else:
+            path.unlink()
+            _fsync_dir(path.parent)
+            reclaimed += before
+    return reclaimed
 
 
 def _scan(root, *, apply, only, dead, mode):
@@ -330,9 +362,21 @@ def _scan(root, *, apply, only, dead, mode):
             continue
         try:
             prior, cid, source = _bind(root, archive, reports, leases)
-            size = sum(allocated for _, _, allocated in _candidates(archive))
+            candidates = _candidates(archive)
+            size = sum(allocated for _, _, allocated in candidates)
             if not size:
-                continue
+                seal = archive / SEAL
+                if not (apply and seal.exists() and not seal.is_symlink()):
+                    continue
+                evidence = _load_sealed_evidence(seal, source)
+                if evidence.get("storage_mode") != mode:
+                    continue
+                planned = _planned_entries(archive, prior, source, mode)
+                states = _verify_all(archive, planned, mode)
+                if all(s == "archived" for s in states.values()):
+                    continue
+                size = sum(planned[p]["bytes"] for p, s in states.items()
+                           if s == "plain")
             if apply:
                 output["reclaimed_bytes"] += _apply(
                     archive, prior, cid, source, dead, root, mode=mode)
@@ -369,7 +413,7 @@ def retire(root, *, apply=False, only=None, dead=_observed_dead,
         return _scan(root, apply=True, only=only, dead=dead, mode=mode)
 
 
-def _restore_entries(archive, evidence):
+def _restore_entries(archive, evidence, root):
     """Rebuild each proven frame at its original path and retire the frame."""
     restored = []
     for item in evidence["files"]:
@@ -378,17 +422,26 @@ def _restore_entries(archive, evidence):
                 or _variant(path) or not _disposable(path, archive / "scratch")):
             raise ValueError("unsafe sealed disposable path")
         expected = _expected(item)
-        if path.is_file():
-            if codec.logical_digest(path, format=codec.SCRATCH_FORMAT) != expected:
+        if path.exists() or path.is_symlink():
+            if not path.is_file() or path.is_symlink():
+                raise ValueError("unsafe restored scratch target")
+            if codec.logical_digest(
+                    path, format=codec.SCRATCH_FORMAT) != expected:
                 raise ValueError("archived scratch changed")
             continue
         meta_path = path.with_name(path.name + codec.META_SUFFIX)
         frame_path = path.with_name(path.name + codec.ZST_SUFFIX)
-        if not (meta_path.is_file() and frame_path.is_file()):
+        if not (frame_path.exists() or frame_path.is_symlink()
+                or meta_path.exists() or meta_path.is_symlink()):
             raise ValueError("archived scratch is missing")
+        if not (meta_path.is_file() and frame_path.is_file()):
+            raise ValueError("incomplete scratch proof")
+        _regular_variant(frame_path)
+        _regular_variant(meta_path)
         proof = codec.load_meta(meta_path, format=codec.SCRATCH_FORMAT)
         if (proof["original_sha256"], proof["original_size"]) != expected:
             raise ValueError("archived proof differs from seal")
+        _require_headroom(root, item["bytes"])
         handle, temp_name = tempfile.mkstemp(
             prefix="." + path.name + ".restore.", dir=path.parent)
         os.close(handle)
@@ -396,22 +449,27 @@ def _restore_entries(archive, evidence):
         try:
             digest, size = hashlib.sha256(), 0
             with temp.open("wb") as target:
-                for block in codec.logical_bytes(path, format=codec.SCRATCH_FORMAT):
+                for block in codec.logical_bytes(
+                        path, format=codec.SCRATCH_FORMAT):
                     target.write(block)
                     digest.update(block)
                     size += len(block)
+                target.flush()
+                os.fsync(target.fileno())
             if (digest.hexdigest(), size) != expected:
                 raise ValueError("restored scratch differs from seal")
             os.replace(temp, path)
+            _fsync_dir(path.parent)
             frame_path.unlink()
             meta_path.unlink()
+            _fsync_dir(path.parent)
             restored.append(str(path))
         finally:
             temp.unlink(missing_ok=True)
     return restored
 
 
-def restore(root, *, only=None):
+def restore(root, *, only=None, dead=_observed_dead):
     """Restore proven archived scratch at its original logical paths."""
     root = Path(root).resolve(strict=True)
     archives = root / "outputs" / "attempts"
@@ -426,7 +484,9 @@ def restore(root, *, only=None):
             if only is not None and archive.name != only:
                 continue
             try:
-                prior, _, source = _bind(root, archive, reports, leases)
+                prior, cid, source = _bind(root, archive, reports, leases)
+                if not dead(root, cid):
+                    raise ValueError("exact CID absence not freshly observed")
                 seal = archive / SEAL
                 if not seal.exists() or seal.is_symlink():
                     continue
@@ -434,7 +494,8 @@ def restore(root, *, only=None):
                 if (evidence.get("failure") != prior
                         or evidence.get("storage_mode") != ARCHIVE_MODE):
                     raise ValueError("seal does not describe archived scratch")
-                restored.extend(_restore_entries(archive, evidence))
+                _require_headroom(root, sum(e["bytes"] for e in evidence["files"]))
+                restored.extend(_restore_entries(archive, evidence, root))
             except (ValueError, OSError, KeyError, TypeError, RuntimeError,
                     codec.TableError) as exc:
                 skipped.append({"archive": archive.name, "reason": str(exc)})

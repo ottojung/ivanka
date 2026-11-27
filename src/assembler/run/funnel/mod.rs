@@ -1,6 +1,8 @@
+mod stages;
 #[cfg(test)]
 mod tests;
 use super::{canonical_kmer, K};
+pub(super) use stages::{emit_all, emit_one, emit_selected};
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::os::unix::fs::OpenOptionsExt;
@@ -17,14 +19,6 @@ fn open(path: PathBuf) -> io::Result<std::fs::File> {
         .open(path)
 }
 
-fn hash(data: &[u8]) -> String {
-    let mut value = 0xcbf29ce484222325u64;
-    for &byte in data {
-        value = (value ^ u64::from(byte)).wrapping_mul(0x100000001b3);
-    }
-    format!("{value:016x}")
-}
-
 /// Append one bounded funnel stage to a private trace and a sequence-free summary.
 /// Both files are derived only from the existing output path; no env or CLI option.
 pub(super) fn emit(out: &str, stage: &str, entries: &[(usize, &[u8], usize)]) -> io::Result<()> {
@@ -39,7 +33,7 @@ pub(super) fn emit(out: &str, stage: &str, entries: &[(usize, &[u8], usize)]) ->
         let head = format!(
             "{{\"i\":{index},\"l\":{},\"s\":{support},\"h\":\"{}\",\"k\":{},\"q\":\"{}\",\"stored\":{stored}",
             seq.len(),
-            hash(seq),
+            stages::hash(seq),
             seq.windows(K).filter_map(canonical_kmer).count(),
             if seq.len() > MAX_BASES { "t" } else { "f" }
         );

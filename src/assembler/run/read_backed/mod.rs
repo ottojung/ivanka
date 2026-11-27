@@ -29,47 +29,25 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
     let statistics = scoring::count(contigs, reads, &hits);
     let chosen = ranking::best(contigs, &statistics);
     #[cfg(feature = "ouj-funnel-trace")]
-    funnel::emit(
-        path,
-        "readback_before",
-        &contigs
-            .iter()
-            .enumerate()
-            .map(|(i, seq)| (i, seq.as_slice(), statistics.pairs[i]))
-            .collect::<Vec<_>>(),
-    )?;
+    funnel::emit_all(path, "readback_before", contigs, &statistics.pairs)?;
     #[cfg(feature = "ouj-funnel-trace")]
-    funnel::emit(
-        path,
-        "component_before",
-        &[(chosen, contigs[chosen].as_slice(), statistics.pairs[chosen])],
-    )?;
+    funnel::emit_one(path, "component_before", contigs, &statistics.pairs, chosen)?;
     selection(contigs.len(), chosen, &statistics);
     let mut selected = output::component(contigs, reads, &statistics, chosen);
     for candidate in ranking::additional(contigs, &statistics, chosen) {
         #[cfg(feature = "ouj-funnel-trace")]
-        funnel::emit(
+        funnel::emit_one(
             path,
             "readback_additional",
-            &[(
-                candidate,
-                contigs[candidate].as_slice(),
-                statistics.pairs[candidate],
-            )],
+            contigs,
+            &statistics.pairs,
+            candidate,
         )?;
         selection(contigs.len(), candidate, &statistics);
         selected.extend(output::component(contigs, reads, &statistics, candidate));
     }
     #[cfg(feature = "ouj-funnel-trace")]
-    funnel::emit(
-        path,
-        "tiling_after",
-        &selected
-            .iter()
-            .enumerate()
-            .map(|(i, entry)| (i, entry.1.as_slice(), 0))
-            .collect::<Vec<_>>(),
-    )?;
+    funnel::emit_selected(path, "tiling_after", &selected)?;
     output::write(path, &selected)?;
     Ok(selected.len())
 }

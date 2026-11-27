@@ -25,15 +25,7 @@ pub(super) fn write(
         rescue,
     } = prepared;
     #[cfg(feature = "ouj-funnel-trace")]
-    funnel::emit(
-        out,
-        "ranking_before",
-        &contigs
-            .iter()
-            .enumerate()
-            .map(|(i, seq)| (i, seq.as_slice(), supporting_counts[i]))
-            .collect::<Vec<_>>(),
-    )?;
+    funnel::emit_all(out, "ranking_before", &contigs, &supporting_counts)?;
     let (mut contigs, audit) = if audit_path.is_some() {
         select_supported_contigs_with_kmers(
             contigs,
@@ -49,15 +41,7 @@ pub(super) fn write(
         )
     };
     #[cfg(feature = "ouj-funnel-trace")]
-    funnel::emit(
-        out,
-        "ranking_after",
-        &contigs
-            .iter()
-            .enumerate()
-            .map(|(i, seq)| (i, seq.as_slice(), 0))
-            .collect::<Vec<_>>(),
-    )?;
+    funnel::emit_all(out, "ranking_after", &contigs, &[])?;
     if let Some(rescue) = rescue {
         // Never exceed the user-requested max-contigs cap. Replace only a
         // non-protected path whose canonical 31-mers remain represented;
@@ -67,10 +51,7 @@ pub(super) fn write(
     let count = super::write_results::write(out, &contigs, &reads, standard, skip_matching_seeds)?;
     if let Some(path) = audit_path {
         let count = write_snv_audit(&path, &audit, &contigs, &reads.seed_counts, canonical_kmer)?;
-        eprintln!(
-            "Ivanka separately observed {} unphased SNV alternatives",
-            count
-        );
+        eprintln!("Ivanka separately observed {count} unphased SNV alternatives");
     }
     Ok(count)
 }

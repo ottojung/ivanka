@@ -13,6 +13,7 @@ CALL_SITES = (
 )
 FEATURE_FILES = (
     'src/assembler/run/funnel/mod.rs',
+    'src/assembler/run/funnel/stages.rs',
     'src/assembler/run/funnel/tests.rs',
 )
 

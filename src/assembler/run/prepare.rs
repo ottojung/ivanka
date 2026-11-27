@@ -35,15 +35,7 @@ pub(super) fn assemble(config: &Config) -> Result<Prepared, Box<dyn Error>> {
         &contigs,
     )?;
     #[cfg(feature = "ouj-funnel-trace")]
-    funnel::emit(
-        &config.output,
-        "native",
-        &contigs
-            .iter()
-            .enumerate()
-            .map(|(i, seq)| (i, seq.as_slice(), supporting_counts[i]))
-            .collect::<Vec<_>>(),
-    )?;
+    funnel::emit_all(&config.output, "native", &contigs, &supporting_counts)?;
     eprintln!(
         concat!(
             "Ivanka ranking {} candidates by read-support density ",

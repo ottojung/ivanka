@@ -36,7 +36,7 @@ NEW_ROOT = "/workspace/ivanka-guard-pr535-staged-20261127"
 # its own exact module chain. The control HEAD is an exact reviewed commit, not
 # a self-referential future commit.
 CONTROL_ROOT = str(guard_source.CONTROL_ROOT)
-CONTROL_HEAD = "a48397e172131a28cf035239a8dbbe3577fce159"
+CONTROL_HEAD = "c3798910cb1d884ddea33cd1d0f405d7e0c31e2b"
 CONTROL_MODULES = dict(guard_source._read_control_identity()["sources"])
 CONTROL_MODULES.update(guard_source.EXPECTED)
 

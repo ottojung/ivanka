@@ -584,6 +584,83 @@ def load_portable_postbuild_receipt(path, *, expected_sha):
     return doc, actual
 
 
+def verify_copy_overlay_lease(root, ident, *, plan_sha, base_layers,
+                              teardown, orphan_baseline_ids):
+    """Prove one authentic lease acquire -> bind_group -> release lifecycle.
+
+    ``lease.acquire`` really emits ``state=active, mode=copy_overlay, pid=None``
+    and ``bind_group`` emits a SECOND ``active`` event with ``helper=True``.
+    The bind must therefore be selected by the unique helper=True marker, not
+    by the first active event, and the whole lifecycle must be unique/ordered.
+    """
+    root = Path(root or SHARED_PX_BOUNDARY["worker_root"])
+    try:
+        events = lease.events(root)
+        fail_closed = [event for event in watchdog.read_evidence(root)
+                       if event.get("worker") == ident
+                       and event.get("result") == "fail_closed"]
+    except GuardExceeded as exc:
+        raise ValueError(f"copy_overlay journal unavailable: {exc.reason}") from exc
+    if fail_closed:
+        raise ValueError("copy_overlay watchdog fail-closed evidence present")
+
+    scoped = [event for event in events if event.get("lease") == ident]
+    acquired = [event for event in scoped
+                if event.get("state") == "active"
+                and event.get("mode") == "copy_overlay"
+                and event.get("pid") is None
+                and event.get("helper") is not True]
+    binds = [event for event in scoped
+             if event.get("state") == "active"
+             and event.get("mode") == "copy_overlay"
+             and event.get("helper") is True]
+    releases = [event for event in scoped if event.get("state") == "released"]
+    if len(acquired) != 1 or len(binds) != 1 or len(releases) != 1:
+        raise ValueError("copy_overlay lease lifecycle not unique")
+    acquire, bind, release = acquired[0], binds[0], releases[0]
+    if not (events.index(acquire) < events.index(bind) < events.index(release)):
+        raise ValueError("copy_overlay lease lifecycle out of order")
+    if (acquire.get("owner") != ident or bind.get("owner") != ident
+            or release.get("owner") != ident):
+        raise ValueError("copy_overlay lease owner changed")
+
+    pid = bind.get("pid")
+    if (not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0
+            or bind.get("pgid") != pid
+            or not isinstance(bind.get("fingerprint"), list)
+            or len(bind["fingerprint"]) < 2
+            or acquire.get("at_utc") != bind.get("at_utc")):
+        raise ValueError("copy_overlay bind identity invalid")
+    if (bind.get("plan_sha256") != plan_sha
+            or bind.get("graphroot") != SHARED_PX_BOUNDARY["graphroot"]
+            or bind.get("storage_conf_sha256") != PINS_V2["storage_conf"]
+            or bind.get("base_image") != PARENT_IMAGE
+            or [normalize_digest(x) for x in (bind.get("base_layers") or [])]
+            != [normalize_digest(x) for x in base_layers]):
+        raise ValueError("copy_overlay bind evidence mismatch")
+    expected_baseline = sorted(orphan_baseline_ids)
+    if sorted(bind.get("baseline_ids") or []) != expected_baseline:
+        raise ValueError("copy_overlay bind baseline mismatch")
+
+    if not isinstance(teardown, dict):
+        raise ValueError("copy_overlay teardown proof missing")
+    cleanup = teardown.get("orphan_cleanup")
+    if (teardown.get("process_group") != pid
+            or teardown.get("stopped") is not True
+            or teardown.get("method") != "verified_exact_group"
+            or teardown.get("kernel_enforcement") is not False
+            or not isinstance(cleanup, dict)
+            or cleanup.get("method") != "exact_full_id_base_proof"
+            or cleanup.get("graphroot") != SHARED_PX_BOUNDARY["graphroot"]
+            or cleanup.get("expected_base") != PARENT_IMAGE
+            or cleanup.get("fresh_absence_check") is not True
+            or cleanup.get("kernel_enforcement") is not False
+            or sorted(cleanup.get("baseline_ids") or []) != expected_baseline):
+        raise ValueError("copy_overlay teardown proof incomplete")
+    if release.get("proof") != teardown:
+        raise ValueError("copy_overlay release proof mismatch")
+    return bind
+
 def verify_copy_overlay_result(path, *, expected_sha, expected_plan_sha,
                                expected_image, expected_labels, root=None):
     """Validate the ACTUAL copy_overlay result.json and its durable journals.
@@ -642,37 +719,10 @@ def verify_copy_overlay_result(path, *, expected_sha, expected_plan_sha,
         if labels.get(key) != value:
             raise ValueError(f"copy_overlay result label mismatch: {key}")
 
-    root = Path(root or SHARED_PX_BOUNDARY["worker_root"])
-    try:
-        events = lease.events(root)
-        latest = lease.latest(events)
-        recorded = latest.get(ident)
-        bind = next((event for event in events
-                     if event.get("lease") == ident
-                     and event.get("state") == "active"
-                     and event.get("mode") == "copy_overlay"), None)
-        fail_closed = [event for event in watchdog.read_evidence(root)
-                       if event.get("worker") == ident
-                       and event.get("result") == "fail_closed"]
-    except GuardExceeded as exc:
-        raise ValueError(f"copy_overlay journal unavailable: {exc.reason}") from exc
-    if fail_closed:
-        raise ValueError("copy_overlay watchdog fail-closed evidence present")
-    if (not isinstance(bind, dict) or bind.get("owner") != ident
-            or bind.get("plan_sha256") != plan_sha
-            or bind.get("helper") is not True
-            or bind.get("base_image") != PARENT_IMAGE
-            or [normalize_digest(x) for x in (bind.get("base_layers") or [])]
-            != [normalize_digest(x) for x in base_layers]):
-        raise ValueError("copy_overlay lease bind evidence missing")
-    if not isinstance(recorded, dict) or recorded.get("state") != "released":
-        raise ValueError("copy_overlay lease not released")
-    if recorded.get("owner") != ident:
-        raise ValueError("copy_overlay lease released by foreign owner")
-    proof = state.get("teardown")
-    if (not isinstance(proof, dict) or not proof
-            or recorded.get("proof") != proof):
-        raise ValueError("copy_overlay release proof mismatch")
+    verify_copy_overlay_lease(
+        root, ident, plan_sha=plan_sha, base_layers=base_layers,
+        teardown=state.get("teardown"),
+        orphan_baseline_ids=state.get("orphan_baseline_ids") or [])
     return {"path": str(target), "sha256": actual, "plan_sha256": plan_sha,
             "lease": ident, "owner": ident, "released": True,
             "fail_closed_events": 0, "image": expected_image,

@@ -637,27 +637,36 @@ class PortableArtifactPlanTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         cases = [
-            dict(mutate_receipt=lambda rec: rec.__setitem__("prebuild_plan_sha256", "0" * 64)),
-            dict(mutate_receipt=lambda rec: rec.__setitem__("image_digest", "2" * 64)),
-            dict(mutate_receipt=lambda rec: rec["copy_overlay_result"].__setitem__("sha256", "0" * 64)),
-            dict(mutate_result=lambda res: res["image_receipt"].__setitem__("one_layer_overlay", False)),
-            dict(mutate_result=lambda res: res["image_receipt"]["labels"].__setitem__(
-                "org.ottojung.ivanka.binary-sha256", "f" * 64)),
-            dict(mutate_result=lambda res: res.__setitem__("status", "failed")),
-            dict(mutate_result=lambda res: res.__setitem__("exit_code", 1)),
-            dict(mutate_result=lambda res: res.__setitem__("plan_sha256", "f" * 64)),
-            dict(omit_release=True),
-            dict(fail_closed=True),
-            dict(wrong_release_proof=True),
-            dict(omit_result=True),
+            (dict(mutate_receipt=lambda rec: rec.__setitem__("prebuild_plan_sha256", "0" * 64)), "not bound to prebuild plan"),
+            (dict(mutate_receipt=lambda rec: rec.__setitem__("image_digest", "2" * 64)), "image digest mismatch"),
+            (dict(mutate_receipt=lambda rec: rec["copy_overlay_result"].__setitem__("sha256", "0" * 64)), "result pin mismatch"),
+            (dict(mutate_result=lambda res: res["image_receipt"].__setitem__("one_layer_overlay", False)), "one-layer evidence"),
+            (dict(mutate_result=lambda res: res["image_receipt"]["labels"].__setitem__(
+                "org.ottojung.ivanka.binary-sha256", "f" * 64)), "label mismatch"),
+            (dict(mutate_result=lambda res: res.__setitem__("status", "failed")), "not completed cleanly"),
+            (dict(mutate_result=lambda res: res.__setitem__("exit_code", 1)), "exit code nonzero"),
+            (dict(mutate_result=lambda res: res.__setitem__("plan_sha256", "f" * 64)), "plan sha mismatch"),
+            (dict(omit_result=True), "result missing"),
+            (dict(omit_bind=True), "lifecycle not unique"),
+            (dict(duplicate_bind=True), "lifecycle not unique"),
+            (dict(replay_acquire=True), "lifecycle not unique"),
+            (dict(omit_release=True), "lifecycle not unique"),
+            (dict(foreign_owner_release=True), "lease owner changed"),
+            (dict(foreign_proof=True), "release proof mismatch"),
+            (dict(wrong_release_proof=True), "release proof mismatch"),
+            (dict(wrong_teardown=True), "release proof mismatch"),
+            (dict(wrong_bind_plan=True), "bind evidence mismatch"),
+            (dict(wrong_bind_graphroot=True), "bind evidence mismatch"),
+            (dict(wrong_bind_storage_conf=True), "bind evidence mismatch"),
+            (dict(fail_closed=True), "fail-closed evidence"),
         ]
-        for index, kwargs in enumerate(cases):
+        for index, (kwargs, pattern) in enumerate(cases):
             sub = Path(tmp.name) / f"case-{index}"
             info = self._fixture(sub, **kwargs)
             args = self._prepare_args(str(sub), info)
             run = lambda a=args, s=str(sub): r.prepare(
                 a, disk_usage_fn=lambda p: 33 * 1024 ** 3, copy_overlay_root=s)
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, pattern):
                 self._with_patches(self._prepare_patches(args), run)
 
 

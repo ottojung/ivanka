@@ -90,6 +90,7 @@
                 <option value="0">0</option>
                 <option value="1">1</option>
                 <option value="2">2</option>
+                <option value="Infinity">∞ (sign)</option>
               </select>
             </label>
             <label for="psiMetric" id="psiMetricWrap" hidden>NUMERIC METRIC
@@ -97,7 +98,7 @@
             </label>
           </div>
         </div>
-        <p class="subtle">Rows are compared with columns. All evaluates Ψ dominance for every selected metric; choose r = 0, 1, or 2 for numerical Ψ values.</p>
+        <p class="subtle">Rows are compared with columns. All evaluates Ψ dominance for every selected metric; choose r = 0, 1, 2, or ∞ (eventual sign) for a single metric.</p>
         <div class="subject-panel">
           <div class="subject-header">
             <label for="subjectSearch">FIND SUBJECT<input id="subjectSearch" type="search" placeholder="Clips, coverage, concordance…" autocomplete="off"></label>
@@ -109,14 +110,14 @@
         </div>
         <p class="subtle" id="dominanceContext"></p>
         <p class="dominance-key" id="dominanceLegend" aria-label="Matrix legend">
-          <strong class="legend-yes">YES</strong> dominates · <strong class="legend-no">NO</strong> does not · <strong>—</strong> no comparison.
+          <strong class="legend-yes">Blue YES</strong> row dominates · <strong class="legend-no">Red NO</strong> column dominates · <strong>—</strong> neither direction demonstrated.
           Results use the available paired cases; select a cell for details.
         </p>
         <p class="dominance-key" id="momentLegend" hidden>
           <strong class="legend-yes">Blue +</strong> row advantage ·
           <strong class="legend-no">Red −</strong> row disadvantage ·
           <strong>0</strong> tie · <strong>—</strong> no comparison.
-          Ψ(0) is mean sign, Ψ(1) is mean difference, and Ψ(2) is mean signed squared difference.
+          Ψ(0) is mean sign, Ψ(1) is mean difference, and Ψ(2) is mean signed squared difference; ∞ shows the eventual sign, not the literal limit.
         </p>
         <div class="table-scroll" id="dominanceMatrix"></div>
         <aside id="dominanceDetails" class="detail-panel" aria-live="polite"></aside>

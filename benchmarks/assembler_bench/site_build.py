@@ -122,12 +122,13 @@ def validate_public_site(site=SITE):
             ('<option value="all" selected>All</option>',
              '<option value="0">0</option>',
              '<option value="1">1</option>',
-             '<option value="2">2</option>')) or
-            'function moment(entry, exponent)' not in subjects or
+             '<option value="2">2</option>',
+             '<option value="Infinity">∞ (sign)</option>')) or
+            'function moment(entry, exponent, context)' not in subjects or
             'BenchSubjects.moment(' not in js or
             'params.set("psi_r",state.psiExponent)' not in js or
             'params.set("psi_metric",state.psiMetric)' not in js):
-        raise ValueError("matrix lacks checked-metric Ψ(0,1,2) numeric views")
+        raise ValueError("matrix lacks checked-metric Ψ(0,1,2,∞) numeric views")
     if any(token not in js for token in ("function toolLabelHtml(",
                                           "function na(",
                                           "function methodNotes(")):

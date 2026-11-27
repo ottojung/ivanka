@@ -292,3 +292,8 @@ section.dominance,section.diagnostics{margin-top:61px}
 .global-notice[hidden]{display:none}
 .global-notice{font-size:12px;line-height:1.6}
 .compare .bar-count:empty{visibility:hidden}
+
+/* Matrix axis colours match the winner colours, including method labels. */
+.psi-matrix th[scope="row"]{color:var(--blue)}
+.psi-matrix th[scope="col"]{color:var(--red)}
+.psi-matrix th[scope] .method-badge{color:inherit}

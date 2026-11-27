@@ -5,6 +5,8 @@ const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) =>
 const fmt = (x, digits = 2) => Number.isFinite(x)
   ? Number(x).toLocaleString("en", { maximumFractionDigits: digits }) : "—";
 const fmtPsi = x => {
+  if(x===Infinity)return "+∞";
+  if(x===-Infinity)return "−∞";
   if(!Number.isFinite(x))return "—";
   if(x===0)return "0";
   const abs=Math.abs(x);
@@ -614,12 +616,14 @@ function drawDominance() {
     return;
   }
   const r=numeric?Number(state.psiExponent):null;
+  const exponentLabel=r===Infinity?"∞":r;
   el("dominanceContext").textContent=numeric
-    ?"Ψ("+r+") · "+chosen.label+" ("+chosen.direction+"): "+
+    ?"Ψ("+exponentLabel+") · "+chosen.label+" ("+chosen.direction+"): "+
       (r===0?"mean sign difference (dimensionless)":
        r===1?"mean paired advantage ("+(
          chosen.key==="runtime"?"seconds":chosen.key==="alignment"
            ?"alignment units": "chosen metric units")+")":
+       r===Infinity?"eventual sign as r tends to infinity (largest uncancelled absolute paired difference)":
        "mean signed squared advantage (metric units squared)")+
       "."
     :selected.length+" metrics: "+
@@ -635,23 +639,24 @@ function drawDominance() {
         const result=BenchSubjects.evaluate(report,a,b,selected,snapshot,state.run);
         const verdict=BenchSubjects.observedVerdict(result);
         const evidence=BenchSubjects.evidence(result);
-        const shortLabel=
-          ["full-yes","observed-yes","partial-yes"].includes(verdict.kind)
-          ?(verdict.kind==="full-yes"?verdict.label:"YES")
-          :verdict.kind==="observed-no"?"NO":"—";
+        const reverse=numeric?null:BenchSubjects.observedVerdict(
+          BenchSubjects.evaluate(report,b,a,selected,snapshot,state.run));
+        const winner=numeric?0:BenchSubjects.winner(verdict,reverse);
+        const shortLabel=winner>0?"YES":winner<0?"NO":"—";
         const moment=numeric?BenchSubjects.moment(
-          result.entries.find(e=>e.key===chosen.key),r):null;
+          result.entries.find(e=>e.key===chosen.key),r,{run:state.run,snapshot,a,b}):null;
         const number=moment?.value;
         const numberClass=number===null?"psi-unavailable":
           number>0?"psi-positive":number<0?"psi-negative":"psi-zero";
         const label=numeric?(number===null?"—":fmtPsi(number)):shortLabel;
         const style=numeric?"psi-number "+numberClass:
-          "dom-"+result.status+" dom-scope-"+verdict.kind;
-        const meaning=numeric?"Ψ("+r+") for "+chosen.label+
+          winner>0?"psi-positive":winner<0?"psi-negative":"psi-zero";
+        const meaning=numeric?"Ψ("+exponentLabel+") for "+chosen.label+
           ": "+(number===null?"numeric value unavailable":fmtPsi(number))+
           "; "+(moment?.paired||0)+" paired cases":
-          "Does "+a+" dominate "+b+" on all "+selected.length+
-          " selected metrics? "+verdict.label+" — "+verdict.explanation;
+          (winner>0?a+" dominates "+b:winner<0?b+" dominates "+a:
+          "Neither direction demonstrated strict dominance on all selected metrics")+
+          " · Row: "+verdict.explanation+" · Column: "+reverse.explanation;
         return '<td class="'+esc(style)+'"><button type="button" data-dominates-a="'+
           esc(a)+'" data-dominates-b="'+esc(b)+'" title="'+
           esc(meaning)+(evidence.description?' · Observed: '+
@@ -667,17 +672,24 @@ function drawDominance() {
       const result=BenchSubjects.evaluate(report,a,b,selected,snapshot,state.run);
       const verdict=BenchSubjects.observedVerdict(result);
       const complete=BenchSubjects.verdict(result.status);
+      const reverseVerdict=BenchSubjects.observedVerdict(
+        BenchSubjects.evaluate(report,b,a,selected,snapshot,state.run));
+      const winner=BenchSubjects.winner(verdict,reverseVerdict);
       const numericEntry=numeric?result.entries.find(
         entry=>entry.key===chosen.key):null;
-      const number=numeric?BenchSubjects.moment(numericEntry,r):null;
-      const momentDetails=numeric?'<p>Displayed Ψ('+r+') on '+
+      const number=numeric?BenchSubjects.moment(numericEntry,r,{run:state.run,snapshot,a,b}):null;
+      const momentDetails=numeric?'<p>Displayed Ψ('+exponentLabel+') on '+
         esc(chosen.label)+': <strong>'+esc(fmtPsi(number.value))+
         '</strong> · '+number.paired+'/'+number.expected+
         ' paired cases.</p>':'';
       details.innerHTML='<h3>'+toolLabelHtml(a)+' versus '+
         toolLabelHtml(b)+' · '+selected.length+
         ' selected subjects</h3>'+momentDetails+
-        '<p>Observed paired-subset dominance: <strong>'+
+        (!numeric?'<p>Matrix result: <strong>'+
+          esc(winner>0?toolLabel(a)+" dominates":winner<0?toolLabel(b)+" dominates":
+            "Neither direction demonstrated dominance")+
+          '</strong>. Column evidence: '+esc(reverseVerdict.explanation)+'.</p>':'')+
+        '<p>Observed paired-subset dominance (row versus column): <strong>'+
         esc(verdict.label)+'</strong> — '+esc(verdict.explanation)+
         ' · '+esc(verdict.scope)+'. Full-cohort status: <strong>'+
         esc(complete.label)+'</strong>.</p>'+
@@ -853,7 +865,7 @@ async function main() {
     state.firstTool=params.get("first");
     state.tool=params.get("competitor");
     el("search").value=params.get("search")||"";
-    state.psiExponent=["all","0","1","2"].includes(params.get("psi_r"))
+    state.psiExponent=["all","0","1","2","Infinity"].includes(params.get("psi_r"))
       ?params.get("psi_r"):"all";
     state.psiMetric=params.get("psi_metric")||"alignment";
     drawSubjectControls();

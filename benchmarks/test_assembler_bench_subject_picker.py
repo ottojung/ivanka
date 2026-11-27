@@ -173,11 +173,49 @@ console.log('PARTIAL_MOMENT_SYMMETRY_OK');
         js=(SITE/"app.js").read_text()
         self.assertIn("const fmtPsi =",js)
 
+    def test_infinity_sign_and_two_direction_winners(self):
+        self._node_current("""
+const assert=require('assert');
+const calc=require(process.argv[1]);
+const runs=require(process.argv[2]).runs;
+const metric={key:'alignment',label:'Alignment',direction:'higher'};
+for(const run of runs){
+ for(const a of run.tools)for(const b of run.tools){
+  if(a===b)continue;
+  const x=calc.evaluate(run.dominance_matrix,a,b,[metric]);
+  const y=calc.evaluate(run.dominance_matrix,b,a,[metric]);
+  const v=calc.moment(x.entries[0],Infinity).value;
+  const w=calc.moment(y.entries[0],Infinity).value;
+  if(v!==null&&w!==null)assert(v===-w);
+  const vx=calc.observedVerdict(x),vy=calc.observedVerdict(y);
+  assert(calc.winner(vx,vy)===-calc.winner(vy,vx));
+ }
+}
+assert.equal(calc.tailSign([10,-10,-3,2]),-1);
+assert.equal(calc.tailSign([.8,-.8,.5]),1);
+assert.equal(calc.tailSign([3,-3,0]),0);
+const entry={paired:1,expected:3,observed:{gains:1,losses:0,ties:0}};
+assert.equal(calc.moment(entry,Infinity).value,Infinity);
+assert.equal(calc.moment({...entry,observed:{gains:0,losses:1,ties:0}},
+ Infinity).value,-Infinity);
+assert.equal(calc.moment({...entry,observed:{gains:0,losses:0,ties:1}},
+ Infinity).value,0);
+assert.equal(calc.moment({...entry,paired:0},Infinity).value,null);
+const yes={kind:'observed-yes',label:'YES'},no={kind:'observed-no',label:'NO'};
+assert.equal(calc.winner(no,no),0);
+assert.equal(calc.winner(yes,no),1);
+assert.equal(calc.winner(no,yes),-1);
+assert.equal(calc.winner({kind:'partial-yes',label:'YES'},no),0);
+""")
+        css=(SITE/"style.css").read_text()
+        self.assertIn('th[scope="row"]{color:var(--blue)}',css)
+        self.assertIn('th[scope="col"]{color:var(--red)}',css)
+
     def test_psi_selector_is_independent_and_shareable(self):
         html=(SITE/"index.html").read_text()
         app=(SITE/"app.js").read_text()
         css=(SITE/"style.css").read_text()
-        for option in ('all','0','1','2'):
+        for option in ('all','0','1','2','Infinity'):
             self.assertIn('value="'+option+'"',html)
         self.assertIn('id="psiMetric"',html)
         self.assertIn('id="momentLegend"',html)

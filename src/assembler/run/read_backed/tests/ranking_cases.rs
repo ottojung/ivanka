@@ -10,6 +10,7 @@ fn breadth_pair_support_beats_short_count_bias() {
     let stats = scoring::Statistics {
         depth: vec![],
         pair_masks: vec![],
+        exclusive_masks: vec![],
         pairs: vec![410, 578],
         coverage: vec![1116, 420],
         spans: vec![vec![], vec![]],
@@ -23,6 +24,7 @@ fn narrow_dense_contig_can_beat_long_unsupported_extension() {
     let stats = scoring::Statistics {
         depth: vec![],
         pair_masks: vec![],
+        exclusive_masks: vec![],
         pairs: vec![8416, 3191],
         coverage: vec![466, 1220],
         spans: vec![vec![], vec![]],

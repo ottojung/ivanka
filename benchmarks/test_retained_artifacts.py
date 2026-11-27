@@ -105,6 +105,29 @@ class RetainedArtifactsTests(unittest.TestCase):
             for name in ("nuc.csv", "conseq.fasta", "metrics.json"):
                 self.assertEqual((arm / name).read_text(), "evidence")
 
+    def test_visual_retirement_reports_actual_allocated_bytes(self):
+        with TemporaryDirectory() as d:
+            arm = Path(d) / "arm"
+            deep = arm / "diagnostics" / "plots"
+            deep.mkdir(parents=True)
+            visuals = [arm / "coverage.svg", deep / "figure.pdf"]
+            expected_apparent = 0
+            expected_allocated = 0
+            for path in visuals:
+                payload = ("x" * 4096) if path.name == "figure.pdf" else "vector"
+                path.write_text(payload)
+                info = path.stat()
+                expected_apparent += info.st_size
+                expected_allocated += info.st_blocks * 512
+            report = remove_visuals(arm)
+            self.assertEqual(report["removed_images"], 2)
+            self.assertEqual(report["removed_image_bytes"], expected_apparent)
+            self.assertEqual(report["removed_image_allocated_bytes"],
+                             expected_allocated)
+            replay = remove_visuals(arm)
+            self.assertEqual(replay["removed_images"], 0)
+            self.assertEqual(replay["removed_image_allocated_bytes"], 0)
+
     def test_workspace_inventory_cannot_infer_terminal_liveness(self):
         with TemporaryDirectory() as d:
             workspace = Path(d)

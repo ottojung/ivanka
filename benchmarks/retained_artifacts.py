@@ -313,6 +313,7 @@ def remove_visuals(arm):
     root = arm.resolve()
     removed = 0
     bytes_removed = 0
+    allocated_removed = 0
     for parent, dirs, files in os.walk(arm, followlinks=False):
         dirs[:] = [name for name in dirs
                    if not (Path(parent) / name).is_symlink()]
@@ -323,10 +324,13 @@ def remove_visuals(arm):
             if not path.is_file():
                 continue
             _assert_inside(path, root)
-            bytes_removed += path.stat().st_size
+            info = path.stat()
+            bytes_removed += info.st_size
+            allocated_removed += info.st_blocks * 512
             path.unlink()
             removed += 1
-    return {"removed_images": removed, "removed_image_bytes": bytes_removed}
+    return {"removed_images": removed, "removed_image_bytes": bytes_removed,
+            "removed_image_allocated_bytes": allocated_removed}
 
 
 def seal_terminal_evidence(arm, evidence, source_hashes,

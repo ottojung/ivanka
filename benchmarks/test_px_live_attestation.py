@@ -43,11 +43,32 @@ class AttestationHarness(unittest.TestCase):
         self.locked = False
         self.now = 1000.0
         self.mods = self.base / "mods"
+        self._fixture_roots = {}
+        self._missing_roots = set()
+        orig_is_dir = Path.is_dir
+
+        def _is_dir(path_obj):
+            s = str(path_obj)
+            if s in self._missing_roots:
+                return False
+            if s in self._fixture_roots:
+                return self._fixture_roots[s].is_dir()
+            return orig_is_dir(path_obj)
+
+        self._orig_is_dir = orig_is_dir
+        Path.is_dir = _is_dir
+        self.addCleanup(self._restore_is_dir)
+
+    def _restore_is_dir(self):
+        Path.is_dir = self._orig_is_dir
 
     def code_root(self, root):
-        path = self.base / Path(root).name
-        (path / ".git").mkdir(parents=True, exist_ok=True)
-        return path
+        root = str(root)
+        if root not in self._fixture_roots:
+            path = self.base / Path(root).name
+            (path / ".git").mkdir(parents=True, exist_ok=True)
+            self._fixture_roots[root] = path
+        return self._fixture_roots[root]
 
     def modules(self, root, table):
         self.code_root(root)
@@ -216,6 +237,13 @@ class PreCutoverTests(AttestationHarness):
                            % (live.NEW_ROOT, live.OLD_ROOT, live.OLD_ROOT)).encode())
         blocked = live.attest(phase="pre_cutover", **opts)
         self.assertIn("wrong_code_root:watchdog", blocked["blockers"])
+
+    def test_missing_code_root_is_blocker(self):
+        opts = self.build("pre_cutover")
+        self._missing_roots.add(str(live.OLD_ROOT))
+        blocked = live.attest(phase="pre_cutover", **opts)
+        self.assertIn("code_root_missing:watchdog", blocked["blockers"])
+        self.assertFalse(blocked["ready"])
 
     def test_module_byte_drift_is_blocker(self):
         opts = self.build("pre_cutover")

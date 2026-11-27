@@ -15,15 +15,15 @@ is gated on watchdog deployment plus an exact operator slot token.
 | Candidate binary | `8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786` | native release build, verified present; NOT rebuilt |
 | Previous hwe8M runner | `babc4dba90d7753a18458f284951c3452c26e8ef` | `fix/p1-bounded-pilot-runner-integration`, base `0e6969fd` |
 | Prior rebase (superseded) | `7567302af86593e9bff9ac69fc6d13162dd51d28` | was on exact PR520 `1b6e88c0`; bundle retained |
-| Rebase target | `7c2bb512b67d06e9bb987688eed706f6d500f3d0` | **actual current integration base** (current `main` tip at reconciliation time); includes merged PR535 copy-overlay admission (`165a86b38c`, head `39317f021f`) and merged PR536 guard (`091f56275ae823cb3291b81dbdf016fcf16c3ea0`, corrected head `6e6886a8`). This is the controller's `INTEGRATION_BASE`. |
-| Stale integration base (explicitly rejected) | `1b6e88c0…` / `aad9a2cd…` / `b185c7f2…` / `3fb720c7…` / `9f810867…` | earlier PR520/PR527/pre-merge bases; none is the actual rebase base. `INTEGRATION_BASE` MUST be `7c2bb512b67d06e9bb987688eed706f6d500f3d0`; regression tests pin this value so it cannot silently drift again. |
+| Rebase target | `07231fa1a06b2cdd7d43d9896935f5050b7df4f5` | **actual current integration base** (current `main` tip at reconciliation time); includes merged PR535 copy-overlay admission (`165a86b38c`, head `39317f021f`), merged PR536 guard (`091f56275ae823cb3291b81dbdf016fcf16c3ea0`, corrected head `6e6886a8`) and PR550 posthoc diagnostics. This is the controller's `INTEGRATION_BASE`. |
+| Stale integration base (explicitly rejected) | `1b6e88c0…` / `aad9a2cd…` / `b185c7f2…` / `3fb720c7…` / `9f810867…` / `7c2bb512…` | earlier PR520/PR527/pre-merge bases; none is the actual rebase base. `INTEGRATION_BASE` MUST be `07231fa1a06b2cdd7d43d9896935f5050b7df4f5`; regression tests pin this value so it cannot silently drift again. |
 | This branch | `science/p1-bounded-pilot-950fe331-on-pr527-20261126` | clean worktree, additive P1 pilot controller files rebased onto current main |
 | Exact head | `git rev-parse HEAD` on the pushed branch; exact tip SHA posted to issue `jshCHOLY4i9mLYkjfdFyPv-cervical` and retained in the operator handoff | linear chain on top of current main; no force-push / history rewrite except explicit force-with-lease by operator |
 | Fallback bundle | `p1-pilot-7567302a.bundle` (prior base) — verify with prerequisite `1b6e88c0`; the current source is the rebased branch above | offline provenance only |
 | Integration base diff | additive: runner + tests + watchdog readiness probe + manifests + Containerfiles + runbooks; **zero** guard/frozen/source changes | additive only |
 
 The stale `63becaa4…` / `7567302a…` / `8bcc47b8…` (base `aad9a2cd…`) / PR520 /
-`b185c7f2…` / `9f810867…` rebase references are superseded by this current-main
+`b185c7f2…` / `9f810867…` / `7c2bb512…` rebase references are superseded by this current-main
 rebase. Rebase recipe (performed in the existing worktree):
 ```sh
 git fetch origin main
@@ -114,7 +114,7 @@ reviewed guard pins, exact 950fe331/PCR candidate artifacts, and frozen truth.
 | `benchmarks/expanded/p1_bounded_pilot_runner.py` | runnable controller (`python -m expanded.p1_bounded_pilot_runner`), `--check` / `--armed --slot` |
 | `benchmarks/test_p1_bounded_pilot_runner.py` | 26 deterministic injected tests, no live podman; 8 assert shared-boundary fail-closed |
 | `benchmarks/expanded/p1_pilot_cases.json` | source-pinned case manifest (SHA256 `fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de`) |
-| `benchmarks/expanded/p1_pilot_image_manifest.json` | source-pinned image manifest (SHA256 `087241b77d39b27df2588c28d8dcf96ce2191e32d4e767d4621f5ebb640539b5`) — source `950fe331…`, binary `8569290d…` verified on disk; integration fields track current main integration base `7c2bb512…` |
+| `benchmarks/expanded/p1_pilot_image_manifest.json` | source-pinned image manifest (SHA256 `1e2ac3fa6c688c3dc7bc45e04a59981d2dabbb4dddf7fb3e84c7aad0bf9dd9cb`) — source `950fe331…`, binary `8569290d…` verified on disk; integration fields track current main integration base `07231fa1…` |
 | `benchmarks/expanded/p1_watchdog_readiness.py` | read-only s6-service + ALIVE readiness probe; no arm/install/write |
 | `benchmarks/test_p1_watchdog_readiness.py` | 12 deterministic tests over a simulated s6 layout |
 | `benchmarks/expanded/Containerfile.p1-pilot-950fe331-binary-only` | prepared, **not built** |
@@ -243,18 +243,18 @@ PYTHONPATH=.:benchmarks python3 -m pytest -q \
 python3 -m ruff check --select E4,E9,F,B006,B018,B023 \
   benchmarks/expanded/p1_bounded_pilot_runner.py \
   benchmarks/test_p1_bounded_pilot_runner.py   # All checks passed
-git diff --check 7c2bb512b67d06e9bb987688eed706f6d500f3d0 -- .   # clean
+git diff --check 07231fa1a06b2cdd7d43d9896935f5050b7df4f5 -- .   # clean
 ```
 
 To inspect the exact source in a clean clone:
 ```sh
 git fetch origin science/p1-bounded-pilot-950fe331-on-pr527-20261126
 git rev-parse FETCH_HEAD   # exact tip SHA posted to the P1 board
-git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach 7c2bb512…
+git log --format='%H %P' -1 FETCH_HEAD   # parent chain MUST reach 07231fa1…
 ```
 
 ## 6b. Dependency status and prospective guard pin
-- This candidate is integrated on current main `7c2bb512b67d06e9bb987688eed706f6d500f3d0`,
+- This candidate is integrated on current main `07231fa1a06b2cdd7d43d9896935f5050b7df4f5`,
   which already contains the reviewed+merged PR536 guard at merge commit
   `091f56275ae823cb3291b81dbdf016fcf16c3ea0` (corrected head `6e6886a8` was
   independently GO'd). `verify_guard_source_pins()` pins those exact source

@@ -13,7 +13,7 @@ from unittest import mock
 from expanded import p1_bounded_pilot_runner as r
 from expanded import p1_watchdog_readiness as w
 
-MERGED_HEAD = "7c2bb512b67d06e9bb987688eed706f6d500f3d0"
+MERGED_HEAD = "07231fa1a06b2cdd7d43d9896935f5050b7df4f5"
 BINARY_SHA = "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786"
 IMAGE = "a" * 64
 
@@ -369,11 +369,35 @@ class ProspectiveGuardPinTests(unittest.TestCase):
             r.verify_guard_source_pins(base)
 
 
+class CopyOverlayAdmissionPinTests(unittest.TestCase):
+    def test_merged_pr535_admission_pinned_source_only(self):
+        proof = r.verify_copy_overlay_admission_pins()
+        self.assertEqual(proof["merge"], r.COPY_OVERLAY_ADMISSION_MERGE)
+        self.assertEqual(proof["pr_head"], r.COPY_OVERLAY_ADMISSION_PR_HEAD)
+        self.assertTrue(proof["prospective"])
+        self.assertFalse(proof["deployed"])
+        self.assertFalse(proof["build_executed"])
+        self.assertEqual(len(proof["digests"]), 4)
+        self.assertEqual(proof["digests"]["watchdog_cli"],
+                         "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369")
+
+    def test_mismatched_admission_source_refused(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name)
+        for name, (relative, _digest) in r.COPY_OVERLAY_ADMISSION_DIGESTS.items():
+            path = base / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(name)
+        with self.assertRaises(ValueError):
+            r.verify_copy_overlay_admission_pins(base)
+
+
 class SeparatePcrCandidateTests(unittest.TestCase):
     def test_existing_950fe331_pin_untouched(self):
         path = Path(r.__file__).with_name("p1_pilot_image_manifest.json")
         self.assertEqual(r.sha256(path),
-                         "087241b77d39b27df2588c28d8dcf96ce2191e32d4e767d4621f5ebb640539b5")
+                         "1e2ac3fa6c688c3dc7bc45e04a59981d2dabbb4dddf7fb3e84c7aad0bf9dd9cb")
         doc = json.loads(path.read_text())
         self.assertEqual(doc["candidate_source_commit"], r.SOURCE_COMMIT)
 

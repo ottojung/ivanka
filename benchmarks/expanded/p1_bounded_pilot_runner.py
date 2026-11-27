@@ -73,7 +73,7 @@ STATUS = "ATTEMPTED_NOT_QUALIFIED"
 SOURCE_COMMIT = "950fe331dfcd857011bfd63f9eeca92462708545"
 BINARY_SHA = "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786"
 PARENT_IMAGE = ORIGINAL_IVANKA_IMAGE
-INTEGRATION_BASE = "7c2bb512b67d06e9bb987688eed706f6d500f3d0"
+INTEGRATION_BASE = "07231fa1a06b2cdd7d43d9896935f5050b7df4f5"
 
 CASES_MANIFEST = Path(__file__).with_name("p1_pilot_cases.json")
 IMAGE_MANIFEST = Path(__file__).with_name("p1_pilot_image_manifest.json")
@@ -82,7 +82,7 @@ CONTAINERFILE = Path(__file__).with_name(
 
 PINS_V2 = {
     "cases_manifest": "fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de",
-    "image_manifest": "087241b77d39b27df2588c28d8dcf96ce2191e32d4e767d4621f5ebb640539b5",
+    "image_manifest": "1e2ac3fa6c688c3dc7bc45e04a59981d2dabbb4dddf7fb3e84c7aad0bf9dd9cb",
     "storage_conf": "fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21",
     "physical_spec": "478c1b7b68943ac5e1ef565c257fd96ba6871184425ace80b026dd2b18cf8f87",
 }
@@ -296,6 +296,45 @@ def verify_guard_source_pins(bench_dir=None):
         got[name] = actual
     return {"head": REVIEWED_GUARD_HEAD, "digests": got,
             "prospective": True, "deployed": False}
+
+
+# PR535 copy-only build admission is merged into this base; bind its exact
+# source so a guarded pilot cannot silently use an ungated/altered launcher.
+# Deployment of a built image remains a separate operator action.
+COPY_OVERLAY_ADMISSION_MERGE = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+COPY_OVERLAY_ADMISSION_PR_HEAD = "39317f021f4e5c00f5da859bcdcf755de4c6d353"
+COPY_OVERLAY_ADMISSION_DIGESTS = {
+    "copy_overlay": ("fail_closed_guard/copy_overlay.py",
+                     "f59049e5c0a8dd3e042bd723ffbeb3caaba2af386b7158016bf160824300da31"),
+    "copy_overlay_helper": ("fail_closed_guard/copy_overlay_helper.py",
+                            "8242d81c9c6b169dfbfac1b837ae9c23e1e3f1259190438871dee89dccdf0bc5"),
+    "build": ("fail_closed_guard/build.py",
+              "edf6585f84f919db6d677e34a4597dc57e9dcc6d2d77ab06e81ee6c33c9c80dd"),
+    "watchdog_cli": ("fail_closed_guard/watchdog_cli.py",
+                     "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369"),
+}
+
+
+def verify_copy_overlay_admission_pins(bench_dir=None):
+    """Prove the merged PR535 COPY-only admission source is exact.
+
+    This is a source/prospective pin only: it does not build, run, import,
+    deploy or claim a ready watchdog. The pilot still needs the live
+    operator-bound watchdog proof before any arm.
+    """
+    base = Path(bench_dir) if bench_dir else Path(__file__).resolve().parents[1]
+    got = {}
+    for name, (relative, expected) in COPY_OVERLAY_ADMISSION_DIGESTS.items():
+        path = base / relative
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"copy-overlay admission module missing: {name}")
+        actual = sha256(path)
+        if actual != expected:
+            raise ValueError(f"copy-overlay admission pin mismatch: {name}")
+        got[name] = actual
+    return {"merge": COPY_OVERLAY_ADMISSION_MERGE,
+            "pr_head": COPY_OVERLAY_ADMISSION_PR_HEAD, "digests": got,
+            "prospective": True, "deployed": False, "build_executed": False}
 
 
 def pinned_podman_env(storage_conf=None, *, expected_sha=None):
@@ -946,6 +985,7 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
 
     verify_pins(Path(args.data), Path(args.frozen_results), Path(args.timer))
     guard_pins = verify_guard_source_pins()
+    admission_pins = verify_copy_overlay_admission_pins()
     store = verify_px_store_binding(
         store_conf or args.storage_conf, expected_sha=PINS_V2["storage_conf"])
     shared = verify_shared_px_boundary(
@@ -974,6 +1014,7 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         "guard_status": "NO-GO pending independent reviewer approval and operator slot",
         "integration_base": INTEGRATION_BASE,
         "reviewed_guard_pins": guard_pins,
+        "copy_overlay_admission_pins": admission_pins,
         "candidate_source_commit": SOURCE_COMMIT,
         "candidate_image": args.image,
         "candidate_image_contract": contract,

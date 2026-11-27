@@ -2,6 +2,8 @@ use super::{
     append_preserving_diversity, canonical_kmer, select_supported_contigs,
     select_supported_contigs_with_kmers, write_snv_audit,
 };
+#[cfg(feature = "ouj-funnel-trace")]
+use super::funnel;
 use std::error::Error;
 
 // Selection uses only read-supported contigs. The ordinary FASTA is
@@ -22,6 +24,16 @@ pub(super) fn write(
         protected: protected_seed_count,
         rescue,
     } = prepared;
+    #[cfg(feature = "ouj-funnel-trace")]
+    funnel::emit(
+        out,
+        "ranking_before",
+        &contigs
+            .iter()
+            .enumerate()
+            .map(|(i, seq)| (i, seq.as_slice(), supporting_counts[i]))
+            .collect::<Vec<_>>(),
+    )?;
     let (mut contigs, audit) = if audit_path.is_some() {
         select_supported_contigs_with_kmers(
             contigs,
@@ -36,6 +48,16 @@ pub(super) fn write(
             Vec::new(),
         )
     };
+    #[cfg(feature = "ouj-funnel-trace")]
+    funnel::emit(
+        out,
+        "ranking_after",
+        &contigs
+            .iter()
+            .enumerate()
+            .map(|(i, seq)| (i, seq.as_slice(), 0))
+            .collect::<Vec<_>>(),
+    )?;
     if let Some(rescue) = rescue {
         // Never exceed the user-requested max-contigs cap. Replace only a
         // non-protected path whose canonical 31-mers remain represented;

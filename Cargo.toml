@@ -4,5 +4,8 @@ version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 
+[features]
+ouj-funnel-trace = []
+
 [dependencies]
 flate2 = "1.1"

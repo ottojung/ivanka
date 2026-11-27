@@ -1,3 +1,5 @@
+#[cfg(feature = "ouj-funnel-trace")]
+use super::funnel;
 use super::{assemble_candidates, balanced_seed_candidates, rescue_short, seeds, Config, Reads};
 use std::error::Error;
 
@@ -31,6 +33,16 @@ pub(super) fn assemble(config: &Config) -> Result<Prepared, Box<dyn Error>> {
         &reads,
         config.max_pairs,
         &contigs,
+    )?;
+    #[cfg(feature = "ouj-funnel-trace")]
+    funnel::emit(
+        &config.output,
+        "native",
+        &contigs
+            .iter()
+            .enumerate()
+            .map(|(i, seq)| (i, seq.as_slice(), supporting_counts[i]))
+            .collect::<Vec<_>>(),
     )?;
     eprintln!(
         concat!(

@@ -5,6 +5,7 @@ lease, STOP or live benchmark is touched.
 """
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,7 @@ from unittest import mock
 
 from expanded import p1_bounded_pilot_runner as r
 from expanded import p1_watchdog_readiness as w
+from p1_portable_fixtures import build as build_postbuild_fixture
 
 MERGED_HEAD = "07231fa1a06b2cdd7d43d9896935f5050b7df4f5"
 BINARY_SHA = "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786"
@@ -532,44 +534,26 @@ class PortableArtifactPlanTests(unittest.TestCase):
             r.require_portable_image_identity_verified(
                 row["source_commit"], "0" * 64)
 
-    def _portable_postbuild_receipt(self, root, *, image="1" * 64, mutate=None):
+    def _row(self):
         plan = r.load_portable_plan()
-        row = next(c for c in plan["candidates"]
-                   if c["source_commit"] == r.SOURCE_COMMIT)
-        base_layers = ["sha256:" + "a" * 64]
-        layers = base_layers + ["sha256:" + "b" * 64]
-        receipt = {
-            "schema": r.PORTABLE_POSTBUILD_SCHEMA,
-            "prebuild_plan_sha256": r.PORTABLE_PLAN_SHA256,
-            "build_executed": True,
-            "image_identity_verified": True,
-            "source_commit": row["source_commit"],
-            "native_binary_sha256": row["native_binary_sha256"],
-            "portable_binary_sha256": row["portable_binary_sha256"],
-            "portable_binary_path": row["portable_binary_path"],
-            "image_digest": image,
-            "portable_image": image,
-            "copy_overlay_image_receipt": {
-                "image": image,
-                "one_layer_overlay": True,
-                "base_layers": base_layers,
-                "layers": layers,
-                "labels": {
-                    "org.ottojung.ivanka.source-commit": row["source_commit"],
-                    "org.ottojung.micall.frozen-image-id": r.PARENT_IMAGE,
-                    "org.ottojung.ivanka.binary-sha256": row["portable_binary_sha256"],
-                    "org.ottojung.ivanka.frozen-manifest-sha256": r.FROZEN_MANIFEST_SHA256,
-                    "org.ottojung.ivanka.pilot-role": row["role"],
-                },
-            },
-        }
-        if mutate:
-            mutate(receipt)
-        path = Path(root) / "portable-postbuild.json"
-        path.write_text(json.dumps(receipt))
-        return path
+        return next(c for c in plan["candidates"]
+                    if c["source_commit"] == r.SOURCE_COMMIT)
 
-    def _prepare_args(self, root, receipt, *, image="1" * 64):
+    def _fixture(self, root, *, row=None, image="1" * 64, mutate_result=None,
+                 mutate_receipt=None, **kwargs):
+        row = row or self._row()
+        return build_postbuild_fixture(
+            root, source_commit=row["source_commit"], role=row["role"],
+            portable_sha=row["portable_binary_sha256"],
+            native_sha=row["native_binary_sha256"],
+            portable_binary_path=row["portable_binary_path"],
+            prebuild_plan_sha=r.PORTABLE_PLAN_SHA256, image=image,
+            base_image=r.PARENT_IMAGE,
+            expected_labels=r.expected_portable_labels(row),
+            mutate_result=mutate_result, mutate_receipt=mutate_receipt,
+            **kwargs)
+
+    def _prepare_args(self, root, info, *, image="1" * 64, receipt_sha=None):
         root = Path(root)
         out = root / "evidence"
         return mock.Mock(
@@ -580,66 +564,194 @@ class PortableArtifactPlanTests(unittest.TestCase):
             lease_root=r.DEFAULT_LEASE_ROOT, disk_path=root,
             watchdog_path=root / "alive.json", owner="test-owner",
             cases=None, check=True, armed=False, slot=r.PENDING_SLOT,
-            portable_postbuild_receipt=receipt)
+            portable_postbuild_receipt=(info["receipt_path"] if info else None),
+            portable_postbuild_receipt_sha256=(
+                receipt_sha if receipt_sha is not None
+                else (info["receipt_sha"] if info else None)))
+
+    def _prepare_patches(self, args, graphroot="/px"):
+        return (
+            mock.patch.object(r, "verify_pins", return_value=True),
+            mock.patch.object(r, "pinned_podman_env",
+                              return_value={"CONTAINERS_STORAGE_CONF": "/pinned"}),
+            mock.patch.object(r, "verify_px_store_binding",
+                              return_value={"storage_conf": str(args.storage_conf),
+                                            "storage_conf_sha256": "f" * 64,
+                                            "graphroot": graphroot}),
+            mock.patch.object(r, "verify_shared_px_boundary",
+                              return_value={"shared": True}),
+            mock.patch.object(r, "verify_image_contract",
+                              return_value={"labels": {}, "parent": r.PARENT_IMAGE}),
+            mock.patch.object(r, "verify_image_layer_contract",
+                              return_value={"verified": True, "entries": {}}),
+            mock.patch.object(r, "_disk_free", return_value=33 * 1024 ** 3),
+        )
+
+    def _with_patches(self, patches, fn):
+        stack = __import__('contextlib').ExitStack()
+        with stack:
+            for patch in patches:
+                stack.enter_context(patch)
+            return fn()
 
     def test_prepare_requires_and_accepts_verified_portable_postbuild_receipt(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        receipt = self._portable_postbuild_receipt(tmp.name)
-        args = self._prepare_args(tmp.name, receipt)
-        with mock.patch.object(r, "verify_pins", return_value=True), \
-             mock.patch.object(r, "pinned_podman_env",
-                               return_value={"CONTAINERS_STORAGE_CONF": "/pinned"}), \
-             mock.patch.object(r, "verify_px_store_binding",
-                               return_value={"storage_conf": str(args.storage_conf),
-                                             "storage_conf_sha256": "f" * 64,
-                                             "graphroot": "/px"}), \
-             mock.patch.object(r, "verify_shared_px_boundary",
-                               return_value={"shared": True}), \
-             mock.patch.object(r, "verify_image_contract",
-                               return_value={"labels": {}, "parent": r.PARENT_IMAGE}), \
-             mock.patch.object(r, "verify_image_layer_contract",
-                               return_value={"verified": True, "entries": {}}), \
-             mock.patch.object(r, "_disk_free", return_value=33 * 1024 ** 3):
-            manifest = r.prepare(args, disk_usage_fn=lambda p: 33 * 1024 ** 3)
+        info = self._fixture(tmp.name)
+        args = self._prepare_args(tmp.name, info)
+        run = lambda: r.prepare(args, disk_usage_fn=lambda p: 33 * 1024 ** 3,
+                                copy_overlay_root=tmp.name)
+        manifest = self._with_patches(self._prepare_patches(args), run)
         self.assertEqual(manifest["candidate_image"], "1" * 64)
+        self.assertEqual(manifest["candidate_source_commit"], r.SOURCE_COMMIT)
         self.assertTrue(manifest["portable_postbuild_receipt"]["image_identity_verified"])
+        self.assertTrue(manifest["portable_postbuild_receipt"]
+                        ["copy_overlay_result"]["released"])
 
         args_missing = self._prepare_args(tmp.name, None)
         with self.assertRaisesRegex(ValueError, "portable postbuild receipt required"):
-            r.prepare(args_missing, disk_usage_fn=lambda p: 33 * 1024 ** 3)
+            r.prepare(args_missing, disk_usage_fn=lambda p: 33 * 1024 ** 3,
+                      copy_overlay_root=tmp.name)
         with self.assertRaisesRegex(ValueError, "portable postbuild receipt required"):
-            r.run(args_missing, disk_usage_fn=lambda p: 33 * 1024 ** 3)
+            r.run(args_missing, disk_usage_fn=lambda p: 33 * 1024 ** 3,
+                  copy_overlay_root=tmp.name)
 
-    def test_prepare_rejects_tampered_portable_postbuild_receipt(self):
+    def test_postbuild_receipt_requires_sha_pin(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        info = self._fixture(tmp.name)
+        args = self._prepare_args(tmp.name, info, receipt_sha=None)
+        args.portable_postbuild_receipt_sha256 = None
+        run = lambda: r.prepare(args, disk_usage_fn=lambda p: 33 * 1024 ** 3,
+                                copy_overlay_root=tmp.name)
+        with self.assertRaisesRegex(ValueError, "SHA pin required"):
+            self._with_patches(self._prepare_patches(args), run)
+        args_wrong = self._prepare_args(tmp.name, info, receipt_sha="0" * 64)
+        with self.assertRaisesRegex(ValueError, "receipt pin mismatch"):
+            self._with_patches(self._prepare_patches(args_wrong),
+                               lambda: r.prepare(args_wrong,
+                                                 disk_usage_fn=lambda p: 33 * 1024 ** 3,
+                                                 copy_overlay_root=tmp.name))
+
+    def test_prepare_rejects_tampered_portable_postbuild_evidence(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         cases = [
-            lambda rec: rec.__setitem__("prebuild_plan_sha256", "0" * 64),
-            lambda rec: rec.__setitem__("image_digest", "2" * 64),
-            lambda rec: rec["copy_overlay_image_receipt"].__setitem__("one_layer_overlay", False),
-            lambda rec: rec["copy_overlay_image_receipt"]["labels"].__setitem__(
-                "org.ottojung.ivanka.binary-sha256", "f" * 64),
+            dict(mutate_receipt=lambda rec: rec.__setitem__("prebuild_plan_sha256", "0" * 64)),
+            dict(mutate_receipt=lambda rec: rec.__setitem__("image_digest", "2" * 64)),
+            dict(mutate_receipt=lambda rec: rec["copy_overlay_result"].__setitem__("sha256", "0" * 64)),
+            dict(mutate_result=lambda res: res["image_receipt"].__setitem__("one_layer_overlay", False)),
+            dict(mutate_result=lambda res: res["image_receipt"]["labels"].__setitem__(
+                "org.ottojung.ivanka.binary-sha256", "f" * 64)),
+            dict(mutate_result=lambda res: res.__setitem__("status", "failed")),
+            dict(mutate_result=lambda res: res.__setitem__("exit_code", 1)),
+            dict(mutate_result=lambda res: res.__setitem__("plan_sha256", "f" * 64)),
+            dict(omit_release=True),
+            dict(fail_closed=True),
+            dict(wrong_release_proof=True),
+            dict(omit_result=True),
         ]
-        for mutate in cases:
-            receipt = self._portable_postbuild_receipt(tmp.name, mutate=mutate)
-            args = self._prepare_args(tmp.name, receipt)
-            with mock.patch.object(r, "verify_pins", return_value=True), \
-                 mock.patch.object(r, "pinned_podman_env",
-                                   return_value={"CONTAINERS_STORAGE_CONF": "/pinned"}), \
-                 mock.patch.object(r, "verify_px_store_binding",
-                                   return_value={"storage_conf": str(args.storage_conf),
-                                                 "storage_conf_sha256": "f" * 64,
-                                                 "graphroot": "/px"}), \
-                 mock.patch.object(r, "verify_shared_px_boundary",
-                                   return_value={"shared": True}), \
-                 mock.patch.object(r, "verify_image_contract",
-                                   return_value={"labels": {}, "parent": r.PARENT_IMAGE}), \
-                 mock.patch.object(r, "verify_image_layer_contract",
-                                   return_value={"verified": True, "entries": {}}), \
-                 mock.patch.object(r, "_disk_free", return_value=33 * 1024 ** 3):
-                with self.assertRaises(ValueError):
-                    r.prepare(args, disk_usage_fn=lambda p: 33 * 1024 ** 3)
+        for index, kwargs in enumerate(cases):
+            sub = Path(tmp.name) / f"case-{index}"
+            info = self._fixture(sub, **kwargs)
+            args = self._prepare_args(str(sub), info)
+            run = lambda a=args, s=str(sub): r.prepare(
+                a, disk_usage_fn=lambda p: 33 * 1024 ** 3, copy_overlay_root=s)
+            with self.assertRaises(ValueError):
+                self._with_patches(self._prepare_patches(args), run)
+
+
+class PortablePostbuildSeamTests(unittest.TestCase):
+    """Positive low-level seam: real image + layer verification, no mocks of it."""
+
+    def test_prepare_independently_verifies_portable_image_and_binary_layer(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        binary = root / "portable-binary"
+        binary.write_bytes(b"portable seam fixture binary")
+        binary_sha = r.sha256(binary)
+
+        plan = json.loads(json.dumps(r.load_portable_plan()))
+        row = dict(plan["candidates"][1])
+        pcr_commit = "19386765b40a4d57dce15c0984a731486b69121e"
+        role = row["role"]
+        row.update({"source_commit": pcr_commit,
+                    "portable_binary_sha256": binary_sha})
+        plan["candidates"][1] = row
+        plan_path = root / "portable-plan.json"
+        plan_path.write_text(json.dumps(plan, sort_keys=True))
+        plan_pin = r.sha256(plan_path)
+
+        image = "1" * 64
+        base_layers = ["sha256:" + "b" * 64]
+        added = "sha256:" + "c" * 64
+        info = build_postbuild_fixture(
+            root, source_commit=pcr_commit, role=role,
+            portable_sha=binary_sha, native_sha=row["native_binary_sha256"],
+            portable_binary_path=row["portable_binary_path"],
+            prebuild_plan_sha=plan_pin, image=image,
+            base_image=r.PARENT_IMAGE,
+            expected_labels=r.expected_portable_labels(row),
+            base_layers=base_layers, added_digest=added)
+
+        graphroot = root / "graphroot"
+        layer_id = "d" * 64
+        index_dir = graphroot / "overlay-layers"
+        index_dir.mkdir(parents=True)
+        (index_dir / "layers.json").write_text(json.dumps([
+            {"id": layer_id, "diff-digest": added,
+             "compressed-diff-digest": added}]))
+        target = graphroot / "overlay" / layer_id / "diff" / "usr" / "local" / "bin"
+        target.mkdir(parents=True)
+        shutil.copyfile(binary, target / "ivanka")
+
+        expected_labels = r.expected_portable_labels(row)
+        layers = base_layers + [added]
+
+        def inspect(value, fmt):
+            if fmt == "{{.Id}}":
+                return 0, value
+            if fmt == "{{json .Config.Labels}}":
+                return 0, json.dumps(expected_labels)
+            if fmt == "{{json .RootFS.Layers}}":
+                return 0, json.dumps(base_layers if value == r.PARENT_IMAGE else layers)
+            raise AssertionError(fmt)
+
+        args = mock.Mock(
+            data=root / "data", frozen_results=root / "frozen.jsonl",
+            timer=root / "timer.py", out=root / "evidence", image=image,
+            commit=pcr_commit, storage_conf=root / "storage.conf",
+            lock=r.DEFAULT_LOCK, stop=r.DEFAULT_STOP,
+            lease_root=r.DEFAULT_LEASE_ROOT, disk_path=root,
+            watchdog_path=root / "alive.json", owner="test-owner",
+            cases=None, check=True, armed=False, slot=r.PENDING_SLOT,
+            portable_postbuild_receipt=info["receipt_path"],
+            portable_postbuild_receipt_sha256=info["receipt_sha"])
+
+        with mock.patch.object(r, "PORTABLE_PLAN", plan_path),              mock.patch.object(r, "PORTABLE_PLAN_SHA256", plan_pin),              mock.patch.object(r, "verify_pins", return_value=True),              mock.patch.object(r, "verify_guard_source_pins", return_value={}),              mock.patch.object(r, "verify_copy_overlay_admission_pins", return_value={}),              mock.patch.object(r, "verify_shared_px_boundary", return_value={"shared": True}),              mock.patch.object(r, "verify_px_store_binding",
+                               return_value={"storage_conf": str(args.storage_conf),
+                                             "storage_conf_sha256": "f" * 64,
+                                             "graphroot": str(graphroot)}),              mock.patch.object(r, "pinned_podman_env",
+                               return_value={"CONTAINERS_STORAGE_CONF":
+                                             r.SHARED_PX_BOUNDARY["storage_conf"]}):
+            manifest = r.prepare(args, image_inspect=inspect,
+                                 disk_usage_fn=lambda p: 33 * 1024 ** 3,
+                                 copy_overlay_root=root)
+
+        self.assertEqual(manifest["candidate_image"], image)
+        self.assertEqual(manifest["candidate_source_commit"], pcr_commit)
+        self.assertEqual(manifest["candidate_portable_role"], role)
+        self.assertEqual(manifest["candidate_image_contract"]["labels"],
+                         expected_labels)
+        self.assertEqual(manifest["added_layer_evidence"]["entries"],
+                         {"/usr/local/bin/ivanka": binary_sha})
+        # The native image manifest would reject this PCR source and binary.
+        with self.assertRaisesRegex(ValueError, "source commit differs"):
+            r.verify_image_contract(
+                image, pcr_commit,
+                env={"CONTAINERS_STORAGE_CONF": r.SHARED_PX_BOUNDARY["storage_conf"]},
+                inspect=inspect, image_manifest=r.load_image_manifest()[0])
 
 
 class SeparatePcrCandidateTests(unittest.TestCase):

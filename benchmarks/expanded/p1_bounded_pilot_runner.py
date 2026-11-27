@@ -40,7 +40,7 @@ import time
 import tomllib
 from pathlib import Path
 
-from benchmarks.fail_closed_guard import proc, startup, watchdog_contract
+from benchmarks.fail_closed_guard import lease, proc, startup, watchdog, watchdog_contract
 from benchmarks.fail_closed_guard import stop as guard_stop
 from benchmarks.fail_closed_guard import p1_harness
 from benchmarks.fail_closed_guard.errors import GuardExceeded
@@ -536,12 +536,47 @@ def normalize_digest(value):
     raise ValueError("invalid digest")
 
 
-def load_portable_postbuild_receipt(path, *, expected_sha=None):
+def expected_portable_labels(row):
+    """Exact labels the guarded COPY-only build must set for this role.
+
+    The binary label is the PORTABLE SHA, never the native pin; the source
+    commit is the candidate's own commit (for example the PCR candidate), not
+    the controller's default. Derived only from the immutable prebuild plan.
+    """
+    return {
+        "org.ottojung.ivanka.source-commit": row["source_commit"],
+        "org.ottojung.micall.frozen-image-id": PARENT_IMAGE,
+        "org.ottojung.ivanka.binary-sha256": row["portable_binary_sha256"],
+        "org.ottojung.ivanka.frozen-manifest-sha256": FROZEN_MANIFEST_SHA256,
+        "org.ottojung.ivanka.pilot-role": row["role"],
+    }
+
+
+def portable_image_contract(row):
+    """Per-portable-role image contract consumed by verify_image_contract."""
+    return {
+        "candidate_source_commit": row["source_commit"],
+        "expected_labels": expected_portable_labels(row),
+        "layer_contract": {
+            "kind": "one_layer_binary_only_overlay",
+            "no_source_or_truth_in_image": True,
+            "verify": ("child.RootFS.Layers[:-1] == parent.RootFS.Layers and "
+                       "the added layer contains only /usr/local/bin/ivanka "
+                       "with the pinned portable sha256"),
+            "binary_sha256": row["portable_binary_sha256"],
+        },
+    }
+
+
+def load_portable_postbuild_receipt(path, *, expected_sha):
+    """Load an authenticated postbuild receipt; SHA pin is mandatory."""
+    if not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
+        raise ValueError("portable postbuild receipt SHA pin required")
     target = Path(path)
     if target.is_symlink() or not target.is_file():
         raise ValueError("portable postbuild receipt missing or symlink")
     actual = sha256(target)
-    if expected_sha is not None and actual != expected_sha:
+    if actual != expected_sha:
         raise ValueError(f"portable postbuild receipt pin mismatch: {actual}")
     doc = json.loads(target.read_text())
     if doc.get("schema") != PORTABLE_POSTBUILD_SCHEMA:
@@ -549,14 +584,108 @@ def load_portable_postbuild_receipt(path, *, expected_sha=None):
     return doc, actual
 
 
-def verify_portable_postbuild_receipt(path, *, expected_sha=None,
-                                      source_commit=None, plan=None):
-    """Validate an authenticated postbuild receipt against copy_overlay evidence.
+def verify_copy_overlay_result(path, *, expected_sha, expected_plan_sha,
+                               expected_image, expected_labels, root=None):
+    """Validate the ACTUAL copy_overlay result.json and its durable journals.
 
-    The prebuild plan remains immutable; this separate receipt may only be
-    accepted when it binds the exact plan/candidate/portable bytes to a real
-    copy_overlay image receipt (digest, labels, base layers, one-layer overlay)
-    and a verified post-build image identity. No manual manifest build claim.
+    Nothing nested inside the postbuild receipt is trusted as build evidence:
+    the result file is SHA-pinned and its completion, exact plan sha, owner,
+    released lease proof, image receipt and absence of fail-closed evidence
+    are read from disk. The image/layer contract is independently inspected by
+    verify_image_contract/verify_image_layer_contract in prepare().
+    """
+    if not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
+        raise ValueError("copy_overlay result SHA pin required")
+    target = Path(path)
+    if target.is_symlink() or not target.is_file():
+        raise ValueError("copy_overlay result missing or symlink")
+    actual = sha256(target)
+    if actual != expected_sha:
+        raise ValueError(f"copy_overlay result pin mismatch: {actual}")
+    state = json.loads(target.read_text())
+    if not isinstance(state, dict):
+        raise ValueError("copy_overlay result schema invalid")
+    if state.get("tool") != "copy_overlay":
+        raise ValueError("copy_overlay result tool invalid")
+    if state.get("status") != "completed" or state.get("reason") is not None:
+        raise ValueError("copy_overlay result not completed cleanly")
+    if state.get("exit_code") != 0:
+        raise ValueError("copy_overlay result exit code nonzero")
+    if state.get("enforcement") != "userspace_observed":
+        raise ValueError("copy_overlay result enforcement invalid")
+    plan_sha = normalize_digest(state.get("plan_sha256"))
+    if plan_sha != normalize_digest(expected_plan_sha):
+        raise ValueError("copy_overlay result plan sha mismatch")
+    ident = "copy-" + plan_sha[:16]
+    if state.get("lease") != ident or state.get("owner") != ident:
+        raise ValueError("copy_overlay result lease/owner mismatch")
+
+    evidence = state.get("image_receipt")
+    if not isinstance(evidence, dict):
+        raise ValueError("copy_overlay result image receipt missing")
+    if evidence.get("image") != expected_image:
+        raise ValueError("copy_overlay result image mismatch")
+    if evidence.get("one_layer_overlay") is not True:
+        raise ValueError("copy_overlay result missing one-layer evidence")
+    base_layers = evidence.get("base_layers")
+    layers = evidence.get("layers")
+    if (not isinstance(base_layers, list) or not base_layers
+            or not isinstance(layers, list)
+            or [normalize_digest(x) for x in layers[:-1]] != [normalize_digest(x) for x in base_layers]
+            or len(layers) != len(base_layers) + 1
+            or normalize_digest(layers[-1]) == normalize_digest(base_layers[-1])):
+        raise ValueError("copy_overlay result layer evidence invalid")
+    labels = evidence.get("labels")
+    if not isinstance(labels, dict):
+        raise ValueError("copy_overlay result labels missing")
+    for key, value in expected_labels.items():
+        if labels.get(key) != value:
+            raise ValueError(f"copy_overlay result label mismatch: {key}")
+
+    root = Path(root or SHARED_PX_BOUNDARY["worker_root"])
+    try:
+        events = lease.events(root)
+        latest = lease.latest(events)
+        recorded = latest.get(ident)
+        bind = next((event for event in events
+                     if event.get("lease") == ident
+                     and event.get("state") == "active"
+                     and event.get("mode") == "copy_overlay"), None)
+        fail_closed = [event for event in watchdog.read_evidence(root)
+                       if event.get("worker") == ident
+                       and event.get("result") == "fail_closed"]
+    except GuardExceeded as exc:
+        raise ValueError(f"copy_overlay journal unavailable: {exc.reason}") from exc
+    if fail_closed:
+        raise ValueError("copy_overlay watchdog fail-closed evidence present")
+    if (not isinstance(bind, dict) or bind.get("owner") != ident
+            or bind.get("plan_sha256") != plan_sha
+            or bind.get("helper") is not True
+            or bind.get("base_image") != PARENT_IMAGE
+            or [normalize_digest(x) for x in (bind.get("base_layers") or [])]
+            != [normalize_digest(x) for x in base_layers]):
+        raise ValueError("copy_overlay lease bind evidence missing")
+    if not isinstance(recorded, dict) or recorded.get("state") != "released":
+        raise ValueError("copy_overlay lease not released")
+    if recorded.get("owner") != ident:
+        raise ValueError("copy_overlay lease released by foreign owner")
+    proof = state.get("teardown")
+    if (not isinstance(proof, dict) or not proof
+            or recorded.get("proof") != proof):
+        raise ValueError("copy_overlay release proof mismatch")
+    return {"path": str(target), "sha256": actual, "plan_sha256": plan_sha,
+            "lease": ident, "owner": ident, "released": True,
+            "fail_closed_events": 0, "image": expected_image,
+            "one_layer_overlay": True, "labels": labels}
+
+
+def verify_portable_postbuild_receipt(path, *, expected_sha,
+                                      source_commit=None, plan=None, root=None):
+    """Validate a pinned postbuild receipt against the actual copy_overlay build.
+
+    The immutable prebuild plan and its exact candidate/portable pins are bound
+    to a SHA-pinned receipt, which points at the actual copy_overlay result.json
+    (itself SHA-pinned). Self-declared nested evidence is never accepted.
     """
     doc, receipt_sha = load_portable_postbuild_receipt(
         path, expected_sha=expected_sha)
@@ -583,53 +712,34 @@ def verify_portable_postbuild_receipt(path, *, expected_sha=None,
     if image != normalize_digest(doc.get("portable_image")):
         raise ValueError("portable postbuild receipt image digest mismatch")
 
-    evidence = doc.get("copy_overlay_image_receipt")
-    if not isinstance(evidence, dict):
-        raise ValueError("portable postbuild receipt missing copy_overlay evidence")
-    if evidence.get("one_layer_overlay") is not True:
-        raise ValueError("portable postbuild receipt missing one-layer evidence")
-    if normalize_digest(evidence.get("image")) != image:
-        raise ValueError("portable postbuild receipt image evidence mismatch")
-    base_layers = evidence.get("base_layers")
-    layers = evidence.get("layers")
-    if (not isinstance(base_layers, list) or not base_layers
-            or not isinstance(layers, list)
-            or [normalize_digest(x) for x in layers[:-1]] != [normalize_digest(x) for x in base_layers]
-            or len(layers) != len(base_layers) + 1
-            or normalize_digest(layers[-1]) == normalize_digest(base_layers[-1])):
-        raise ValueError("portable postbuild receipt layer evidence invalid")
-    labels = evidence.get("labels")
-    expected_labels = {
-        "org.ottojung.ivanka.source-commit": commit,
-        "org.ottojung.micall.frozen-image-id": PARENT_IMAGE,
-        "org.ottojung.ivanka.binary-sha256": portable_sha,
-        "org.ottojung.ivanka.frozen-manifest-sha256": FROZEN_MANIFEST_SHA256,
-    }
-    if not isinstance(labels, dict):
-        raise ValueError("portable postbuild receipt labels missing")
-    for key, value in expected_labels.items():
-        if labels.get(key) != value:
-            raise ValueError(f"portable postbuild receipt label mismatch: {key}")
-    # The role label must be present and bound to the planned candidate.
-    if labels.get("org.ottojung.ivanka.pilot-role") != row["role"]:
-        raise ValueError("portable postbuild receipt role label mismatch")
-
+    result_ref = doc.get("copy_overlay_result")
+    if not isinstance(result_ref, dict):
+        raise ValueError("portable postbuild receipt missing copy_overlay result binding")
+    result = verify_copy_overlay_result(
+        result_ref.get("path"), expected_sha=result_ref.get("sha256"),
+        expected_plan_sha=result_ref.get("plan_sha256"),
+        expected_image=image, expected_labels=expected_portable_labels(row),
+        root=root)
     return {"schema": doc["schema"], "receipt_sha256": receipt_sha,
             "source_commit": commit, "image": image,
             "portable_binary_sha256": portable_sha,
-            "image_identity_verified": True, "build_executed": True,
-            "copy_overlay_image_receipt": evidence}
+            "portable_binary_path": row["portable_binary_path"],
+            "role": row["role"], "image_identity_verified": True,
+            "build_executed": True, "copy_overlay_result": result,
+            "candidate_row": row}
 
 
 def require_portable_image_identity_verified(source_commit, image_digest,
                                              *, plan=None, postbuild_receipt=None,
-                                             postbuild_receipt_sha256=None):
+                                             postbuild_receipt_sha256=None,
+                                             root=None):
     """Fail closed until a guarded COPY-only build produced a verified image.
 
     Portable bytes may be pinned before an image exists, but no arm may use
-    them until an authenticated postbuild receipt binds the exact prebuild
-    plan and portable bytes to copy_overlay build evidence and verified image
-    identity. No manual manifest build claim is accepted.
+    them until a SHA-pinned postbuild receipt is bound to the actual
+    copy_overlay result and journals. No manual manifest build claim is
+    accepted, and the image/layer contract is independently inspected by the
+    caller before this identity is used.
     """
     prebuild = plan or load_portable_plan()
     verify_portable_plan(prebuild)
@@ -639,7 +749,7 @@ def require_portable_image_identity_verified(source_commit, image_digest,
         raise ValueError("portable image identity not verified post-build")
     verified = verify_portable_postbuild_receipt(
         postbuild_receipt, expected_sha=postbuild_receipt_sha256,
-        source_commit=source_commit, plan=prebuild)
+        source_commit=source_commit, plan=prebuild, root=root)
     if verified["image"] != normalize_digest(image_digest):
         raise ValueError("portable image identity not verified post-build")
     return verified
@@ -1278,7 +1388,8 @@ def _public_diagnostics(dest):
 
 
 def prepare(args, *, image_inspect=None, image_manifest=None,
-            store_conf=None, disk_usage_fn=None, wall=None):
+            store_conf=None, disk_usage_fn=None, wall=None,
+            postbuild_receipt_sha256=None, copy_overlay_root=None):
     """Read-only gate evaluation and durable prepared manifest, no spawn."""
     cases_manifest, cases_sha = load_case_manifest()
     image_doc, image_sha = load_image_manifest()
@@ -1292,25 +1403,37 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         raise ValueError(f"unknown case(s): {', '.join(unknown)}")
 
     portable_postbuild = None
+    contract_manifest = image_doc or image_manifest
+    layer_expected_sha = None
     portable_plan = load_portable_plan()
     verify_portable_plan(portable_plan)
     portable_candidate = next(
         (row for row in portable_plan["candidates"]
          if row["source_commit"] == args.commit), None)
     if getattr(args, "portable_postbuild_receipt", None):
+        receipt_sha = (postbuild_receipt_sha256 or
+                       getattr(args, "portable_postbuild_receipt_sha256", None))
+        if portable_candidate is None:
+            raise ValueError("portable postbuild receipt source commit not planned")
         provisional = verify_portable_postbuild_receipt(
-            args.portable_postbuild_receipt,
-            source_commit=args.commit, plan=portable_plan)
+            args.portable_postbuild_receipt, expected_sha=receipt_sha,
+            source_commit=args.commit, plan=portable_plan,
+            root=copy_overlay_root)
         expected_image = (args.image
                           if args.image not in (None, "", "PENDING_CANDIDATE_IMAGE_DIGEST")
                           else provisional["image"])
         portable_postbuild = require_portable_image_identity_verified(
-            args.commit, expected_image,
-            plan=portable_plan,
-            postbuild_receipt=args.portable_postbuild_receipt)
+            args.commit, expected_image, plan=portable_plan,
+            postbuild_receipt=args.portable_postbuild_receipt,
+            postbuild_receipt_sha256=receipt_sha, root=copy_overlay_root)
         if (args.image not in (None, "", "PENDING_CANDIDATE_IMAGE_DIGEST")
                 and normalize_digest(args.image) != portable_postbuild["image"]):
             raise ValueError("portable postbuild receipt image differs from --image")
+        # The exact per-role contract pins the PORTABLE binary SHA and this
+        # candidate's own source commit; the native image manifest would
+        # reject the PCR source and expect the native SHA.
+        contract_manifest = portable_image_contract(portable_candidate)
+        layer_expected_sha = portable_candidate["portable_binary_sha256"]
         args = argparse.Namespace(**{**vars(args),
                                      "image": portable_postbuild["image"],
                                      "commit": portable_postbuild["source_commit"]})
@@ -1331,10 +1454,10 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
     verified_env = pinned_podman_env(store["storage_conf"])
     contract = verify_image_contract(
         args.image, args.commit, env=verified_env,
-        inspect=image_inspect, image_manifest=image_doc or image_manifest)
+        inspect=image_inspect, image_manifest=contract_manifest)
     layer = verify_image_layer_contract(
-        args.image, env=verified_env,
-        inspect=image_inspect, graphroot=store["graphroot"])
+        args.image, env=verified_env, inspect=image_inspect,
+        graphroot=store["graphroot"], expected_sha=layer_expected_sha)
 
     free = (disk_usage_fn or _disk_free)(args.disk_path)
     if free < PILOT_REQUIRED_FREE_BYTES:
@@ -1351,8 +1474,10 @@ def prepare(args, *, image_inspect=None, image_manifest=None,
         "reviewed_guard_pins": guard_pins,
         "copy_overlay_admission_pins": admission_pins,
         "portable_postbuild_receipt": portable_postbuild,
-        "candidate_source_commit": SOURCE_COMMIT,
+        "candidate_source_commit": args.commit,
         "candidate_image": args.image,
+        "candidate_portable_role": (portable_candidate["role"]
+                                    if portable_postbuild else None),
         "candidate_image_contract": contract,
         "added_layer_evidence": layer,
         "cases_manifest_sha256": cases_sha,
@@ -1427,10 +1552,13 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
         store_conf=None, watchdog_ready=None, watchdog_snapshot=None,
         snapshot=None, clock=None, sleep=None, audit=None, disk_usage=None,
         disk_usage_fn=None, bind_container=None, stop_cid_fn=None,
-        wall=None, live_watchdog_check=None):
+        wall=None, live_watchdog_check=None, postbuild_receipt_sha256=None,
+        copy_overlay_root=None):
     manifest = prepare(args, image_inspect=image_inspect,
                        image_manifest=image_manifest, store_conf=store_conf,
-                       disk_usage_fn=disk_usage_fn, wall=wall)
+                       disk_usage_fn=disk_usage_fn, wall=wall,
+                       postbuild_receipt_sha256=postbuild_receipt_sha256,
+                       copy_overlay_root=copy_overlay_root)
     # --check must prove a LIVE, identity-bound watchdog, not merely a path.
     (live_watchdog_check or require_live_watchdog_ready)(
         args.watchdog_path, manifest["storage"]["graphroot"], wall=wall)
@@ -1510,7 +1638,8 @@ def run(args, *, env=None, image_inspect=None, image_manifest=None,
             verify_case_hashes(case_dir, hashes)
         row = run_case(
             case_id=case_id, role=role_by_id[case_id], case_dir=case_dir,
-            destination=out / case_id, image=args.image, commit=args.commit,
+            destination=out / case_id, image=manifest["candidate_image"],
+            commit=manifest["candidate_source_commit"],
             timer=args.timer, env=env, owner=owner, lock_path=args.lock,
             stop_path=args.stop, lease_root=args.lease_root,
             disk_path=str(args.disk_path), watchdog_path=args.watchdog_path,
@@ -1558,7 +1687,9 @@ def main(argv=None):
     parser.add_argument("--image", default="PENDING_CANDIDATE_IMAGE_DIGEST")
     parser.add_argument("--commit", default=SOURCE_COMMIT)
     parser.add_argument("--portable-postbuild-receipt", type=Path, default=None,
-                        help="separate authenticated postbuild receipt for a portable COPY-only build")
+                        help="SHA-pinned postbuild receipt for a portable COPY-only build")
+    parser.add_argument("--portable-postbuild-receipt-sha256", default=None,
+                        help="required SHA-256 pin of --portable-postbuild-receipt")
     parser.add_argument("--storage-conf", type=Path, default=Path(DEFAULT_STORAGE_CONF))
     parser.add_argument("--lock", default=DEFAULT_LOCK)
     parser.add_argument("--stop", default=DEFAULT_STOP)
@@ -1577,7 +1708,8 @@ def main(argv=None):
     if not args.check and (not args.armed or args.slot == PENDING_SLOT):
         parser.error("execution requires --armed --slot <operator slot>; use --check to prepare")
     try:
-        summary = run(args)
+        summary = run(args,
+                      postbuild_receipt_sha256=args.portable_postbuild_receipt_sha256)
     except ValueError as exc:
         parser.error(f"gate failed closed: {exc}")
     return 0 if (args.check or summary["all_succeeded"]) else 1

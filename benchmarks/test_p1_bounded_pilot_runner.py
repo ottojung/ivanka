@@ -14,6 +14,7 @@ from fail_closed_guard.errors import GuardExceeded
 
 from expanded import p1_bounded_pilot_runner as runner
 from expanded.p1_full464_controller import MEMORY_BYTES, WALL_CAP_SECONDS
+from p1_portable_fixtures import build as build_postbuild_fixture
 
 CID = "a" * 64
 IMAGE = "d" * 64
@@ -489,38 +490,17 @@ class PrepareTests(unittest.TestCase):
         plan = runner.load_portable_plan()
         row = next(c for c in plan["candidates"]
                    if c["source_commit"] == runner.SOURCE_COMMIT)
-        base_layers = ["sha256:" + "a" * 64]
-        layers = base_layers + ["sha256:" + "b" * 64]
-        receipt = {
-            "schema": runner.PORTABLE_POSTBUILD_SCHEMA,
-            "prebuild_plan_sha256": runner.PORTABLE_PLAN_SHA256,
-            "build_executed": True,
-            "image_identity_verified": True,
-            "source_commit": row["source_commit"],
-            "native_binary_sha256": row["native_binary_sha256"],
-            "portable_binary_sha256": row["portable_binary_sha256"],
-            "portable_binary_path": row["portable_binary_path"],
-            "image_digest": image,
-            "portable_image": image,
-            "copy_overlay_image_receipt": {
-                "image": image,
-                "one_layer_overlay": True,
-                "base_layers": base_layers,
-                "layers": layers,
-                "labels": {
-                    "org.ottojung.ivanka.source-commit": row["source_commit"],
-                    "org.ottojung.micall.frozen-image-id": runner.PARENT_IMAGE,
-                    "org.ottojung.ivanka.binary-sha256": row["portable_binary_sha256"],
-                    "org.ottojung.ivanka.frozen-manifest-sha256": runner.FROZEN_MANIFEST_SHA256,
-                    "org.ottojung.ivanka.pilot-role": row["role"],
-                },
-            },
-        }
-        path = self.root / "portable-postbuild.json"
-        path.write_text(json.dumps(receipt))
-        return path
+        return build_postbuild_fixture(
+            self.root, source_commit=row["source_commit"], role=row["role"],
+            portable_sha=row["portable_binary_sha256"],
+            native_sha=row["native_binary_sha256"],
+            portable_binary_path=row["portable_binary_path"],
+            prebuild_plan_sha=runner.PORTABLE_PLAN_SHA256, image=image,
+            base_image=runner.PARENT_IMAGE,
+            expected_labels=runner.expected_portable_labels(row))
 
     def args(self):
+        info = self.write_postbuild_receipt()
         return mock.Mock(
             data=self.root / "data", frozen_results=self.root / "frozen.jsonl",
             timer=self.root / "timer.py", out=self.out, image=IMAGE,
@@ -529,7 +509,8 @@ class PrepareTests(unittest.TestCase):
             lease_root=runner.DEFAULT_LEASE_ROOT, disk_path=self.root,
             watchdog_path=self.root / "alive.json", owner="test-owner",
             cases=None, check=True, armed=False, slot=runner.PENDING_SLOT,
-            portable_postbuild_receipt=self.write_postbuild_receipt())
+            portable_postbuild_receipt=info["receipt_path"],
+            portable_postbuild_receipt_sha256=info["receipt_sha"])
 
     def test_check_mode_writes_prepared_manifest_without_spawn(self):
         args = self.args()
@@ -551,7 +532,8 @@ class PrepareTests(unittest.TestCase):
              mock.patch.object(runner.subprocess, "Popen",
                                side_effect=AssertionError("spawn in check mode")):
             summary = runner.run(args, disk_usage_fn=lambda p: 33 * 1024 ** 3,
-                                 live_watchdog_check=lambda *a, **k: {"ready": True})
+                                 live_watchdog_check=lambda *a, **k: {"ready": True},
+                                 copy_overlay_root=self.root)
         self.assertFalse(summary["spawned"])
         manifest = json.loads((self.out / "prepared_manifest.json").read_text())
         self.assertFalse(manifest["spawned"])

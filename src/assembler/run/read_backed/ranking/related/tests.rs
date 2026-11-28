@@ -1,5 +1,7 @@
-pub(super) use super::{additional, counts, Statistics};
+pub(super) use super::{additional, approximate_junction, counts, Statistics};
 
+mod approximate_fixtures;
+mod approximate_tests;
 mod cases;
 mod controls;
 

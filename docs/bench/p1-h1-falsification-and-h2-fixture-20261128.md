@@ -1,34 +1,31 @@
-# P1 H1 falsification and read-supported traversal-uniqueness fixture (2026-11-28)
+# P1 H1 falsification and conservative H2 candidate (2026-11-28)
 
 Owner: agent-FReJQGQODlgkArssDisF5g-wrought | host marceline-dev | issue 13mh3jxJbwPnB2hIZ9JdZx-blush.
 
-Exact base: `dabda4593ee93d506db292053f7bf277a73053bc` (tree `9b13cbfd`), the signed fragment-retention candidate. This branch adds one test-only module and this note. No production assembly behaviour, threshold, ranking, scorer, frozen data, image or gate is changed. No truth, reference, cohort case name or tuning input reaches assembly. The original candidate and its image are untouched.
+Exact base for this increment: `fc27fb87b7febd76236fde3b18d9035e97fd9710` (the signed H1-falsification/fixture branch). This commit implements ONE conservative H2 source candidate on that branch, not on main. No image, frozen data, threshold, scorer, gate, truth or reference is changed; no native panel is run.
 
-## H1 is explicitly rejected
+## H1 remains explicitly rejected
 
-H1 proposed: where a safely merged exact observed pair already covers a mate's canonical evidence, stop emitting the redundant single-read fallback. Three source-grounded reasons show this cannot remove inherited duplicated traversal:
+1. The duplicated-traversal signature exists in historical `12d8c72`, which has no native-fragment merge or fallback at all.
+2. `native_fragments::select::retain` already skips candidates whose canonical 31-mers are represented (`represent::uncovered`); a covered fallback is either redundant or the only surviving evidence when a mate-tail 31-mer vetoes the merge.
+3. Native `contigs.fasta` and MiCall `unstitched_contigs.fasta` are byte-identical in all five flagged cases, placing the duplication upstream of fragment ranking.
 
-1. **The duplication predates the merge.** Retained native contigs from historical `12d8c72` already score 390/586/361/377/420 per mille on the truth-free repeated-path fixture (five residuals); all five controls score 0. That tree has `read_backed` tiling and traversal but no `native_fragments` merge at all. A fallback introduced by `dabda459` cannot be the origin of a signature that exists without it.
-2. **Redundancy is already resolved where it matters.** `native_fragments::select::retain` skips a candidate when *any* canonical 31-mer is already represented (`represent::uncovered`). If a merged fragment is retained, its represented set covers the original read's 31-mers, so the fallback is skipped; if the merged fragment is vetoed, the fallback is also vetoed unless the veto came only from mate-tail 31-mers, which is precisely the case where dropping the fallback would lose observed pair-supported sequence. Suppression is therefore either output-neutral or evidence-destroying, never a duplication fix.
-3. **The duplicated contig is upstream of fragment ranking.** Native `contigs.fasta` and MiCall `unstitched_contigs.fasta` are byte-identical in all five flagged cases. `read_backed::tiling::present` emits overlapping tiles as separate named entries, so one long contig containing two same-strand, same-truth overlapping segments must already have been duplicated in the extension path before selection and tiling.
+## H2 hypothesis and conservative implementation
 
-Conclusion: H1 is falsified as a mechanism for inherited duplication. No H1 production change is proposed.
+Hypothesis: an approximate second traversal of one read-supported path can be extended without the exact-31-mer cycle stop (`CYCLE_MATCH = 512`). Sequence similarity alone is not enough to split it: a homologous repeat or a genuine tandem repeat can look similar. A split is justified only when there is *independent read-derived evidence of an unsupported transition* between two disjoint, read-supported approximate copies.
 
-## H2: read-supported traversal uniqueness with a divergence-tolerant stop
+Implementation (`read_backed/ranking/approximate.rs`, `spans.rs`, `junction`, `output.rs`):
 
-Hypothesis: the extension path has exact-31-mer cycle protection (`CYCLE_MATCH = 512`, `cycle_end`), but a second traversal that accumulated substitutions is not an exact repeat. Two read-supported copies of one path separated by unique flank can therefore be extended into one contig without a cycle stop, even though no novel haplotype is present. A read-supported, divergence-tolerant path-visited guard would stop the second traversal; distinct haplotypes with genuine divergence must remain separate.
+- Two disjoint windows (generic 2000/1000 spacing, matching existing cycle spacing) are compared by canonical 12-mer seeds. Only positions with original-pair depth >= 3 contribute seeds, so the signal is read-derived.
+- A candidate is raised only when the shared fraction is at least one quarter of the smaller seed set (250 per mille) **and** `spans::unsupported` finds far fewer original pairs crossing the boundary than comparable flanks **and** both flanks are read-supported (`spans::dense`). Those are the existing read-derived unsupported-join rules, not new fitted thresholds.
+- `ranking::any_junction` prefers the established depth-valley join and otherwise applies this approximate-repeat gate. `output::component` still renders only native subsequences via existing `pieces()`/`tiling::present()`: no base is invented, reordered or removed, and a supported path is never cut on similarity alone.
+- No genome length, truth, reference, family label, case name or tuning input is read. Existing golden byte-identity, clonal, tandem-repeat, distinct-haplotype and supported-join tests remain green.
 
-Minimal counterexample fixture (`src/assembler/extension_helpers/test_cycle/divergent.rs`, test-only):
+Controls added: approximate repeat with no spanning pairs splits; the same approximate repeat with spanning original pairs stays whole; a genuine 150 bp tandem repeat stays whole; distinct haplotypes and a supported long clonal path stay whole.
 
-- 4000 bp deterministic path + 1000 bp unique flank + the same path again -> exact cycle **is** cut.
-- the same construction with the second copy substituted every 12th base (~8% divergence, so no shared exact 31-mer) -> exact cycle protection **misses** it.
-- a genuinely distinct 4000 bp tail -> correctly not cut.
+## Predeclared ready experiment (requires explicit P1 grant)
 
-All sequences are generated from fixed seeds. No truth, reference, family label or score is read. The fixture demonstrates the detection gap; it does not change assembly and is not proof that production extension always takes the duplicated path.
-
-## Predeclared validation / decision rule (before any native panel)
-
-- Tests: `cargo fmt --all -- --check`, `cargo test --locked --all-targets`, `cargo clippy` CI denial set, `rustc --test source_lints/mod.rs`, `python3 benchmarks/reference_isolation.py`, structural source lint, `git diff --check`.
-- No native panel, no cohort replay, no image, no slot, no worker action until the coordinator grants a short P1 slot and the integrated retry is complete.
-- Any future production change must first reproduce the fixture at native level with read-derived inputs only, then pass an integrated final-MAX evaluation. Truth-free repeated-path per mille is a mechanism diagnostic, never a substitute for final MAX.
-- cNcov owns the integrated retry; this owner is available for separate sealed final-MAX scoring when genuine receipts arrive.
+1. No native panel, no worker, slot, podman, image, STOP/s6 or cohort replay in this turn. PX continues; the integrated retry belongs to cNcov and UNZbw grants slots.
+2. When a short P1 slot is granted, run the already predeclared truth-free native panel on the five held-out residuals plus five negative controls with candidate `dabda459`+H2 versus baseline, alternating arms, OS limits, empty environment and truth opened only in a sealed posthoc.
+3. Decision rule predeclared: H2 is supported only if the approximate-repeat split is observed on the read-derived residual fixtures with no change on supported homologous-repeat, tandem-repeat or clonal controls. Any control change is a stop, not a tuning opportunity.
+4. Repeated-path per mille is a mechanism diagnostic only. Any production promotion still needs the separate integrated final-MAX evaluation; no qualification or clinical claim is made.

@@ -1,5 +1,6 @@
 #[cfg(test)]
 pub(super) use super::additional;
+pub(super) use super::approximate_junction;
 pub(super) use super::{Statistics, K};
 mod diversity;
 #[cfg(test)]

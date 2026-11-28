@@ -1,3 +1,38 @@
+use std::collections::HashSet;
+
+pub(in super::super) const SEED: usize = 12;
+
+/// Canonical short seed: survives a diverged second traversal.
+pub(in super::super) fn seed(window: &[u8]) -> Option<u64> {
+    let (mut forward, mut reverse) = (0u64, 0u64);
+    for &base in window {
+        let digit = match base {
+            b'A' => 0,
+            b'C' => 1,
+            b'G' => 2,
+            b'T' => 3,
+            _ => return None,
+        };
+        forward = (forward << 2) | digit;
+        reverse = (reverse << 2) | (3 - digit);
+    }
+    Some(forward.min(reverse))
+}
+
+/// Read-supported canonical seeds inside one window of a candidate contig.
+pub(in super::super) fn supported_seeds(
+    seq: &[u8],
+    depth: &[u32],
+    from: usize,
+    window: usize,
+) -> HashSet<u64> {
+    let end = (from + window).min(seq.len());
+    (from..end.saturating_sub(SEED - 1))
+        .filter(|&position| depth.get(position).copied().unwrap_or(0) >= 3)
+        .filter_map(|position| seed(&seq[position..position + SEED]))
+        .collect()
+}
+
 /// Count original pairs that reach an interval from either flank. A mate that
 /// stops inside the valley still evidences local continuity, so it counts as
 /// spanning evidence too; this avoids declaring a join from incomplete spans.

@@ -1,3 +1,4 @@
+mod approximate;
 mod balanced;
 mod independent;
 mod junction;
@@ -6,9 +7,20 @@ mod related;
 mod retained;
 mod spans;
 pub(super) use super::{scoring::Statistics, K};
+pub(super) use approximate::junction as approximate_junction;
 pub(super) use independent::additional;
 pub(super) use junction::junction;
 use std::cmp::Ordering;
+
+/// Prefer an established unsupported valley; otherwise a conservative
+/// approximate-repeat split with independent pair evidence.
+pub(super) fn any_junction(
+    seq: &[u8],
+    depth: &[u32],
+    pairs: &[(usize, usize)],
+) -> Option<(usize, usize)> {
+    junction(depth, pairs).or_else(|| approximate_junction(seq, depth, pairs))
+}
 
 /// Render intervals in contig coordinates; without a detected unsupported
 /// join this is the single whole contig and the established path is unchanged.

@@ -23,8 +23,9 @@ pub(super) fn component(
     statistics: &Statistics,
     chosen: usize,
 ) -> Vec<Entry> {
-    let joined = ranking::junction(&statistics.depth[chosen], &statistics.spans[chosen]);
     let native = &contigs[chosen];
+    let joined =
+        ranking::any_junction(native, &statistics.depth[chosen], &statistics.spans[chosen]);
     let repaired = if joined.is_some() {
         None
     } else {

@@ -256,20 +256,22 @@ def group_quiesced(bound, table):
 
     After natural completion a descendant may remain as a kernel-verified zombie
     (state Z) with the original PGID. That member is quiescent, not reaped; the
-    proof accepts it only when every bound-group member is a proven zombie with
-    valid structural facts and no positive RSS. Any live, unreadable, unknown,
-    reused-leader, ambiguous, positive-RSS zombie or escaped live descendant
-    fails closed.
+    proof accepts it only when every member of the exact bound PGID is a proven
+    zombie with valid structural facts and no positive RSS. Membership is by the
+    bound PGID alone: a process that merely shares the leader's starttime and
+    PID-namespace tick but sits in a different PGID is unrelated and must never
+    be treated as bound. Any live, unreadable, unknown, reused-leader, ambiguous,
+    positive-RSS zombie or escaped live descendant fails closed.
     """
     identity_keys = tuple(bound["fingerprint"][:2])
     pgid = bound.get("pgid")
     bound_pid = bound.get("pid")
-    members = [record for record in table.values()
-               if ((record.get("starttime"), record.get("pid_ns")) == identity_keys
-                   or record.get("pgid") == pgid)]
-    # Only records tied to the bound group can poison its proof; unrelated
-    # host processes must not prevent a verified quiescent COPY completion.
-    if any(record.get("structural_unavailable") for record in members):
+    # Bind members by the exact PGID, never by the leader's starttime tick. A
+    # same-tick process in another PGID is neither a bound member nor exempt
+    # from any check merely because it shares the leader's immutable identity.
+    members = [(pid, record) for pid, record in table.items()
+               if record.get("pgid") == pgid]
+    if any(record.get("structural_unavailable") for _, record in members):
         return False
     if not members:
         return False
@@ -282,8 +284,11 @@ def group_quiesced(bound, table):
                 or leader.get("pgid") != pgid
                 or not _quiesced_member(leader)):
             return False
-    for record in members:
-        if (record.get("starttime"), record.get("pid_ns")) == identity_keys:
+    for pid, record in members:
+        # Only the exact bound PID was validated above. Every other member of
+        # the bound PGID must independently prove it is a quiescent zombie,
+        # including any same-tick sibling that the old tick-based skip ignored.
+        if pid == bound_pid:
             continue
         if record.get("pgid") != pgid:
             return False
@@ -291,7 +296,7 @@ def group_quiesced(bound, table):
             return False
     # Descendants of a quiescent group cannot be live; a live or ambiguous
     # process reparented outside the PGID is an escaped descendant.
-    member_pids = {record.get("pid") for record in members}
+    member_pids = {pid for pid, _ in members}
     descendants = set(tree.descendants(table, bound_pid))
     for pid, record in table.items():
         if pid in member_pids:

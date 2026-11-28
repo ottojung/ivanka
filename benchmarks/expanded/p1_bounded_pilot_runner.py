@@ -316,7 +316,7 @@ COPY_OVERLAY_ADMISSION_DIGESTS = {
     "copy_overlay_helper": ("fail_closed_guard/copy_overlay_helper.py",
                             "8242d81c9c6b169dfbfac1b837ae9c23e1e3f1259190438871dee89dccdf0bc5"),
     "build": ("fail_closed_guard/build.py",
-              "6771a107107779d7daafa9996326db9a925e701e9821a1030661144627ce3994"),
+              "4d01b152b5970b14d9084b1137af5c776b5b742fe257509c69038207c3a64119"),
     "watchdog_cli": ("fail_closed_guard/watchdog_cli.py",
                      "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369"),
 }

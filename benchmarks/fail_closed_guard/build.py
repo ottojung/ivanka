@@ -111,8 +111,16 @@ def stop_group_by_id(pgid, *, snapshot=None, sleep=None, clock=None,
                         "method": "verified_exact_group",
                         "kernel_enforcement": False}
             proof = _quiescent_proof(pgid, table, quiesced)
-            if proof is not None:
-                return proof
+            if proof is not None and now() < deadline:
+                # Mirror the pre-signal path: a second fresh snapshot inside the
+                # same deadline proves the post-signal quiescent state is stable
+                # and not a single-snapshot race. An unconfirmed proof fails
+                # closed rather than claiming a stopped group.
+                nap(min(0.1, max(0.0, deadline - now())))
+                confirm = _quiescent_proof(pgid, take(), quiesced)
+                if confirm is not None:
+                    proof["fresh_confirmations"] = 2
+                    return proof
         if now() >= deadline:
             raise TeardownError("build_group_survived")
         nap(min(0.1, max(0.0, deadline - now())))

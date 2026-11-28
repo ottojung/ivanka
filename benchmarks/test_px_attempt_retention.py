@@ -364,5 +364,109 @@ class AttemptRetentionTests(unittest.TestCase):
         self.assert_untouched()
 
 
+    def _audit_bind_unavailable(self, ident, owner):
+        return {"schema": "ivanka.worker-lease.v1", "event": "bind_unavailable",
+                "at_utc": 1.0, "cidfile": str(self.root / "bind.cid"),
+                "lease_id": ident, "owner": owner}
+
+    def _audit_startup_abort(self, ident, owner):
+        return {"schema": "ivanka.worker-lease.v1", "event": "startup_abort",
+                "at_utc": 2.0, "cid": self.cid,
+                "cidfile": str(self.root / "abort.cid"), "detail": "watchdog_failed",
+                "lease_id": ident, "lease_state": "active_unreleased",
+                "owner": owner, "reason": "watchdog_failed", "teardown": {},
+                "teardown_result": {}}
+
+    def _audit_stop_retired(self, ident, owner, cid=None):
+        return {"schema": "ivanka.worker-lease.v1", "event": "stop_retired",
+                "at_utc": 3.0, "cid": cid or self.cid, "lease": ident,
+                "owner": owner, "proof": dict(self.proof)}
+
+    def test_state_less_audit_records_are_not_ownership_events(self):
+        self.rows[:] = [
+            self._audit_bind_unavailable("p1-audit", "agent-a"),
+            self.rows[0],
+            self._audit_startup_abort("p1-audit", "agent-a"),
+            self.rows[1],
+            self._audit_stop_retired("p1-audit", "agent-a"),
+        ]
+        self.write_leases()
+        leases = retention._leases(self.root)
+        self.assertEqual(list(leases), [self.lease])
+        self.assertEqual([r.get("state") for _, r in leases[self.lease]],
+                         ["active", "released"])
+        result = self.run_retire(True)
+        self.assertEqual(len(result["eligible"]), 1)
+        self.assertGreater(result["reclaimed_bytes"], 0)
+
+    def test_stop_retired_audit_after_close_cannot_become_close(self):
+        self.rows.append(self._audit_stop_retired(
+            self.lease, "foreign-owner", cid="1" * 64))
+        self.write_leases()
+        self.assertGreater(self.run_retire(True)["reclaimed_bytes"], 0)
+
+    def test_audit_record_alone_cannot_close_lease(self):
+        self.rows[:] = [self.rows[0],
+                        self._audit_stop_retired(self.lease, self.lease)]
+        self.write_leases()
+        self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
+        self.assert_untouched()
+
+    def test_unknown_event_fails_closed(self):
+        self.rows.append({"schema": "ivanka.worker-lease.v1",
+                          "event": "future_ownership_event", "owner": "x",
+                          "at_utc": 4.0})
+        self.write_leases()
+        with self.assertRaises(ValueError):
+            retention._leases(self.root)
+        with self.assertRaises(ValueError):
+            self.run_retire(True)
+        self.assert_untouched()
+
+    def test_malformed_ownership_or_state_fails_closed(self):
+        self.rows.append({"schema": "ivanka.worker-lease.v1",
+                          "lease": "orphan", "owner": "x"})
+        self.write_leases()
+        with self.assertRaises(ValueError):
+            retention._leases(self.root)
+        with self.assertRaises(ValueError):
+            self.run_retire(True)
+        self.assert_untouched()
+
+    def test_malformed_known_audit_shape_fails_closed(self):
+        bad = self._audit_bind_unavailable("p1-audit", "agent-a")
+        bad.pop("lease_id")
+        self.rows.append(bad)
+        self.write_leases()
+        with self.assertRaises(ValueError):
+            retention._leases(self.root)
+        with self.assertRaises(ValueError):
+            self.run_retire(True)
+        self.assert_untouched()
+
+    def test_audit_with_state_is_not_ignored(self):
+        bad = self._audit_stop_retired(self.lease, self.lease)
+        bad["state"] = "released"
+        self.rows.append(bad)
+        self.write_leases()
+        with self.assertRaises(ValueError):
+            retention._leases(self.root)
+        with self.assertRaises(ValueError):
+            self.run_retire(True)
+        self.assert_untouched()
+
+    def test_foreign_owner_close_not_accepted(self):
+        self.rows[-1]["owner"] = "foreign-owner"
+        self.write_leases()
+        self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
+        self.assert_untouched()
+
+    def test_foreign_cid_close_not_accepted(self):
+        self.rows[-1]["cid"] = "1" * 64
+        self.write_leases()
+        self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
+        self.assert_untouched()
+
+
 if __name__ == "__main__":
     unittest.main()

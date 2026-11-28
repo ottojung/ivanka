@@ -87,14 +87,57 @@ def _reports(root):
     return by_hash
 
 
+LEASE_SCHEMA = "ivanka.worker-lease.v1"
+OWNERSHIP_STATES = frozenset(("active", "released", "reconciled"))
+# State-less audit evidence is append-only history, never an ownership
+# transition. Exact key sets are pinned: an unknown event, an extra field or
+# a malformed audit record must still fail closed.
+AUDIT_SHAPES = {
+    "bind_unavailable": frozenset(
+        ("at_utc", "cidfile", "event", "lease_id", "owner", "schema")),
+    "startup_abort": frozenset(
+        ("at_utc", "cid", "cidfile", "detail", "event", "lease_id",
+         "lease_state", "owner", "reason", "schema", "teardown",
+         "teardown_result")),
+    "stop_retired": frozenset(
+        ("at_utc", "cid", "event", "lease", "owner", "proof", "schema")),
+}
+
+
+def _owner_of(record):
+    """Owner identity; legacy ownership events used the lease id as owner."""
+    owner = record.get("owner")
+    return owner if owner is not None else record.get("lease")
+
+
 def _leases(root):
     records = {}
     for line in _regular(root / ".worker-lease.jsonl").read_text().splitlines():
         record = json.loads(line)
-        if (not isinstance(record, dict) or not isinstance(record.get("lease"), str)
-                or record.get("schema") != "ivanka.worker-lease.v1"):
+        if not isinstance(record, dict) or record.get("schema") != LEASE_SCHEMA:
             raise ValueError("unknown worker lease schema")
-        records.setdefault(record["lease"], []).append((line, record))
+        state = record.get("state")
+        if isinstance(state, str) and state in OWNERSHIP_STATES:
+            lease = record.get("lease")
+            if (not isinstance(lease, str) or not lease
+                    or "event" in record):
+                raise ValueError("unknown worker lease schema")
+            records.setdefault(lease, []).append((line, record))
+            continue
+        # Only the three known state-less audit shapes may be skipped, and
+        # only when their identity fields are well formed.
+        event = record.get("event")
+        shape = AUDIT_SHAPES.get(event) if isinstance(event, str) else None
+        if shape is None or state is not None or frozenset(record) != shape:
+            raise ValueError("unknown worker lease schema")
+        ident = (record.get("lease") if event == "stop_retired"
+                 else record.get("lease_id"))
+        if (not isinstance(ident, str) or not ident
+                or not isinstance(record.get("owner"), str)
+                or not isinstance(record.get("at_utc"), (int, float))
+                or (event == "startup_abort"
+                    and not isinstance(record.get("lease_state"), str))):
+            raise ValueError("unknown worker lease schema")
     return records
 
 
@@ -124,11 +167,16 @@ def _bound_report(root, prior, reports, leases):
     if not rows:
         raise ValueError("missing worker lease")
     line, last = rows[-1]
+    active = [(row_line, row) for row_line, row in rows[:-1]
+              if row.get("state") == "active" and row.get("cid") == cid]
     if (last.get("state") != "released" or last.get("cid") != cid
-            or not _absence(last.get("proof"), cid)
-            or not any(r.get("state") == "active" and r.get("cid") == cid
-                       for _, r in rows[:-1])):
+            or not _absence(last.get("proof"), cid) or not active):
         raise ValueError("worker lease not released for exact CID")
+    # Mirror lease.latest: a close is authorized only for the owner of the
+    # active lease and the exact bound CID. A foreign close never releases it.
+    owner = _owner_of(last)
+    if any(_owner_of(row) != owner for _, row in active):
+        raise ValueError("foreign owner lease close")
     return cid, {"launcher_report": _sha(path), "launcher_log": digest,
                  "released_lease": hashlib.sha256(line.encode()).hexdigest()}
 

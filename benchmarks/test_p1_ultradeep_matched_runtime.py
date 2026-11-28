@@ -20,6 +20,10 @@ OBSERVED_QUOTA = {
     "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
     "source": "/sys/fs/cgroup/libpod-test.scope/cpu.max",
     "pid": 4242, "cgroup": "0::/libpod-test.scope", "cid": "a" * 64,
+    "fingerprint": [5, 7], "leaf_value": "200000 100000",
+    "leaf_only": True, "effective_source": "/libpod-test.scope",
+    "chain": [{"path": "/libpod-test.scope", "raw": "200000 100000",
+               "value": "200000 100000"}],
 }
 
 

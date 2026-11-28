@@ -34,6 +34,10 @@ OBSERVED_QUOTA = {
     "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
     "source": "/sys/fs/cgroup/libpod-test.scope/cpu.max",
     "pid": 4242, "cgroup": "0::/libpod-test.scope", "cid": "a" * 64,
+    "fingerprint": [5, 7], "leaf_value": "200000 100000",
+    "leaf_only": True, "effective_source": "/libpod-test.scope",
+    "chain": [{"path": "/libpod-test.scope", "raw": "200000 100000",
+               "value": "200000 100000"}],
 }
 
 
@@ -222,20 +226,71 @@ class ExecutorTest(unittest.TestCase):
             self.assertIsNone(ex.normalize_cpu_max("bogus 100000"))
             self.assertIsNone(ex.kernel_cpu_max("0::/missing.scope\n", root))
 
-    def test_observed_quota_binds_exact_cid_and_rejects_foreign(self) -> None:
+    def test_observed_quota_uses_guard_bind_and_ancestor_walk(self) -> None:
+        cid = "a" * 64
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
-            scope = root / "libpod-abcdef123456.scope"
+            scope = root / ("libpod-" + cid + ".scope")
             scope.mkdir()
             (scope / "cpu.max").write_text("200000 100000\n")
+            bound = {"cid": cid, "pid": 9, "fingerprint": [5, 7]}
             table = {
-                7: {"cgroup": "0::/init.scope"},
-                9: {"cgroup": "0::/libpod-abcdef123456.scope"},
+                7: {"cgroup": "0::/init.scope", "starttime": 5, "pid_ns": 7},
+                9: {"cgroup": "0::/libpod-" + cid + ".scope",
+                    "starttime": 5, "pid_ns": 7},
             }
-            observed = ex.find_observed_cpu_quota(table, "abcdef1234567890", root)
+            observed = ex.observe_bound_cpu_quota(table, bound, root)
             self.assertEqual(observed["pid"], 9)
-            self.assertEqual(observed["cid"], "abcdef1234567890")
-            self.assertIsNone(ex.find_observed_cpu_quota(table, "ffffffffffffffff", root))
+            self.assertEqual(observed["cid"], cid)
+            self.assertEqual(observed["fingerprint"], [5, 7])
+            self.assertTrue(observed["leaf_only"])
+
+            # A truncated-prefix collision on another PID must never bind.
+            table[11] = {"cgroup": "0::/libpod-" + cid[:12] + ".scope",
+                         "starttime": 5, "pid_ns": 7}
+            self.assertEqual(ex.observe_bound_cpu_quota(table, bound, root)["pid"], 9)
+
+            # Tighter ancestor makes the leaf value insufficient as proof.
+            (root / "cpu.max").write_text("100000 100000\n")
+            tighter = ex.observe_bound_cpu_quota(table, bound, root)
+            self.assertEqual(tighter["value"], "100000 100000")
+            self.assertEqual(tighter["leaf_value"], "200000 100000")
+            self.assertFalse(tighter["leaf_only"])
+            self.assertEqual(tighter["effective_source"], str(root))
+
+            # Continuous observation reflects a mid-arm change instead of caching.
+            (root / "cpu.max").unlink()
+            (scope / "cpu.max").write_text("150000 100000\n")
+            self.assertEqual(ex.observe_bound_cpu_quota(table, bound, root)["value"],
+                             "150000 100000")
+
+    def test_bound_identity_changes_fail_closed(self) -> None:
+        cid = "b" * 64
+        bound = {"cid": cid, "pid": 12, "fingerprint": [5, 7]}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            scope = root / ("libpod-" + cid + ".scope")
+            scope.mkdir()
+            (scope / "cpu.max").write_text("200000 100000\n")
+            live = {12: {"cgroup": "0::/libpod-" + cid + ".scope",
+                         "starttime": 5, "pid_ns": 7}}
+            self.assertIsNotNone(ex.observe_bound_cpu_quota(live, bound, root))
+            changed = {12: {**live[12], "starttime": 999}}
+            self.assertIsNone(ex.observe_bound_cpu_quota(changed, bound, root))
+            unreadable = {12: {**live[12], "cgroup": None}}
+            self.assertIsNone(ex.observe_bound_cpu_quota(unreadable, bound, root))
+            malformed = {12: live[12]}
+            self.assertIsNone(ex.observe_bound_cpu_quota(malformed,
+                              {**bound, "cid": "deadbeef"}, root))
+
+    def test_observed_cpu_quota_mismatch_is_refused(self) -> None:
+        good = {"value": "200000 100000", "origin": ex.CPU_MAX_ORIGIN_V2,
+                "effective_source": "/x", "leaf_only": True}
+        ex.check_observed_cpu_quota(good)
+        with self.assertRaises(plan.Refusal):
+            ex.check_observed_cpu_quota({**good, "value": "150000 100000"})
+        with self.assertRaises(plan.Refusal):
+            ex.check_observed_cpu_quota({**good, "origin": "podman_hostconfig"})
 
     def test_missing_observed_quota_fails_comparability(self) -> None:
         def no_quota(step, argv, arm_dir, *, deadline=None):

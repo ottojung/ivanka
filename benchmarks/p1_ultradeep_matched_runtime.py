@@ -502,10 +502,13 @@ def arm_evidence_record(
             quota_effective = effective_cpus(observed_value)
         except ValueError:
             quota_effective = None
-    quota_complete = (
-        requested == COMPARABILITY["required_container_cpu_max"]
+    quota_complete = bool(
+        observed
+        and requested == COMPARABILITY["required_container_cpu_max"]
         and quota_effective == COMPARABILITY["required_container_effective_cpus"]
-        and origin in KERNEL_QUOTA_ORIGINS)
+        and origin in KERNEL_QUOTA_ORIGINS
+        and isinstance(observed.get("effective_source"), str)
+        and isinstance(observed.get("chain"), list))
     record = {
         "schema": "ivanka.p1.ultradeep.arm-evidence.v1",
         "case": step["case"], "arm": step["arm"],
@@ -526,6 +529,11 @@ def arm_evidence_record(
             "observed_pid": observed.get("pid") if observed else None,
             "observed_cgroup": observed.get("cgroup") if observed else None,
             "observed_raw": observed.get("raw") if observed else None,
+            "observed_leaf_value": observed.get("leaf_value") if observed else None,
+            "observed_leaf_only": observed.get("leaf_only") if observed else None,
+            "observed_effective_source": observed.get("effective_source") if observed else None,
+            "observed_chain": observed.get("chain") if observed else None,
+            "observed_fingerprint": observed.get("fingerprint") if observed else None,
             "container_effective_cpus": quota_effective,
             "memory_limit_bytes": int(CONSTRAINTS["memory"]),
         },

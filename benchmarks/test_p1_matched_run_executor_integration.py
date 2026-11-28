@@ -154,6 +154,10 @@ class GuardHarness:
                 "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
                 "source": "/sys/fs/cgroup/cpu.max", "pid": PID,
                 "cgroup": "0::/libpod-test.scope", "cid": CID,
+                "fingerprint": [5, 7], "leaf_value": "200000 100000",
+                "leaf_only": True, "effective_source": "/libpod-test.scope",
+                "chain": [{"path": "/libpod-test.scope", "raw": "200000 100000",
+                           "value": "200000 100000"}],
             }
             result["observed_container_cpu_max"] = "200000 100000"
             return result

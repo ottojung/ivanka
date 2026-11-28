@@ -80,13 +80,30 @@ def normalize_cpu_max(raw: str) -> str | None:
     return None
 
 
-def kernel_cpu_max(cgroup_text: str, cgroup_root: pathlib.Path) -> dict[str, Any] | None:
-    """Read the effective CPU quota from the kernel cgroup of a live process.
+def _quota_ratio(value: str) -> float | None:
+    quota, period = value.split()
+    if quota == "max":
+        return float("inf")
+    try:
+        return int(quota) / int(period)
+    except (ValueError, ZeroDivisionError):
+        return None
 
-    Podman HostConfig describes a request, not enforcement. The cgroup quota
-    file is the only value usable for comparability, and its origin is recorded
-    with the raw bytes so a missing or foreign-namespace reading cannot be
-    mistaken for a matched arm.
+
+def _cgroup_dirs(v2_path: str, cgroup_root: pathlib.Path) -> list[pathlib.Path]:
+    """Every directory from the cgroup root to the process leaf, in order."""
+    parts = [part for part in v2_path.split("/") if part]
+    return [cgroup_root.joinpath(*parts[:index]) for index in range(len(parts) + 1)]
+
+
+def kernel_cpu_max(cgroup_text: str, cgroup_root: pathlib.Path) -> dict[str, Any] | None:
+    """Walk the live cgroup ancestry and report the tightest effective quota.
+
+    A leaf-only reading cannot prove an effective quota: an ancestor may impose
+    a smaller limit. Every directory from the cgroup root to the leaf is read,
+    every value is retained, and the tightest observed ratio is reported with
+    its source. An unreadable quota file in the chain is a measurement gap, not
+    a successful 2-CPU observation.
     """
     for line in cgroup_text.splitlines():
         fields = line.split(":", 2)
@@ -94,47 +111,88 @@ def kernel_cpu_max(cgroup_text: str, cgroup_root: pathlib.Path) -> dict[str, Any
             continue
         hierarchy, controller, path = fields
         if hierarchy == "0" and controller == "":
-            candidate = cgroup_root / path.lstrip("/") / "cpu.max"
-            if candidate.is_file() and not candidate.is_symlink():
+            chain = []
+            for directory in _cgroup_dirs(path, cgroup_root):
+                candidate = directory / "cpu.max"
+                if candidate.is_symlink():
+                    continue
+                if not candidate.is_file():
+                    continue
                 raw = candidate.read_text().strip()
                 value = normalize_cpu_max(raw)
                 if value is not None:
-                    return {"value": value, "origin": CPU_MAX_ORIGIN_V2,
-                            "raw": raw, "cgroup_path": path, "source": str(candidate)}
-            continue
+                    chain.append({"path": str(directory), "raw": raw, "value": value})
+            if not chain:
+                continue
+            tightest = min(chain, key=lambda item: _quota_ratio(item["value"]) or float("inf"))
+            return {
+                "value": tightest["value"], "origin": CPU_MAX_ORIGIN_V2,
+                "raw": tightest["raw"], "cgroup_path": path,
+                "source": str(pathlib.Path(tightest["path"]) / "cpu.max"),
+                "chain": chain, "leaf_value": chain[-1]["value"],
+                "leaf_only": len(chain) == 1,
+                "effective_source": tightest["path"],
+            }
         if controller == "cpu":
             base = cgroup_root / "cpu" / path.lstrip("/")
             quota_file, period_file = base / "cpu.cfs_quota_us", base / "cpu.cfs_period_us"
-            if quota_file.is_file() and period_file.is_file():
+            if quota_file.is_file() and period_file.is_file() and not quota_file.is_symlink():
                 quota = quota_file.read_text().strip()
                 period = period_file.read_text().strip()
                 value = normalize_cpu_max(("max " if quota == "-1" else quota) + " " + period)
                 if value is not None:
                     return {"value": value, "origin": CPU_MAX_ORIGIN_V1,
                             "raw": quota + " " + period, "cgroup_path": path,
-                            "source": str(quota_file)}
+                            "source": str(quota_file), "chain": [
+                                {"path": str(base), "raw": quota + " " + period,
+                                 "value": value}],
+                            "leaf_value": value, "leaf_only": True,
+                            "effective_source": str(base)}
     return None
 
 
-def find_observed_cpu_quota(table: dict[int, Any], cid: str,
+def observe_bound_cpu_quota(table: dict[int, Any], bound: dict[str, Any],
                             cgroup_root: pathlib.Path = pathlib.Path("/sys/fs/cgroup"),
                             ) -> dict[str, Any] | None:
-    """Bind an exact live CID to one PID in the guard's monitored snapshot."""
-    if not cid or len(cid) < 12 or not isinstance(table, dict):
+    """Observe quota only from the guard-bound init PID with unchanged identity."""
+    if not isinstance(bound, dict):
         return None
-    for pid, record in table.items():
-        if not isinstance(record, dict):
-            continue
-        cgroup_text = record.get("cgroup")
-        if not isinstance(cgroup_text, str) or cid[:12] not in cgroup_text:
-            continue
-        observed = kernel_cpu_max(cgroup_text, cgroup_root)
-        if observed is not None:
-            observed["pid"] = pid
-            observed["cgroup"] = cgroup_text
-            observed["cid"] = cid
-            return observed
-    return None
+    from fail_closed_guard import binding
+    cid, pid = bound.get("cid"), bound.get("pid")
+    fingerprint = bound.get("fingerprint")
+    if (not isinstance(cid, str) or not binding.CID.fullmatch(cid)
+            or not isinstance(pid, int) or not isinstance(fingerprint, list)
+            or len(fingerprint) != 2):
+        return None
+    record = table.get(pid) if isinstance(table, dict) else None
+    if not isinstance(record, dict):
+        return None
+    actual = [record.get("starttime"), record.get("pid_ns")]
+    if actual != list(fingerprint):
+        return None
+    cgroup_text = record.get("cgroup")
+    if not isinstance(cgroup_text, str) or cid[:12] not in cgroup_text:
+        return None
+    observed = kernel_cpu_max(cgroup_text, cgroup_root)
+    if observed is not None:
+        observed["pid"] = pid
+        observed["cgroup"] = cgroup_text
+        observed["cid"] = cid
+        observed["fingerprint"] = list(fingerprint)
+    return observed
+
+
+def check_observed_cpu_quota(observed: dict[str, Any] | None) -> None:
+    """Refuse a measured quota that differs from the matched-resource request."""
+    if observed is None:
+        return
+    if observed.get("origin") not in KERNEL_QUOTA_ORIGINS:
+        raise Refusal("observed CPU quota is not a kernel cgroup reading")
+    value = observed.get("value")
+    if value != REQUESTED_CPU_MAX:
+        raise Refusal("observed kernel cpu.max mismatch: " + str(value))
+    if not observed.get("leaf_only") and observed.get("effective_source") is None:
+        raise Refusal("observed CPU quota has no identified effective source")
 
 
 def operator_environment(storage_conf: pathlib.Path,
@@ -192,6 +250,7 @@ def build_production_arm_runner(
     watchdog_graphroot: pathlib.Path,
     attestation: pathlib.Path,
     env: dict[str, str] | None = None,
+    cgroup_root: pathlib.Path = pathlib.Path("/sys/fs/cgroup"),
 ) -> Callable[..., dict[str, Any]]:
     """Build a real guarded runner for live operator use.
 
@@ -216,7 +275,7 @@ def build_production_arm_runner(
         return bool(proc is not None and proc.poll() is None)
 
     inner_holder: dict[str, Any] = {}
-    from fail_closed_guard import proc as proc_sampler
+    from fail_closed_guard import binding, proc as proc_sampler
 
     def _measure():
         # watch_bound requires a non-None measurement; actual RSS is sampled by
@@ -224,24 +283,37 @@ def build_production_arm_runner(
         return True
 
     def _monitored_snapshot():
-        """Guard-owned PID table; also sample the exact CID's kernel quota.
+        """Guard-owned PID table; observe quota only from its validated bind.
 
-        The shared guard calls this for binding and on every watch sample, so
-        quota observation occurs only while the arm is under its supervision.
-        No inspection blocks spawn before the CID is bound.
+        The shared guard calls this for binding and on every watch sample. The
+        exact CID, init PID and immutable fingerprint come from the guard's own
+        bind_container; a changed or unreadable identity stops the observation
+        instead of attributing another process's cgroup to this arm.
         """
         table = proc_sampler.snapshot()
-        cid = inner_holder.get("cid")
-        if not cid:
-            cidfile = inner_holder.get("cidfile")
-            if cidfile:
-                try:
-                    cid = pathlib.Path(cidfile).read_text().strip()
-                except (OSError, ValueError):
-                    cid = ""
-        if cid and inner_holder.get("observed_cpu_quota") is None:
-            inner_holder["observed_cpu_quota"] = find_observed_cpu_quota(table, cid)
+        bound = inner_holder.get("bound")
+        if bound is None:
+            return table
+        observed = observe_bound_cpu_quota(table, bound, cgroup_root)
+        previous = inner_holder.get("observed_cpu_quota")
+        if previous is not None and observed is not None \
+                and previous.get("value") != observed.get("value"):
+            inner_holder["identity_unstable"] = True
+        if observed is None:
+            if previous is not None:
+                inner_holder["identity_unstable"] = True
+                inner_holder["observed_cpu_quota"] = None
+            return table
+        inner_holder["observed_cpu_quota"] = observed
         return table
+
+    def _bind(cid, env, snapshot=None):
+        bound = binding.bind_container(cid, env, snapshot=snapshot)
+        inner_holder["bound"] = {
+            "cid": bound.get("cid"), "pid": bound.get("pid"),
+            "fingerprint": bound.get("fingerprint"),
+        }
+        return bound
 
     def _runner(step: dict[str, str], argv: list[str], arm_dir: pathlib.Path,
                 *, deadline: float | None = None) -> dict[str, Any]:
@@ -268,16 +340,18 @@ def build_production_arm_runner(
             running=lambda: _running(inner_holder),
             measure=_measure,
             snapshot=_monitored_snapshot,
+            bind_container=_bind,
         )
         result = local_runner(step, argv, arm_dir, deadline=deadline)
+        if inner_holder.get("identity_unstable"):
+            raise Refusal("bound container identity or CPU quota changed during arm")
         observed = inner_holder.get("observed_cpu_quota")
         # Requested/configured values are preserved but never used as proof.
         result["requested_container_cpu_max"] = REQUESTED_CPU_MAX
         result["container_cpu_max"] = REQUESTED_CPU_MAX
         result["observed_cpu_quota"] = observed
         result["observed_container_cpu_max"] = observed.get("value") if observed else None
-        if observed is not None and observed["value"] != REQUESTED_CPU_MAX:
-            raise Refusal("observed kernel cpu.max mismatch: " + observed["value"])
+        check_observed_cpu_quota(observed)
         return result
 
     return _runner

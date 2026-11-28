@@ -18,5 +18,6 @@ pub(super) fn encode(seq: &[u8]) -> Option<u64> {
 }
 
 use super::cycle;
+mod divergent;
 mod oracle;
 mod stopping;

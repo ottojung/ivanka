@@ -44,9 +44,9 @@ WATCHDOG_CLI_REL = Path("benchmarks/fail_closed_guard/watchdog_cli.py")
 # The immediately previous live guard (165a86b3) and the older PR536 guard
 # (091f5627) are retained for old-root verification and provenance only; neither
 # is an alternative accepted identity and neither bypasses a readiness check.
-LEGACY_WATCHDOG_SERVICE_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
-PREVIOUS_WATCHDOG_SERVICE_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
-WATCHDOG_SERVICE_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
+LEGACY_WATCHDOG_SERVICE_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+PREVIOUS_WATCHDOG_SERVICE_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
+WATCHDOG_SERVICE_HEAD = "b777f34976bb338ba3652239feffe99510326e44"
 # Exact watchdog_cli.py at both heads (unchanged PR527 implementation).
 WATCHDOG_CLI_SHA256 = "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369"
 # WATCHDOG_CODE is intentionally absent: it is read from the run script itself.

@@ -461,7 +461,7 @@ class GuardPinAndDigestTests(unittest.TestCase):
         guard = guard_source.verify()
         self.assertEqual(record["guard_commit"], guard_source.GUARD_COMMIT)
         self.assertEqual(record["guard_commit"],
-                         "1e5104082c4366f30c93fd759e3f46307a142e63")
+                         "b777f34976bb338ba3652239feffe99510326e44")
         self.assertEqual(record["guard_control_source_sha256"],
                          guard_source.CONTROL_RETRY_SHA256)
         self.assertEqual(record["guard_control_source_sha256"],

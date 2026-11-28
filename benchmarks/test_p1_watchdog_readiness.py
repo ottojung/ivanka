@@ -210,7 +210,7 @@ class ServiceHeadPinTests(unittest.TestCase):
         """The new s6 service head and exact staged watchdog CLI are accepted."""
         from assembler_bench import px_guard_source as guard_source
         from expanded import p1_bounded_pilot_runner as runner
-        head = "1e5104082c4366f30c93fd759e3f46307a142e63"
+        head = "b777f34976bb338ba3652239feffe99510326e44"
         self.assertEqual(w.WATCHDOG_SERVICE_HEAD, head)
         self.assertEqual(w.WATCHDOG_SERVICE_HEAD, guard_source.DEPLOYED_HEAD)
         self.assertEqual(w.WATCHDOG_SERVICE_HEAD, runner.REVIEWED_GUARD_HEAD)
@@ -230,7 +230,7 @@ class ServiceHeadPinTests(unittest.TestCase):
 
     def test_old_service_head_fails_closed_under_new_expectation(self):
         """A live s6 run still pinned to 165a86b3 cannot satisfy readiness."""
-        old_pin = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+        old_pin = "1e5104082c4366f30c93fd759e3f46307a142e63"
         self.assertNotEqual(old_pin, w.WATCHDOG_SERVICE_HEAD)
         self.install()
         run = self.svc / "run"

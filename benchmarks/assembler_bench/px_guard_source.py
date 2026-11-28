@@ -10,7 +10,7 @@ Two explicit, non-self-referential identities are bound by reviewed source
 hashes and operator-attested manifests:
 
 * the immutable guard deployment checkout (``DEPLOYED_ROOT``) is the reviewed,
-  signed integration ``1e510408``. It may be staged as a git checkout or a COPY
+  reviewed PR597 source ``b777f349``. It may be staged as a git checkout or a COPY
   image. If ``.git`` exists, HEAD is checked against ``DEPLOYED_HEAD``. In all
   cases the reviewed manifest and exact module-byte chain are required.
   ``DEPLOYED_EXPECTED`` binds those new bytes; ``EXPECTED`` remains the
@@ -42,11 +42,11 @@ CONTROL_RETRY_SHA256 = "0ba6009b3bb63411e92b159d54e7cb7e62bef9fb7d0cc31113b53207
 CONTROL_GUARD_SOURCE_SHA256 = "69e657398cd6215b94a421d39a94b90c147c34122ed007e3395a2df761ae2885"
 
 # Immutable guard deployment checkout (reviewed, signed integration). Preserve .git.
-DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr592-candidate-1e510408-20261128")
-DEPLOYED_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
+DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr597-candidate-b777f349-20261128")
+DEPLOYED_HEAD = "b777f34976bb338ba3652239feffe99510326e44"
 IDENTITY_NAME = "px_guard_identity.json"
 IDENTITY_SCHEMA = "ivanka.px.guard-source-identity.v1"
-IDENTITY_SHA256 = "f012c244cbb442ac720251053cb3f67bde9b5209377a0f94ca74e9e011aac2d1"
+IDENTITY_SHA256 = "5822b1a9f00da556f5a554d038119b7937000592829eea96545fad7f76485e88"
 
 # Origin of the constant-time shared disk reserve (PR #510). Retained evidence.
 RESERVE_COMMIT = "af1f10d19143fa7a00134a01b56a858ef8a09647"

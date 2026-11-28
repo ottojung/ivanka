@@ -1,5 +1,6 @@
 """PX build plans must stay regenerable, pinned and nonqualifying."""
 import copy
+import hashlib
 import json
 import tempfile
 import unittest
@@ -61,7 +62,8 @@ class TestExplorerBuildPlans(unittest.TestCase):
             self.assertEqual(
                 row["adapter_commit"], self.registry["adapter_branch_commits"][tool])
             self.assertEqual(
-                row["common_baseline_commit"], self.registry["adapter_baseline_commit"])
+                row["common_baseline_commit"],
+                plan.BASELINES.get(tool, self.registry["adapter_baseline_commit"]))
             self.assertEqual(row["tool_source_commit"], candidate["source_commit"])
             self.assertEqual(row["tool_source_repo"], candidate["source_repo"])
             self.assertEqual(
@@ -87,8 +89,11 @@ class TestExplorerBuildPlans(unittest.TestCase):
         for row in self.document["builds"]:
             with self.subTest(tool=row["id"]):
                 args = row["recipe_args"]
-                for name in ("MICALL_ADAPTER_COMMANDS_SHA256",
-                             "MICALL_ADAPTER_DISPATCH_SHA256"):
+                names = (("BENCHMARK_ASSEMBLER_SHA256", "BENCHMARK_TEST_SHA256")
+                         if row["id"] == "unicycler" else
+                         ("MICALL_ADAPTER_COMMANDS_SHA256",
+                          "MICALL_ADAPTER_DISPATCH_SHA256"))
+                for name in names:
                     self.assertEqual(len(args[name]), 64)
                     self.assertIn(name + "=" + args[name],
                                   row["command_template"])
@@ -101,12 +106,17 @@ class TestExplorerBuildPlans(unittest.TestCase):
         self.assertIn("TOOL_LICENSE_SHA256", fermi["recipe_args"])
         self.assertEqual(len(fermi["recipe_args"]["TOOL_LICENSE_SHA256"]), 64)
         unicycler = by_id["unicycler"]
-        self.assertEqual(
-            unicycler["recipe_args"]["SPADES_SOURCE_COMMIT"],
-            "896694ce5c7a9050a6ffa9fccc950a4cd9f04363")
-        self.assertIn("SPADES_BINARY_SHA256", unicycler["extra_placeholders"])
-        self.assertIn("SPADES_BINARY_SHA256={SPADES_BINARY_SHA256}",
-                      unicycler["command_template"])
+        self.assertEqual(unicycler["adapter_branch"],
+                         "bench/minimal-8458f9e5-unicycler-20261123")
+        self.assertEqual(unicycler["common_baseline_commit"],
+                         "8458f9e5d34c39a6694b1fb6a40e055d7ce89553")
+        self.assertEqual(unicycler["recipe"], "Containerfile.assembler-bench")
+        for token in ("ASSEMBLER_TOOL_IMAGE={ASSEMBLER_TOOL_IMAGE}",
+                      "TOOL_IMAGE_ID={TOOL_IMAGE_ID}",
+                      "MICALL_BASE_COMMIT=8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+                      "MICALL_SOURCE_COMMIT="
+                      "5ad7874fe193043fa378063efc123018bff546da"):
+            self.assertIn(token, unicycler["command_template"])
 
     def test_mutated_adapter_hash_is_rejected(self):
         def change(document):
@@ -119,10 +129,91 @@ class TestExplorerBuildPlans(unittest.TestCase):
             plan.render(self.document, "unicycler", "sha256:" + "a" * 64,
                         "b" * 64, "/workspace/adapter", str(plan.REGISTRY))
         command = plan.render(
-            self.document, "unicycler", "sha256:" + "a" * 64, "b" * 64,
+            self.document, "unicycler", None, None,
             "/workspace/adapter", str(plan.REGISTRY),
-            {"SPADES_BINARY_SHA256": "c" * 64})
-        self.assertIn("SPADES_BINARY_SHA256=" + "c" * 64, " ".join(command))
+            {"ASSEMBLER_TOOL_IMAGE": "sha256:" + "c" * 64,
+             "TOOL_IMAGE_ID": "d" * 64})
+        joined = " ".join(command)
+        self.assertIn("ASSEMBLER_TOOL_IMAGE=sha256:" + "c" * 64, joined)
+        self.assertIn("TOOL_IMAGE_ID=" + "d" * 64, joined)
+        self.assertNotIn("FORK_BASE_IMAGE", joined)
+
+    def test_unicycler_frozen_lineage_has_no_stale_donor_ancestry(self):
+        row = next(r for r in self.document["builds"] if r["id"] == "unicycler")
+        blob = json.dumps(row, sort_keys=True)
+        self.assertEqual(row["adapter_branch"],
+                         "bench/minimal-8458f9e5-unicycler-20261123")
+        self.assertEqual(row["adapter_commit"],
+                         "5ad7874fe193043fa378063efc123018bff546da")
+        self.assertEqual(row["common_baseline_commit"],
+                         "8458f9e5d34c39a6694b1fb6a40e055d7ce89553")
+        self.assertEqual(row["recipe"], "Containerfile.assembler-bench")
+        for stale in ("eeca0381808a6e9ba5ef791c80238a0e2940abb0",
+                      "fada133c16ca2c58d60f3cb5ad06eb65565a440d",
+                      "2ae4983fcbe30e57e85d0bc6acd464084d57c3e9",
+                      "Dockerfile.assembler-bench", "MICALL_FORK_SOURCE_COMMIT"):
+            self.assertNotIn(stale, blob)
+
+    def test_frozen_unicycler_lineage_is_validated_from_pinned_file_bytes(self):
+        lineage = json.loads(plan.FROZEN_LINEAGE.read_text())
+        self.assertEqual(lineage["adapter_repo"],
+                         "https://github.com/ottojung/MiCall.git")
+        self.assertEqual(lineage["adapter_parent"], lineage["clinical_master"])
+        self.assertEqual(lineage["donor_evidence_parent"],
+                         lineage["adapter_commit"])
+        self.assertEqual(lineage["donor_evidence_commit"],
+                         "c16a2f1189ec2056e7c1fd027cd2dddb7cf5c278")
+        fixtures = (plan.FROZEN_LINEAGE.parent / "fixtures" / "frozen-unicycler")
+        for name, expected in lineage["staged_file_sha256"].items():
+            with self.subTest(file=name):
+                blob = (fixtures / name).read_bytes()
+                self.assertEqual(hashlib.sha256(blob).hexdigest(), expected)
+        recipe = (fixtures / "Containerfile.assembler-bench").read_text()
+        self.assertIn("FROM $ASSEMBLER_TOOL_IMAGE", recipe)
+        self.assertIn("rm -rf /opt/micall "
+                      "/opt/venv/lib/python3.12/site-packages/micall", recipe)
+        self.assertIn("--reinstall-package micall", recipe)
+        for label in ("frozen-upstream-master", "native-tool-image",
+                      "integration-mode"):
+            self.assertIn(label, recipe)
+        row = next(r for r in self.document["builds"] if r["id"] == "unicycler")
+        args = row["recipe_args"]
+        staged = lineage["staged_file_sha256"]
+        self.assertEqual(args["BENCHMARK_ASSEMBLER_SHA256"],
+                         staged["benchmark_assembler.py"])
+        self.assertEqual(args["BENCHMARK_TEST_SHA256"],
+                         staged["test_benchmark_assembler.py"])
+        self.assertEqual(args["CONTAINERFILE_SHA256"],
+                         staged["Containerfile.assembler-bench"])
+        self.assertEqual(args["DEPENDENCY_DONORS_SHA256"],
+                         staged["DEPENDENCY-DONORS.md"])
+        self.assertIsNone(lineage["spades_core_sha256"])
+        self.assertIsNone(lineage["donor_image_id"])
+        self.assertIsNone(lineage["final_image_sha256"])
+
+    def test_frozen_unicycler_canary_plan_matches_live_guard_contract(self):
+        from assembler_bench.exploratory_runtime import pilot
+
+        canary = json.loads(
+            (plan.HERE / "frozen_unicycler_canary_plan.json").read_text())
+        lineage = json.loads(plan.FROZEN_LINEAGE.read_text())
+        self.assertEqual(canary["lineage_commit"], lineage["adapter_commit"])
+        self.assertEqual(canary["donor_evidence_commit"],
+                         lineage["donor_evidence_commit"])
+        self.assertEqual(canary["forbidden_podman_flags"],
+                         list(pilot.FORBIDDEN))
+        self.assertEqual(canary["forbidden_cidfile_prefix"], "--cidfile")
+        self.assertIn("--cidfile", canary["required_native_flags"])
+        self.assertEqual(canary["required_native_flags"][1],
+                         "--memory=%d" % pilot.RAM_LIMIT)
+        self.assertEqual(canary["reserve_bytes"], plan.RESERVE_BYTES)
+        self.assertEqual(canary["min_workspace_free_bytes"], 32 * 1024**3)
+        self.assertEqual(canary["max_wall_seconds"], 2400)
+        self.assertEqual(canary["max_sampled_process_tree_rss_bytes"],
+                         4_000_000_000)
+        self.assertEqual(canary["canaries"], {"physical": 1, "synthetic": 1})
+        self.assertIsNone(canary["final_image_sha256"])
+        self.assertFalse(canary["qualifying"])
 
     @unittest.skipUnless(
         Path("/workspace/px-skesa-pqhG00h5412U4gNpP6e2KI-20261121/"

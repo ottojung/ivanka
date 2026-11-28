@@ -1,0 +1,24 @@
+{
+  "schema": "ivanka.exploratory.frozen-unicycler-canary.v1",
+  "scope": "source-only plan; no case executed; no slot held; no live control",
+  "lineage_commit": "5ad7874fe193043fa378063efc123018bff546da",
+  "donor_evidence_commit": "c16a2f1189ec2056e7c1fd027cd2dddb7cf5c278",
+  "image_tag": "localhost/ivanka-exploratory-unicycler:5ad7874fe193",
+  "final_image_sha256": null,
+  "launcher": "assembler_bench.exploratory_runtime.cli",
+  "mode": "pilot",
+  "reserve_bytes": 1073741824,
+  "min_workspace_free_bytes": 34359738368,
+  "max_wall_seconds": 2400,
+  "max_sampled_process_tree_rss_bytes": 4000000000,
+  "canaries": {
+    "physical": 1,
+    "synthetic": 1
+  },
+  "case_source": "frozen input manifest selected by the named slot coordinator; no generated, promoted or score-selected inputs",
+  "forbidden_podman_flags": ["-m", "--memory", "--memory-swap", "--net", "--network", "--cgroups", "--cgroupns", "--privileged"],
+  "forbidden_cidfile_prefix": "--cidfile",
+  "required_native_flags": ["--cidfile", "--memory=4000000000", "--network=none"],
+  "qualifying": false,
+  "hidden_evidence_free": true
+}

@@ -1,7 +1,7 @@
 {
   "schema": "ivanka.exploratory.recipe-audit.v1",
   "audited_utc": "2026-11-23T19:58:00Z",
-  "method": "git show PINNED_ADAPTER_COMMIT:micall/core/assembler_commands.py | sha256sum (same for assembler_dispatch.py); fork refs rechecked with git ls-remote; fermi-lite LICENSE.txt fetched read-only from the pinned upstream commit; binary hashes are external attestations, never derived from source",
+  "method": "git show PINNED_ADAPTER_COMMIT:micall/core/assembler_commands.py | sha256sum (same for assembler_dispatch.py); Unicycler is the frozen 8458f9e5 lineage instead: git show 5ad7874:Containerfile.assembler-bench / micall/core/benchmark_assembler.py / micall/tests/test_benchmark_assembler.py and c16a2f11:assembler-bench/DEPENDENCY-DONORS.md; fork refs rechecked with git ls-remote; fermi-lite LICENSE.txt fetched read-only from the pinned upstream commit; binary hashes are external attestations, never derived from source",
   "fork_repo": "https://github.com/ottojung/MiCall",
   "common_baseline_commit": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
   "recipes": {
@@ -42,16 +42,16 @@
       "blockers": ["no independently attested native binary hash", "no pinned common MiCall base image built yet"]
     },
     "unicycler": {
-      "adapter_commands_sha256": "698e58f05ce5ebb412ee6e335082712cc0f7b143e1b8de875e69b93bdfd2e5e0",
-      "adapter_dispatch_sha256": "c247bcc1d002658541769f3e40df61b6f83cc6fce99857698dce1212ba0ba187",
+      "adapter_commands_sha256": "3848b4442b5015057fce79c5cfc8ecc761d1713fb7c59834929e6a147883bdc0",
+      "adapter_dispatch_sha256": "0fb24ae4fb6fc4ab1428faed576ea703b8b90f06a1aa599414020e48edd60f8b",
       "extra_build_args": {
-        "SPADES_SOURCE_REPO": "https://github.com/ablab/spades",
-        "SPADES_SOURCE_COMMIT": "896694ce5c7a9050a6ffa9fccc950a4cd9f04363"
+        "CONTAINERFILE_SHA256": "d3c59d9c3084ef87b976cc5076b57a5f934fb9f454559d065d317a6ee7952085",
+        "DEPENDENCY_DONORS_SHA256": "22e2521031e5b90928a71e1bf835c8b867447032b3c9092a2c6a3a6407d7206f"
       },
-      "extra_placeholders": ["SPADES_BINARY_SHA256"],
+      "extra_placeholders": [],
       "attested_binary_sha256": null,
       "attestation_provenance": null,
-      "blockers": ["no independently attested SPAdes core binary hash", "no independently attested Unicycler cpp_functions.so hash", "no pinned common MiCall base image built yet"]
+      "blockers": ["no build-attested native tool donor image id", "no build-attested SPAdes core binary hash", "no build-attested Unicycler cpp_functions.so binary hash", "no final image digest attested"]
     },
     "tadpole": {
       "adapter_commands_sha256": "28e61e3095a91107897134b92c564629eaaf056c5946665c5effd16182e445b0",

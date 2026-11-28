@@ -1,0 +1,19 @@
+# Dedicated unicycler benchmark. Native tools from the digest-pinned donor.
+ARG ASSEMBLER_TOOL_IMAGE
+FROM $ASSEMBLER_TOOL_IMAGE
+ARG MICALL_BASE_COMMIT
+ARG MICALL_SOURCE_COMMIT
+ARG TOOL_IMAGE_ID
+# Remove every old MiCall code installation, not only known patched files.
+RUN rm -rf /opt/micall /opt/venv/lib/python3.12/site-packages/micall
+COPY pyproject.toml uv.lock README.md /opt/micall/
+COPY micall /opt/micall/micall
+RUN /opt/uv-home/.local/bin/uv sync --frozen --managed-python --project /opt/micall --extra basespace --extra watcher --extra utils --no-editable --reinstall-package micall
+RUN /opt/venv/bin/micall make_blast_db
+LABEL org.opencontainers.image.source="https://github.com/ottojung/MiCall"
+LABEL org.opencontainers.image.revision="$MICALL_SOURCE_COMMIT"
+LABEL org.ottojung.micall.frozen-upstream-master="$MICALL_BASE_COMMIT"
+LABEL org.ottojung.micall.native-tool-image="$TOOL_IMAGE_ID"
+LABEL org.ottojung.micall.assembler="unicycler"
+LABEL org.ottojung.micall.integration-mode="single-assembler-frozen-clinical"
+ENV MICALL_DENOVO_ASSEMBLER="unicycler"

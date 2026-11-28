@@ -96,58 +96,78 @@ def _cgroup_dirs(v2_path: str, cgroup_root: pathlib.Path) -> list[pathlib.Path]:
     return [cgroup_root.joinpath(*parts[:index]) for index in range(len(parts) + 1)]
 
 
-def kernel_cpu_max(cgroup_text: str, cgroup_root: pathlib.Path) -> dict[str, Any] | None:
-    """Walk the live cgroup ancestry and report the tightest effective quota.
+def _read_quota_file(path: pathlib.Path, raw: str) -> tuple[str, str | None, str | None]:
+    value = normalize_cpu_max(raw)
+    if value is None:
+        return "unreadable", None, "malformed"
+    return "ok", value, None
 
-    A leaf-only reading cannot prove an effective quota: an ancestor may impose
-    a smaller limit. Every directory from the cgroup root to the leaf is read,
-    every value is retained, and the tightest observed ratio is reported with
-    its source. An unreadable quota file in the chain is a measurement gap, not
-    a successful 2-CPU observation.
+
+def kernel_cpu_max(cgroup_text: str, cgroup_root: pathlib.Path) -> dict[str, Any] | None:
+    """Inspect the visible cgroup hierarchy of one live process.
+
+    Every directory from the mounted cgroup root to the process leaf is checked.
+    A missing cpu controller is distinct from an unreadable/malformed file. The
+    result always records coverage, leaf status and the full normalized chain;
+    it is a visible-hierarchy observation, never an absolute effective-quota
+    proof unless an operator separately supplies host-scope provenance.
     """
     for line in cgroup_text.splitlines():
         fields = line.split(":", 2)
         if len(fields) != 3:
             continue
         hierarchy, controller, path = fields
-        if hierarchy == "0" and controller == "":
-            chain = []
-            for directory in _cgroup_dirs(path, cgroup_root):
-                candidate = directory / "cpu.max"
-                if candidate.is_symlink():
-                    continue
-                if not candidate.is_file():
-                    continue
-                raw = candidate.read_text().strip()
-                value = normalize_cpu_max(raw)
-                if value is not None:
-                    chain.append({"path": str(directory), "raw": raw, "value": value})
-            if not chain:
+        if hierarchy != "0" or controller != "":
+            continue
+        directories = _cgroup_dirs(path, cgroup_root)
+        chain, missing, unreadable = [], [], []
+        for directory in directories:
+            candidate = directory / "cpu.max"
+            if candidate.is_symlink():
+                unreadable.append(str(directory))
                 continue
+            if not candidate.is_file():
+                if (directory / "cgroup.controllers").is_file():
+                    missing.append(str(directory))
+                else:
+                    unreadable.append(str(directory))
+                continue
+            try:
+                raw = candidate.read_text().strip()
+            except OSError:
+                unreadable.append(str(directory))
+                continue
+            status, value, reason = _read_quota_file(candidate, raw)
+            if status == "ok":
+                chain.append({"path": str(directory), "raw": raw,
+                              "value": str(value), "status": "ok"})
+            else:
+                unreadable.append(str(directory))
+        leaf = directories[-1]
+        leaf_status = "ok" if any(item["path"] == str(leaf) for item in chain) else "unavailable"
+        tightest = None
+        if chain:
             tightest = min(chain, key=lambda item: _quota_ratio(item["value"]) or float("inf"))
-            return {
-                "value": tightest["value"], "origin": CPU_MAX_ORIGIN_V2,
-                "raw": tightest["raw"], "cgroup_path": path,
-                "source": str(pathlib.Path(tightest["path"]) / "cpu.max"),
-                "chain": chain, "leaf_value": chain[-1]["value"],
-                "leaf_only": len(chain) == 1,
-                "effective_source": tightest["path"],
-            }
-        if controller == "cpu":
-            base = cgroup_root / "cpu" / path.lstrip("/")
-            quota_file, period_file = base / "cpu.cfs_quota_us", base / "cpu.cfs_period_us"
-            if quota_file.is_file() and period_file.is_file() and not quota_file.is_symlink():
-                quota = quota_file.read_text().strip()
-                period = period_file.read_text().strip()
-                value = normalize_cpu_max(("max " if quota == "-1" else quota) + " " + period)
-                if value is not None:
-                    return {"value": value, "origin": CPU_MAX_ORIGIN_V1,
-                            "raw": quota + " " + period, "cgroup_path": path,
-                            "source": str(quota_file), "chain": [
-                                {"path": str(base), "raw": quota + " " + period,
-                                 "value": value}],
-                            "leaf_value": value, "leaf_only": True,
-                            "effective_source": str(base)}
+        complete = not missing and not unreadable and leaf_status == "ok"
+        return {
+            "origin": CPU_MAX_ORIGIN_V2,
+            "value": tightest["value"] if tightest else None,
+            "raw": tightest["raw"] if tightest else None,
+            "cgroup_path": path,
+            "source": tightest["path"] + "/cpu.max" if tightest else None,
+            "chain": chain, "chain_normalized": [
+                [item["path"], item["value"]] for item in chain],
+            "leaf_value": next((item["value"] for item in chain
+                                if item["path"] == str(leaf)), None),
+            "leaf_status": leaf_status,
+            "leaf_only": len(chain) == 1 and leaf_status == "ok",
+            "effective_source": tightest["path"] if complete and tightest else None,
+            "coverage": {"expected": len(directories), "read": len(chain),
+                         "missing": missing, "unreadable": unreadable,
+                         "complete": complete},
+            "scope": "visible_hierarchy_only",
+            "absolute_effective_claim": False,
+        }
     return None
 
 
@@ -161,7 +181,8 @@ def observe_bound_cpu_quota(table: dict[int, Any], bound: dict[str, Any],
     cid, pid = bound.get("cid"), bound.get("pid")
     fingerprint = bound.get("fingerprint")
     if (not isinstance(cid, str) or not binding.CID.fullmatch(cid)
-            or not isinstance(pid, int) or not isinstance(fingerprint, list)
+            or not isinstance(pid, int) or isinstance(pid, bool)
+            or not isinstance(fingerprint, (list, tuple))
             or len(fingerprint) != 2):
         return None
     record = table.get(pid) if isinstance(table, dict) else None
@@ -171,7 +192,7 @@ def observe_bound_cpu_quota(table: dict[int, Any], bound: dict[str, Any],
     if actual != list(fingerprint):
         return None
     cgroup_text = record.get("cgroup")
-    if not isinstance(cgroup_text, str) or cid[:12] not in cgroup_text:
+    if not isinstance(cgroup_text, str) or not cgroup_text.strip():
         return None
     observed = kernel_cpu_max(cgroup_text, cgroup_root)
     if observed is not None:
@@ -179,20 +200,73 @@ def observe_bound_cpu_quota(table: dict[int, Any], bound: dict[str, Any],
         observed["cgroup"] = cgroup_text
         observed["cid"] = cid
         observed["fingerprint"] = list(fingerprint)
+        observed["sample_identity"] = {
+            "cid": cid, "pid": pid, "fingerprint": list(fingerprint),
+            "cgroup": cgroup_text,
+            "chain_normalized": observed.get("chain_normalized"),
+        }
     return observed
 
 
-def check_observed_cpu_quota(observed: dict[str, Any] | None) -> None:
-    """Refuse a measured quota that differs from the matched-resource request."""
+def compare_quota_samples(previous: dict[str, Any] | None,
+                          current: dict[str, Any]) -> list[str]:
+    """Report any change in the full bound sample, not just the quota value."""
+    if previous is None:
+        return []
+    before = previous.get("sample_identity") or {}
+    after = current.get("sample_identity") or {}
+    reasons = []
+    for key in ("cid", "pid", "fingerprint", "cgroup", "chain_normalized"):
+        if before.get(key) != after.get(key):
+            reasons.append("bound " + key + " changed")
+    if previous.get("value") != current.get("value"):
+        reasons.append("quota value changed")
+    if (previous.get("coverage") or {}).get("complete") != (
+            current.get("coverage") or {}).get("complete"):
+        reasons.append("quota coverage changed")
+    return reasons
+
+
+def sampling_gap_kind(previous: dict[str, Any] | None,
+                      table: dict[int, Any], bound: dict[str, Any]) -> str | None:
+    """A proven natural exit ends sampling; any other gap is a drift fault."""
+    if previous is None:
+        return None
+    live = table.get(bound.get("pid")) if isinstance(table, dict) else None
+    if isinstance(live, dict) and live.get("state") == "Z":
+        return "terminal"
+    return "drift"
+
+
+def quota_diagnostic(observed: dict[str, Any] | None, *,
+                     host_scope_proven: bool = False,
+                     drift: list[str] | None = None) -> dict[str, Any]:
+    """Classify an observation as evidence; never silently qualify a gap.
+
+    Mismatch, incomplete ancestry and delegated visibility are recorded as
+    diagnostics so the measured arm evidence survives even when comparability
+    must fail closed.
+    """
+    reasons = []
     if observed is None:
-        return
-    if observed.get("origin") not in KERNEL_QUOTA_ORIGINS:
-        raise Refusal("observed CPU quota is not a kernel cgroup reading")
-    value = observed.get("value")
-    if value != REQUESTED_CPU_MAX:
-        raise Refusal("observed kernel cpu.max mismatch: " + str(value))
-    if not observed.get("leaf_only") and observed.get("effective_source") is None:
-        raise Refusal("observed CPU quota has no identified effective source")
+        reasons.append("no observed kernel quota")
+    else:
+        if observed.get("origin") not in KERNEL_QUOTA_ORIGINS:
+            reasons.append("non-kernel quota origin")
+        if observed.get("value") != REQUESTED_CPU_MAX:
+            reasons.append("quota value differs from request")
+        coverage = observed.get("coverage") or {}
+        if not coverage.get("complete"):
+            reasons.append("invisible or unreadable cgroup ancestry")
+        if observed.get("leaf_status") != "ok":
+            reasons.append("leaf cpu quota unreadable")
+        if not host_scope_proven:
+            reasons.append("visible hierarchy only; host scope not proven")
+    if drift:
+        reasons.extend(drift)
+    return {"matched": not reasons, "reasons": reasons,
+            "host_scope_proven": bool(host_scope_proven),
+            "observed_value": observed.get("value") if observed else None}
 
 
 def operator_environment(storage_conf: pathlib.Path,
@@ -251,6 +325,7 @@ def build_production_arm_runner(
     attestation: pathlib.Path,
     env: dict[str, str] | None = None,
     cgroup_root: pathlib.Path = pathlib.Path("/sys/fs/cgroup"),
+    host_scope_proven: bool = False,
 ) -> Callable[..., dict[str, Any]]:
     """Build a real guarded runner for live operator use.
 
@@ -296,15 +371,18 @@ def build_production_arm_runner(
             return table
         observed = observe_bound_cpu_quota(table, bound, cgroup_root)
         previous = inner_holder.get("observed_cpu_quota")
-        if previous is not None and observed is not None \
-                and previous.get("value") != observed.get("value"):
-            inner_holder["identity_unstable"] = True
-        if observed is None:
-            if previous is not None:
-                inner_holder["identity_unstable"] = True
-                inner_holder["observed_cpu_quota"] = None
+        if observed is not None:
+            drift = compare_quota_samples(previous, observed)
+            if drift:
+                inner_holder["quota_drift"] = drift
+            inner_holder["observed_cpu_quota"] = observed
             return table
-        inner_holder["observed_cpu_quota"] = observed
+        if sampling_gap_kind(previous, table, bound) == "terminal":
+            # A proven natural exit legitimately ends sampling; earlier samples
+            # stay as evidence and are not poisoned by the terminal gap.
+            inner_holder["terminal_sample_gap"] = True
+        elif previous is not None:
+            inner_holder["quota_drift"] = ["bound init disappeared or became unreadable"]
         return table
 
     def _bind(cid, env, snapshot=None):
@@ -343,15 +421,18 @@ def build_production_arm_runner(
             bind_container=_bind,
         )
         result = local_runner(step, argv, arm_dir, deadline=deadline)
-        if inner_holder.get("identity_unstable"):
-            raise Refusal("bound container identity or CPU quota changed during arm")
         observed = inner_holder.get("observed_cpu_quota")
+        drift = list(inner_holder.get("quota_drift") or [])
         # Requested/configured values are preserved but never used as proof.
         result["requested_container_cpu_max"] = REQUESTED_CPU_MAX
         result["container_cpu_max"] = REQUESTED_CPU_MAX
         result["observed_cpu_quota"] = observed
         result["observed_container_cpu_max"] = observed.get("value") if observed else None
-        check_observed_cpu_quota(observed)
+        result["quota_drift"] = drift
+        result["terminal_sample_gap"] = bool(inner_holder.get("terminal_sample_gap"))
+        result["host_scope_proven"] = bool(host_scope_proven)
+        result["quota_diagnostic"] = quota_diagnostic(
+            observed, host_scope_proven=host_scope_proven, drift=drift)
         return result
 
     return _runner
@@ -680,6 +761,8 @@ def execute_plan(
             container_cpu_max=raw.get("container_cpu_max"),
             requested_cpu_max=raw.get("requested_container_cpu_max"),
             observed_cpu_quota=raw.get("observed_cpu_quota"),
+            quota_diagnostic=raw.get("quota_diagnostic"),
+            quota_drift=raw.get("quota_drift"),
             stage_timing=stage_timing,
             log_sha256=log_sha,
         )
@@ -691,7 +774,8 @@ def execute_plan(
         }
         for key in ("guard_outcome", "pinned_cidfiles",
                     "requested_container_cpu_max", "observed_cpu_quota",
-                    "observed_container_cpu_max"):
+                    "observed_container_cpu_max", "quota_diagnostic",
+                    "quota_drift", "terminal_sample_gap", "host_scope_proven"):
             if key in raw:
                 record[key] = raw[key]
         _write_json_exclusive(arm_dir / "argv.json", {

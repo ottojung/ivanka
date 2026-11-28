@@ -37,8 +37,20 @@ OBSERVED_QUOTA = {
     "fingerprint": [5, 7], "leaf_value": "200000 100000",
     "leaf_only": True, "effective_source": "/libpod-test.scope",
     "chain": [{"path": "/libpod-test.scope", "raw": "200000 100000",
-               "value": "200000 100000"}],
+               "value": "200000 100000", "status": "ok"}],
+    "chain_normalized": [["/libpod-test.scope", "200000 100000"]],
+    "leaf_status": "ok", "scope": "host_scope_proven",
+    "coverage": {"expected": 1, "read": 1, "missing": [],
+                 "unreadable": [], "complete": True},
+    "sample_identity": {"cid": "a" * 64, "pid": 4242,
+                        "fingerprint": [5, 7],
+                        "cgroup": "0::/libpod-test.scope",
+                        "chain_normalized": [["/libpod-test.scope",
+                                              "200000 100000"]]},
 }
+DIAGNOSTIC_OK = {"matched": True, "reasons": [],
+                "host_scope_proven": True,
+                "observed_value": "200000 100000"}
 
 
 def fake_arm_runner(step, argv, arm_dir, *, deadline=None):
@@ -59,6 +71,9 @@ def fake_arm_runner(step, argv, arm_dir, *, deadline=None):
         "requested_container_cpu_max": "200000 100000",
         "observed_cpu_quota": OBSERVED_QUOTA,
         "observed_container_cpu_max": "200000 100000",
+        "quota_diagnostic": DIAGNOSTIC_OK,
+        "quota_drift": [],
+        "host_scope_proven": True,
         "host_before": CALM_HOST,
         "host_after": {**CALM_HOST, "loadavg": [1.1, 1.0, 1.0], "cpu_stat": {"nr_periods": 110, "nr_throttled": 0}},
     }
@@ -224,7 +239,10 @@ class ExecutorTest(unittest.TestCase):
             self.assertEqual(observed["raw"], "200000 100000")
             self.assertEqual(ex.normalize_cpu_max("max 100000"), "max 100000")
             self.assertIsNone(ex.normalize_cpu_max("bogus 100000"))
-            self.assertIsNone(ex.kernel_cpu_max("0::/missing.scope\n", root))
+            absent = ex.kernel_cpu_max("0::/missing.scope\n", root)
+            self.assertIsNone(absent["value"])
+            self.assertEqual(absent["leaf_status"], "unavailable")
+            self.assertFalse(absent["coverage"]["complete"])
 
     def test_observed_quota_uses_guard_bind_and_ancestor_walk(self) -> None:
         cid = "a" * 64
@@ -283,14 +301,59 @@ class ExecutorTest(unittest.TestCase):
             self.assertIsNone(ex.observe_bound_cpu_quota(malformed,
                               {**bound, "cid": "deadbeef"}, root))
 
-    def test_observed_cpu_quota_mismatch_is_refused(self) -> None:
-        good = {"value": "200000 100000", "origin": ex.CPU_MAX_ORIGIN_V2,
-                "effective_source": "/x", "leaf_only": True}
-        ex.check_observed_cpu_quota(good)
-        with self.assertRaises(plan.Refusal):
-            ex.check_observed_cpu_quota({**good, "value": "150000 100000"})
-        with self.assertRaises(plan.Refusal):
-            ex.check_observed_cpu_quota({**good, "origin": "podman_hostconfig"})
+    def test_observed_cpu_quota_mismatch_is_diagnostic_not_dropped(self) -> None:
+        good = dict(OBSERVED_QUOTA)
+        self.assertTrue(ex.quota_diagnostic(
+            good, host_scope_proven=True)["matched"])
+        self.assertFalse(ex.quota_diagnostic({**good, "value": "150000 100000"},
+            host_scope_proven=True)["matched"])
+        self.assertFalse(ex.quota_diagnostic({**good, "origin": "podman_hostconfig"},
+            host_scope_proven=True)["matched"])
+        self.assertFalse(ex.quota_diagnostic(good)["matched"])
+        bad_coverage = {**good}
+        bad_coverage["coverage"] = {**good["coverage"], "complete": False}
+        self.assertFalse(ex.quota_diagnostic(
+            bad_coverage, host_scope_proven=True)["matched"])
+        drift = ex.compare_quota_samples(good, {
+            **good,
+            "sample_identity": {**good["sample_identity"],
+                                "cgroup": "0::/other.scope",
+                                "chain_normalized": [["/other.scope",
+                                                      "200000 100000"]]}})
+        self.assertIn("bound cgroup changed", drift)
+
+    def test_missing_intermediate_and_root_only_are_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            mid = root / "slice-a"
+            leaf = mid / "libpod-test.scope"
+            leaf.mkdir(parents=True)
+            (root / "cpu.max").write_text("200000 100000\n")
+            (leaf / "cpu.max").write_text("200000 100000\n")
+            # Missing intermediate controller is recorded, not silently skipped.
+            (mid / "cgroup.controllers").write_text("cpuset memory\n")
+            observed = ex.kernel_cpu_max("0::/slice-a/libpod-test.scope\n", root)
+            self.assertEqual(observed["value"], "200000 100000")
+            self.assertIn(str(mid), observed["coverage"]["missing"])
+            self.assertIsNone(observed["effective_source"])
+            self.assertFalse(ex.quota_diagnostic(
+                observed, host_scope_proven=True)["matched"])
+
+            # Root-only reading cannot be presented as the leaf.
+            (leaf / "cpu.max").unlink()
+            root_only = ex.kernel_cpu_max("0::/slice-a/libpod-test.scope\n", root)
+            self.assertEqual(root_only["leaf_status"], "unavailable")
+            self.assertEqual(root_only["value"], "200000 100000")
+            self.assertIsNone(root_only["leaf_value"])
+            self.assertIsNone(root_only["effective_source"])
+
+    def test_natural_exit_gap_does_not_poison_earlier_samples(self) -> None:
+        previous = dict(OBSERVED_QUOTA)
+        bound = {"cid": "a" * 64, "pid": 4242, "fingerprint": [5, 7]}
+        zombie = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
+        self.assertEqual(ex.sampling_gap_kind(previous, zombie, bound), "terminal")
+        self.assertEqual(ex.sampling_gap_kind(previous, {}, bound), "drift")
+        self.assertIsNone(ex.sampling_gap_kind(None, zombie, bound))
 
     def test_missing_observed_quota_fails_comparability(self) -> None:
         def no_quota(step, argv, arm_dir, *, deadline=None):
@@ -343,9 +406,37 @@ class ExecutorTest(unittest.TestCase):
                  "memory_current": 1},
                 {"seconds": 100.0, "exit_code": 0},
                 sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
-                requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA))
+                requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA,
+            quota_diagnostic=DIAGNOSTIC_OK))
         decision = plan.comparability_check(records, cases=plan.ALL_CASES)
         self.assertTrue(decision["comparable"])
+
+
+    def test_mismatch_is_preserved_as_diagnostic_receipt(self) -> None:
+        def mismatched(step, argv, arm_dir, *, deadline=None):
+            result = fake_arm_runner(step, argv, arm_dir, deadline=deadline)
+            result["observed_cpu_quota"] = {
+                **OBSERVED_QUOTA, "value": "150000 100000"}
+            result["observed_container_cpu_max"] = "150000 100000"
+            result["quota_diagnostic"] = ex.quota_diagnostic(
+                result["observed_cpu_quota"], host_scope_proven=True)
+            return result
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp) / "out"
+            emitted = plan.build_plan(RECEIPT, out)
+            receipt = ex.execute_plan(
+                emitted, output_root=out, arm_runner=mismatched,
+                allow_unready=True, host_evidence=calm_host_evidence)
+            self.assertTrue((out / "receipt.json").is_file())
+            self.assertTrue(receipt["comparability"]["abort"])
+            for record in receipt["records"]:
+                self.assertFalse(record["cpu_quota_complete"])
+                self.assertEqual(record["cpu_quota"]["observed_container_cpu_max"],
+                                 "150000 100000")
+                self.assertFalse(record["cpu_quota_diagnostic"]["matched"])
+                self.assertIn("quota value differs from request",
+                              record["cpu_quota_diagnostic"]["reasons"])
 
 
 if __name__ == "__main__":

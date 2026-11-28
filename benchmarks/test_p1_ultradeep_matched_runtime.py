@@ -23,8 +23,20 @@ OBSERVED_QUOTA = {
     "fingerprint": [5, 7], "leaf_value": "200000 100000",
     "leaf_only": True, "effective_source": "/libpod-test.scope",
     "chain": [{"path": "/libpod-test.scope", "raw": "200000 100000",
-               "value": "200000 100000"}],
+               "value": "200000 100000", "status": "ok"}],
+    "chain_normalized": [["/libpod-test.scope", "200000 100000"]],
+    "leaf_status": "ok", "scope": "host_scope_proven",
+    "coverage": {"expected": 1, "read": 1, "missing": [],
+                 "unreadable": [], "complete": True},
+    "sample_identity": {"cid": "a" * 64, "pid": 4242,
+                        "fingerprint": [5, 7],
+                        "cgroup": "0::/libpod-test.scope",
+                        "chain_normalized": [["/libpod-test.scope",
+                                              "200000 100000"]]},
 }
+DIAGNOSTIC_OK = {"matched": True, "reasons": [],
+                "host_scope_proven": True,
+                "observed_value": "200000 100000"}
 
 
 def host(load: float = 1.0, cpu_max: str = "200000 100000",
@@ -256,7 +268,8 @@ class EvidenceTest(unittest.TestCase):
             {"timing_origin": "micall_in_container_monotonic_v1",
              "seconds": 836.2, "exit_code": 0},
             sampled_rss_bytes=1_500_000_000, container_cpu_max="200000 100000",
-            requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA)
+            requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA,
+            quota_diagnostic=DIAGNOSTIC_OK)
         self.assertEqual(record["sampled_peak_rss_bytes"], 1_500_000_000)
         self.assertEqual(record["cpu_quota"]["container_effective_cpus"], 2.0)
         self.assertTrue(plan.evidence_complete(record))
@@ -287,7 +300,8 @@ class EvidenceTest(unittest.TestCase):
                 step, host(), host(load=1.1),
                 {"seconds": 100.0, "exit_code": 0},
                 sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
-                requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA))
+                requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA,
+            quota_diagnostic=DIAGNOSTIC_OK))
         decision = plan.comparability_check(records)
         self.assertTrue(decision["comparable"])
         self.assertFalse(decision["abort"])
@@ -302,7 +316,8 @@ class EvidenceTest(unittest.TestCase):
                     {"seconds": 100.0, "exit_code": 0},
                     sampled_rss_bytes=1_000_000_000,
                     container_cpu_max="200000 100000",
-                    requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA))
+                    requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA,
+            quota_diagnostic=DIAGNOSTIC_OK))
             return result
 
         self.assertTrue(plan.comparability_check(full(throttled=20))["abort"])
@@ -322,7 +337,8 @@ class EvidenceTest(unittest.TestCase):
             return [plan.arm_evidence_record(
                 step, host(), host(), {"seconds": 1.0, "exit_code": 0},
                 sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
-                requested_cpu_max="200000 100000", observed_cpu_quota=observed)
+                requested_cpu_max="200000 100000", observed_cpu_quota=observed,
+                quota_diagnostic=DIAGNOSTIC_OK if observed else None)
                 for step in plan.alternating_schedule(("ultradeep-s006",))]
 
         self.assertFalse(plan.comparability_check(

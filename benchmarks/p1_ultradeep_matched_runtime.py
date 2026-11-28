@@ -481,6 +481,8 @@ def arm_evidence_record(
     container_cpu_max: str | None = None,
     requested_cpu_max: str | None = None,
     observed_cpu_quota: dict[str, Any] | None = None,
+    quota_diagnostic: dict[str, Any] | None = None,
+    quota_drift: list[str] | None = None,
     stage_timing: dict[str, Any] | None = None,
     log_sha256: str | None = None,
 ) -> dict[str, Any]:
@@ -502,13 +504,19 @@ def arm_evidence_record(
             quota_effective = effective_cpus(observed_value)
         except ValueError:
             quota_effective = None
+    diagnostic = quota_diagnostic if isinstance(quota_diagnostic, dict) else {}
+    coverage = observed.get("coverage") if observed else None
     quota_complete = bool(
         observed
         and requested == COMPARABILITY["required_container_cpu_max"]
         and quota_effective == COMPARABILITY["required_container_effective_cpus"]
         and origin in KERNEL_QUOTA_ORIGINS
         and isinstance(observed.get("effective_source"), str)
-        and isinstance(observed.get("chain"), list))
+        and isinstance(observed.get("chain"), list)
+        and isinstance(coverage, dict) and coverage.get("complete") is True
+        and observed.get("leaf_status") == "ok"
+        and diagnostic.get("matched") is True
+        and not quota_drift)
     record = {
         "schema": "ivanka.p1.ultradeep.arm-evidence.v1",
         "case": step["case"], "arm": step["arm"],
@@ -538,6 +546,8 @@ def arm_evidence_record(
             "memory_limit_bytes": int(CONSTRAINTS["memory"]),
         },
         "cpu_quota_complete": quota_complete,
+        "cpu_quota_diagnostic": diagnostic or None,
+        "cpu_quota_drift": list(quota_drift or []),
         "rss_enforcement": "sampled_userspace_observed",
         "kernel_enforcement": False,
         "constraints": CONSTRAINTS,

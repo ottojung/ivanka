@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from typing import Any
 
 import p1_matched_run_executor as ex
 import p1_ultradeep_matched_runtime as plan
@@ -51,6 +53,14 @@ OBSERVED_QUOTA = {
 DIAGNOSTIC_OK = {"matched": True, "reasons": [],
                 "host_scope_proven": True,
                 "observed_value": "200000 100000"}
+
+# The exact shape emitted by fail_closed_guard.natural_exit.attest. Only this
+# guard-owned proof may make a zombie/terminal gap a proven natural exit.
+TERMINAL_PROOF = {
+    "cid": "a" * 64, "returncode": 0, "method": "exact_cid_inspect",
+    "absence_proof": {"observed_absent": True, "inspected_absent_twice": True},
+    "kernel_enforcement": False,
+}
 
 
 def fake_arm_runner(step, argv, arm_dir, *, deadline=None):
@@ -351,9 +361,131 @@ class ExecutorTest(unittest.TestCase):
         previous = dict(OBSERVED_QUOTA)
         bound = {"cid": "a" * 64, "pid": 4242, "fingerprint": [5, 7]}
         zombie = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
-        self.assertEqual(ex.sampling_gap_kind(previous, zombie, bound), "terminal")
-        self.assertEqual(ex.sampling_gap_kind(previous, {}, bound), "drift")
-        self.assertIsNone(ex.sampling_gap_kind(None, zombie, bound))
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound, terminal_proof=TERMINAL_PROOF), "terminal")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, {}, bound, terminal_proof=TERMINAL_PROOF), "drift")
+        self.assertIsNone(ex.sampling_gap_kind(
+            None, zombie, bound, terminal_proof=TERMINAL_PROOF))
+
+    def test_zombie_terminal_requires_full_bound_fingerprint(self) -> None:
+        previous = dict(OBSERVED_QUOTA)
+        bound = {"cid": "a" * 64, "pid": 4242, "fingerprint": [5, 7]}
+        matching = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
+        changed_starttime = {4242: {"state": "Z", "starttime": 999, "pid_ns": 7}}
+        changed_namespace = {4242: {"state": "Z", "starttime": 5, "pid_ns": 999}}
+        no_fingerprint = {4242: {"state": "Z"}}
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, matching, bound, terminal_proof=TERMINAL_PROOF), "terminal")
+        for record in (changed_starttime, changed_namespace, no_fingerprint):
+            self.assertEqual(ex.sampling_gap_kind(
+                previous, record, bound, terminal_proof=TERMINAL_PROOF), "drift")
+
+    def test_natural_exit_needs_guard_owned_terminal_proof(self) -> None:
+        previous = dict(OBSERVED_QUOTA)
+        bound = {"cid": "a" * 64, "pid": 4242, "fingerprint": [5, 7]}
+        zombie = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound, terminal_proof=TERMINAL_PROOF), "terminal")
+        # No proof, a caller assertion, or a malformed/foreign proof is drift.
+        self.assertEqual(ex.sampling_gap_kind(previous, zombie, bound), "drift")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound, terminal_proof=True), "drift")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound,
+            terminal_proof={**TERMINAL_PROOF, "cid": "b" * 64}), "drift")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound,
+            terminal_proof={**TERMINAL_PROOF, "method": "caller_asserted"}), "drift")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound, terminal_proof={
+                **TERMINAL_PROOF,
+                "absence_proof": {"observed_absent": True,
+                                  "inspected_absent_twice": False}}), "drift")
+
+    def test_guard_terminal_proof_is_guard_owned(self) -> None:
+        self.assertEqual(
+            ex.guard_terminal_proof(TERMINAL_PROOF, cid="a" * 64), TERMINAL_PROOF)
+        self.assertIsNone(ex.guard_terminal_proof(TERMINAL_PROOF, cid="b" * 64))
+        self.assertIsNone(ex.guard_terminal_proof(None))
+        self.assertIsNone(ex.guard_terminal_proof({"method": "exact_cid_inspect"}))
+
+    def test_caller_assertion_cannot_set_host_scope_proven(self) -> None:
+        self.assertFalse(ex.host_scope_proven_from_proof(True))
+        self.assertFalse(ex.host_scope_proven_from_proof("host_scope_proven"))
+        self.assertFalse(ex.host_scope_proven_from_proof(
+            {"asserted": True, "scope": "host_scope_proven"}))
+        # Only a structured, separately attested proof is recognized.
+        self.assertTrue(ex.host_scope_proven_from_proof({
+            "schema": ex.HOST_SCOPE_PROOF_SCHEMA,
+            "cgroup_root": "/sys/fs/cgroup",
+            "attested_by": "operator-review",
+        }))
+        # A caller assertion fed through the diagnostic stays diagnostic-only.
+        diagnostic = ex.quota_diagnostic(
+            OBSERVED_QUOTA,
+            host_scope_proven=ex.host_scope_proven_from_proof(True))
+        self.assertFalse(diagnostic["host_scope_proven"])
+        self.assertFalse(diagnostic["matched"])
+        self.assertIn("visible hierarchy only; host scope not proven",
+                      diagnostic["reasons"])
+
+    def test_production_gap_is_terminal_only_with_guard_proof(self) -> None:
+        cid = "a" * 64
+        bound = {"cid": cid, "pid": 4242, "fingerprint": [5, 7]}
+        live = {4242: {"cgroup": "0::/libpod-" + cid + ".scope",
+                       "starttime": 5, "pid_ns": 7}}
+        zombie = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
+        captured: dict[str, Any] = {}
+
+        def local_runner_factory(**kwargs):
+            captured["snapshot"] = kwargs["snapshot"]
+            captured["bind"] = kwargs["bind_container"]
+
+            def run(step, argv, arm_dir, *, deadline=None):
+                captured["bind"](cid, {})
+                captured["tables"] = [live, zombie]
+                captured["snapshot"]()  # records a live quota observation
+                captured["snapshot"]()  # records the terminal gap candidate
+                return {"status": "completed", "guard_outcome": {
+                    "result": {"natural_exit": captured.get("proof")}}}
+            return run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            scope = root / ("libpod-" + cid + ".scope")
+            scope.mkdir()
+            (scope / "cpu.max").write_text("200000 100000\n")
+            att = root / "att.json"
+            att.write_text("{}")
+
+            with mock.patch.object(ex.plan, "readiness",
+                                   return_value={"ready": True, "reasons": []}), \
+                    mock.patch.object(ex, "guarded_podman_arm_runner",
+                                      side_effect=local_runner_factory), \
+                    mock.patch("fail_closed_guard.binding.bind_container",
+                               return_value=bound), \
+                    mock.patch("fail_closed_guard.proc.snapshot",
+                               side_effect=lambda: captured["tables"].pop(0)):
+                runner = ex.build_production_arm_runner(
+                    owner="o", lease_root=root / "leases",
+                    stop_path=root / "STOP", disk_path=root,
+                    lock_path=root / "lock", watchdog_path=root / "wd",
+                    watchdog_graphroot=root, attestation=att,
+                    cgroup_root=root)
+                step = {"case": "c", "arm": "frozen"}
+                # Guard-owned proof plus matching fingerprint: natural exit.
+                captured["proof"] = TERMINAL_PROOF
+                result = runner(step, [], root / "arm1")
+                self.assertTrue(result["terminal_sample_gap"])
+                self.assertEqual(result["quota_drift"], [])
+                self.assertFalse(result["host_scope_proven"])
+                # The same gap without a guard proof is drift, not terminal.
+                captured["proof"] = None
+                result = runner(step, [], root / "arm2")
+                self.assertFalse(result["terminal_sample_gap"])
+                self.assertIn("bound init disappeared or became unreadable",
+                              result["quota_drift"])
 
     def test_missing_observed_quota_fails_comparability(self) -> None:
         def no_quota(step, argv, arm_dir, *, deadline=None):

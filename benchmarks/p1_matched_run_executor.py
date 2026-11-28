@@ -67,6 +67,10 @@ CPU_MAX_ORIGIN_V2 = "kernel_cgroup_v2_cpu_max"
 CPU_MAX_ORIGIN_V1 = "kernel_cgroup_v1_cpu_cfs"
 KERNEL_QUOTA_ORIGINS = (CPU_MAX_ORIGIN_V2, CPU_MAX_ORIGIN_V1)
 
+# Host scope is never inferred from a /proc mount or a caller assertion; only
+# a separately reviewed, structured operator proof may set host_scope_proven.
+HOST_SCOPE_PROOF_SCHEMA = "ivanka.p1.host-cgroup-scope-proof.v1"
+
 
 def normalize_cpu_max(raw: str) -> str | None:
     """Normalize a kernel cpu.max / CFS pair to the reviewed 'quota period' form."""
@@ -227,15 +231,71 @@ def compare_quota_samples(previous: dict[str, Any] | None,
     return reasons
 
 
+def guard_terminal_proof(proof: Any, *, cid: str | None = None) -> dict[str, Any] | None:
+    """Recognize only the shared guard's own exact-CID natural-exit proof.
+
+    The guard's ``natural_exit.attest`` is the sole terminal proof: it requires
+    the exact bound CID to be proven absent twice together with a real integer
+    launcher result. A zombie /proc record, a launcher poll or a caller
+    assertion is never a guard-owned terminal proof.
+    """
+    if not isinstance(proof, dict):
+        return None
+    from fail_closed_guard import binding
+    absence = proof.get("absence_proof")
+    proof_cid = proof.get("cid")
+    if (proof.get("method") != "exact_cid_inspect"
+            or not isinstance(proof_cid, str)
+            or not binding.CID.fullmatch(proof_cid)
+            or (cid is not None and proof_cid != cid)
+            or isinstance(proof.get("returncode"), bool)
+            or not isinstance(proof.get("returncode"), int)
+            or not isinstance(absence, dict)
+            or absence.get("observed_absent") is not True
+            or absence.get("inspected_absent_twice") is not True):
+        return None
+    return proof
+
+
+def host_scope_proven_from_proof(proof: Any) -> bool:
+    """True only for a structured, separately attested host-scope proof.
+
+    A bare boolean or caller assertion is never host evidence. Production has
+    no such proof today, so ``host_scope_proven`` stays False and comparability
+    remains diagnostic-only until an operator supplies a reviewed proof.
+    """
+    if not isinstance(proof, dict):
+        return False
+    return (proof.get("schema") == HOST_SCOPE_PROOF_SCHEMA
+            and isinstance(proof.get("cgroup_root"), str)
+            and bool(proof.get("cgroup_root"))
+            and isinstance(proof.get("attested_by"), str)
+            and bool(proof.get("attested_by")))
+
+
 def sampling_gap_kind(previous: dict[str, Any] | None,
-                      table: dict[int, Any], bound: dict[str, Any]) -> str | None:
-    """A proven natural exit ends sampling; any other gap is a drift fault."""
+                      table: dict[int, Any], bound: dict[str, Any], *,
+                      terminal_proof: Any = None) -> str | None:
+    """A zombie at the bound PID is terminal only with identity and guard proof.
+
+    State Z for the bound init PID is a natural-exit candidate only when the
+    full guard-bound fingerprint (starttime, pid_ns) still matches. Even then
+    it is accepted as terminal only when backed by the shared guard's own
+    exact-CID natural-exit proof. PID reuse, a foreign process and a caller
+    assertion without that proof are all drift.
+    """
     if previous is None:
         return None
     live = table.get(bound.get("pid")) if isinstance(table, dict) else None
-    if isinstance(live, dict) and live.get("state") == "Z":
-        return "terminal"
-    return "drift"
+    if not isinstance(live, dict) or live.get("state") != "Z":
+        return "drift"
+    fingerprint = bound.get("fingerprint")
+    if (not isinstance(fingerprint, (list, tuple)) or len(fingerprint) != 2
+            or [live.get("starttime"), live.get("pid_ns")] != list(fingerprint)):
+        return "drift"
+    if guard_terminal_proof(terminal_proof, cid=bound.get("cid")) is None:
+        return "drift"
+    return "terminal"
 
 
 def quota_diagnostic(observed: dict[str, Any] | None, *,
@@ -325,7 +385,7 @@ def build_production_arm_runner(
     attestation: pathlib.Path,
     env: dict[str, str] | None = None,
     cgroup_root: pathlib.Path = pathlib.Path("/sys/fs/cgroup"),
-    host_scope_proven: bool = False,
+    host_scope_proof: dict[str, Any] | None = None,
 ) -> Callable[..., dict[str, Any]]:
     """Build a real guarded runner for live operator use.
 
@@ -333,13 +393,16 @@ def build_production_arm_runner(
     shared guard, and observed container CPU quota. It does NOT bypass the guard:
     run_prospective still enforces STOP/lease/watchdog/disk/admission. Callers
     must supply reviewed attestation and explicit operator authorization; absence
-    of those inputs must refuse before spawn.
+    of those inputs must refuse before spawn. ``host_scope_proof`` must be a
+    separate, structured operator proof; a bare assertion cannot set
+    ``host_scope_proven`` in any receipt.
     """
     if not attestation.is_file():
         raise Refusal("deployment attestation file missing")
     deps = plan.readiness(attestation)
     if deps.get("ready") is not True:
         raise Refusal("dependencies not ready: " + "; ".join(deps.get("reasons", [])))
+    proven = host_scope_proven_from_proof(host_scope_proof)
     run_env = dict(env or {})
 
     def _spawn(cidfile: str, spawn_env: dict[str, str], *, argv: list[str], arm_dir: pathlib.Path):
@@ -376,13 +439,15 @@ def build_production_arm_runner(
             if drift:
                 inner_holder["quota_drift"] = drift
             inner_holder["observed_cpu_quota"] = observed
+            # The bound identity was observed live again; a prior gap cannot
+            # be a terminal natural exit and must not be promoted later.
+            inner_holder.pop("pending_sample_gap", None)
             return table
-        if sampling_gap_kind(previous, table, bound) == "terminal":
-            # A proven natural exit legitimately ends sampling; earlier samples
-            # stay as evidence and are not poisoned by the terminal gap.
-            inner_holder["terminal_sample_gap"] = True
-        elif previous is not None:
-            inner_holder["quota_drift"] = ["bound init disappeared or became unreadable"]
+        if previous is not None:
+            # Defer terminal classification: the guard has not produced its
+            # exact-CID natural-exit proof yet at sampling time. Keep the raw
+            # table so the decision uses guard-owned evidence after the run.
+            inner_holder["pending_sample_gap"] = table
         return table
 
     def _bind(cid, env, snapshot=None):
@@ -423,16 +488,32 @@ def build_production_arm_runner(
         result = local_runner(step, argv, arm_dir, deadline=deadline)
         observed = inner_holder.get("observed_cpu_quota")
         drift = list(inner_holder.get("quota_drift") or [])
+        bound = inner_holder.get("bound") or {}
+        guard_outcome = result.get("guard_outcome")
+        guard_result = guard_outcome.get("result") if isinstance(guard_outcome, dict) else None
+        proof = guard_terminal_proof(
+            guard_result.get("natural_exit") if isinstance(guard_result, dict) else None,
+            cid=bound.get("cid"))
+        pending = inner_holder.get("pending_sample_gap")
+        terminal_gap = False
+        if pending is not None and observed is not None:
+            if sampling_gap_kind(observed, pending, bound,
+                                terminal_proof=proof) == "terminal":
+                # A guard-owned natural exit legitimately ends sampling; earlier
+                # samples stay as evidence and are not poisoned by the gap.
+                terminal_gap = True
+            else:
+                drift.append("bound init disappeared or became unreadable")
         # Requested/configured values are preserved but never used as proof.
         result["requested_container_cpu_max"] = REQUESTED_CPU_MAX
         result["container_cpu_max"] = REQUESTED_CPU_MAX
         result["observed_cpu_quota"] = observed
         result["observed_container_cpu_max"] = observed.get("value") if observed else None
         result["quota_drift"] = drift
-        result["terminal_sample_gap"] = bool(inner_holder.get("terminal_sample_gap"))
-        result["host_scope_proven"] = bool(host_scope_proven)
+        result["terminal_sample_gap"] = terminal_gap
+        result["host_scope_proven"] = proven
         result["quota_diagnostic"] = quota_diagnostic(
-            observed, host_scope_proven=host_scope_proven, drift=drift)
+            observed, host_scope_proven=proven, drift=drift)
         return result
 
     return _runner

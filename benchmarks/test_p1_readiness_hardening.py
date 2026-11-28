@@ -366,6 +366,14 @@ class ProspectiveGuardPinTests(unittest.TestCase):
         self.assertFalse(proof["deployed"])
         self.assertEqual(len(proof["digests"]), 5)
 
+    def test_p1_harness_source_pin_tracks_reviewed_bytes(self):
+        path = (Path(__file__).resolve().parent
+                / "fail_closed_guard" / "p1_harness.py")
+        expected = r.sha256(path)
+        self.assertEqual(r.REVIEWED_GUARD_DIGESTS["p1_harness"][1], expected)
+        self.assertEqual(r.verify_guard_source_pins()["digests"]["p1_harness"],
+                         expected)
+
     def test_new_reviewed_digests_and_unchanged_cli(self):
         identity = json.loads((Path(__file__).resolve().parent / "fixtures"
                                / "px_guard_pins" / "px_guard_identity.json")

@@ -9,10 +9,13 @@ authorization.
 Two explicit, non-self-referential identities are bound by reviewed source
 hashes and operator-attested manifests:
 
-* the immutable guard deployment checkout (``DEPLOYED_ROOT``) is the reviewed
-  PR535 merge ``165a86b3``. It may be staged as a git checkout or a COPY
+* the immutable guard deployment checkout (``DEPLOYED_ROOT``) is the reviewed,
+  reviewed PR597 source ``b777f349``. It may be staged as a git checkout or a COPY
   image. If ``.git`` exists, HEAD is checked against ``DEPLOYED_HEAD``. In all
   cases the reviewed manifest and exact module-byte chain are required.
+  ``DEPLOYED_EXPECTED`` binds those new bytes; ``EXPECTED`` remains the
+  unchanged control-checkout module map so ``verify_control()`` stays valid
+  against the live ``b8720600`` control root without a control redeploy.
 * the operator/retry/supervisor control checkout (``CONTROL_ROOT``) is created
   from reviewed main ``07231fa1`` plus this PR. Its identity is pinned by
   reviewed source hashes (not by an arbitrary/self-referential git hash).
@@ -33,17 +36,17 @@ COMMIT = re.compile(r"^[a-f0-9]{40}$")
 CONTROL_ROOT = Path("/workspace/ivanka-px-control-cutover")
 CONTROL_IDENTITY_NAME = "px_control_identity.json"
 CONTROL_IDENTITY_SCHEMA = "ivanka.px.control-source-identity.v1"
-CONTROL_IDENTITY_SHA256 = "8891c6520f9aaa652ce0f9bde800513333ebdc0f57f4986777ad9fc4189d0286"
+CONTROL_IDENTITY_SHA256 = "43f712fb5c48ab9c291a6e822fcbe552b21ea9b4dbd3552b1b753b0e23a80af2"
 CONTROL_RETRY_SOURCE = "benchmarks/assembler_bench/px_retry_authorization.py"
 CONTROL_RETRY_SHA256 = "0ba6009b3bb63411e92b159d54e7cb7e62bef9fb7d0cc31113b5320792acb3e6"
-CONTROL_GUARD_SOURCE_SHA256 = "69e657398cd6215b94a421d39a94b90c147c34122ed007e3395a2df761ae2885"
+CONTROL_GUARD_SOURCE_SHA256 = "660b464b9bc4eed31d8b815ed821541633c31aafa763e8e2bd81613f5482d517"
 
-# Immutable guard deployment checkout (reviewed PR535 merge). Preserve .git.
-DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr535-staged-20261127")
-DEPLOYED_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+# Immutable guard deployment checkout (reviewed, signed integration). Preserve .git.
+DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr597-candidate-b777f349-20261128")
+DEPLOYED_HEAD = "b777f34976bb338ba3652239feffe99510326e44"
 IDENTITY_NAME = "px_guard_identity.json"
 IDENTITY_SCHEMA = "ivanka.px.guard-source-identity.v1"
-IDENTITY_SHA256 = "7675143e1c2892383b59b2ca17f5fd7845c14945aacf1e175365862d0c6a04d9"
+IDENTITY_SHA256 = "5822b1a9f00da556f5a554d038119b7937000592829eea96545fad7f76485e88"
 
 # Origin of the constant-time shared disk reserve (PR #510). Retained evidence.
 RESERVE_COMMIT = "af1f10d19143fa7a00134a01b56a858ef8a09647"
@@ -118,6 +121,25 @@ EXPECTED = {
         "6d5e7d3c62a2bdba7a15af2ea69b99b8c6674cab72996e660d39a148587e41b2",
 }
 
+# Reviewed module bytes of the new staged guard. EXPECTED above stays bound to
+# the live control checkout at b8720600; only these five guards differ, and a
+# guard-only root swap must not silently repin control verification.
+DEPLOYED_EXPECTED = dict(EXPECTED)
+DEPLOYED_EXPECTED.update({
+    "benchmarks/fail_closed_guard/build.py":
+        "4d01b152b5970b14d9084b1137af5c776b5b742fe257509c69038207c3a64119",
+    "benchmarks/fail_closed_guard/copy_overlay.py":
+        "7f4158ebf99af727aaa59528dabb5979624c5ce55ab2875c3f8a68764a25f53e",
+    "benchmarks/fail_closed_guard/natural_exit.py":
+        "9e7e4dda884896fa102e0d5af50d743780aa5617025698ea2574284b7af55daa",
+    "benchmarks/fail_closed_guard/proc.py":
+        "ee1438ba99b936a1a799913407e391f03bf90b0c22c89fd73a42570cdddef78a",
+    "benchmarks/fail_closed_guard/watchdog.py":
+        "95f2877f356747aa7601261081ed76bd645d8065c488813025155d160e5da2c4",
+    "benchmarks/fail_closed_guard/watchdog_contract.py":
+        "6bede6e674d633caf503877af2bd3ca444d96846650ed56418bf21250e00076b",
+})
+
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -157,7 +179,7 @@ def _read_identity(base):
     if (not isinstance(identity, dict)
             or identity.get("schema") != IDENTITY_SCHEMA
             or identity.get("source_commit") != DEPLOYED_HEAD
-            or identity.get("sources") != EXPECTED):
+            or identity.get("sources") != DEPLOYED_EXPECTED):
         raise ValueError("deployed PX guard identity manifest drift")
     return identity
 
@@ -178,7 +200,7 @@ def verify_deployment(root=None):
         git_state = "git_absent_manifest_attested"
     _read_identity(base)
     found = {}
-    for name, expected in EXPECTED.items():
+    for name, expected in DEPLOYED_EXPECTED.items():
         path = base / name
         if path.is_symlink() or not path.is_file() or digest(path) != expected:
             raise ValueError("deployed PX guard source drift")

@@ -145,12 +145,21 @@ class BackgroundSupervisor:
                 raise HandoffRequired("no verified image-agent handoff for " + tool)
         pending = sched.resume(plan, self.root)
         completed, deferred = [], []
+        stopped = False
         for arm in balanced_pending(plan, pending):
-            if (self.root / STOP_FILE).is_file():
+            if self._stopped():
+                stopped = True
                 break
-            if self._run_arm(arm, plan, completed) == "deferred":
+            outcome = self._run_arm(arm, plan, completed)
+            if outcome == "stopped":
+                # The inner drain boundary may have observed a STOP that the
+                # owner retired before control returned here. Remember it so
+                # no later arm is dispatched and the status stays stopped.
+                stopped = True
+                break
+            if outcome == "deferred":
                 deferred.append(sched.receipt_id(arm))
-        status = "stopped" if (self.root / STOP_FILE).is_file() else (
+        status = "stopped" if (stopped or self._stopped()) else (
             "deferred" if deferred else "idle" if not pending else "advanced")
         return {"status": status, "completed": completed, "deferred": deferred,
                 "remaining": len(pending) - len(completed)}
@@ -190,6 +199,10 @@ class BackgroundSupervisor:
             sched.admit_arm(self.registry, self.baseline, self.root,
                             reserve_bytes)
 
+    def _stopped(self):
+        """Read the owner-bound drain sentinel at a single narrow boundary."""
+        return (self.root / STOP_FILE).is_file()
+
     def _run_runner(self, arm, case, reserve_bytes):
         # The reservation is part of the guarded execution contract. An
         # exception may occur after side effects; never retry an invocation
@@ -201,8 +214,12 @@ class BackgroundSupervisor:
         first = 1 if existing is None else existing.get("attempt", 1) + 1
         for attempt in range(first, sched.AUTHORIZED_EXTRA_ATTEMPT + 1):
             if attempt > sched.MAX_INFRA_ATTEMPTS:
-                if ((self.root / STOP_FILE).is_file()
-                        or authz.verify(self.root, arm) is None):
+                if self._stopped():
+                    # A drain armed after a previous terminal outcome is not
+                    # a completed arm. Leave the retry authorization untouched
+                    # and report the explicit boundary to the caller.
+                    return "stopped"
+                if authz.verify(self.root, arm) is None:
                     break
             prior = sched.verify_receipt(self.root, arm)
             dispatch_reserve, disk_decision = self._dispatch_reserve(arm, attempt)
@@ -228,6 +245,16 @@ class BackgroundSupervisor:
                 # worker lock before claim/spawn; fail closed before consuming
                 # any one-shot authorization.
                 self._locked_admit(dispatch_reserve)
+            # Drain boundary: a STOP may be armed after the pre-loop check,
+            # during admission/case resolution, or while the optional
+            # under-lock re-admission runs. Recheck immediately before
+            # consuming a one-shot authorization or dispatching any child.
+            # This is an advisory-filesystem check outside the launcher lock;
+            # a STOP armed in the remaining subsecond window before operate()
+            # takes that lock is a documented residual race, not a reason to
+            # weaken the dispatch contract here.
+            if self._stopped():
+                return "stopped"
             if attempt > sched.MAX_INFRA_ATTEMPTS:
                 # Consume the one-shot durably before any child can spawn; an
                 # interrupted dispatch must not be dispatchable again.

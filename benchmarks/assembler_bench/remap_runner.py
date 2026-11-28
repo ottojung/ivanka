@@ -179,6 +179,7 @@ def plan_case(case: Case, manifest: str, *, stamp: str, token: str) -> dict:
         sha256s=(case.r1_sha256, case.r2_sha256))
     argv = launcher.build_command(
         image=IMAGE_DIGEST,
+        launch_image=IMAGE_ID,
         reads_dir=Path(case.reads_dir),
         attempt_dir=Path(case.attempt_dir),
         timer=Path(case.timer),

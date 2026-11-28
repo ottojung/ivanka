@@ -180,9 +180,10 @@ def pinned_plan_argv(plan: dict, cidfile) -> list[str]:
     reads = tuple((plan.get("inputs") or {}).get("read_basenames") or [])
     if len(reads) != 2:
         raise ValueError("plan lacks attested read basenames")
+    image_id = (plan.get("image") or {}).get("id")
     launcher.assert_reference_blind(
         argv, allowed_values=allowed, expected_sources=sources,
-        denovo=False, reads=reads)
+        denovo=False, reads=reads, image_id=image_id)
     return argv
 
 

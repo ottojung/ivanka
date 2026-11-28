@@ -140,6 +140,26 @@ def require_watchdog_ready(*, checker=None, path=None, graphroot=None,
     return result
 
 
+def _release_pre_spawn(lease_root, ident, owner, reason):
+    """Close only this caller's active CID-null lease with a proof of reason.
+
+    The release proof itself records the fail-closed reason; no separate
+    state-less audit event is emitted, so downstream strict lease parsers need
+    no new event kind. A missing, closed, foreign or CID-bound lease is never
+    released by this pre-spawn path.
+    """
+    current = lease.latest(lease.events(lease_root)).get(str(ident))
+    if (not isinstance(current, dict) or current.get("state") != "active"
+            or current.get("mode") != "pilot"
+            or current.get("cid") is not None
+            or str(current.get("owner")) != str(owner)):
+        raise GuardExceeded("pre_spawn_release_unverified")
+    proof = {"method": "pre_spawn_abort", "reason": reason,
+             "stopped": True, "kernel_enforcement": False}
+    lease.release(lease_root, ident, owner=owner, proof=proof)
+    return proof
+
+
 def pin_cidfile(root, ident):
     """Reserve a unique project-owned cidfile path before spawn.
 
@@ -400,10 +420,30 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         token = secrets.token_hex(12)
         ident = "p1-%s-%s" % (str(owner), token)
         cidfile = pin_cidfile(lease_root, ident)
-        lease.acquire(lease_root, ident, "pilot", owner=owner, cidfile=cidfile)
+        # Ordering correction: publish the real controller heartbeat BEFORE
+        # the lease is visible to the watchdog. The watchdog discovers work
+        # from active leases; an absent heartbeat can no longer be observed
+        # for a pending lease. No grace covers a failed initial emit.
+        emitter = heartbeat.Emitter(lease_root, ident)
+        try:
+            emitter.before_spawn()
+        except Exception as exc:
+            raise GuardExceeded("heartbeat_unavailable") from exc
+        try:
+            watchdog.read_heartbeat(heartbeat.path(lease_root, ident),
+                                    worker=ident, monotonic=time.monotonic,
+                                    max_age=watchdog.DEFAULT_HEARTBEAT_MAX_AGE)
+        except GuardExceeded as exc:
+            raise GuardExceeded("heartbeat_unavailable") from exc
+        try:
+            lease.acquire(lease_root, ident, "pilot", owner=owner,
+                          cidfile=cidfile)
+        except Exception as exc:
+            raise GuardExceeded("lease_journal_unavailable") from exc
         acquired = lease.acquisition_start(lease_root, ident)
         if (not isinstance(acquired, (int, float))
                 or not math.isfinite(acquired)):
+            _release_pre_spawn(lease_root, ident, owner, "invalid_lease")
             raise GuardExceeded("invalid_lease")
         # The independent watchdog stops granting startup grace 120s after
         # durable acquisition. Never wait past that boundary, even when the
@@ -415,17 +455,12 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
             lease_root, ident, wall_seconds)
         deadline_utc = _bounded_deadline(deadline_utc, durable_cap)
         if time.time() >= deadline_utc:
+            _release_pre_spawn(lease_root, ident, owner, "wall_limit")
             raise GuardExceeded("wall_limit")
 
-        # The independent watchdog must observe a live controller from before
-        # spawn through every sample; otherwise the arm is killed at first
-        # observation as an orphan.
-        emitter = heartbeat.Emitter(lease_root, ident)
-        try:
-            emitter.before_spawn()
-        except Exception as exc:
-            raise GuardExceeded("heartbeat_unavailable") from exc
-
+        # The controller heartbeat was published before the lease existed and
+        # is refreshed on every bind-wait/watch sample. Watchdog readiness and
+        # disk reserve were already required under this lock before the emit.
         stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))
         try:
             spawned = spawn(cidfile, env)

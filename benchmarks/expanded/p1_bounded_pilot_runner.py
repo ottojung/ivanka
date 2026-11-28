@@ -309,7 +309,7 @@ COPY_OVERLAY_ADMISSION_MERGE = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
 COPY_OVERLAY_ADMISSION_PR_HEAD = "39317f021f4e5c00f5da859bcdcf755de4c6d353"
 COPY_OVERLAY_ADMISSION_DIGESTS = {
     "copy_overlay": ("fail_closed_guard/copy_overlay.py",
-                     "f59049e5c0a8dd3e042bd723ffbeb3caaba2af386b7158016bf160824300da31"),
+                     "e146c7eda1d06527c061ecd3c5765adfbf608966ca8d501b8005e7da75ac64e7"),
     "copy_overlay_helper": ("fail_closed_guard/copy_overlay_helper.py",
                             "8242d81c9c6b169dfbfac1b837ae9c23e1e3f1259190438871dee89dccdf0bc5"),
     "build": ("fail_closed_guard/build.py",

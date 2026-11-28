@@ -136,6 +136,11 @@ def plan_for_row(row, *, context, storage_conf, base_layers, code_root=None,
         "base_layers": list(base_layers),
         "artifact_sha256": row["portable_binary_sha256"],
         "artifact_mode": 0o755,
+        # Disable Buildah's cached-tag branch: installed Buildah 1.43.1
+        # tagExistingImage omits DestinationCtx and falls back to /var/tmp,
+        # which is read-only on the production host. The guard constructs the
+        # single --no-cache flag from this pinned boolean; no arbitrary flags.
+        "no_cache": True,
         "source": copy_overlay.SOURCE,
         "destination": copy_overlay.DESTINATION,
         "frozen_manifest_sha256": runner.FROZEN_MANIFEST_SHA256,

@@ -323,6 +323,55 @@ class CopyOverlayTests(unittest.TestCase):
                 expected_graphroot=GRAPHROOT, root=self.root)
         self.plan["code_sha256"] = self.code_sha
 
+    def test_pinned_no_cache_preserves_offline_labels_and_receipt(self):
+        # Upstream Buildah 1.43.1 tagExistingImage omits DestinationCtx on a
+        # cache hit; the pinned boolean must force a normal fresh commit while
+        # keeping network-off flags, exact labels and iid/receipt contract.
+        self.plan["no_cache"] = True
+        validated = copy_overlay.validate_plan(
+            self.plan, expected_base=FROZEN, expected_commit=COMMIT,
+            expected_graphroot=GRAPHROOT, root=self.root)
+        self.assertIs(validated["no_cache"], True)
+        argv = validated["argv"]
+        self.assertEqual(argv.count("--no-cache"), 1)
+        self.assertIn("--network=none", argv)
+        self.assertIn("--pull=never", argv)
+        self.assertEqual(argv.index("--no-cache"),
+                         argv.index("--pull=never") + 1)
+        self.assertEqual(argv[0:2], ["podman", "build"])
+        with tempfile.TemporaryDirectory() as tmp:
+            sealed = dict(validated)
+            copy_overlay.seal_context(Path(tmp), sealed)
+            argv = sealed["argv"]
+            self.assertEqual(argv.count("--no-cache"), 1)
+            self.assertIn("--iidfile", argv)
+            self.assertIn("org.ottojung.ivanka.binary-sha256=" + ARTIFACT_SHA,
+                          argv)
+            self.assertEqual(argv[-1], str(sealed["context"]))
+        # The flag is part of the plan identity, never an arbitrary command.
+        legacy = dict(self.plan)
+        legacy["no_cache"] = False
+        self.assertNotEqual(copy_overlay.plan_digest(legacy),
+                            copy_overlay.plan_digest(self.plan))
+
+    def test_no_cache_must_be_a_pinned_boolean(self):
+        for value in ("true", 1, None, ["--no-cache"]):
+            self.plan["no_cache"] = value
+            with self.assertRaises(GuardExceeded):
+                copy_overlay.validate_plan(
+                    self.plan, expected_base=FROZEN, expected_commit=COMMIT,
+                    expected_graphroot=GRAPHROOT, root=self.root)
+
+    def test_absent_no_cache_keeps_legacy_offline_argv(self):
+        self.plan.pop("no_cache", None)
+        validated = copy_overlay.validate_plan(
+            self.plan, expected_base=FROZEN, expected_commit=COMMIT,
+            expected_graphroot=GRAPHROOT, root=self.root)
+        self.assertIs(validated["no_cache"], False)
+        self.assertNotIn("--no-cache", validated["argv"])
+        self.assertIn("--network=none", validated["argv"])
+        self.assertIn("--pull=never", validated["argv"])
+
     def test_stop_must_exist_and_be_owner_bound(self):
         with self.assertRaises(GuardExceeded) as caught:
             copy_overlay.check_stop(self.root, self.ident)

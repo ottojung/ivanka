@@ -1,9 +1,9 @@
 """The frozen run's container settings must be explicit and reviewable."""
-from pathlib import Path
 import os
-import tempfile
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -23,11 +23,20 @@ class ReadBackedBuildRecipeTests(unittest.TestCase):
         budget = (ROOT / "src/assembler/run_seed/assembly/experiment_budget.rs").read_text()
         finish = (ROOT / "src/assembler/run/write_results.rs").read_text()
         selector = (ROOT / "src/assembler/run/read_backed/mod.rs").read_text()
+        output = (ROOT / "src/assembler/run/read_backed/output.rs").read_text()
+        tiling = (ROOT / "src/assembler/run/read_backed/tiling.rs").read_text()
         recipe = (ROOT / "benchmarks/Dockerfile.read-backed").read_text()
         self.assertIn("let limits = (50, 20);", budget)
         self.assertNotIn("std::env", budget)
         self.assertIn("read_backed::write(out, contigs, reads)", finish)
-        self.assertIn("tiling::partition", selector)
+        # The selector delegates rendering to output::component; the tiling
+        # contract is reached through that call chain, not called directly.
+        self.assertIn("output::component(contigs, reads, &statistics, chosen)", selector)
+        self.assertNotIn("tiling::", selector)
+        self.assertIn("output::write(path, &selected)?;", selector)
+        self.assertIn("ranking::pieces(joined, sequence.len())", output)
+        self.assertIn("tiling::present(sequence, depth, (from, to), &name)", output)
+        self.assertIn("partition(name, &seq[a + s..a + t], &obs[s..o])", tiling)
         self.assertIn("/usr/local/bin/ivanka", recipe)
         self.assertNotIn("/usr/local/bin/ivanka-native", recipe)
         self.assertNotIn("COPY benchmarks/ivanka_read_support_selector.py", recipe)

@@ -111,6 +111,7 @@ class AdmissionTests(unittest.TestCase):
         self.assertEqual(plan["destination"], "/usr/local/bin/ivanka")
         self.assertEqual(plan["code_sha256"], runner.sha256(helper))
         self.assertEqual(plan["storage_conf_sha256"], runner.sha256(conf))
+        self.assertIs(plan["no_cache"], True)
         first = copy_overlay.plan_digest(plan)
         plan["artifact_sha256"] = self.row["native_binary_sha256"]
         self.assertNotEqual(copy_overlay.plan_digest(plan), first)

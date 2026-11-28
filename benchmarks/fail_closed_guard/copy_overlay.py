@@ -132,8 +132,12 @@ def seal_context(temp, validated):
         + validated["frozen_manifest_sha256"],
         "org.ottojung.ivanka.pilot-role=" + validated["pilot_role"],
     ]
-    argv = ["podman", "build", "--network=none", "--pull=never",
-            "--iidfile", str(iidfile)]
+    argv = ["podman", "build", "--network=none", "--pull=never"]
+    # A pinned plan boolean may disable caches. The guard constructs this flag
+    # itself; a plan can never inject an arbitrary command or flag.
+    if validated.get("no_cache"):
+        argv.append("--no-cache")
+    argv.extend(["--iidfile", str(iidfile)])
     for label in labels:
         argv.extend(["--label", label])
     argv.extend(["-f", validated["containerfile"], "-t", validated["tag"],
@@ -251,8 +255,13 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
         os.close(fd)
     if digest.hexdigest() != artifact_sha:
         raise GuardExceeded("invalid_plan")
-    argv = ["podman", "build", "--network=none", "--pull=never",
-            "-f", str(manifest), "-t", tag, str(context)]
+    no_cache = plan.get("no_cache", False)
+    if not isinstance(no_cache, bool):
+        raise GuardExceeded("invalid_plan")
+    argv = ["podman", "build", "--network=none", "--pull=never"]
+    if no_cache:
+        argv.append("--no-cache")
+    argv.extend(["-f", str(manifest), "-t", tag, str(context)])
     return {"schema": SCHEMA, "base_image": base, "source_commit": commit,
             "context": str(context), "containerfile": str(manifest),
             "source": SOURCE, "destination": DESTINATION,
@@ -263,7 +272,7 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
             "inherited_labels": dict(plan.get("inherited_labels") or {}),
             "storage_conf": str(conf), "graphroot": str(expected_graphroot),
             "storage_conf_sha256": conf_sha,
-            "base_layers": list(layers),
+            "base_layers": list(layers), "no_cache": no_cache,
             "tag": tag, "argv": argv, "plan_sha256": plan_digest(plan)}
 
 

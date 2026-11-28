@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from assembler_bench import px_guard_source as guard_source
 from expanded import p1_bounded_pilot_runner as r
 from expanded import p1_watchdog_readiness as w
 from p1_portable_fixtures import build as build_postbuild_fixture
@@ -378,7 +379,12 @@ class ProspectiveGuardPinTests(unittest.TestCase):
         identity = json.loads((Path(__file__).resolve().parent / "fixtures"
                                / "px_guard_pins" / "px_guard_identity.json")
                               .read_text())
-        self.assertEqual(identity["source_commit"], r.REVIEWED_GUARD_HEAD)
+        # The fixture is the staged deployment identity; the runner's reviewed
+        # source head remains the prospective P1 source pin.
+        self.assertEqual(identity["source_commit"],
+                         guard_source.DEPLOYED_HEAD)
+        self.assertEqual(r.REVIEWED_GUARD_HEAD,
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
         sources = identity["sources"]
         for name, (relative, digest) in r.REVIEWED_GUARD_DIGESTS.items():
             key = "benchmarks/" + relative

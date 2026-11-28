@@ -74,14 +74,15 @@ class AttestationHarness(unittest.TestCase):
     def modules(self, root, table):
         self.code_root(root)
         for name, digest in table.items():
-            path = self.mods / name
+            path = self.mods / Path(root).name / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(digest)
 
     def reader_opts(self):
         return {
-            "module_reader": lambda _base, name: (
-                (self.mods / name).read_text() if (self.mods / name).is_file() else None),
+            "module_reader": lambda base, name: (
+                (self.mods / Path(base).name / name).read_text()
+                if (self.mods / Path(base).name / name).is_file() else None),
             "head_reader": lambda base: self.heads.get(str(base), self.head),
             "git_present": lambda _base: True,
         }
@@ -256,7 +257,8 @@ class PreCutoverTests(AttestationHarness):
 
     def test_module_byte_drift_is_blocker(self):
         opts = self.build("pre_cutover")
-        (self.mods / "benchmarks/fail_closed_guard/watchdog.py").write_text("0" * 64)
+        (self.mods / Path(live.OLD_ROOT).name /
+         "benchmarks/fail_closed_guard/watchdog.py").write_text("0" * 64)
         blocked = live.attest(phase="pre_cutover", **opts)
         self.assertIn("module_bytes_mismatch:watchdog", blocked["blockers"])
 

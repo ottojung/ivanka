@@ -16,6 +16,7 @@ from assembler_bench import px_guard_source as guard_source
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "benchmarks" / "fixtures" / "px_guard_pins"
+CONTROL_FIXTURE = ROOT / "benchmarks" / "fixtures" / "px_control_pins"
 CANONICAL_MANIFEST = ROOT / "benchmarks/assembler_bench" / guard_source.IDENTITY_NAME
 CANONICAL_CONTROL = ROOT / "benchmarks/assembler_bench" / guard_source.CONTROL_IDENTITY_NAME
 
@@ -55,11 +56,18 @@ class GuardSourceIdentityTests(unittest.TestCase):
                         self.identity_root / "benchmarks/assembler_bench" / guard_source.CONTROL_IDENTITY_NAME)
         # Control checkout must carry the reviewed control-source files.
         control_id = json.loads(CANONICAL_CONTROL.read_bytes())
-        for name in list(control_id["sources"]) + ["benchmarks/assembler_bench/px_guard_source.py"]:
+        for name in control_id["sources"]:
             src = ROOT / name
             dst = self.control / name
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src, dst)
+        # The live control checkout keeps the previous module bytes and its
+        # matching px_guard_source.py; a staged guard swap does not repin them.
+        for source in CONTROL_FIXTURE.rglob("*"):
+            if source.is_file():
+                dst = self.control / source.relative_to(CONTROL_FIXTURE)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, dst)
         _init_git(self.control)
 
     def verify(self, deployed=None, control=None):
@@ -76,13 +84,13 @@ class GuardSourceIdentityTests(unittest.TestCase):
         manifest = json.loads(CANONICAL_MANIFEST.read_bytes())
         self.assertEqual(manifest["schema"], guard_source.IDENTITY_SCHEMA)
         self.assertEqual(manifest["source_commit"], guard_source.DEPLOYED_HEAD)
-        self.assertEqual(manifest["sources"], dict(guard_source.EXPECTED))
-        self.assertEqual(len(guard_source.EXPECTED), 19)
+        self.assertEqual(manifest["sources"], dict(guard_source.DEPLOYED_EXPECTED))
+        self.assertEqual(len(guard_source.DEPLOYED_EXPECTED), 19)
 
     def test_no_self_referential_commit_pin(self):
         self.assertFalse(hasattr(guard_source, "CONTROL_HEAD"))
         self.assertEqual(guard_source.DEPLOYED_HEAD,
-                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+                         "1e5104082c4366f30c93fd759e3f46307a142e63")
 
     def test_staged_git_checkout_head_is_checked(self):
         _init_git(self.deployed)
@@ -105,7 +113,7 @@ class GuardSourceIdentityTests(unittest.TestCase):
         # no .git in fixture by default: manifest attestation is required and sufficient for bytes
         result = guard_source.verify_deployment(self.deployed)
         self.assertEqual(result["git_state"], "git_absent_manifest_attested")
-        self.assertEqual(result["modules"], dict(guard_source.EXPECTED))
+        self.assertEqual(result["modules"], dict(guard_source.DEPLOYED_EXPECTED))
 
     def test_missing_git_never_skips_manifest(self):
         (self.deployed / guard_source.IDENTITY_NAME).unlink()
@@ -152,12 +160,42 @@ class GuardSourceIdentityTests(unittest.TestCase):
     def test_both_identities_verified(self):
         with patch.object(guard_source, "root", return_value=self.identity_root):
             found = guard_source.verify(root=self.deployed, control_root=self.control)
-        self.assertEqual(found, dict(guard_source.EXPECTED))
+        self.assertEqual(found, dict(guard_source.DEPLOYED_EXPECTED))
 
     def test_verify_is_not_live_attestation(self):
         # verify() checks bytes/manifests only; no /proc/s6 binding.
         self.assertEqual(guard_source.verify_deployment(self.deployed)["kind"],
                          "staged_deployment_bytes")
+
+    def test_repinned_guard_digests_are_exact(self):
+        exact = {
+            "benchmarks/fail_closed_guard/build.py":
+                "4d01b152b5970b14d9084b1137af5c776b5b742fe257509c69038207c3a64119",
+            "benchmarks/fail_closed_guard/copy_overlay.py":
+                "7f4158ebf99af727aaa59528dabb5979624c5ce55ab2875c3f8a68764a25f53e",
+            "benchmarks/fail_closed_guard/proc.py":
+                "ee1438ba99b936a1a799913407e391f03bf90b0c22c89fd73a42570cdddef78a",
+            "benchmarks/fail_closed_guard/watchdog.py":
+                "95f2877f356747aa7601261081ed76bd645d8065c488813025155d160e5da2c4",
+            "benchmarks/fail_closed_guard/watchdog_contract.py":
+                "6bede6e674d633caf503877af2bd3ca444d96846650ed56418bf21250e00076b",
+        }
+        for name, digest in exact.items():
+            self.assertEqual(guard_source.DEPLOYED_EXPECTED[name], digest)
+            self.assertEqual(guard_source.digest(self.deployed / name), digest)
+
+    def test_control_map_is_unchanged_by_guard_repin(self):
+        self.assertEqual(len(guard_source.EXPECTED), 19)
+        self.assertNotEqual(guard_source.EXPECTED, guard_source.DEPLOYED_EXPECTED)
+        for name in ("benchmarks/fail_closed_guard/build.py",
+                     "benchmarks/fail_closed_guard/copy_overlay.py",
+                     "benchmarks/fail_closed_guard/proc.py",
+                     "benchmarks/fail_closed_guard/watchdog.py",
+                     "benchmarks/fail_closed_guard/watchdog_contract.py"):
+            self.assertNotEqual(guard_source.EXPECTED[name],
+                                guard_source.DEPLOYED_EXPECTED[name])
+            self.assertEqual(guard_source.digest(self.control / name),
+                             guard_source.EXPECTED[name])
 
 
 class NormalSchedulingPreservedTests(unittest.TestCase):

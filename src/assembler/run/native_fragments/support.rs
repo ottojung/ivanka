@@ -1,26 +1,13 @@
-use super::{fasta_seeds, rolling_canonical_kmers, Reads};
+use super::Reads;
 use std::collections::{HashMap, HashSet};
-use std::io;
 
 /// Minimum number of distinct observed pairs supporting a retained fragment.
 pub(super) const MIN_SUPPORT: usize = 15;
 
-/// Mark regions already covered by selected contigs or supplied seeds.
-pub(super) fn covered(
-    represented: &mut HashSet<u64>,
-    contigs: &[Vec<u8>],
-    supplied: Option<&str>,
-) -> io::Result<()> {
-    for seq in contigs {
-        cover(represented, seq);
-    }
-    if let Some(path) = supplied {
-        for seed in fasta_seeds(path)? {
-            cover(represented, &seed);
-        }
-    }
-    Ok(())
-}
+/// Minimum share of the library's distinct observed pairs for a fragment.
+/// Trace components (for example contamination) must not consume contig slots.
+pub(super) const MIN_SHARE_NUMERATOR: usize = 1;
+pub(super) const MIN_SHARE_DENOMINATOR: usize = 100;
 
 /// Rank reads by the number of distinct observed pairs they appear in.
 /// Identical pair sequences are counted once; no molecule identity is assumed.
@@ -34,9 +21,14 @@ pub(super) fn ranked(reads: &Reads) -> Vec<(Vec<u8>, usize)> {
         *support.entry(observed[0].clone()).or_insert(0) += 1;
         *support.entry(observed[2].clone()).or_insert(0) += 1;
     }
+    let total = pairs.len();
     let mut candidates = support
         .into_iter()
-        .filter(|&(_, n)| n >= MIN_SUPPORT)
+        .filter(|&(_, n)| {
+            n >= MIN_SUPPORT
+                && n.saturating_mul(MIN_SHARE_DENOMINATOR)
+                    >= total.saturating_mul(MIN_SHARE_NUMERATOR)
+        })
         .collect::<Vec<_>>();
     candidates.sort_by(|a, b| {
         b.1.cmp(&a.1)
@@ -44,14 +36,4 @@ pub(super) fn ranked(reads: &Reads) -> Vec<(Vec<u8>, usize)> {
             .then_with(|| a.0.cmp(&b.0))
     });
     candidates
-}
-
-pub(super) fn cover(represented: &mut HashSet<u64>, seq: &[u8]) {
-    for k in rolling_canonical_kmers(seq) {
-        represented.insert(k);
-    }
-}
-
-pub(super) fn uncovered(represented: &HashSet<u64>, seq: &[u8]) -> bool {
-    !rolling_canonical_kmers(seq).any(|k| represented.contains(&k))
 }

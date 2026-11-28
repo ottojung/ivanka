@@ -464,9 +464,43 @@ def _load_authorization(path, *, operator, alias, run_id, token, graphroot,
 
 def _watchdog_checker(path, *, config, graphroot, snapshot=None,
                       clock=None):
-    """Build a fresh, identity-bound checker for the shared harness contract."""
+    """Validate the operator checker ONCE, then verify live ALIVE every sample.
+
+    The operator record is a one-shot admission gate: it must be fresh and
+    identity-bound when the case starts. Re-reading it on every watcher sample
+    would age out a normal >30 s case even while the independent watchdog
+    remains genuinely alive. After the first call this adapter therefore
+    re-verifies the real ALIVE record (freshness, graphroot, live PID identity)
+    on every sample and never synthesizes its own heartbeat.
+    """
+    wall = clock or time.time
+    observe = snapshot or proc.snapshot
+    initial = {"pending": True, "identity": None}
+
+    def live_check():
+        try:
+            bound = watchdog_contract.require_watchdog_readiness(
+                config.watchdog_path, graphroot=graphroot,
+                snapshot=observe, wall=wall)
+        except guard_errors.GuardExceeded as exc:
+            raise ValueError("watchdog_checker_alive_" + exc.reason) from exc
+        authorized = initial["identity"]
+        if (authorized is not None
+                and (bound["starttime"], bound["pid_ns"]) != authorized):
+            raise ValueError("watchdog_checker_identity_drift")
+        alive = json.loads(Path(config.watchdog_path).read_text())
+        observed = observe().get(alive.get("pid"))
+        if (observed is None
+                or (observed.get("starttime"), observed.get("pid_ns"))
+                != (bound["starttime"], bound["pid_ns"])):
+            raise ValueError("watchdog_checker_live_mismatch")
+        return {"schema": WATCHDOG_CHECKER_SCHEMA, "ready": True,
+                "identity_bound": True, "pid_ns": bound["pid_ns"],
+                "starttime": bound["starttime"], "at_utc": wall()}
 
     def checker():
+        if not initial["pending"]:
+            return live_check()
         record = json.loads(Path(path).read_text())
         if (not isinstance(record, dict)
                 or record.get("schema") != WATCHDOG_CHECKER_SCHEMA
@@ -478,27 +512,15 @@ def _watchdog_checker(path, *, config, graphroot, snapshot=None,
                 or type(pid_ns) is not int or pid_ns <= 0):
             raise ValueError("watchdog_checker_identity")
         at = record.get("at_utc")
-        age = (clock or time.time)() - at if type(at) in (int, float) \
+        age = wall() - at if type(at) in (int, float) \
             and not isinstance(at, bool) else -1
         if not 0 <= age <= heartbeat.ALIVE_MAX_AGE:
             raise ValueError("watchdog_checker_stale")
-        # The injected checker is only an adapter: the real ALIVE record must
-        # still satisfy the shared contract's freshness, namespace and live
-        # identity checks before a spawn may be admitted.
-        try:
-            bound = watchdog_contract.require_watchdog_readiness(
-                config.watchdog_path, graphroot=graphroot,
-                snapshot=snapshot or proc.snapshot, wall=clock or time.time)
-        except guard_errors.GuardExceeded as exc:
-            raise ValueError("watchdog_checker_alive_" + exc.reason) from exc
-        if (bound["starttime"], bound["pid_ns"]) != (starttime, pid_ns):
+        fresh = live_check()
+        if (fresh["starttime"], fresh["pid_ns"]) != (starttime, pid_ns):
             raise ValueError("watchdog_checker_alive_mismatch")
-        alive = json.loads(Path(config.watchdog_path).read_text())
-        observed = (snapshot or proc.snapshot)().get(alive.get("pid"))
-        if (observed is None
-                or (observed.get("starttime"), observed.get("pid_ns"))
-                != (starttime, pid_ns)):
-            raise ValueError("watchdog_checker_live_mismatch")
+        initial["identity"] = (starttime, pid_ns)
+        initial["pending"] = False
         return {"schema": WATCHDOG_CHECKER_SCHEMA, "ready": True,
                 "identity_bound": True, "pid_ns": pid_ns,
                 "starttime": starttime, "at_utc": at}

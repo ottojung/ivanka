@@ -242,7 +242,8 @@ def _validate_bounded_number(token: str, prefix: str, low: int, high: int, label
 
 
 def assert_reference_blind(argv, *, allowed_values, expected_sources,
-                           denovo: bool = True, reads=PINNED_READS):
+                           denovo: bool = True, reads=PINNED_READS,
+                           image_id: str | None = None):
     """Validate an *exact* allowlisted command; fail closed on anything else.
 
     ``allowed_values`` is the exact set of non-mount tokens the caller built;
@@ -304,8 +305,13 @@ def assert_reference_blind(argv, *, allowed_values, expected_sources,
     _validate_bounded_number(non_mount[13], "--cpus=", 1, 32, "cpu limit")
     _validate_bounded_number(non_mount[14], "--memory=", 1, 4_000_000_000, "memory limit")
     _validate_bounded_number("--timeout=" + non_mount[16], "--timeout=", 1, 2400, "timeout")
-    if not re.fullmatch(r"sha256:[0-9a-f]{64}", non_mount[19]):
-        raise UnsafeCommand("image is not an exact sha256 digest")
+    if image_id is None:
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", non_mount[19]):
+            raise UnsafeCommand("image is not an exact sha256 digest")
+    elif (not isinstance(image_id, str)
+          or not re.fullmatch(r"[0-9a-f]{64}", image_id)
+          or non_mount[19] != image_id):
+        raise UnsafeCommand("image is not the exact pinned image ID")
     observed_tail = tuple(non_mount[-len(tail):])
     if observed_tail != tail:
         raise UnsafeCommand("integrated MiCall tail differs from exact contract")
@@ -317,6 +323,7 @@ def assert_reference_blind(argv, *, allowed_values, expected_sources,
 def build_command(
     *,
     image: str,
+    launch_image: str | None = None,
     reads_dir: os.PathLike[str] | str,
     attempt_dir: os.PathLike[str] | str,
     timer: os.PathLike[str] | str,
@@ -347,6 +354,17 @@ def build_command(
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image):
         raise UnsafeCommand("candidate image must be an exact sha256 digest")
 
+    # Podman in the pinned deployment resolves an exact image ID but not a
+    # manifest-digest reference. The immutable ID is used only for launch;
+    # the digest stays the pinned provenance identity in plan/receipt.
+    if launch_image is not None:
+        if (not isinstance(launch_image, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", launch_image)):
+            raise UnsafeCommand("launch image must be an exact 64-hex image ID")
+        image_argument = launch_image
+    else:
+        image_argument = image
+
     reads_source = str(Path(reads_dir).resolve())
     results_source = str(Path(attempt_dir).resolve())
     timer_source = str(Path(timer).resolve())
@@ -364,13 +382,14 @@ def build_command(
     ]
     for mount in mounts:
         argv.extend(("-v", mount))
-    argv.extend(("--entrypoint", "/opt/venv/bin/python", image))
+    argv.extend(("--entrypoint", "/opt/venv/bin/python", image_argument))
     argv.extend(micall_tail(denovo=denovo, reads=reads))
     allowed_values = frozenset(
         value for value in argv if value not in mounts) | frozenset({"podman"})
     assert_reference_blind(
         argv, allowed_values=allowed_values, denovo=denovo, reads=reads,
-        expected_sources=frozenset({reads_source, results_source, timer_source}))
+        expected_sources=frozenset({reads_source, results_source, timer_source}),
+        image_id=launch_image)
     return argv
 
 

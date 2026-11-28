@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import os
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -183,6 +184,111 @@ class ExecuteCaseTests(unittest.TestCase):
         for k in runner.NA_METRICS:
             self.assertIsNone(receipt["diagnostics"][k])
             self.assertIn(k, receipt["unavailable"])
+
+    def test_log_copy_integrity_failure_keeps_explicit_failure_receipt(self):
+        def runner_with_drifted_log(plan, output_dir, attempt_dir):
+            run = self.fake_runner()(plan, output_dir, attempt_dir)
+            run["log_sha256"] = {"container.log": "0" * 64}
+            return run
+
+        receipt = ctl.execute_case(
+            self.pilot_case, plan=self.plan, preflight_result=self.preflight,
+            runner=runner_with_drifted_log, output_dir=self.root / "out-drift",
+            attempt_dir=self.root / "att-drift",
+            scorer=lambda p, c, o: {
+                "schema": ctl.SCORING_SCHEMA, "method": "m", "cohort": "real",
+                "score": 321.0, "reference_panel_sha256": "f" * 64,
+                "best_reference": "x", "multitruth": None})
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["failure_reason"], "log_integrity_failure")
+        self.assertIsNone(receipt["score"])
+        self.assertIsNone(receipt["seconds"])
+        self.assertIn("log_integrity_failure", receipt["diagnostics"])
+        self.assertTrue((self.root / "att-drift" / "receipt.json").is_file())
+        retention = json.loads(
+            (self.root / "att-drift" / "retention.json").read_text())
+        self.assertIn("container.log", retention["log_integrity_failure"])
+
+    def test_expected_log_absent_is_explicit_not_unclassified(self):
+        def runner_with_missing_expected(plan, output_dir, attempt_dir):
+            run = self.fake_runner()(plan, output_dir, attempt_dir)
+            run["log_sha256"] = {"expected-only.log": "a" * 64}
+            return run
+
+        receipt = ctl.execute_case(
+            self.pilot_case, plan=self.plan, preflight_result=self.preflight,
+            runner=runner_with_missing_expected,
+            output_dir=self.root / "out-missing",
+            attempt_dir=self.root / "att-missing",
+            scorer=lambda p, c, o: {
+                "schema": ctl.SCORING_SCHEMA, "method": "m", "cohort": "real",
+                "score": 9.0, "reference_panel_sha256": "f" * 64,
+                "best_reference": "x", "multitruth": None})
+        self.assertEqual(receipt["status"], "failed")
+        self.assertIn("log_artifact_missing", receipt["failure_reason"])
+        self.assertIn("expected-only.log",
+                      receipt["diagnostics"]["log_artifact_missing"])
+        manifest = json.loads(
+            (self.root / "att-missing" / "retention.json").read_text())
+        self.assertIn("expected-only.log", manifest["missing_logs"])
+        self.assertTrue((self.root / "att-missing" / "receipt.json").is_file())
+
+    def test_log_copied_once_and_source_mutation_after_copy_is_ignored(self):
+        real_copy = ctl._copy_log
+        calls = []
+
+        def copy_then_mutate(source, dest):
+            copied = real_copy(source, dest)
+            calls.append(source)
+            if len(calls) == 1:
+                Path(source).write_bytes(b"mutated-after-copy")
+            return copied
+
+        with patch.object(ctl, "_copy_log", side_effect=copy_then_mutate):
+            ctl.execute_case(
+                self.pilot_case, plan=self.plan,
+                preflight_result=self.preflight,
+                runner=self.fake_runner(), output_dir=self.root / "out-once",
+                attempt_dir=self.root / "att-once",
+                scorer=lambda p, c, o: {
+                    "schema": ctl.SCORING_SCHEMA, "method": "m",
+                    "cohort": "real", "score": 9.0,
+                    "reference_panel_sha256": "f" * 64,
+                    "best_reference": "x", "multitruth": None})
+        self.assertEqual(len(calls), 1)
+        manifest = json.loads(
+            (self.root / "att-once" / "retention.json").read_text())
+        self.assertEqual(
+            manifest["logs"]["container.log"],
+            hashlib.sha256(b"ok\n").hexdigest())
+        source = Path(calls[0])
+        self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(),
+                         hashlib.sha256(b"mutated-after-copy").hexdigest())
+        self.assertNotIn("container.log", manifest["log_integrity_failure"])
+
+    def test_undrained_log_observation_is_explicit(self):
+        def runner_undrained(plan, output_dir, attempt_dir):
+            run = self.fake_runner(returncode=None, write_final_max=False)(
+                plan, output_dir, attempt_dir)
+            run["log_observation"] = {"terminal": False,
+                                      "reason": "launcher_exit_unproven"}
+            return run
+
+        receipt = ctl.execute_case(
+            self.pilot_case, plan=self.plan, preflight_result=self.preflight,
+            runner=runner_undrained, output_dir=self.root / "out-undrained",
+            attempt_dir=self.root / "att-undrained",
+            scorer=lambda p, c, o: {
+                "schema": ctl.SCORING_SCHEMA, "method": "m", "cohort": "real",
+                "score": 9.0, "reference_panel_sha256": "f" * 64,
+                "best_reference": "x", "multitruth": None})
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["failure_reason"], "missing_exit_status")
+        self.assertEqual(
+            receipt["diagnostics"]["log_observation"]["terminal"], False)
+        self.assertEqual(receipt["diagnostics"]["logs_undrained"],
+                         "launcher_exit_unproven")
+        self.assertTrue((self.root / "att-undrained" / "receipt.json").is_file())
 
     def test_distinct_receipts_for_distinct_runs(self):
         r1 = ctl.execute_case(
@@ -713,6 +819,87 @@ class RealGuardedExecutionTests(unittest.TestCase):
                 scorer=lambda *a: self.fail("scorer ran without unmount"))
         self.assertEqual(receipt["status"], "failed")
         self.assertIsNone(receipt["score"])
+
+
+class LogDrainAndRetentionTests(unittest.TestCase):
+    """Failed pre-bind launches must hash drained logs, never racing bytes."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.case, self.plan = make_plan(self.root / "real", alias="R001",
+                                          cohort="real")
+        self.manifest = {
+            "schema": gexec.BINDING_SCHEMA,
+            "manifest_sha256": gexec.ORIGINAL_MANIFEST_SHA256,
+            "physical_manifest_sha256": "1" * 64,
+            "synthetic_cohort_sha256": "2" * 64,
+            "truth_opened": False,
+            "cases": [{"alias": "R001", "cohort": "real",
+                       "read_sha256": dict(self.plan["inputs"]["read_sha256"]),
+                       "source_verified": True}],
+        }
+
+    def test_guard_hashes_logs_only_after_child_exit(self):
+        attempt = self.root / "attempt"
+        attempt.mkdir()
+
+        def spawn(plan, cidfile, env, stdout, stderr, groot):
+            return subprocess.Popen(
+                ["/bin/sh", "-c", "printf late >&2"],
+                stdout=open(stdout, "wb"), stderr=open(stderr, "wb"),
+                start_new_session=True)
+
+        class Harness:
+            class ExclusiveLock:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    return False
+
+            @staticmethod
+            def run_prospective(**kwargs):
+                kwargs["spawn"](attempt / "cid", kwargs["env"])
+                raise RuntimeError("early-guard-stop")
+
+        usage = lambda target: SimpleNamespace(free=40 * 1024**3)
+        state = gexec.run_guarded_case(
+            self.plan, self.manifest,
+            output_dir=self.root / "output", attempt_dir=attempt,
+            owner="operator-test",
+            stop_path=self.root / "STOP", watchdog_ready=lambda: {
+                "ready": True, "pid_ns": 1, "starttime": 1},
+            guard_root=self.root, disk_path=self.root,
+            spawn=spawn, harness=Harness(), disk_usage=usage)
+        self.assertTrue(state["launcher_exited"])
+        self.assertEqual(state["log_sha256"]["launcher.stderr.log"],
+                         hashlib.sha256(b"late").hexdigest())
+
+    def test_retention_refuses_copied_log_hash_mismatch(self):
+        attempt = self.root / "attempt"
+        attempt.mkdir()
+        source = self.root / "launcher.stderr.log"
+        source.write_bytes(b"original bytes")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        manifest = ctl.retain_case_artifacts(
+            attempt_dir=attempt, receipt={"schema": "test"},
+            logs={"launcher.stderr.log": str(source)},
+            expected_logs={"launcher.stderr.log": digest})
+        self.assertEqual(manifest["logs"]["launcher.stderr.log"], digest)
+        (attempt / "logs" / "launcher.stderr.log").unlink()
+        altered = ctl.retain_case_artifacts(
+            attempt_dir=attempt, receipt={"schema": "test"},
+            logs={"launcher.stderr.log": str(source)},
+            expected_logs={"launcher.stderr.log": "0" * 64})
+        self.assertEqual(
+            altered["log_integrity_failure"]["launcher.stderr.log"],
+            {"source_sha256": "0" * 64, "copy_sha256": digest})
+        self.assertTrue((attempt / "receipt.json").is_file())
 
 
 if __name__ == "__main__":

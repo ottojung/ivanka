@@ -465,6 +465,104 @@ class RegistryActivationTests(unittest.TestCase):
         self.assertEqual(adopted, ["idba-ud"])
         self.assertEqual(evidence["assemblers"][0]["image_sha256"], "c" * 64)
 
+    @staticmethod
+    def _rewrite_pilot(registry_path, tool, physical="__keep__",
+                       synthetic="__keep__"):
+        """Change arm statuses while keeping the verified digest chain intact.
+
+        ``None`` removes an arm; the default keeps it unchanged.
+        """
+        registry = json.loads(Path(registry_path).read_text())
+        item = next(c for c in registry["candidates"] if c["id"] == tool)
+        path = Path(item["pilot_evidence"]["path"])
+        pilot = json.loads(path.read_text())
+        for name, value in (("physical", physical), ("synthetic", synthetic)):
+            if value == "__keep__":
+                continue
+            if value is None:
+                pilot.pop(name, None)
+            else:
+                pilot[name] = value
+        path.write_text(json.dumps(pilot))
+        digest = _sha(path)
+        item["pilot_evidence"]["sha256"] = digest
+        Path(registry_path).write_text(json.dumps(registry))
+        handoff_path = path.parent.parent / "handoff" / (tool + ".json")
+        handoff = json.loads(handoff_path.read_text())
+        handoff["pilot_receipt_sha256"] = digest
+        handoff_path.write_text(json.dumps(handoff))
+        return registry_path
+
+    def test_verified_terminal_pair_with_honest_failure_adopted(self):
+        """A real success plus a recorded failure publishes provenance verbatim."""
+        tool = "soapdenovo2"
+        registry_path = self._activate((tool,))
+        registry_path = self._rewrite_pilot(
+            registry_path, tool,
+            synthetic={"source_input_sha256": "f" * 64,
+                       "status": "failure",
+                       "failure_cause": "guard soft trip; no final MAX"})
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            adopted = refresh_registry_provenance(
+                self.evidence, registry_path, self.root / "handoff")
+        self.assertEqual(adopted, [tool])
+        profile = next(a for a in self.evidence["assemblers"] if a["id"] == tool)
+        self.assertEqual(profile["image_sha256"], "c" * 64)
+        self.assertEqual(profile["pilot"]["outcomes"],
+                         {"physical": "success", "synthetic": "failure"})
+        self.assertNotIn("qualifying", profile["pilot"])
+        self.assertEqual(profile.get("cases"), [])
+
+    def test_partial_nonterminal_or_malformed_pair_refused(self):
+        """Only a complete terminal pair may publish; no partial pilot."""
+        tool = "skesa"
+        cases = (
+            {"synthetic": None},  # arm absent
+            {"synthetic": {"status": "partial"}},  # non-terminal
+            {"synthetic": "malformed"},  # malformed arm
+        )
+        for variant in cases:
+            with self.subTest(variant=variant):
+                self.setUp()
+                registry_path = self._activate((tool,))
+                self._rewrite_pilot(registry_path, tool, **variant)
+                with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                           self.root):
+                    try:
+                        adopted = refresh_registry_provenance(
+                            self.evidence, registry_path, self.root / "handoff")
+                    except ValueError:
+                        adopted = []  # fail closed is also refusal
+                self.assertEqual(adopted, [])
+
+    def test_unadmitted_tool_is_never_adopted(self):
+        self._activate(("skesa",))
+        handoff = json.loads((self.root / "handoff" / "skesa.json").read_text())
+        handoff["tool_id"] = "not-in-registry"
+        (self.root / "handoff" / "not-in-registry.json").write_text(
+            json.dumps(handoff))
+        registry_path = self.root / "registry.json"
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            adopted = refresh_registry_provenance(
+                self.evidence, registry_path, self.root / "handoff")
+        self.assertNotIn("not-in-registry", adopted)
+
+    def test_failure_pair_cannot_repoint_old_scores(self):
+        registry_path, evidence = self._unpinned_activation("f" * 64)
+        self._rewrite_pilot(
+            registry_path, "idba-ud",
+            synthetic={"source_input_sha256": "f" * 64,
+                       "status": "failure", "failure_cause": "guard trip"})
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            with self.assertRaisesRegex(ValueError,
+                                        "measured case provenance"):
+                refresh_registry_provenance(
+                    evidence, registry_path, self.root / "handoff")
+        self.assertEqual(evidence["assemblers"][0]["image_sha256"], "c" * 64)
+
 
 class PxCohortSyntheticIngestTests(unittest.TestCase):
     """Synthetic admission built only from the frozen 464-case source manifest."""

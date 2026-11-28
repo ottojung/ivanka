@@ -267,7 +267,12 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(resumed["completed"], calls)
 
     def test_stop_during_authorized_retry_admission_consumes_nothing(self):
-        """No claim, runner or completion when STOP arrives before attempt 3."""
+        """No claim, runner or completion when STOP arrives before attempt 3.
+
+        The entire test stays hermetic: guard identity is injected from the
+        pinned fixture for authorization, resume and receipt recording too, so
+        no host deployment/control root is consulted.
+        """
         registry = self.registry()
         self.handoff_all(registry)
         plan = sched.build_plan(registry, self.source(), self.px)
@@ -277,8 +282,6 @@ class SupervisorTests(unittest.TestCase):
             sched.record_outcome(self.px, arm, None, "failure",
                                  failure_reason="measurement_unavailable",
                                  runner_receipt_sha256="b" * 64)
-        # Hermetic guard identity: inject the pinned fixture module map instead
-        # of reading whatever deployment/control root this host happens to have.
         guard_modules = json.loads(
             (GUARD_FIXTURE / guard_source.IDENTITY_NAME).read_bytes())["sources"]
         calls, claims = [], []
@@ -307,14 +310,14 @@ class SupervisorTests(unittest.TestCase):
             self.assertEqual(sched.verify_receipt(self.px, arm)["attempt"],
                              sched.MAX_INFRA_ATTEMPTS)
 
-        (self.px / sup.STOP_FILE).unlink()
-        resumed = self.supervisor(self.fake_runner(calls, stop_after=1),
-                                  registry).start(armed=True)
-        self.assertEqual(calls, [arm_id])
-        self.assertEqual(resumed["completed"], [arm_id])
-        receipt = sched.verify_receipt(self.px, arm)
-        self.assertEqual(receipt["attempt"], sched.AUTHORIZED_EXTRA_ATTEMPT)
-        self.assertEqual(receipt["outcome"], "success")
+            (self.px / sup.STOP_FILE).unlink()
+            resumed = self.supervisor(self.fake_runner(calls, stop_after=1),
+                                      registry).start(armed=True)
+            self.assertEqual(calls, [arm_id])
+            self.assertEqual(resumed["completed"], [arm_id])
+            receipt = sched.verify_receipt(self.px, arm)
+            self.assertEqual(receipt["attempt"], sched.AUTHORIZED_EXTRA_ATTEMPT)
+            self.assertEqual(receipt["outcome"], "success")
 
     def test_inner_stop_is_remembered_if_owner_retires_sentinel(self):
         """No later arm runs when the owner removes STOP during the return."""

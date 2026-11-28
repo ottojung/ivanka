@@ -464,6 +464,15 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
         target = assemblers.get(tool)
         if item is None or target is None:
             continue
+        # Provenance publication is cohort admission, not just receipt
+        # validity. A pinned but non-cohort-admitted candidate is refused
+        # even when its handoff, receipts and adapter chain verify.
+        try:
+            admitted = exploratory_policy.cohort_eligible(registry, tool)
+        except (KeyError, TypeError, StopIteration):
+            admitted = False
+        if not admitted:
+            continue
         adapter = branches.get(tool)
         image_evidence = item.get("image_evidence") or {}
         pilot_evidence = item.get("pilot_evidence") or {}

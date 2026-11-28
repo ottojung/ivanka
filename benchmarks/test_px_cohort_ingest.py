@@ -549,6 +549,25 @@ class RegistryActivationTests(unittest.TestCase):
                 self.evidence, registry_path, self.root / "handoff")
         self.assertNotIn("not-in-registry", adopted)
 
+    def test_pinned_but_non_cohort_admitted_candidate_refused(self):
+        """A verified terminal pair cannot publish an unadmitted candidate."""
+        tool = "skesa"
+        registry_path = self._activate((tool,))
+        registry = json.loads(Path(registry_path).read_text())
+        candidate = next(c for c in registry["candidates"] if c["id"] == tool)
+        self.assertIsNotNone(candidate.get("image_sha256"))
+        candidate["status"] = "source-pinned"  # pinned, not cohort-admitted
+        Path(registry_path).write_text(json.dumps(registry))
+        with patch("assembler_bench.exploratory_policy.PROVENANCE_ROOT",
+                   self.root):
+            adopted = refresh_registry_provenance(
+                self.evidence, registry_path, self.root / "handoff")
+        self.assertEqual(adopted, [])
+        profile = next(a for a in self.evidence["assemblers"]
+                       if a["id"] == tool)
+        self.assertEqual(profile.get("adapter_commit"), "2" * 40)
+        self.assertNotIn("pilot", profile)
+
     def test_failure_pair_cannot_repoint_old_scores(self):
         registry_path, evidence = self._unpinned_activation("f" * 64)
         self._rewrite_pilot(

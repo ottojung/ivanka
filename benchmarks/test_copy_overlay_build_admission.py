@@ -489,16 +489,20 @@ class CopyOverlayTests(unittest.TestCase):
         bound = {"state": "bound_group", "pid": PID, "pgid": PID,
                  "fingerprint": [200, 99], "stable": True,
                  "graphroot": GRAPHROOT}
-        reused = {9999: record(9999, 999, pgid=9999)}
+        # True PID reuse keeps the bound PID and PGID but changes kernel
+        # immutable identity. The group is still live under a new owner, so
+        # no signal is sent and teardown fails closed.
+        reused = {PID: record(PID, 999, pgid=PID, ns=98)}
         with patch("os.killpg", side_effect=AssertionError("bare/reused PGID")):
-            with self.assertRaises(Exception):
+            with self.assertRaises(Exception) as caught:
                 build.stop_group_by_id(
                     PID, snapshot=lambda: reused, sleep=lambda _: None,
                     clock=lambda: 0.0,
                     verify=lambda pgid, table: watchdog.group_still_owned(
                         bound, table),
-                    absent=lambda pgid, table: watchdog.group_absent(
+                    absent=lambda pgid, table: watchdog.group_absence_proven(
                         bound, table))
+        self.assertEqual(str(caught.exception), "identity_lost_before_signal")
 
     def test_deadline_disk_rss_and_inspect_deadline(self):
         self.assertLess(watchdog.RSS_LIMIT, watchdog.RSS_UPPER_BOUND)
@@ -575,6 +579,173 @@ class CopyOverlayTests(unittest.TestCase):
                                 watchdog_path=self.root / "absent",
                                 graphroot=GRAPHROOT, snapshot=lambda: {},
                                 wall=time.time, command=self.command)
+
+    @staticmethod
+    def _bound_group():
+        return {"state": "bound_group", "pid": PID, "pgid": PID,
+                "fingerprint": [200, 99], "stable": True,
+                "graphroot": GRAPHROOT}
+
+    def test_fast_exit_helper_proves_absence_without_signal(self):
+        # The helper can finish before its own stop callback. A trustworthy
+        # snapshot proving the exact identity and PGID are gone resolves the
+        # teardown; it must not be reported as identity loss or signalled.
+        verify, absent = watchdog.group_callbacks(self._bound_group())
+        # An unrelated process may remain; it carries neither the bound
+        # identity nor the bound PGID and must never be signalled or claimed.
+        unrelated = {9999: record(9999, 999, pgid=9999)}
+        with patch("os.killpg", side_effect=AssertionError(
+                "self-exited helper must never be signalled")):
+            proof = build.stop_group_by_id(
+                PID, snapshot=lambda: unrelated, sleep=lambda _: None,
+                clock=lambda: 0.0, verify=verify, absent=absent)
+        self.assertTrue(proof["stopped"])
+        self.assertTrue(proof["pre_exited"])
+        self.assertEqual(proof["method"], "verified_exact_group")
+        self.assertEqual(proof["process_group"], PID)
+        self.assertFalse(proof["kernel_enforcement"])
+
+    def test_genuine_identity_loss_still_fails_closed(self):
+        # A different leader occupying the bound PGID is identity loss even
+        # though the original leader is gone: no signal, no absence proof.
+        reused = {PID: record(PID, 999, pgid=PID, ns=98)}
+        verify, absent = watchdog.group_callbacks(self._bound_group())
+        with patch("os.killpg", side_effect=AssertionError(
+                "unowned group must never be signalled")):
+            with self.assertRaises(Exception) as caught:
+                build.stop_group_by_id(
+                    PID, snapshot=lambda: reused, sleep=lambda _: None,
+                    clock=lambda: 0.0, verify=verify, absent=absent)
+        self.assertEqual(str(caught.exception), "identity_lost_before_signal")
+
+    def test_unreadable_snapshot_never_proves_absence(self):
+        unreadable = {PID: {"pid": PID, "ppid": None, "pgid": None,
+                            "starttime": None, "pid_ns": None,
+                            "cmdline_sha": None, "rss": None, "cgroup": None,
+                            "state": None, "structural_unavailable": True}}
+        verify, absent = watchdog.group_callbacks(self._bound_group())
+        with patch("os.killpg", side_effect=AssertionError(
+                "unknown group state must never be signalled")):
+            with self.assertRaises(Exception) as caught:
+                build.stop_group_by_id(
+                    PID, snapshot=lambda: unreadable, sleep=lambda _: None,
+                    clock=lambda: 0.0, verify=verify, absent=absent)
+        self.assertEqual(str(caught.exception), "identity_lost_before_signal")
+
+    def test_exact_group_absence_proof_is_conservative(self):
+        bound = self._bound_group()
+        self.assertTrue(watchdog.group_absence_proven(bound, {}))
+        live = self.table()
+        self.assertFalse(watchdog.group_absence_proven(bound, live))
+        # Immutable starttime + namespace identify the leader; a changed
+        # cmdline is not a different group and must still block the proof.
+        execed = dict(live)
+        execed[PID] = dict(live[PID], cmd="podman-exec")
+        self.assertFalse(watchdog.group_absence_proven(bound, execed))
+        self.assertFalse(watchdog.group_absence_proven(
+            bound, {PID: record(PID, 999, pgid=PID, ns=98)}))
+        unreadable = {PID: dict(live[PID], structural_unavailable=True)}
+        self.assertFalse(watchdog.group_absence_proven(bound, unreadable))
+
+    def test_signalled_teardown_still_reports_no_pre_exit(self):
+        tables = iter([self.table(), {}])
+        verify, absent = watchdog.group_callbacks(self._bound_group())
+        signals = []
+
+        def killpg(pgid, _signal):
+            signals.append(pgid)
+
+        with patch("os.killpg", side_effect=killpg):
+            proof = build.stop_group_by_id(
+                PID, snapshot=lambda: next(tables, {}), sleep=lambda _: None,
+                clock=lambda: 0.0, verify=verify, absent=absent)
+        self.assertEqual(signals, [PID])
+        self.assertTrue(proof["stopped"])
+        self.assertNotIn("pre_exited", proof)
+
+    def test_run_completes_when_helper_self_exits_before_teardown(self):
+        self.ping()
+        self.permission = []
+        exited = {"value": False}
+
+        def on_inspect():
+            exited["value"] = True
+
+        self.on_image_inspect = on_inspect
+
+        def snap():
+            return self.table() if not exited["value"] else {}
+
+        def fake_spawn(root, argv, env_value, pass_fds, log):
+            self.own_external()
+            self.write_iid(argv)
+            return Handle(PID)
+
+        with patch.object(copy_overlay, "default_spawn", side_effect=fake_spawn), \
+             patch("os.killpg", side_effect=AssertionError(
+                 "self-exited helper must never be signalled")):
+            state = copy_overlay.run(
+                self.root, self.plan, expected_base=FROZEN,
+                expected_commit=COMMIT, graphroot=GRAPHROOT, env=self.env,
+                reserve_bytes=1024, snapshot=snap, command=self.command,
+                usage=lambda path: Free(100 * 1024**3),
+                wall=time.time, monotonic=lambda: 0.0, sleep=lambda _: None,
+                permission=self.write_permission)
+        self.assertEqual(state["status"], "completed")
+        self.assertEqual(state["exit_code"], 0)
+        self.assertTrue(state["teardown"]["stopped"])
+        self.assertTrue(state["teardown"]["pre_exited"])
+        self.assertEqual(self.permission[0][1], b"G")
+        self.assertEqual(self.removed, [NEW_ID])
+
+    def test_preserved_copy_overlay_invariants_after_teardown_fix(self):
+        self.plan["no_cache"] = True
+        validated = copy_overlay.validate_plan(
+            self.plan, expected_base=FROZEN, expected_commit=COMMIT,
+            expected_graphroot=GRAPHROOT, root=self.root)
+        self.assertIs(validated["no_cache"], True)
+        argv = validated["argv"]
+        self.assertEqual(argv[0:4],
+                         ["podman", "build", "--network=none", "--pull=never"])
+        self.assertEqual(argv.count("--no-cache"), 1)
+        self.assertEqual(argv.index("--no-cache"), argv.index("--pull=never") + 1)
+        for value in ("true", 1, None, ["--no-cache"]):
+            with self.subTest(value=value):
+                self.plan["no_cache"] = value
+                with self.assertRaises(GuardExceeded):
+                    copy_overlay.validate_plan(
+                        self.plan, expected_base=FROZEN, expected_commit=COMMIT,
+                        expected_graphroot=GRAPHROOT, root=self.root)
+        self.plan["no_cache"] = True
+        with tempfile.TemporaryDirectory() as tmp:
+            sealed = dict(validated)
+            copy_overlay.seal_context(Path(tmp), sealed)
+            self.assertIn("--iidfile", sealed["argv"])
+            self.assertEqual(sealed["iidfile"], str(Path(tmp) / "image.iid"))
+            self.assertEqual(len(sealed["labels"]), 5)
+            self.assertIn("org.ottojung.ivanka.binary-sha256=" + ARTIFACT_SHA,
+                          sealed["argv"])
+        legacy = dict(self.plan, no_cache=False)
+        self.assertNotEqual(copy_overlay.plan_digest(legacy),
+                            copy_overlay.plan_digest(self.plan))
+        ident = "copy-" + validated["plan_sha256"][:16]
+        (self.root / "STOP").write_text(ident + "\n")
+        self.assertEqual(copy_overlay.check_stop(self.root, ident),
+                         str(self.root / "STOP"))
+
+    def test_admission_provenance_separates_lineage_from_amendment(self):
+        from expanded import p1_bounded_pilot_runner as runner
+        self.assertEqual(runner.COPY_OVERLAY_ADMISSION_MERGE,
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(runner.COPY_OVERLAY_ADMISSION_PR_HEAD,
+                         "39317f021f4e5c00f5da859bcdcf755de4c6d353")
+        base = Path(__file__).resolve().parent
+        for name, (relative, expected) in \
+                runner.COPY_OVERLAY_ADMISSION_DIGESTS.items():
+            with self.subTest(name=name):
+                actual = hashlib.sha256((base / relative).read_bytes()).hexdigest()
+                self.assertEqual(actual, expected)
+                self.assertNotEqual(actual, runner.COPY_OVERLAY_ADMISSION_MERGE)
 
 
 if __name__ == "__main__":

@@ -300,7 +300,7 @@ def _owned(bound):
         return watchdog.group_still_owned(bound, table)
 
     def absent(_pgid, table):
-        return watchdog.group_absent(bound, table)
+        return watchdog.group_absence_proven(bound, table)
 
     return verify, absent
 

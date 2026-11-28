@@ -46,9 +46,11 @@ def stop_group_by_id(pgid, *, snapshot=None, sleep=None, clock=None,
     """Signal only an exactly verified live group; prove absence conservatively.
 
     ``verify(pgid, table)`` must confirm the bound immutable identity before
-    every signal and ``absent(pgid, table)`` must confirm it is gone before a
-    proof is claimed. With either callback missing the call refuses, so a
-    reused PGID is never signalled or reported as reaped.
+    every signal and ``absent(pgid, table)`` must prove the exact group is gone
+    before a proof is claimed. With either callback missing the call refuses,
+    so a reused PGID is never signalled or reported as reaped. A bound helper
+    that already exited on its own is a completed teardown, not identity loss:
+    proven absence resolves without sending any signal.
     """
     pgid = int(pgid)
     if pgid <= 0 or verify is None or absent is None:
@@ -59,6 +61,14 @@ def stop_group_by_id(pgid, *, snapshot=None, sleep=None, clock=None,
     deadline = now() + timeout
     table = take()
     if not verify(pgid, table):
+        if absent(pgid, table):
+            # A fast COPY-only helper can finish before its stop callback.
+            # Proof that neither the bound identity nor its PGID remains is a
+            # verified natural exit: no signal is sent and no live group is
+            # claimed as reaped. An unattestable or live group is still refused.
+            return {"process_group": pgid, "stopped": True,
+                    "method": "verified_exact_group",
+                    "pre_exited": True, "kernel_enforcement": False}
         raise TeardownError("identity_lost_before_signal")
     try:
         os.killpg(pgid, signal.SIGTERM)

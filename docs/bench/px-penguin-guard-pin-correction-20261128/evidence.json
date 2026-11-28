@@ -1,0 +1,96 @@
+{
+  "schema": "ivanka.agent.penguin.guard-pin-correction.v1",
+  "date_utc": "2026-11-28",
+  "issue": "V9roZ0y80gjXs7WrOCgNbH-moral",
+  "repository": "https://github.com/ottojung/ivanka.git",
+  "branch_base": "6534a91f26f89850c07ff8027b2e85c2fb148e5f",
+  "fresh_branch_no_private_ancestor": true,
+  "publication": "sanitized digests and commit hashes only; host paths and operational scripts withheld",
+  "correction": {
+    "scope": "source-only; two pin values changed, no artifact or evidence byte changed",
+    "stale": {
+      "guard_root_basename": "ivanka-guard-pr536-staged-20261126",
+      "guard_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
+    },
+    "reviewed_live": {
+      "guard_root_basename": "ivanka-guard-pr535-staged-20261127",
+      "guard_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+    },
+    "as_written_dryrun_gate": "watchdog_code_drift",
+    "corrected_source_sha256": "47bb4af1d7cda898ad2f8a91486c3baceac8cd3482d6a2c449a734dc2697eb0d",
+    "byte_identical_to_sandbox_proven_probe": true,
+    "unchanged_evidence_sha256": "931f8fa9363d87a8d97d21a466083f0dc00b35d65187e54ce28de9b950bc0b33"
+  },
+  "api_gates_still_in_force": [
+    "import_source_drift",
+    "watchdog_code_drift",
+    "watchdog_pythonpath_drift",
+    "live_path_missing_podman",
+    "watchdog_cmdline_drift",
+    "guard_head_drift",
+    "stop_ambiguity",
+    "active_worker",
+    "registry_drift",
+    "storage_conf_drift",
+    "unknown_store",
+    "shared_reserve_below_floor",
+    "penguin_image_drift",
+    "watchdog_or_lease_gate",
+    "index_entry_drift",
+    "proposal_receipt_drift",
+    "existing_evidence_digest_mismatch",
+    "not_eligible",
+    "handoff_rejected",
+    "verify_additive",
+    "canonical_arms_changed",
+    "unrelated_change",
+    "post_commit_verification"
+  ],
+  "exact_ci": {
+    "migration_suite": {"tests": 26, "passed": 26, "failed": 0, "log_sha256": "a32de94f7a58a41560f0e97534f89998ee648ef4b59257ad03c83ab7504c3187"},
+    "concurrency_suite": {"tests": 12, "passed": 12, "failed": 0, "log_sha256": "24ac2888f2363c7be11f7181f4d0682541a49694c99274380345bf8236f48eb6"},
+    "focused_pin_tests": {"tests": 4, "passed": 4, "failed": 0},
+    "corrected_test_module_sha256": "97b5675284b5dc67c2678f43c0af728fe3b5e7cc9fe3140ebcdf8e31123e705d",
+    "unchanged_concurrency_module_sha256": "77bc48ff545fd750689582dc13f42ae4e09ca7c40408c5ff3b01385ae501a26b",
+    "new_rejection_tests": [
+      "test_23_stale_pr536_guard_root_is_rejected",
+      "test_24_stale_pr536_guard_head_is_rejected",
+      "test_25_arbitrary_wrong_guard_pin_is_rejected",
+      "test_26_reviewed_live_guard_pin_is_accepted"
+    ],
+    "rejected_gates": ["watchdog_code_drift", "guard_head_drift"]
+  },
+  "preserved_facts": {
+    "physical_pilot": "success",
+    "physical_alias": "PX-R053",
+    "synthetic_pilot": "failure",
+    "synthetic_alias": "PX-H452",
+    "synthetic_sampled_rss_soft_trip_bytes": 3701882880,
+    "synthetic_exit_code": 137,
+    "kernel_enforcement": false,
+    "sampled_rss_is_not_a_kernel_cap_or_scored_rss": true,
+    "terminal_failure_not_retried_or_relabelled": true,
+    "no_proxy_zero": true,
+    "no_scoring_attestation": true,
+    "no_retroactive_metric": true,
+    "argv_mount_capture_gap_retained": true,
+    "qualifying": false,
+    "seven_way_psi_release_inclusion": false,
+    "qualification_claim": false
+  },
+  "boundaries": {
+    "live_apply": false,
+    "stop_mutated": false,
+    "lease_mutated": false,
+    "supervisor_or_s6_mutated": false,
+    "global_lock_mutated": false,
+    "store_mutated": false,
+    "physical_or_synthetic_case_started": false,
+    "frozen_image_or_micall_mutated": false,
+    "score_or_site_mutated": false,
+    "named_slot_taken": false,
+    "reason": "sole grant coordinator is terminal with no surviving grant owner; the one exclusive worker is held by another agent"
+  },
+  "verdict": "needs-independent-review",
+  "request": "independent reviewer and coordinator to verify after exact CI; no integration or live apply implied"
+}

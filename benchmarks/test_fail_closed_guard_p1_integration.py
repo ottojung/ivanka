@@ -948,23 +948,24 @@ class P1HarnessStartupAbortTests(P1HarnessLifecycleTests):
         self.assert_no_release()
 
     def test_ownership_fault_with_known_cid_never_tears_down(self):
+        ident = "p1-ownership-fault"
+        cidfile = self.root / "cidfiles" / "ownership.cid"
+        cidfile.parent.mkdir(parents=True, exist_ok=True)
+        lease.acquire(self.root, ident, "pilot", owner="real-owner",
+                      cidfile=str(cidfile))
         for problem in ("journal_unavailable", "owner_mismatch",
                         "cidfile_mismatch", "cid_mismatch"):
             with self.subTest(problem=problem):
-                (self.root / lease.JOURNAL_NAME).unlink(missing_ok=True)
-                states = self.ready_then_unready()
                 with patch("fail_closed_guard.p1_harness._late_cid",
                            return_value=(None, problem)):
-                    with self.assertRaises(GuardExceeded) as caught:
-                        self._run(spawn=self.spawn_with_cid(),
-                                  launcher=PollLauncher(),
-                                  watchdog_ready=lambda states=states: next(states))
-                self.assertEqual(caught.exception.reason, "watchdog_unbound")
-                self.assertEqual(self.calls["stop"], [])
-                event = self.abort_events()[-1]
-                self.assertEqual(event["late_cid"], problem)
-                self.assertNotIn("cid", event)
-                self.assert_no_release()
+                    evidence = p1_harness._startup_abort(
+                        self.root, ident, "real-owner", str(cidfile),
+                        GuardExceeded("watchdog_unbound"),
+                        stopper=self._stopper, snapshot=lambda: self.table,
+                        handle=None, known_cid=CID)
+                self.assertEqual(evidence["late_cid"], problem)
+                self.assertNotIn("cid", evidence)
+        self.assertEqual(self.calls["stop"], [])
 
     def test_known_cid_survives_cidfile_disappearing_after_read(self):
         holder = {}

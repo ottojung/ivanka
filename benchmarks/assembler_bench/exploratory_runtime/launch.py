@@ -10,6 +10,7 @@ from pathlib import Path
 from assembler_bench.exploratory_space import admit_reserve
 
 from fail_closed_guard import heartbeat, identity, lease, teardown, watchdog_contract
+from fail_closed_guard import legacy_resource
 from fail_closed_guard import proc as process_snapshot
 from fail_closed_guard.errors import GuardExceeded
 
@@ -246,6 +247,15 @@ def operate(registry_path, baseline_path, tool, mode, argv, reserve_bytes):
                     state["status"] = "failed"
                     state["reason"] = "watchdog_evidence_unreadable"
                     state["watchdog_error"] = exc.reason
+                # An exact legacy guard violation is the actual sampled-resource
+                # stop and outranks any watchdog reason; it is not a recoverable
+                # infrastructure failure merely because the runner said "error".
+                # No proof means no attribution and no change to the reason.
+                resource = legacy_resource.attributed_resource_stop(
+                    root, ident, log)
+                if resource is not None:
+                    state["reason"] = resource
+                    state["resource_evidence_reason"] = resource
                 state["recorded_utc"] = time.time()
                 output.flush()
                 os.fsync(output.fileno())

@@ -484,8 +484,8 @@ class PortableArtifactPlanTests(unittest.TestCase):
     def test_plan_pins_produced_portable_bytes_not_built_images(self):
         proof = r.verify_portable_plan()
         self.assertEqual(proof["schema"], "ivanka.p1.portable-artifact-plan.v1")
-        self.assertEqual(proof["candidates"], 2)
-        self.assertEqual(proof["produced"], 2)
+        self.assertEqual(proof["candidates"], 3)
+        self.assertEqual(proof["produced"], 3)
         self.assertFalse(proof["build_executed"])
         doc = r.load_portable_plan()
         self.assertEqual(doc["status"], "PORTABLE_BYTES_PRODUCED_NOT_IMAGE_BUILT")
@@ -496,11 +496,13 @@ class PortableArtifactPlanTests(unittest.TestCase):
         native = [row["native_binary_sha256"] for row in doc["candidates"]]
         self.assertEqual(native, [
             "8569290db7aada4b915feda4648cfd3bcb92a48288cea7918ce36cc9439c3786",
-            "ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563"])
+            "ec5eb83546fb4fb212514a3ff54a8fea39e5b016e06ac70f46e2e22a1a931563",
+            "c17218f25e7ef1972c40a936dd6bfefd7bafd2f936d215fba31faae9a98d0e13"])
         portable = [row["portable_binary_sha256"] for row in doc["candidates"]]
         self.assertEqual(portable, [
             "a3c3181be82a87bb823917e74d9e265b1afc0bd981c65d92b6db7cb2ea66a0bf",
-            "de62b9f59f323090e7f2ba03890f33a2bb11c6dc1487a4cb22cca7a93efd8c16"])
+            "de62b9f59f323090e7f2ba03890f33a2bb11c6dc1487a4cb22cca7a93efd8c16",
+            "eea71e1b7f470a0204d4a76c6d836a64b41801971f8127dab37ab79c9bababba"])
         self.assertTrue(all("/gnu/store/" in row["native_interp"]
                             for row in doc["candidates"]))
         self.assertTrue(all(row["portable_image"] is None
@@ -508,6 +510,32 @@ class PortableArtifactPlanTests(unittest.TestCase):
                             and row["image_identity_verified"] is False
                             and row["copy_only_build"]["executed"] is False
                             for row in doc["candidates"]))
+
+    def test_new_candidate_and_six_residual_allowlist_are_exactly_pinned(self):
+        doc = r.load_portable_plan()
+        rows = [row for row in doc["candidates"]
+                if row["source_commit"] ==
+                "dabda4593ee93d506db292053f7bf277a73053bc"]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row["role"], "bounded-prospective-p1-87ce-fragments")
+        self.assertEqual(row["native_binary_sha256"],
+                         "c17218f25e7ef1972c40a936dd6bfefd7bafd2f936d215fba31faae9a98d0e13")
+        self.assertEqual(row["portable_binary_sha256"],
+                         "eea71e1b7f470a0204d4a76c6d836a64b41801971f8127dab37ab79c9bababba")
+        self.assertIsNone(row["portable_image"])
+        self.assertFalse(row["image_built"])
+        self.assertFalse(row["image_identity_verified"])
+        cases, _ = r.load_case_manifest()
+        allowed = r.explicit_cases(cases)
+        self.assertEqual(allowed, (
+            "pcr_jackpot-s001", "pcr_jackpot-s003", "pcr_jackpot-s015",
+            "equal_strains-s000", "equal_strains-s007", "equal_strains-s013",
+            "clonal-s000", "coverage_hole-s002"))
+        self.assertEqual(cases["physical_canary"]["case_id"], "physical-canary-R042")
+        self.assertEqual(cases["cohort_sha256"],
+                         "90990f6109553347d37f7754cde63398a4dce57c388f90c2ce4b648530bfdfe4")
+        self.assertFalse(cases["truth_used_at_assembly_time"])
 
     def test_actual_portable_bytes_match_pins_and_dynamic_contract(self):
         doc = r.load_portable_plan()

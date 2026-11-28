@@ -16,6 +16,16 @@ benchmark fix. See [binding frozen-base policy](docs/bench/frozen-micall-base.md
 and [docs/assembly-objective.md](docs/assembly-objective.md).**
 
 
+## Durable priority and scheduling board
+
+The founder-approved P1 scientific fast-loop and benchmark-worker priority
+policy is recorded on the durable Antonina board issue
+`13mh3jxJbwPnB2hIZ9JdZx-blush`. Operational details are in
+[docs/bench/p1-fast-loop-priority-20261128.md](docs/bench/p1-fast-loop-priority-20261128.md).
+This is scheduling/process guidance only: it does not change the intents or
+any frozen qualification or resource acceptance condition.
+
+
 ## Required execution intents
 
 **All seventeen intent records are cumulative and binding. New requirements do

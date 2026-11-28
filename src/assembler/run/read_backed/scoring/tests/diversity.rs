@@ -1,9 +1,7 @@
 //! Raw-read diversity controls: signature count is a lower bound, not dedup.
 
-use super::super::super::{index, ranking};
-use super::super::count;
-use super::sig_count;
 use super::support::{rc, reads, sequence, tiled};
+use super::{count, index, ranking, sig_count};
 
 #[test]
 fn pcr_identical_pairs_do_not_admit_single_locus_component() {
@@ -12,7 +10,6 @@ fn pcr_identical_pairs_do_not_admit_single_locus_component() {
     b[200] = if b[200] == b'A' { b'C' } else { b'A' };
     let contigs = vec![a.clone(), b.clone()];
     let mut pairs = tiled(&a, 60);
-    pairs.extend(tiled(&b, 60));
     let dup = (b[170..230].to_vec(), rc(&b[170..230]));
     pairs.extend(std::iter::repeat_n(dup, 30));
     let stats = count(&contigs, &reads(&pairs), &index::build(&contigs));
@@ -24,7 +21,7 @@ fn pcr_identical_pairs_do_not_admit_single_locus_component() {
 fn distinct_fragments_can_admit_genuine_single_locus_strain() {
     let a = sequence(400, 11);
     let mut b = a.clone();
-    b[200] = if b[200] == b'A' { b'C' } else { b'A' };
+    b[180..220].copy_from_slice(&sequence(40, 23));
     let contigs = vec![a.clone(), b.clone()];
     let mut pairs = tiled(&a, 60);
     pairs.extend(tiled(&b, 60));

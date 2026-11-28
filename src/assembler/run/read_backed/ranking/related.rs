@@ -1,7 +1,6 @@
 #[cfg(test)]
 pub(super) use super::additional;
-#[cfg(test)]
-pub(super) use super::Statistics;
+pub(super) use super::{Statistics, K};
 mod diversity;
 #[cfg(test)]
 mod tests;

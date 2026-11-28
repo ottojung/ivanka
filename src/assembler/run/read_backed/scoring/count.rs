@@ -1,7 +1,7 @@
 use super::{evidence, scan, spans, Hits, Reads, Statistics, K};
 
 /// Count each original read pair once per contig, irrespective of hit count.
-pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statistics {
+pub(in super::super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statistics {
     let mut depth = contigs
         .iter()
         .map(|seq| vec![0; seq.len().saturating_sub(K - 1)])

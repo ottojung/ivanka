@@ -2,9 +2,8 @@
 //! decision for each locus and proves the one-pass scan is equivalent even
 //! when one 31-mer maps to many loci or to several candidates.
 
-use super::super::super::super::K;
-use super::super::super::index::Hits;
-use super::super::scan::{pair_loci, Loci};
+use super::scan::{pair_loci, Loci};
+use super::{Hits, K};
 use std::collections::HashMap;
 
 fn key(base: u8) -> [u8; K] {
@@ -14,7 +13,7 @@ fn key(base: u8) -> [u8; K] {
 }
 
 fn legacy(hits: &Hits, first: &[u8], second: &[u8]) -> Loci {
-    let (mut matched, mut exclusive) = (HashMap::new(), HashMap::new());
+    let (mut matched, mut exclusive): Loci = (HashMap::new(), HashMap::new());
     for read in [first, second] {
         if read.len() < K {
             continue;

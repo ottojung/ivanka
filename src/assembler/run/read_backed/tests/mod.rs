@@ -10,18 +10,16 @@ mod tiling_cases;
 mod trimming_cases;
 
 fn private_stats(coverage: Vec<usize>, depth: Vec<Vec<u32>>) -> scoring::Statistics {
-    let masks = [vec![3u16; 700], vec![2; 300]].concat();
-    let pairs = (0..2)
-        .map(|i| masks.iter().filter(|&&m| m & (1 << i) != 0).count())
-        .collect();
-    let spans = vec![vec![]; coverage.len()];
+    let n = coverage.len();
+    let pairs = vec![700, 1000];
+    let spans = vec![vec![]; n];
     scoring::Statistics {
         depth,
         pairs,
         coverage,
-        pair_masks: masks,
+        pair_masks: [vec![3u16; 700], vec![2; 300]].concat(),
         spans,
-        ..scoring::Statistics::blank(coverage.len())
+        ..scoring::Statistics::blank(n)
     }
 }
 

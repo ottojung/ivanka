@@ -1,4 +1,4 @@
-use super::super::{Statistics, K};
+use super::{Statistics, K};
 use std::collections::HashSet;
 
 pub(super) fn diversity(stats: &Statistics, selected: u16, i: usize) -> (usize, usize) {

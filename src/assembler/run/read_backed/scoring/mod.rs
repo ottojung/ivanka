@@ -1,6 +1,10 @@
 mod scan;
 mod spans;
 mod statistics;
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+pub(super) use super::{index, ranking};
 pub(super) use super::{index::Hits, Reads, K};
 pub(super) use statistics::Statistics;
 pub(super) use std::collections::{HashMap, HashSet};
@@ -12,8 +16,7 @@ pub(super) fn count(contigs: &[Vec<u8>], reads: &Reads, hits: &Hits) -> Statisti
         .map(|seq| vec![0; seq.len().saturating_sub(K - 1)])
         .collect::<Vec<_>>();
     let (mut pairs, mut spans) = (vec![0usize; contigs.len()], vec![Vec::new(); contigs.len()]);
-    let mut pair_masks = Vec::new();
-    let mut exclusive_masks = Vec::new();
+    let (mut pair_masks, mut exclusive_masks) = (Vec::new(), Vec::new());
     for oriented in reads.seqs.chunks_exact(4).take(80_000) {
         let (matched, exclusive) = scan::pair_loci(hits, &oriented[0], &oriented[2]);
         let mut mask = 0u16;

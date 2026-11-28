@@ -21,12 +21,22 @@ pub(super) fn pair_loci(hits: &Hits, first: &[u8], second: &[u8]) -> Loci {
             continue;
         }
         for pos in (0..=read.len() - K).step_by(2) {
-            if let Some(locations) = hits.get(&read[pos..pos + K]) {
-                for &(candidate, locus) in locations {
-                    matched.entry(candidate).or_default().insert(locus);
-                    if locations.iter().all(|&(other, _)| other == candidate) {
-                        exclusive.entry(candidate).or_default().insert(locus);
-                    }
+            let Some(locations) = hits.get(&read[pos..pos + K]) else {
+                continue;
+            };
+            for &(candidate, locus) in locations {
+                matched.entry(candidate).or_default().insert(locus);
+            }
+            // Exclusivity is a property of the 31-mer, not of each locus. A
+            // repeated k-mer can map to many loci of one candidate in one
+            // vector; deciding once avoids rescanning that vector per locus.
+            let Some(&(only, _)) = locations.first() else {
+                continue;
+            };
+            if locations.iter().all(|&(other, _)| other == only) {
+                let loci = exclusive.entry(only).or_default();
+                for &(_, locus) in locations {
+                    loci.insert(locus);
                 }
             }
         }

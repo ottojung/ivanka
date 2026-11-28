@@ -464,6 +464,15 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
         target = assemblers.get(tool)
         if item is None or target is None:
             continue
+        # Provenance publication is cohort admission, not just receipt
+        # validity. A pinned but non-cohort-admitted candidate is refused
+        # even when its handoff, receipts and adapter chain verify.
+        try:
+            admitted = exploratory_policy.cohort_eligible(registry, tool)
+        except (KeyError, TypeError, StopIteration):
+            admitted = False
+        if not admitted:
+            continue
         adapter = branches.get(tool)
         image_evidence = item.get("image_evidence") or {}
         pilot_evidence = item.get("pilot_evidence") or {}
@@ -503,10 +512,17 @@ def refresh_registry_provenance(evidence, registry_path, handoff_dir):
                 or not exploratory_policy.verified_receipt(
                     item, pilot_evidence, "pilot")):
             raise ValueError("activated tool lacks source-bound receipts")
-        outcomes = {cohort: pilot.get(cohort, {}).get("status")
-                    for cohort in ("physical", "synthetic")}
-        if any(status != "success" for status in outcomes.values()):
-            # A failed or partial pilot cannot promote tool-level provenance.
+        outcomes = {}
+        for cohort in ("physical", "synthetic"):
+            arm = pilot.get(cohort)
+            outcomes[cohort] = arm.get("status") if isinstance(arm, dict) else None
+        # Publication follows terminal-outcome policy, not qualification: a
+        # verified policy-admitted pair with one physical success and one
+        # honest synthetic failure is genuine measured evidence and its actual
+        # outcomes are published verbatim. Partial, malformed or non-terminal
+        # pilots are refused; no score, proxy zero or admission is invented.
+        if any(status not in sched.TERMINAL_OUTCOMES
+               for status in outcomes.values()):
             continue
         for case in target.get("cases", []):
             if case.get("score") is None:

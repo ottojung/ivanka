@@ -288,6 +288,8 @@ class ActiveControllerReadiness(P1HarnessLifecycleTests):
         states = iter([
             {"ready": True, "identity_bound": True, "pid_ns": 7,
              "starttime": 5, "cid": CID},
+            {"ready": True, "identity_bound": True, "pid_ns": 7,
+             "starttime": 5, "cid": CID},
             {"ready": False, "identity_bound": True, "pid_ns": 7,
              "starttime": 5},
         ])
@@ -312,7 +314,7 @@ class ActiveControllerReadiness(P1HarnessLifecycleTests):
                 sleep=lambda _: None, bind_container=self._binder,
                 stop_cid=self._stopper)
         self.assertEqual(caught.exception.reason, "watchdog_unbound")
-        self.assertGreaterEqual(len(checked), 2)
+        self.assertGreaterEqual(len(checked), 3)
         self.assertEqual(self.calls["stop"], [CID])
 
 

@@ -283,16 +283,54 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                                 "detail": str(exc)[:200]})
             raise GuardExceeded("spawn_failed") from exc
 
-        # Exact CID comes only from the cidfile pinned to THIS lease. Bind it
-        # after inspecting, snapshotting and re-inspecting the exact CID; a
-        # changed init PID is terminal identity_lost with exact-CID teardown.
-        try:
-            cid = binding.read_cid(cidfile)
-        except GuardExceeded as exc:
-            _audit(lease_root, {"event": "bind_unavailable", "lease_id": ident,
-                                "owner": str(owner), "cidfile": cidfile})
-            raise exc
+        # Exact CID comes only from the cidfile pinned to THIS lease. Podman
+        # writes --cidfile asynchronously after spawn; only true absence of a
+        # safe cidfile may be retried while the exact launcher is still alive,
+        # within the same finite monotonic/absolute total budget. Every wait
+        # pass refreshes the controller heartbeat and re-verifies the live
+        # independent watchdog, STOP ownership and disk reserve. Present but
+        # malformed/symlink files, launcher exit, deadline exhaustion and
+        # unreadable state are terminal. No missing-CID automatic release.
         stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))
+        tick = clock if clock is not None else time.monotonic
+        start = tick()
+        poll = (launcher.poll if callable(getattr(launcher, "poll", None))
+                else launcher)
+        if launcher is None and callable(getattr(spawned, "poll", None)):
+            launcher = spawned
+            poll = spawned.poll
+        sleep_fn = sleep if sleep is not None else time.sleep
+        while True:
+            remaining_mono = wall_seconds - (tick() - start)
+            remaining_epoch = deadline_utc - time.time()
+            remaining = min(remaining_mono, remaining_epoch)
+            if remaining <= 0:
+                _audit(lease_root, {"event": "bind_unavailable",
+                                    "lease_id": ident, "owner": str(owner),
+                                    "cidfile": cidfile,
+                                    "detail": "deadline"})
+                raise GuardExceeded("binding_unavailable")
+            require_owned_stop(stop_path, owner)
+            try:
+                emitter.refresh()
+            except Exception as exc:
+                raise GuardExceeded("heartbeat_unavailable") from exc
+            require_watchdog_ready(checker=watchdog_ready, path=watchdog_path,
+                                   graphroot=watchdog_graphroot,
+                                   wall=watchdog_wall,
+                                   snapshot=watchdog_snapshot)
+            disk.check_reserve(disk_path, reserve, usage=disk_usage)
+            try:
+                cid = binding.read_cid(cidfile)
+                break
+            except (GuardExceeded, OSError) as exc:
+                launcher_alive = callable(poll) and poll() is None
+                if not launcher_alive or not binding.cidfile_absent(cidfile):
+                    _audit(lease_root, {"event": "bind_unavailable",
+                                        "lease_id": ident, "owner": str(owner),
+                                        "cidfile": cidfile})
+                    raise GuardExceeded("binding_unavailable") from exc
+                sleep_fn(min(interval, remaining))
         try:
             pid_before = binding.inspect_pid(cid, env)
             table = snapshot() if callable(snapshot) else (
@@ -346,10 +384,8 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                                    snapshot=watchdog_snapshot)
             return emitted
 
-        # One monotonic start covers the watcher and natural-exit attestation,
-        # so a lagging launcher cannot grant the arm a second wall budget.
-        tick = clock if clock is not None else time.monotonic
-        start = tick()
+        # One monotonic start covers bind-wait, watcher and natural-exit
+        # attestation, so startup delay cannot grant a second wall budget.
         poll = (launcher.poll if callable(getattr(launcher, "poll", None))
                 else launcher)
         if launcher is None and callable(getattr(spawned, "poll", None)):

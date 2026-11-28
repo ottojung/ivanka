@@ -41,8 +41,25 @@ def stop_group(binding, proc_handle, timeout=5):
     raise TeardownError("build_group_survived")
 
 
+def _quiescent_proof(pgid, table, quiesced):
+    if quiesced is None:
+        return None
+    proof = quiesced(pgid, table)
+    if not proof:
+        return None
+    detail = proof if isinstance(proof, dict) else {}
+    result = {"process_group": pgid, "stopped": True,
+              "method": "verified_quiescent_group",
+              "quiesced": True, "reaped": False,
+              "kernel_enforcement": False}
+    zombies = detail.get("quiescent_zombies")
+    if zombies is not None:
+        result["quiescent_zombies"] = zombies
+    return result
+
+
 def stop_group_by_id(pgid, *, snapshot=None, sleep=None, clock=None,
-                     timeout=5, verify=None, absent=None):
+                     timeout=5, verify=None, absent=None, quiesced=None):
     """Signal only an exactly verified live group; prove absence conservatively.
 
     ``verify(pgid, table)`` must confirm the bound immutable identity before
@@ -50,7 +67,9 @@ def stop_group_by_id(pgid, *, snapshot=None, sleep=None, clock=None,
     before a proof is claimed. With either callback missing the call refuses,
     so a reused PGID is never signalled or reported as reaped. A bound helper
     that already exited on its own is a completed teardown, not identity loss:
-    proven absence resolves without sending any signal.
+    proven absence resolves without sending any signal. A natural completion
+    may leave stat-proven zombies; ``quiesced`` may prove those members are not
+    runnable without claiming they were reaped.
     """
     pgid = int(pgid)
     if pgid <= 0 or verify is None or absent is None:
@@ -69,6 +88,16 @@ def stop_group_by_id(pgid, *, snapshot=None, sleep=None, clock=None,
             return {"process_group": pgid, "stopped": True,
                     "method": "verified_exact_group",
                     "pre_exited": True, "kernel_enforcement": False}
+        proof = _quiescent_proof(pgid, table, quiesced)
+        if proof is not None and now() < deadline:
+            # A second fresh snapshot inside the same durable deadline proves
+            # the quiescent state is stable and not a single-snapshot race.
+            nap(min(0.1, max(0.0, deadline - now())))
+            confirm = _quiescent_proof(pgid, take(), quiesced)
+            if confirm is not None:
+                proof["pre_exited"] = True
+                proof["fresh_confirmations"] = 2
+                return proof
         raise TeardownError("identity_lost_before_signal")
     try:
         os.killpg(pgid, signal.SIGTERM)
@@ -76,9 +105,14 @@ def stop_group_by_id(pgid, *, snapshot=None, sleep=None, clock=None,
         pass
     while True:
         table = take()
-        if absent(pgid, table) and not verify(pgid, table):
-            return {"process_group": pgid, "stopped": True,
-                    "method": "verified_exact_group", "kernel_enforcement": False}
+        if not verify(pgid, table):
+            if absent(pgid, table):
+                return {"process_group": pgid, "stopped": True,
+                        "method": "verified_exact_group",
+                        "kernel_enforcement": False}
+            proof = _quiescent_proof(pgid, table, quiesced)
+            if proof is not None:
+                return proof
         if now() >= deadline:
             raise TeardownError("build_group_survived")
         nap(min(0.1, max(0.0, deadline - now())))

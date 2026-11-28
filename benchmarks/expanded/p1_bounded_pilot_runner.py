@@ -312,11 +312,11 @@ COPY_OVERLAY_ADMISSION_MERGE = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
 COPY_OVERLAY_ADMISSION_PR_HEAD = "39317f021f4e5c00f5da859bcdcf755de4c6d353"
 COPY_OVERLAY_ADMISSION_DIGESTS = {
     "copy_overlay": ("fail_closed_guard/copy_overlay.py",
-                     "8e25f209a19e0bb86091ca48bf44366ab6877e8a597ef3f3fa7fe7fa5eb592b6"),
+                     "7f4158ebf99af727aaa59528dabb5979624c5ce55ab2875c3f8a68764a25f53e"),
     "copy_overlay_helper": ("fail_closed_guard/copy_overlay_helper.py",
                             "8242d81c9c6b169dfbfac1b837ae9c23e1e3f1259190438871dee89dccdf0bc5"),
     "build": ("fail_closed_guard/build.py",
-              "fda6fcf0ef51fea327558ea5f9fcac512e62dfe00c4efc37696af87c9db293a7"),
+              "6771a107107779d7daafa9996326db9a925e701e9821a1030661144627ce3994"),
     "watchdog_cli": ("fail_closed_guard/watchdog_cli.py",
                      "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369"),
 }

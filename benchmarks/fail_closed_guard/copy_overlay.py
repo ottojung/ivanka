@@ -302,17 +302,23 @@ def _owned(bound):
     def absent(_pgid, table):
         return watchdog.group_absence_proven(bound, table)
 
-    return verify, absent
+    def quiesced(_pgid, table):
+        return watchdog.group_quiesced(bound, table)
+
+    return verify, absent, quiesced
 
 
 def _teardown(bound, *, pinned, graphroot, snapshot, sleep, monotonic,
               command, baseline, stop=None, cleanup=None):
-    verify, absent = watchdog.group_callbacks(bound)
+    verify, absent, quiesced = _owned(bound)
     pgid = bound["pgid"]
+    # Quiescence is an explicit COPY-only proof: stat-proven zombies may remain,
+    # but no runnable or ambiguous member is accepted and no reaping is claimed.
     terminate = stop if stop is not None else (
         lambda value: build.stop_group_by_id(value, snapshot=snapshot,
                                               sleep=sleep, clock=monotonic,
-                                              verify=verify, absent=absent))
+                                              verify=verify, absent=absent,
+                                              quiesced=quiesced))
     reclaim = cleanup if cleanup is not None else (
         lambda: orphans.reclaim_owned(
             pinned, graphroot, baseline,
@@ -487,6 +493,11 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                     raise GuardExceeded("observed_rss_limit")
             if now() >= deadline or mono() >= deadline_mono:
                 raise GuardExceeded("wall_limit")
+            # The direct launcher is the one child this process owns. Poll has
+            # already reaped it; a bounded wait makes the reaping explicit and
+            # never waits on a process that is still running.
+            if hasattr(handle, "wait"):
+                handle.wait(timeout=0)
             image = verify_image_receipt(validated, job_env, command)
             if now() >= deadline or mono() >= deadline_mono:
                 raise GuardExceeded("wall_limit")

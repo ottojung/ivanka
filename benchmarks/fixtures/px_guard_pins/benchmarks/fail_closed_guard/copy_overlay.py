@@ -132,8 +132,12 @@ def seal_context(temp, validated):
         + validated["frozen_manifest_sha256"],
         "org.ottojung.ivanka.pilot-role=" + validated["pilot_role"],
     ]
-    argv = ["podman", "build", "--network=none", "--pull=never",
-            "--iidfile", str(iidfile)]
+    argv = ["podman", "build", "--network=none", "--pull=never"]
+    # A pinned plan boolean may disable caches. The guard constructs this flag
+    # itself; a plan can never inject an arbitrary command or flag.
+    if validated.get("no_cache"):
+        argv.append("--no-cache")
+    argv.extend(["--iidfile", str(iidfile)])
     for label in labels:
         argv.extend(["--label", label])
     argv.extend(["-f", validated["containerfile"], "-t", validated["tag"],
@@ -251,8 +255,13 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
         os.close(fd)
     if digest.hexdigest() != artifact_sha:
         raise GuardExceeded("invalid_plan")
-    argv = ["podman", "build", "--network=none", "--pull=never",
-            "-f", str(manifest), "-t", tag, str(context)]
+    no_cache = plan.get("no_cache", False)
+    if not isinstance(no_cache, bool):
+        raise GuardExceeded("invalid_plan")
+    argv = ["podman", "build", "--network=none", "--pull=never"]
+    if no_cache:
+        argv.append("--no-cache")
+    argv.extend(["-f", str(manifest), "-t", tag, str(context)])
     return {"schema": SCHEMA, "base_image": base, "source_commit": commit,
             "context": str(context), "containerfile": str(manifest),
             "source": SOURCE, "destination": DESTINATION,
@@ -263,7 +272,7 @@ def validate_plan(plan, *, expected_base, expected_commit, expected_graphroot,
             "inherited_labels": dict(plan.get("inherited_labels") or {}),
             "storage_conf": str(conf), "graphroot": str(expected_graphroot),
             "storage_conf_sha256": conf_sha,
-            "base_layers": list(layers),
+            "base_layers": list(layers), "no_cache": no_cache,
             "tag": tag, "argv": argv, "plan_sha256": plan_digest(plan)}
 
 
@@ -291,19 +300,25 @@ def _owned(bound):
         return watchdog.group_still_owned(bound, table)
 
     def absent(_pgid, table):
-        return watchdog.group_absent(bound, table)
+        return watchdog.group_absence_proven(bound, table)
 
-    return verify, absent
+    def quiesced(_pgid, table):
+        return watchdog.group_quiesced(bound, table)
+
+    return verify, absent, quiesced
 
 
 def _teardown(bound, *, pinned, graphroot, snapshot, sleep, monotonic,
               command, baseline, stop=None, cleanup=None):
-    verify, absent = watchdog.group_callbacks(bound)
+    verify, absent, quiesced = _owned(bound)
     pgid = bound["pgid"]
+    # Quiescence is an explicit COPY-only proof: stat-proven zombies may remain,
+    # but no runnable or ambiguous member is accepted and no reaping is claimed.
     terminate = stop if stop is not None else (
         lambda value: build.stop_group_by_id(value, snapshot=snapshot,
                                               sleep=sleep, clock=monotonic,
-                                              verify=verify, absent=absent))
+                                              verify=verify, absent=absent,
+                                              quiesced=quiesced))
     reclaim = cleanup if cleanup is not None else (
         lambda: orphans.reclaim_owned(
             pinned, graphroot, baseline,
@@ -478,6 +493,11 @@ def run(root, plan, *, expected_base, expected_commit, graphroot, env=None,
                     raise GuardExceeded("observed_rss_limit")
             if now() >= deadline or mono() >= deadline_mono:
                 raise GuardExceeded("wall_limit")
+            # The direct launcher is the one child this process owns. Poll has
+            # already reaped it; a bounded wait makes the reaping explicit and
+            # never waits on a process that is still running.
+            if hasattr(handle, "wait"):
+                handle.wait(timeout=0)
             image = verify_image_receipt(validated, job_env, command)
             if now() >= deadline or mono() >= deadline_mono:
                 raise GuardExceeded("wall_limit")

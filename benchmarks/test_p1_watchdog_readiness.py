@@ -177,7 +177,7 @@ class ServiceHeadPinTests(unittest.TestCase):
         (root / "px").mkdir()
         self.exp = exp
 
-    def layout(self, head_pin=True):
+    def install(self, head_pin=True):
         exports = [
             "export WATCHDOG_ROOT=%s" % self.exp["WATCHDOG_ROOT"],
             "export WATCHDOG_CODE=%s" % self.exp["WATCHDOG_CODE"],
@@ -194,6 +194,9 @@ class ServiceHeadPinTests(unittest.TestCase):
         (self.svc / "supervise").mkdir(exist_ok=True)
         (self.svc / "supervise" / "status").write_bytes(b"x" * 35)
         (self.scan / w.SERVICE_NAME).symlink_to(self.svc)
+
+    def layout(self, head_pin=True):
+        self.install(head_pin=head_pin)
         return w.probe_service_layout(scan_dir=self.scan,
                                       services_dir=self.services,
                                       expected=self.exp)
@@ -202,6 +205,42 @@ class ServiceHeadPinTests(unittest.TestCase):
         result = self.layout()
         self.assertTrue(result["checks"]["service_head_pinned"])
         self.assertTrue(result["ready"], result)
+
+    def test_integrated_head_and_staged_cli_layout_ready(self):
+        """The new s6 service head and exact staged watchdog CLI are accepted."""
+        from assembler_bench import px_guard_source as guard_source
+        from expanded import p1_bounded_pilot_runner as runner
+        head = "1e5104082c4366f30c93fd759e3f46307a142e63"
+        self.assertEqual(w.WATCHDOG_SERVICE_HEAD, head)
+        self.assertEqual(w.WATCHDOG_SERVICE_HEAD, guard_source.DEPLOYED_HEAD)
+        self.assertEqual(w.WATCHDOG_SERVICE_HEAD, runner.REVIEWED_GUARD_HEAD)
+        # Hermetic proof of the staged CLI bytes: the deployment identity pins
+        # them, and the reviewed source in this checkout carries the same bytes.
+        source_cli = Path(__file__).resolve().parents[1] / w.WATCHDOG_CLI_REL
+        cli_sha = w._sha256(source_cli)
+        self.assertEqual(cli_sha, w.WATCHDOG_CLI_SHA256)
+        self.assertEqual(cli_sha, guard_source.DEPLOYED_EXPECTED[
+            "benchmarks/fail_closed_guard/watchdog_cli.py"])
+        (self.code / w.WATCHDOG_CLI_REL).write_bytes(source_cli.read_bytes())
+        self.exp["watchdog_cli_sha256"] = cli_sha
+        result = self.layout()
+        self.assertTrue(result["checks"]["service_head_pinned"])
+        self.assertTrue(result["checks"]["code_cli_pinned"])
+        self.assertTrue(result["ready"], result)
+
+    def test_old_service_head_fails_closed_under_new_expectation(self):
+        """A live s6 run still pinned to 165a86b3 cannot satisfy readiness."""
+        old_pin = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+        self.assertNotEqual(old_pin, w.WATCHDOG_SERVICE_HEAD)
+        self.install()
+        run = self.svc / "run"
+        run.write_text(run.read_text().replace(w.WATCHDOG_SERVICE_HEAD,
+                                               old_pin))
+        result = w.probe_service_layout(scan_dir=self.scan,
+                                        services_dir=self.services,
+                                        expected=self.exp)
+        self.assertFalse(result["checks"]["service_head_pinned"])
+        self.assertFalse(result["ready"])
 
     def test_missing_head_pin_fails_closed(self):
         result = self.layout(head_pin=False)

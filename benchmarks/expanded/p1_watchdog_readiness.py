@@ -36,14 +36,17 @@ WATCHDOG_MODULE = "fail_closed_guard.watchdog_cli"
 WATCHDOG_CLI_REL = Path("benchmarks/fail_closed_guard/watchdog_cli.py")
 # Code identity is derived from the DEPLOYED service run script, not from a
 # hardcoded path that goes stale when the operator cuts over a new namespace.
-# PROSPECTIVE pin: the reviewed, merged PR535/PR553 combined guard. This is
-# source-level identity evidence only; deployment is a separate operator fact.
-# The probe must keep failing closed until the live s6 run scripts are actually
-# repinned and independently attested by the operator.
-# The previous live PR536 head is retained for old-root verification only: it is
-# not an alternative accepted identity and never bypasses a readiness check.
-PREVIOUS_WATCHDOG_SERVICE_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
-WATCHDOG_SERVICE_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+# PROSPECTIVE pin: the reviewed, signed integration 1e510408 (PR592 COPY helper
+# quiescence on the PR579 guard base). This is source-level identity evidence
+# only; deployment is a separate operator fact. The probe must keep failing
+# closed until the live s6 run scripts are actually repinned to this head and
+# independently attested by the operator.
+# The immediately previous live guard (165a86b3) and the older PR536 guard
+# (091f5627) are retained for old-root verification and provenance only; neither
+# is an alternative accepted identity and neither bypasses a readiness check.
+LEGACY_WATCHDOG_SERVICE_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
+PREVIOUS_WATCHDOG_SERVICE_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+WATCHDOG_SERVICE_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
 # Exact watchdog_cli.py at both heads (unchanged PR527 implementation).
 WATCHDOG_CLI_SHA256 = "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369"
 # WATCHDOG_CODE is intentionally absent: it is read from the run script itself.

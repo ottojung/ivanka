@@ -25,9 +25,12 @@ from benchmarks.fail_closed_guard import heartbeat, lease, proc, watchdog_contra
 
 from . import px_guard_source as guard_source
 
-OLD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
-OLD_ROOT = "/workspace/ivanka-guard-pr536-staged-20261126"
-NEW_ROOT = "/workspace/ivanka-guard-pr535-staged-20261127"
+# The rollback guard is the previously deployed reviewed guard. Its 19-module
+# map is the control-compatible EXPECTED chain still verified by the unchanged
+# control checkout; a staged guard swap does not repin control verification.
+OLD_ROOT = "/workspace/ivanka-guard-pr535-staged-20261127"
+OLD_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+NEW_ROOT = str(guard_source.DEPLOYED_ROOT)
 
 # The supervisor loads control code (px_execution, px_supervisor, retry and disk
 # retry admission); the immutable guard root predates those modules. A correct
@@ -52,38 +55,10 @@ S6_ROOT = Path("/run/s6/legacy-services")
 WATCHDOG_OPTION_NAMES = ("--storage-conf", "--stop", "--min-free", "--reserve",
                          "--rss-limit", "--wall-seconds", "--max-age")
 
-# Reviewed bytes of the old live guard (14-file PR536 map). Kept as explicit
-# evidence for the pre-cutover phase; it is never used to attest new code.
-OLD_MODULES = {
-    "benchmarks/assembler_bench/exploratory_space.py":
-        "bffdc90b703475aeb68f31c2df4334cb36a8912ebaba806cd7baee4d2bc18943",
-    "benchmarks/memory_guard/proc.py":
-        "086ce9aca6d73703216e841d8e9b580cab6678e743f868d6e133a50ba0d69e72",
-    "benchmarks/memory_guard/guard.py":
-        "6e096ffb7cae5014595a6aaa889beb2ed7d05172588556adb6a82ffa23e32dbe",
-    "benchmarks/memory_guard/signals.py":
-        "b5a4dc351da3fc9144bcfad7a26059a849e9c5a58980c26e3c004ad817d88c53",
-    "benchmarks/fail_closed_guard/proc.py":
-        "e8b4c9ebe1a8a3a509466cf824873820df962577352457c879090fd795030b31",
-    "benchmarks/fail_closed_guard/watchdog.py":
-        "a67bac2672efb961408f2401163b49e12e01c07c6300ffb200519c1cc07a6d5e",
-    "benchmarks/fail_closed_guard/watchdog_contract.py":
-        "a2d198b35f0c756cce68f094bebdf79068ad1a585f1f5f061e4e9c2c74906365",
-    "benchmarks/fail_closed_guard/binding.py":
-        "1e764c6a358ddc3b58fe09aa0948d6309b00942936ac525d93ef17d19516e945",
-    "benchmarks/fail_closed_guard/identity.py":
-        "1feecc9e75e71c4bf54b2dbd960cc92886fa00cd9a564c7d220e90f4163aa973",
-    "benchmarks/fail_closed_guard/startup.py":
-        "80b07ce334fa99691ed0a89baf9aa803d4e67631be72c022188963f094ae7b6d",
-    "benchmarks/fail_closed_guard/watchdog_cli.py":
-        "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369",
-    "benchmarks/fail_closed_guard/natural_exit.py":
-        "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
-    "benchmarks/fail_closed_guard/watch.py":
-        "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96",
-    "benchmarks/assembler_bench/exploratory_runtime/monitor.py":
-        "b0bbefa221ff092acf33021b0203f2b07a912c250fc0893e8fdd59dad642293c",
-}
+# Reviewed bytes of the live rollback guard (PR535, 19 modules). Kept as
+# explicit evidence for the pre-cutover phase; it is never used to attest the
+# new code. This is the same chain the live control checkout verifies.
+OLD_MODULES = dict(guard_source.EXPECTED)
 
 PHASES = {
     "pre_cutover": {
@@ -95,9 +70,9 @@ PHASES = {
     "post_cutover": {
         # Top-level keys describe the immutable watchdog guard for compatibility.
         "root": NEW_ROOT, "head": guard_source.DEPLOYED_HEAD,
-        "modules": dict(guard_source.EXPECTED),
+        "modules": dict(guard_source.DEPLOYED_EXPECTED),
         "watchdog": {"root": NEW_ROOT, "head": guard_source.DEPLOYED_HEAD,
-                     "modules": dict(guard_source.EXPECTED)},
+                     "modules": dict(guard_source.DEPLOYED_EXPECTED)},
         "control": {"root": CONTROL_ROOT, "head": CONTROL_HEAD,
                     "modules": dict(CONTROL_MODULES)},
         "supervisor": "running", "idle_required": False,

@@ -627,6 +627,13 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
         if status == "measured":
             status = "failed"
             failure_reason = "log_integrity_failure"
+            # A failed receipt must not carry a measurement: build_receipt
+            # rejects finite score/seconds on unmeasured attempts.
+            score = None
+            seconds = None
+            execution["status"] = status
+            execution["failure_reason"] = failure_reason
+            _write_json(attempt_dir / "execution.json", execution)
 
     receipt = remap_runner.build_receipt(
         plan,

@@ -185,6 +185,31 @@ class ExecuteCaseTests(unittest.TestCase):
             self.assertIsNone(receipt["diagnostics"][k])
             self.assertIn(k, receipt["unavailable"])
 
+    def test_log_copy_integrity_failure_keeps_explicit_failure_receipt(self):
+        def runner_with_drifted_log(plan, output_dir, attempt_dir):
+            run = self.fake_runner()(plan, output_dir, attempt_dir)
+            log = Path(run["log_paths"]["container.log"])
+            run["log_sha256"] = {"container.log": "0" * 64}
+            return run
+
+        receipt = ctl.execute_case(
+            self.pilot_case, plan=self.plan, preflight_result=self.preflight,
+            runner=runner_with_drifted_log, output_dir=self.root / "out-drift",
+            attempt_dir=self.root / "att-drift",
+            scorer=lambda p, c, o: {
+                "schema": ctl.SCORING_SCHEMA, "method": "m", "cohort": "real",
+                "score": 321.0, "reference_panel_sha256": "f" * 64,
+                "best_reference": "x", "multitruth": None})
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["failure_reason"], "log_integrity_failure")
+        self.assertIsNone(receipt["score"])
+        self.assertIsNone(receipt["seconds"])
+        self.assertIn("log_integrity_failure", receipt["diagnostics"])
+        self.assertTrue((self.root / "att-drift" / "receipt.json").is_file())
+        retention = json.loads(
+            (self.root / "att-drift" / "retention.json").read_text())
+        self.assertIn("container.log", retention["log_integrity_failure"])
+
     def test_distinct_receipts_for_distinct_runs(self):
         r1 = ctl.execute_case(
             self.pilot_case, plan=self.plan, preflight_result=self.preflight,

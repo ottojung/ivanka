@@ -58,7 +58,7 @@ class NeutralLivePublicationTests(unittest.TestCase):
 
     def test_neutral_service_failed_commands_never_report_success(self):
         original = (ROOT / "scripts/neutral_bench_publish_service.sh").read_text()
-        for failure in ("fetch", "push"):
+        for failure in ("fetch", "push", "verify"):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 tools = root / "bin"
@@ -79,6 +79,7 @@ class NeutralLivePublicationTests(unittest.TestCase):
                 git.write_text(
                     "#!/bin/sh\n"
                     "shift 2\n"
+                    'while [ "$1" = "-c" ]; do shift 2; done\n'
                     'echo "$1" >> "$MOCK_CALLS"\n'
                     'case "$1" in\n'
                     '  "$MOCK_FAILURE") exit 7 ;;\n'
@@ -88,6 +89,13 @@ class NeutralLivePublicationTests(unittest.TestCase):
                     'esac\n'
                 )
                 git.chmod(0o755)
+                verify = tools / "verify-otto-commit"
+                verify.write_text(
+                    "#!/bin/sh\n"
+                    'echo verify >> "$MOCK_CALLS"\n'
+                    '[ "$MOCK_FAILURE" != verify ] || exit 7\n'
+                )
+                verify.chmod(0o755)
                 sleep = tools / "sleep"
                 sleep.write_text("#!/bin/sh\nexit 91\n")
                 sleep.chmod(0o755)
@@ -111,8 +119,13 @@ class NeutralLivePublicationTests(unittest.TestCase):
                 commands = calls.read_text().splitlines()
                 if failure == "fetch":
                     self.assertNotIn("commit", commands)
-                else:
+                elif failure == "push":
                     self.assertEqual(commands.count("push"), 2)
+                    self.assertEqual(commands.count("verify"), 2)
+                else:
+                    self.assertIn("commit", commands)
+                    self.assertIn("verify", commands)
+                    self.assertNotIn("push", commands)
                 self.assertEqual(commands[-2:], ["rebase", "reset"])
 
     def test_neutral_service_script_never_calls_retired_snapshot(self):

@@ -133,12 +133,18 @@ while :; do
       site/bench/data/resource-policy.json \
       site/bench/data/assembler-evidence.json
     if ! git -C "$WEB" diff --cached --quiet; then
-      git -C "$WEB" commit -qm "Publish neutral cohort-owned Assembler Bench results"
+      # The automated publisher is the actual contributor; Otto is the signer.
+      git -C "$WEB" -c user.name="Otto Jung" -c user.email="otto.jung@vauplace.com" \
+        commit -S -qm "Publish neutral cohort-owned Assembler Bench results" \
+        -m "Co-authored-by: Ivanka Benchmark Publisher <ivanka-bench-publisher@marceline-dev>"
+      verify-otto-commit --repo "$WEB" HEAD
       if ! git -C "$WEB" push -q origin HEAD:refs/heads/main; then
         # Another publisher may have advanced main; rebase our data-only
         # commit and retry rather than dropping verified measurements.
         git -C "$WEB" fetch -q origin main
-        git -C "$WEB" rebase origin/main
+        git -C "$WEB" -c user.name="Otto Jung" -c user.email="otto.jung@vauplace.com" \
+          rebase --gpg-sign origin/main
+        verify-otto-commit --repo "$WEB" HEAD
         git -C "$WEB" push -q origin HEAD:refs/heads/main
       fi
       echo "NEUTRAL_SITE_PUSHED $(date -u +%FT%TZ)"

@@ -277,7 +277,7 @@ PREVIOUS_REVIEWED_GUARD_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
 REVIEWED_GUARD_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
 REVIEWED_GUARD_DIGESTS = {
     "natural_exit": ("fail_closed_guard/natural_exit.py",
-                     "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6"),
+                     "9e7e4dda884896fa102e0d5af50d743780aa5617025698ea2574284b7af55daa"),
     "watch": ("fail_closed_guard/watch.py",
               "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96"),
     "monitor": ("assembler_bench/exploratory_runtime/monitor.py",

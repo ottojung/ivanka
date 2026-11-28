@@ -15,6 +15,12 @@ from .errors import GuardExceeded
 # A launcher poll may lag container exit. Bound the number of confirmations so
 # a stalled launcher cannot hold a guard loop open indefinitely.
 CONFIRMATIONS = 32
+# A container can still report its init PID for one inspect after its launcher
+# has exited. Confirm a post-exit live PID twice within the same durable
+# deadline before calling it identity loss; a single transient sample is not a
+# surviving container. The two authoritative absence checks in attest() still
+# govern every success, and neither confirmation can release a lease or signal.
+LIVE_CONFIRMATIONS = 2
 
 
 def wait_and_attest(cid, env, poll, *, start, wall_seconds, interval=0.5,
@@ -43,8 +49,24 @@ def wait_and_attest(cid, env, poll, *, start, wall_seconds, interval=0.5,
 
     for _ in range(confirmations):
         check()
-        if binding.inspect_pid_if_live(cid, env) is not None:
-            raise GuardExceeded("identity_lost")
+        live_pid = binding.inspect_pid_if_live(cid, env)
+        if live_pid is not None:
+            # A launcher can exit before podman clears State.Pid. Re-inspect
+            # the SAME exact CID, within this arm's existing deadline, before
+            # declaring that the container survived its launcher. Anything
+            # other than the same PID twice is a terminal identity failure;
+            # an unreadable probe keeps raising inspection_unavailable.
+            for _confirmation in range(LIVE_CONFIRMATIONS):
+                sleep(interval)
+                check()
+                again = binding.inspect_pid_if_live(cid, env)
+                if again is None:
+                    live_pid = None
+                    break
+                if again != live_pid:
+                    raise GuardExceeded("identity_lost")
+            if live_pid is not None:
+                raise GuardExceeded("identity_lost")
         check()  # inspection is a blocking probe and may cross the deadline
         result = poll()
         check()  # poll is a probe; never act on a result obtained past deadline

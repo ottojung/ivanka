@@ -46,7 +46,7 @@ DEPLOYED_ROOT = Path("/workspace/ivanka-guard-pr592-candidate-1e510408-20261128"
 DEPLOYED_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
 IDENTITY_NAME = "px_guard_identity.json"
 IDENTITY_SCHEMA = "ivanka.px.guard-source-identity.v1"
-IDENTITY_SHA256 = "c40b1e8f67e909040a736cf4ed680d9f356aa9f0d0be1e337690e459b41b500a"
+IDENTITY_SHA256 = "f012c244cbb442ac720251053cb3f67bde9b5209377a0f94ca74e9e011aac2d1"
 
 # Origin of the constant-time shared disk reserve (PR #510). Retained evidence.
 RESERVE_COMMIT = "af1f10d19143fa7a00134a01b56a858ef8a09647"
@@ -130,6 +130,8 @@ DEPLOYED_EXPECTED.update({
         "4d01b152b5970b14d9084b1137af5c776b5b742fe257509c69038207c3a64119",
     "benchmarks/fail_closed_guard/copy_overlay.py":
         "7f4158ebf99af727aaa59528dabb5979624c5ce55ab2875c3f8a68764a25f53e",
+    "benchmarks/fail_closed_guard/natural_exit.py":
+        "9e7e4dda884896fa102e0d5af50d743780aa5617025698ea2574284b7af55daa",
     "benchmarks/fail_closed_guard/proc.py":
         "ee1438ba99b936a1a799913407e391f03bf90b0c22c89fd73a42570cdddef78a",
     "benchmarks/fail_closed_guard/watchdog.py":

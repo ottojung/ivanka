@@ -1,0 +1,35 @@
+{
+  "schema": "ivanka.exploratory.frozen-unicycler-lineage.v1",
+  "scope": "source-only; no OCI build, no pilot, no live slot, no frozen-data write",
+  "adapter_repo": "https://github.com/ottojung/MiCall.git",
+  "clinical_master": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+  "adapter_branch": "bench/minimal-8458f9e5-unicycler-20261123",
+  "adapter_commit": "5ad7874fe193043fa378063efc123018bff546da",
+  "adapter_parent": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+  "donor_evidence_branch": "bench/minimal-8458f9e5-unicycler-20261123-donor-evidence",
+  "donor_evidence_commit": "c16a2f1189ec2056e7c1fd027cd2dddb7cf5c278",
+  "donor_evidence_parent": "5ad7874fe193043fa378063efc123018bff546da",
+  "recipe": "Containerfile.assembler-bench",
+  "tool_source_repo": "https://github.com/rrwick/Unicycler",
+  "tool_source_commit": "1429301eb24df9162f3c9386e8522f942594ae42",
+  "spades_source_repo": "https://github.com/ablab/spades",
+  "spades_source_commit": "896694ce5c7a9050a6ffa9fccc950a4cd9f04363",
+  "spades_archive_sha256": "9848b69a3a6bab4621eb82b71cac6ed96b111c4109c754e283596e9fa3184b1b",
+  "cpp_functions_sha256": "293f840641afaf17ef8b73858ecc7418553c453958bfece305f658223f2dc668",
+  "spades_core_sha256": null,
+  "donor_image_id": null,
+  "final_image_sha256": null,
+  "staged_file_sha256": {
+    "Containerfile.assembler-bench": "d3c59d9c3084ef87b976cc5076b57a5f934fb9f454559d065d317a6ee7952085",
+    "DEPENDENCY-DONORS.md": "22e2521031e5b90928a71e1bf835c8b867447032b3c9092a2c6a3a6407d7206f",
+    "benchmark_assembler.py": "3848b4442b5015057fce79c5cfc8ecc761d1713fb7c59834929e6a147883bdc0",
+    "test_benchmark_assembler.py": "0fb24ae4fb6fc4ab1428faed576ea703b8b90f06a1aa599414020e48edd60f8b"
+  },
+  "superseded_lineage": {
+    "branch": "bench/assembler-unicycler",
+    "commit": "fada133c16ca2c58d60f3cb5ad06eb65565a440d",
+    "common_baseline": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
+    "recipe": "Dockerfile.assembler-bench",
+    "status": "distinct-donor-lineage-not-the-frozen-comparison"
+  }
+}

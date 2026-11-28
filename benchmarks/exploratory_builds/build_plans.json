@@ -688,15 +688,16 @@
       "tool_source_repo": "https://github.com/bbushnell/BBTools"
     },
     {
-      "adapter_branch": "bench/assembler-unicycler",
-      "adapter_commit": "2ae4983fcbe30e57e85d0bc6acd464084d57c3e9",
+      "adapter_branch": "bench/minimal-8458f9e5-unicycler-20261123",
+      "adapter_commit": "5ad7874fe193043fa378063efc123018bff546da",
       "attestation_provenance": null,
       "attested_binary_sha256": null,
       "base_image_digest": null,
       "blockers": [
-        "no independently attested SPAdes core binary hash",
-        "no independently attested Unicycler cpp_functions.so hash",
-        "no pinned common MiCall base image built yet"
+        "no build-attested native tool donor image id",
+        "no build-attested SPAdes core binary hash",
+        "no build-attested Unicycler cpp_functions.so binary hash",
+        "no final image digest attested"
       ],
       "build_ready": false,
       "command_template": [
@@ -718,56 +719,47 @@
         "build",
         "--pull=never",
         "--file",
-        "{ADAPTER_CHECKOUT}/Dockerfile.assembler-bench",
+        "{ADAPTER_CHECKOUT}/Containerfile.assembler-bench",
         "--tag",
-        "localhost/ivanka-exploratory-unicycler:2ae4983fcbe3",
+        "localhost/ivanka-exploratory-unicycler:5ad7874fe193",
         "--build-arg",
-        "FORK_BASE_IMAGE={BASE_IMAGE_DIGEST}",
+        "ASSEMBLER_TOOL_IMAGE={ASSEMBLER_TOOL_IMAGE}",
         "--build-arg",
-        "MICALL_FORK_SOURCE_COMMIT=2ae4983fcbe30e57e85d0bc6acd464084d57c3e9",
+        "MICALL_BASE_COMMIT=8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
         "--build-arg",
-        "MICALL_FORK_BASE_COMMIT=eeca0381808a6e9ba5ef791c80238a0e2940abb0",
+        "MICALL_SOURCE_COMMIT=5ad7874fe193043fa378063efc123018bff546da",
         "--build-arg",
-        "TOOL_SOURCE_REPO=https://github.com/rrwick/Unicycler",
+        "TOOL_IMAGE_ID={TOOL_IMAGE_ID}",
         "--build-arg",
-        "TOOL_SOURCE_COMMIT=1429301eb24df9162f3c9386e8522f942594ae42",
+        "BENCHMARK_ASSEMBLER_SHA256=3848b4442b5015057fce79c5cfc8ecc761d1713fb7c59834929e6a147883bdc0",
         "--build-arg",
-        "TOOL_BINARY_SHA256={TOOL_BINARY_SHA256}",
+        "BENCHMARK_TEST_SHA256=0fb24ae4fb6fc4ab1428faed576ea703b8b90f06a1aa599414020e48edd60f8b",
         "--build-arg",
-        "MICALL_ADAPTER_COMMANDS_SHA256=698e58f05ce5ebb412ee6e335082712cc0f7b143e1b8de875e69b93bdfd2e5e0",
+        "CONTAINERFILE_SHA256=d3c59d9c3084ef87b976cc5076b57a5f934fb9f454559d065d317a6ee7952085",
         "--build-arg",
-        "MICALL_ADAPTER_DISPATCH_SHA256=c247bcc1d002658541769f3e40df61b6f83cc6fce99857698dce1212ba0ba187",
-        "--build-arg",
-        "SPADES_SOURCE_COMMIT=896694ce5c7a9050a6ffa9fccc950a4cd9f04363",
-        "--build-arg",
-        "SPADES_SOURCE_REPO=https://github.com/ablab/spades",
-        "--build-arg",
-        "SPADES_BINARY_SHA256={SPADES_BINARY_SHA256}",
+        "DEPENDENCY_DONORS_SHA256=22e2521031e5b90928a71e1bf835c8b867447032b3c9092a2c6a3a6407d7206f",
         "{ADAPTER_CHECKOUT}"
       ],
-      "common_baseline_commit": "eeca0381808a6e9ba5ef791c80238a0e2940abb0",
-      "extra_placeholders": [
-        "SPADES_BINARY_SHA256"
-      ],
+      "common_baseline_commit": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553",
+      "extra_placeholders": [],
       "id": "unicycler",
-      "image_tag": "localhost/ivanka-exploratory-unicycler:2ae4983fcbe3",
+      "image_tag": "localhost/ivanka-exploratory-unicycler:5ad7874fe193",
       "name": "Unicycler",
       "nonqualifying": true,
       "qualifying": false,
-      "recipe": "Dockerfile.assembler-bench",
+      "recipe": "Containerfile.assembler-bench",
       "recipe_args": {
-        "MICALL_ADAPTER_COMMANDS_SHA256": "698e58f05ce5ebb412ee6e335082712cc0f7b143e1b8de875e69b93bdfd2e5e0",
-        "MICALL_ADAPTER_DISPATCH_SHA256": "c247bcc1d002658541769f3e40df61b6f83cc6fce99857698dce1212ba0ba187",
-        "SPADES_SOURCE_COMMIT": "896694ce5c7a9050a6ffa9fccc950a4cd9f04363",
-        "SPADES_SOURCE_REPO": "https://github.com/ablab/spades"
+        "BENCHMARK_ASSEMBLER_SHA256": "3848b4442b5015057fce79c5cfc8ecc761d1713fb7c59834929e6a147883bdc0",
+        "BENCHMARK_TEST_SHA256": "0fb24ae4fb6fc4ab1428faed576ea703b8b90f06a1aa599414020e48edd60f8b",
+        "CONTAINERFILE_SHA256": "d3c59d9c3084ef87b976cc5076b57a5f934fb9f454559d065d317a6ee7952085",
+        "DEPENDENCY_DONORS_SHA256": "22e2521031e5b90928a71e1bf835c8b867447032b3c9092a2c6a3a6407d7206f"
       },
       "reference_blind": true,
       "required_placeholders": [
         "ADAPTER_CHECKOUT",
-        "BASE_IMAGE_DIGEST",
+        "ASSEMBLER_TOOL_IMAGE",
         "REGISTRY_PATH",
-        "SPADES_BINARY_SHA256",
-        "TOOL_BINARY_SHA256"
+        "TOOL_IMAGE_ID"
       ],
       "status": "source-pinned",
       "tool_binary_sha256": null,
@@ -789,5 +781,5 @@
     "qualification_admission": "explicit_future_decision_only"
   },
   "schema": "ivanka.exploratory.build-plan.v1",
-  "source_registry_sha256": "5066081be1ee3f4f6bc38b32d5eda7511221aaabd951dfaf971582d40e805438"
+  "source_registry_sha256": "a2427d5a9a361330903ea6050819ca27c6bcbc20598627dfc1f306d4251d7cb2"
 }

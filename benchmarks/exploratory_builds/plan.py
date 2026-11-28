@@ -20,6 +20,12 @@ AUDIT = HERE / "recipe_audit.json"
 SCHEMA = "ivanka.exploratory.build-plan.v1"
 LAUNCHER = "assembler_bench.exploratory_runtime.cli"
 RECIPE = "Dockerfile.assembler-bench"
+# Unicycler's frozen comparison lineage is a different tool-donor lineage:
+# its immutable recipe is Containerfile.assembler-bench on clinical MiCall
+# master 8458f9e5, not the eeca0381 Dockerfile.assembler-bench branch.
+RECIPES = {"unicycler": "Containerfile.assembler-bench"}
+BASELINES = {"unicycler": "8458f9e5d34c39a6694b1fb6a40e055d7ce89553"}
+FROZEN_LINEAGE = HERE / "frozen_unicycler_lineage.json"
 BASELINE = "/workspace/ivanka-exploratory-ten-20261121/budget-baseline.json"
 REGISTRY_ARG = "benchmarks/assembler_bench/exploratory_candidates.json"
 FROZEN_MANIFEST = "9db6e1b569b17aed8b7e96abea495b09374e609478834371e2943b16df36884f"
@@ -33,7 +39,7 @@ ADAPTER_BRANCHES = {
     "idba-ud": "bench/assembler-idba-ud",
     "minia": "bench/assembler-minia",
     "ray": "bench/assembler-ray",
-    "unicycler": "bench/assembler-unicycler",
+    "unicycler": "bench/minimal-8458f9e5-unicycler-20261123",
     "tadpole": "bench/assembler-tadpole",
     "soapdenovo2": "bench/assembler-soapdenovo2",
     "fermi-lite": "bench/assembler-fermi-lite",
@@ -76,16 +82,38 @@ def _audit():
 
 
 def _command(tool, adapter_commit, baseline, repo, source_commit, image_tag,
-             recipe):
+             recipe_name, audit):
     """Exact launcher argv; unresolved fields require an admitted build."""
     arg = "--build-arg"
-    pairs = [
-        ("MICALL_ADAPTER_COMMANDS_SHA256", recipe["adapter_commands_sha256"]),
-        ("MICALL_ADAPTER_DISPATCH_SHA256", recipe["adapter_dispatch_sha256"]),
-    ]
-    pairs.extend(sorted(recipe["extra_build_args"].items()))
+    pairs = sorted(audit["extra_build_args"].items())
     pairs.extend((name, "{" + name + "}")
-                 for name in sorted(recipe["extra_placeholders"]))
+                 for name in sorted(audit["extra_placeholders"]))
+    if tool == "unicycler":
+        pairs = [
+            ("BENCHMARK_ASSEMBLER_SHA256", audit["adapter_commands_sha256"]),
+            ("BENCHMARK_TEST_SHA256", audit["adapter_dispatch_sha256"]),
+            *pairs,
+        ]
+        first = [
+            arg, "ASSEMBLER_TOOL_IMAGE={ASSEMBLER_TOOL_IMAGE}",
+            arg, "MICALL_BASE_COMMIT=" + baseline,
+            arg, "MICALL_SOURCE_COMMIT=" + adapter_commit,
+            arg, "TOOL_IMAGE_ID={TOOL_IMAGE_ID}",
+        ]
+    else:
+        pairs = [
+            ("MICALL_ADAPTER_COMMANDS_SHA256", audit["adapter_commands_sha256"]),
+            ("MICALL_ADAPTER_DISPATCH_SHA256", audit["adapter_dispatch_sha256"]),
+            *pairs,
+        ]
+        first = [
+            arg, "FORK_BASE_IMAGE={BASE_IMAGE_DIGEST}",
+            arg, "MICALL_FORK_SOURCE_COMMIT=" + adapter_commit,
+            arg, "MICALL_FORK_BASE_COMMIT=" + baseline,
+            arg, "TOOL_SOURCE_REPO=" + repo,
+            arg, "TOOL_SOURCE_COMMIT=" + source_commit,
+            arg, "TOOL_BINARY_SHA256={TOOL_BINARY_SHA256}",
+        ]
     extra = [token for name, value in pairs for token in (arg, name + "=" + value)]
     return [
         "python", "-m", LAUNCHER,
@@ -96,14 +124,9 @@ def _command(tool, adapter_commit, baseline, repo, source_commit, image_tag,
         "--reserve-bytes", str(RESERVE_BYTES),
         "--",
         "podman", "build", "--pull=never",
-        "--file", "{ADAPTER_CHECKOUT}/" + RECIPE,
+        "--file", "{ADAPTER_CHECKOUT}/" + recipe_name,
         "--tag", image_tag,
-        arg, "FORK_BASE_IMAGE={BASE_IMAGE_DIGEST}",
-        arg, "MICALL_FORK_SOURCE_COMMIT=" + adapter_commit,
-        arg, "MICALL_FORK_BASE_COMMIT=" + baseline,
-        arg, "TOOL_SOURCE_REPO=" + repo,
-        arg, "TOOL_SOURCE_COMMIT=" + source_commit,
-        arg, "TOOL_BINARY_SHA256={TOOL_BINARY_SHA256}",
+        *first,
         *extra,
         "{ADAPTER_CHECKOUT}",
     ]
@@ -122,9 +145,13 @@ def generate(registry_path=REGISTRY):
         tool = item["id"]
         adapter = data["adapter_branch_commits"][tool]
         recipe = recipes[tool]
+        recipe_name = RECIPES.get(tool, RECIPE)
+        baseline = BASELINES.get(tool, data["adapter_baseline_commit"])
         image_tag = "localhost/ivanka-exploratory-%s:%s" % (tool, adapter[:12])
-        placeholders = ["ADAPTER_CHECKOUT", "BASE_IMAGE_DIGEST",
-                        "REGISTRY_PATH", "TOOL_BINARY_SHA256"]
+        placeholders = ["ADAPTER_CHECKOUT", "REGISTRY_PATH"]
+        placeholders.extend(("ASSEMBLER_TOOL_IMAGE", "TOOL_IMAGE_ID")
+                            if tool == "unicycler" else
+                            ("BASE_IMAGE_DIGEST", "TOOL_BINARY_SHA256"))
         placeholders.extend(recipe["extra_placeholders"])
         builds.append({
             "id": tool,
@@ -132,16 +159,21 @@ def generate(registry_path=REGISTRY):
             "image_tag": image_tag,
             "adapter_branch": ADAPTER_BRANCHES[tool],
             "adapter_commit": adapter,
-            "common_baseline_commit": data["adapter_baseline_commit"],
+            "common_baseline_commit": baseline,
             "tool_source_repo": item["source_repo"],
             "tool_source_commit": item["source_commit"],
             "tool_license": item.get("source_license"),
-            "recipe": RECIPE,
+            "recipe": recipe_name,
             "recipe_args": {
-                "MICALL_ADAPTER_COMMANDS_SHA256":
+                **({"BENCHMARK_ASSEMBLER_SHA256":
                     recipe["adapter_commands_sha256"],
-                "MICALL_ADAPTER_DISPATCH_SHA256":
-                    recipe["adapter_dispatch_sha256"],
+                    "BENCHMARK_TEST_SHA256":
+                    recipe["adapter_dispatch_sha256"]}
+                   if tool == "unicycler" else
+                   {"MICALL_ADAPTER_COMMANDS_SHA256":
+                    recipe["adapter_commands_sha256"],
+                    "MICALL_ADAPTER_DISPATCH_SHA256":
+                    recipe["adapter_dispatch_sha256"]}),
                 **recipe["extra_build_args"],
             },
             "extra_placeholders": sorted(recipe["extra_placeholders"]),
@@ -152,8 +184,8 @@ def generate(registry_path=REGISTRY):
             "base_image_digest": None,
             "tool_binary_sha256": None,
             "command_template": _command(
-                tool, adapter, data["adapter_baseline_commit"],
-                item["source_repo"], item["source_commit"], image_tag, recipe),
+                tool, adapter, baseline, item["source_repo"],
+                item["source_commit"], image_tag, recipe_name, recipe),
             "required_placeholders": sorted(placeholders),
             # A build plan is a template for a future admitted build; its
             # status is independent of the registry row's current state.
@@ -225,20 +257,28 @@ def _validate_build(row, candidate, data, recipe):
             or row.get("image_tag") != expected_tag
             or row.get("adapter_branch") != ADAPTER_BRANCHES[tool]
             or row.get("adapter_commit") != adapter
-            or row.get("common_baseline_commit") != data["adapter_baseline_commit"]
+            or row.get("common_baseline_commit")
+            != BASELINES.get(tool, data["adapter_baseline_commit"])
             or row.get("tool_source_repo") != candidate["source_repo"]
             or row.get("tool_source_commit") != candidate["source_commit"]
             or row.get("tool_license") != candidate.get("source_license")
-            or row.get("recipe") != RECIPE):
+            or row.get("recipe") != RECIPES.get(tool, RECIPE)):
         raise ValueError("pinned build inputs drifted: " + tool)
     if (row.get("base_image_digest") is not None
             or row.get("tool_binary_sha256") is not None):
         raise ValueError("no binary or image digest may be invented: " + tool)
-    expected_args = {
-        "MICALL_ADAPTER_COMMANDS_SHA256": recipe["adapter_commands_sha256"],
-        "MICALL_ADAPTER_DISPATCH_SHA256": recipe["adapter_dispatch_sha256"],
-        **recipe["extra_build_args"],
-    }
+    if tool == "unicycler":
+        expected_args = {
+            "BENCHMARK_ASSEMBLER_SHA256": recipe["adapter_commands_sha256"],
+            "BENCHMARK_TEST_SHA256": recipe["adapter_dispatch_sha256"],
+            **recipe["extra_build_args"],
+        }
+    else:
+        expected_args = {
+            "MICALL_ADAPTER_COMMANDS_SHA256": recipe["adapter_commands_sha256"],
+            "MICALL_ADAPTER_DISPATCH_SHA256": recipe["adapter_dispatch_sha256"],
+            **recipe["extra_build_args"],
+        }
     if (row.get("recipe_args") != expected_args
             or row.get("extra_placeholders") != sorted(recipe["extra_placeholders"])
             or row.get("attested_binary_sha256") != recipe["attested_binary_sha256"]
@@ -254,10 +294,14 @@ def _validate_build(row, candidate, data, recipe):
     command = row.get("command_template")
     if not isinstance(command, list) or not command:
         raise ValueError("missing build command: " + tool)
+    baseline = BASELINES.get(tool, data["adapter_baseline_commit"])
+    joined = " ".join(command)
     if (command[:4] != ["python", "-m", LAUNCHER, "--registry"]
             or "--mode" not in command or "build" not in command
             or "podman" not in command or "--detach" in command
-            or BASELINE not in command or "{REGISTRY_PATH}" not in command):
+            or BASELINE not in command or baseline not in joined
+            or "{REGISTRY_PATH}" not in command
+            or "{ADAPTER_CHECKOUT}/" + RECIPES.get(tool, RECIPE) not in command):
         raise ValueError("build must run the one-worker launcher, detached builds banned: " + tool)
     if "--reserve-bytes" not in command:
         raise ValueError("launcher reservation missing: " + tool)
@@ -265,8 +309,12 @@ def _validate_build(row, candidate, data, recipe):
     if (position >= len(command) or not command[position].isdigit()
             or not RESERVE_BYTES <= int(command[position]) <= 4 * RESERVE_BYTES):
         raise ValueError("launcher reservation must stay within 1-4 GiB: " + tool)
-    joined = " ".join(command)
-    if adapter not in joined or candidate["source_commit"] not in joined:
+    if tool == "unicycler":
+        if adapter not in joined or "MICALL_BASE_COMMIT=" + baseline not in joined:
+            raise ValueError("frozen lineage pins missing from build command: " + tool)
+        if "FORK_BASE_IMAGE" in joined or "MICALL_FORK_SOURCE_COMMIT" in joined:
+            raise ValueError("stale clinical donor lineage in build command: " + tool)
+    elif adapter not in joined or candidate["source_commit"] not in joined:
         raise ValueError("launcher command lost its source pins: " + tool)
     for name, value in expected_args.items():
         if name + "=" + value not in command:
@@ -284,10 +332,6 @@ def _validate_build(row, candidate, data, recipe):
 def render(plan, tool, base_image_digest, tool_binary_sha256, adapter_checkout,
            registry_path, extra_values=None):
     """Materialize an admitted build command; never executes it."""
-    if not DIGEST.fullmatch(base_image_digest or ""):
-        raise ValueError("base image must be an immutable sha256 digest")
-    if not SHA64.fullmatch(tool_binary_sha256 or ""):
-        raise ValueError("a real 64-hex tool binary digest is required")
     if not adapter_checkout or not Path(adapter_checkout).is_absolute():
         raise ValueError("adapter checkout must be an absolute path")
     if (not registry_path
@@ -297,13 +341,30 @@ def render(plan, tool, base_image_digest, tool_binary_sha256, adapter_checkout,
     row = next((item for item in plan["builds"] if item["id"] == tool), None)
     if row is None:
         raise ValueError("unknown explorer: " + tool)
-    values = {
-        "BASE_IMAGE_DIGEST": base_image_digest,
-        "TOOL_BINARY_SHA256": tool_binary_sha256,
-        "ADAPTER_CHECKOUT": adapter_checkout,
-        "REGISTRY_PATH": registry_path,
-    }
-    values.update(extra_values or {})
+    if tool == "unicycler":
+        supplied = extra_values or {}
+        values = {
+            "ASSEMBLER_TOOL_IMAGE": supplied.get("ASSEMBLER_TOOL_IMAGE"),
+            "TOOL_IMAGE_ID": supplied.get("TOOL_IMAGE_ID"),
+            "ADAPTER_CHECKOUT": adapter_checkout,
+            "REGISTRY_PATH": registry_path,
+        }
+        if not DIGEST.fullmatch(values["ASSEMBLER_TOOL_IMAGE"] or ""):
+            raise ValueError("native tool donor image must be an immutable digest")
+        if not SHA64.fullmatch(values["TOOL_IMAGE_ID"] or ""):
+            raise ValueError("a real 64-hex native tool image ID is required")
+    else:
+        if not DIGEST.fullmatch(base_image_digest or ""):
+            raise ValueError("base image must be an immutable sha256 digest")
+        if not SHA64.fullmatch(tool_binary_sha256 or ""):
+            raise ValueError("a real 64-hex tool binary digest is required")
+        values = {
+            "BASE_IMAGE_DIGEST": base_image_digest,
+            "TOOL_BINARY_SHA256": tool_binary_sha256,
+            "ADAPTER_CHECKOUT": adapter_checkout,
+            "REGISTRY_PATH": registry_path,
+        }
+        values.update(extra_values or {})
     if set(values) != set(row["required_placeholders"]):
         raise ValueError("missing or unexpected attested build values: " + tool)
     command = []

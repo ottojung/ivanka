@@ -5,6 +5,7 @@ disk functions. No container, STOP sentinel, shared lock, frozen receipt or
 live case is touched.
 """
 import fcntl
+import json
 import os
 import tempfile
 import time
@@ -14,8 +15,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from fail_closed_guard import (disk, lease, p1_harness, p1_helper, proc, stop,
-                               teardown, tree, watch, watchdog)
+from fail_closed_guard import (disk, heartbeat, lease, p1_harness, p1_helper,
+                               proc, stop, teardown, tree, watch, watchdog)
 from fail_closed_guard.errors import GuardExceeded, TeardownError
 
 CID = "a" * 64
@@ -380,6 +381,40 @@ class P1HarnessLifecycleTests(unittest.TestCase):
         self.assertEqual(self.calls["bind"], [CID])
         self.assertTrue(outcome["result"]["teardown"]["fresh_absence_check"])
         self.assertFalse(self.stop_path.exists())
+
+    def test_watchdog_observes_valid_heartbeat_at_acquire(self):
+        seen = []
+        real_acquire = lease.acquire
+
+        def acquire_with_beat(root, ident, mode, **kwargs):
+            beat = watchdog.read_heartbeat(
+                heartbeat.path(root, ident), worker=ident,
+                monotonic=time.monotonic,
+                max_age=watchdog.DEFAULT_HEARTBEAT_MAX_AGE)
+            seen.append(beat)
+            # A pending lease cannot exist yet, because this interception is
+            # the acquire call itself.
+            self.assertNotIn(ident, lease.latest(lease.events(root)))
+            return real_acquire(root, ident, mode, **kwargs)
+
+        with patch.object(p1_harness.lease, "acquire",
+                          side_effect=acquire_with_beat):
+            outcome = self._run()
+        self.assertEqual(outcome["status"], "completed")
+        self.assertEqual(len(seen), 1)
+        self.assertTrue(seen[0]["fingerprint"])
+        self.assertGreaterEqual(seen[0]["age_seconds"], 0)
+
+    def test_heartbeat_refresh_advances_monotonic_timestamp(self):
+        beats = []
+        with patch.object(heartbeat.time, "monotonic",
+                          side_effect=[100.0, 101.0]):
+            emitter = heartbeat.Emitter(self.root, "beat-test")
+            emitter.before_spawn()
+            emitter.refresh()
+        target = heartbeat.path(self.root, "beat-test")
+        beats.append(json.loads(target.read_text())["at_monotonic"])
+        self.assertEqual(beats, [101.0])
 
     def test_pre_spawn_disk_failure_leaves_no_spurious_lease(self):
         with self.assertRaises(GuardExceeded) as caught:

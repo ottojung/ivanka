@@ -112,6 +112,46 @@ class HelperAttestationTests(unittest.TestCase):
         self.assertEqual(self.calls, [CID])
         self.assertNotIn("natural_exit", caught.exception.guard_result)
 
+    def test_transient_post_exit_live_pid_is_a_true_natural_exit(self):
+        # One lingering State.Pid after launcher exit is a podman teardown
+        # race, not a surviving container: the same exact CID must first
+        # prove absent, then attest twice as before.
+        seq = iter([9, None, None, None, None])
+
+        def transient(_cid, _env):
+            return next(seq, None)
+
+        result = self.run_watch(launcher=Launcher([None, None, None, 0]),
+                                inspect=transient)
+        ne = result["natural_exit"]
+        self.assertEqual(ne["cid"], CID)
+        self.assertEqual(ne["returncode"], 0)
+        self.assertTrue(ne["absence_proof"]["inspected_absent_twice"])
+        self.assertEqual(self.calls, [CID])
+
+    def test_persistent_live_pid_still_fails_closed(self):
+        seq = iter([9, 9, 9])
+
+        def persistent(_cid, _env):
+            return next(seq, 9)
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self.run_watch(launcher=Launcher([None, None, None, 0]),
+                           inspect=persistent)
+        self.assertEqual(caught.exception.reason, "identity_lost")
+        self.assertNotIn("natural_exit", caught.exception.guard_result or {})
+
+    def test_drifting_post_exit_pid_still_fails_closed(self):
+        seq = iter([9, 10])
+
+        def drifting(_cid, _env):
+            return next(seq, 10)
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self.run_watch(launcher=Launcher([None, None, None, 0]),
+                           inspect=drifting)
+        self.assertEqual(caught.exception.reason, "identity_lost")
+
     def test_no_real_result_fails_closed(self):
         with self.assertRaises(GuardExceeded) as caught:
             self.run_watch(launcher=Launcher([None]))

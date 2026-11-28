@@ -179,6 +179,8 @@ class GuardSourceIdentityTests(unittest.TestCase):
                 "95f2877f356747aa7601261081ed76bd645d8065c488813025155d160e5da2c4",
             "benchmarks/fail_closed_guard/watchdog_contract.py":
                 "6bede6e674d633caf503877af2bd3ca444d96846650ed56418bf21250e00076b",
+            "benchmarks/fail_closed_guard/natural_exit.py":
+                "9e7e4dda884896fa102e0d5af50d743780aa5617025698ea2574284b7af55daa",
         }
         for name, digest in exact.items():
             self.assertEqual(guard_source.DEPLOYED_EXPECTED[name], digest)

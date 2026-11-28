@@ -123,7 +123,7 @@ DEPLOYED_PINS = {
     "watchdog_service_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
     "guard_sha256": {
         "natural_exit_sha256":
-            "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
+            "9e7e4dda884896fa102e0d5af50d743780aa5617025698ea2574284b7af55daa",
         "watch_sha256":
             "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96",
         "monitor_sha256":

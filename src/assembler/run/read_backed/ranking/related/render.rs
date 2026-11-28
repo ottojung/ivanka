@@ -45,9 +45,14 @@ pub(crate) fn render(
     seq: &[u8],
     depth: &[u32],
     pairs: &[(usize, usize)],
+    repaired: bool,
 ) -> Vec<(usize, usize)> {
     if valley.is_some() {
         pieces(valley, seq.len())
+    } else if repaired {
+        // Pair spans are in native coordinates; after circle::repair the
+        // sequence and depth are rotated. Keep the established whole output.
+        pieces(None, seq.len())
     } else {
         approximate_parts(seq, depth, pairs)
     }

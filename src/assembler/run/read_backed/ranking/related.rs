@@ -1,7 +1,7 @@
 #[cfg(test)]
 pub(super) use super::additional;
 pub(super) use super::{approximate_junction, junction, spans::seed as short_seed, Statistics, K};
-pub(super) use render::pieces_keep_middle;
+pub(super) use render::{pieces_keep_middle, render};
 mod diversity;
 pub(super) mod render;
 #[cfg(test)]

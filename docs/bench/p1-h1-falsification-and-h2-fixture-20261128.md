@@ -25,6 +25,10 @@ Implementation (`read_backed/ranking/approximate.rs`, `spans.rs`, `related/rende
 
 Controls added: approximate repeat with no spanning pairs splits; the same approximate repeat with spanning original pairs stays whole; a genuine 150 bp tandem repeat stays whole; distinct haplotypes and a supported long clonal path stay whole.
 
+## Stale-span repair (independent review)
+
+`output::component` computes `statistics.spans[chosen]` in native coordinates, but `circle::repair` can rotate the sequence and depth. `ranking::render` now takes a `repaired` flag: when a cycle repair happened, the approximate gate is skipped and the established whole-contig output is preserved. A regression proves that native-coordinate spans which would otherwise split into three fragments are ignored after repair, while a localized valley still renders its two flanks. Pair fixtures use varied ~300 bp localized crossing pairs near each candidate boundary (not multi-kilobase pairs), with negative controls retained. `tiling::present` does not truncate a supported middle: `island::bounds` keeps uniformly supported intervals intact and `partition` emits contiguous overlapping tiles covering the interval; existing tests `continuous_read_supported_genome_is_not_needlessly_fragmented` and `offset_presentation_matches_direct_slice` cover this path. If a future input shows truncation, report it rather than tuning.
+
 ## Predeclared ready experiment (requires explicit P1 grant)
 
 1. No native panel, no worker, slot, podman, image, STOP/s6 or cohort replay in this turn. PX continues; the integrated retry belongs to cNcov and UNZbw grants slots.

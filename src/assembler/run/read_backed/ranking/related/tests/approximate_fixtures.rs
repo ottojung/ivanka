@@ -47,7 +47,9 @@ pub(super) fn fixture(second: Vec<u8>, spanning: bool) -> (Vec<u8>, Vec<u32>, Ve
     let mut spans: Vec<(usize, usize)> = (0..30).map(|n| (0, 200 + 10 * n)).collect();
     spans.extend((0..30).map(|n| (5600 - 5 * n, 5800 - 5 * n)));
     if spanning {
-        spans.extend((0..12).map(|n| (1850 + n, 5150 - n)));
+        for boundary in (2000..=7000).step_by(1000) {
+            spans.extend((0..12).map(|n| (boundary - 50 + n, boundary + 250 + n)));
+        }
     }
     (seq, depth, spans)
 }

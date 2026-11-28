@@ -1,11 +1,12 @@
 pub(super) use super::{
-    additional, approximate_junction, counts, pieces_keep_middle, short_seed, Statistics,
+    additional, approximate_junction, counts, pieces_keep_middle, render, short_seed, Statistics,
 };
 
 mod approximate_fixtures;
 mod approximate_tests;
 mod cases;
 mod controls;
+mod repaired_path;
 
 fn stats(coverage: Vec<usize>, masks: Vec<u16>, exclusive: Vec<u16>) -> Statistics {
     let pairs = (0..coverage.len())

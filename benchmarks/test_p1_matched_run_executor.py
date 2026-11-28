@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from typing import Any
 
 import p1_matched_run_executor as ex
 import p1_ultradeep_matched_runtime as plan
@@ -28,6 +31,38 @@ def calm_host_evidence():
     return dict(CALM_HOST)
 
 
+OBSERVED_QUOTA = {
+    "value": "200000 100000", "origin": plan.KERNEL_QUOTA_ORIGINS[0],
+    "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
+    "source": "/sys/fs/cgroup/libpod-test.scope/cpu.max",
+    "pid": 4242, "cgroup": "0::/libpod-test.scope", "cid": "a" * 64,
+    "fingerprint": [5, 7], "leaf_value": "200000 100000",
+    "leaf_only": True, "effective_source": "/libpod-test.scope",
+    "chain": [{"path": "/libpod-test.scope", "raw": "200000 100000",
+               "value": "200000 100000", "status": "ok"}],
+    "chain_normalized": [["/libpod-test.scope", "200000 100000"]],
+    "leaf_status": "ok", "scope": "host_scope_proven",
+    "coverage": {"expected": 1, "read": 1, "missing": [],
+                 "unreadable": [], "complete": True},
+    "sample_identity": {"cid": "a" * 64, "pid": 4242,
+                        "fingerprint": [5, 7],
+                        "cgroup": "0::/libpod-test.scope",
+                        "chain_normalized": [["/libpod-test.scope",
+                                              "200000 100000"]]},
+}
+DIAGNOSTIC_OK = {"matched": True, "reasons": [],
+                "host_scope_proven": True,
+                "observed_value": "200000 100000"}
+
+# The exact shape emitted by fail_closed_guard.natural_exit.attest. Only this
+# guard-owned proof may make a zombie/terminal gap a proven natural exit.
+TERMINAL_PROOF = {
+    "cid": "a" * 64, "returncode": 0, "method": "exact_cid_inspect",
+    "absence_proof": {"observed_absent": True, "inspected_absent_twice": True},
+    "kernel_enforcement": False,
+}
+
+
 def fake_arm_runner(step, argv, arm_dir, *, deadline=None):
     arm_dir.mkdir(parents=True, exist_ok=True)
     arm = step["arm"]
@@ -43,6 +78,12 @@ def fake_arm_runner(step, argv, arm_dir, *, deadline=None):
         "log_path": str(arm_dir / "podman.log"),
         "sampled_rss_bytes": 1_500_000_000,
         "container_cpu_max": "200000 100000",
+        "requested_container_cpu_max": "200000 100000",
+        "observed_cpu_quota": OBSERVED_QUOTA,
+        "observed_container_cpu_max": "200000 100000",
+        "quota_diagnostic": DIAGNOSTIC_OK,
+        "quota_drift": [],
+        "host_scope_proven": True,
         "host_before": CALM_HOST,
         "host_after": {**CALM_HOST, "loadavg": [1.1, 1.0, 1.0], "cpu_stat": {"nr_periods": 110, "nr_throttled": 0}},
     }
@@ -196,6 +237,294 @@ class ExecutorTest(unittest.TestCase):
             self.assertEqual(payload["execution"], "refused")
             self.assertIn("missing required args", payload["reason"])
 
+    def test_kernel_cpu_max_reads_real_cgroup_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            scope = root / "libpod-abcdef.scope"
+            scope.mkdir()
+            (scope / "cpu.max").write_text("200000 100000\n")
+            observed = ex.kernel_cpu_max("0::/libpod-abcdef.scope\n", root)
+            self.assertEqual(observed["value"], "200000 100000")
+            self.assertEqual(observed["origin"], ex.CPU_MAX_ORIGIN_V2)
+            self.assertEqual(observed["raw"], "200000 100000")
+            self.assertEqual(ex.normalize_cpu_max("max 100000"), "max 100000")
+            self.assertIsNone(ex.normalize_cpu_max("bogus 100000"))
+            absent = ex.kernel_cpu_max("0::/missing.scope\n", root)
+            self.assertIsNone(absent["value"])
+            self.assertEqual(absent["leaf_status"], "unavailable")
+            self.assertFalse(absent["coverage"]["complete"])
+
+    def test_observed_quota_uses_guard_bind_and_ancestor_walk(self) -> None:
+        cid = "a" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            scope = root / ("libpod-" + cid + ".scope")
+            scope.mkdir()
+            (scope / "cpu.max").write_text("200000 100000\n")
+            bound = {"cid": cid, "pid": 9, "fingerprint": [5, 7]}
+            table = {
+                7: {"cgroup": "0::/init.scope", "starttime": 5, "pid_ns": 7},
+                9: {"cgroup": "0::/libpod-" + cid + ".scope",
+                    "starttime": 5, "pid_ns": 7},
+            }
+            observed = ex.observe_bound_cpu_quota(table, bound, root)
+            self.assertEqual(observed["pid"], 9)
+            self.assertEqual(observed["cid"], cid)
+            self.assertEqual(observed["fingerprint"], [5, 7])
+            self.assertTrue(observed["leaf_only"])
+
+            # A truncated-prefix collision on another PID must never bind.
+            table[11] = {"cgroup": "0::/libpod-" + cid[:12] + ".scope",
+                         "starttime": 5, "pid_ns": 7}
+            self.assertEqual(ex.observe_bound_cpu_quota(table, bound, root)["pid"], 9)
+
+            # Tighter ancestor makes the leaf value insufficient as proof.
+            (root / "cpu.max").write_text("100000 100000\n")
+            tighter = ex.observe_bound_cpu_quota(table, bound, root)
+            self.assertEqual(tighter["value"], "100000 100000")
+            self.assertEqual(tighter["leaf_value"], "200000 100000")
+            self.assertFalse(tighter["leaf_only"])
+            self.assertEqual(tighter["effective_source"], str(root))
+
+            # Continuous observation reflects a mid-arm change instead of caching.
+            (root / "cpu.max").unlink()
+            (scope / "cpu.max").write_text("150000 100000\n")
+            self.assertEqual(ex.observe_bound_cpu_quota(table, bound, root)["value"],
+                             "150000 100000")
+
+    def test_bound_identity_changes_fail_closed(self) -> None:
+        cid = "b" * 64
+        bound = {"cid": cid, "pid": 12, "fingerprint": [5, 7]}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            scope = root / ("libpod-" + cid + ".scope")
+            scope.mkdir()
+            (scope / "cpu.max").write_text("200000 100000\n")
+            live = {12: {"cgroup": "0::/libpod-" + cid + ".scope",
+                         "starttime": 5, "pid_ns": 7}}
+            self.assertIsNotNone(ex.observe_bound_cpu_quota(live, bound, root))
+            changed = {12: {**live[12], "starttime": 999}}
+            self.assertIsNone(ex.observe_bound_cpu_quota(changed, bound, root))
+            unreadable = {12: {**live[12], "cgroup": None}}
+            self.assertIsNone(ex.observe_bound_cpu_quota(unreadable, bound, root))
+            malformed = {12: live[12]}
+            self.assertIsNone(ex.observe_bound_cpu_quota(malformed,
+                              {**bound, "cid": "deadbeef"}, root))
+
+    def test_observed_cpu_quota_mismatch_is_diagnostic_not_dropped(self) -> None:
+        good = dict(OBSERVED_QUOTA)
+        self.assertTrue(ex.quota_diagnostic(
+            good, host_scope_proven=True)["matched"])
+        self.assertFalse(ex.quota_diagnostic({**good, "value": "150000 100000"},
+            host_scope_proven=True)["matched"])
+        self.assertFalse(ex.quota_diagnostic({**good, "origin": "podman_hostconfig"},
+            host_scope_proven=True)["matched"])
+        self.assertFalse(ex.quota_diagnostic(good)["matched"])
+        bad_coverage = {**good}
+        bad_coverage["coverage"] = {**good["coverage"], "complete": False}
+        self.assertFalse(ex.quota_diagnostic(
+            bad_coverage, host_scope_proven=True)["matched"])
+        drift = ex.compare_quota_samples(good, {
+            **good,
+            "sample_identity": {**good["sample_identity"],
+                                "cgroup": "0::/other.scope",
+                                "chain_normalized": [["/other.scope",
+                                                      "200000 100000"]]}})
+        self.assertIn("bound cgroup changed", drift)
+
+    def test_missing_intermediate_and_root_only_are_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            mid = root / "slice-a"
+            leaf = mid / "libpod-test.scope"
+            leaf.mkdir(parents=True)
+            (root / "cpu.max").write_text("200000 100000\n")
+            (leaf / "cpu.max").write_text("200000 100000\n")
+            # Missing intermediate controller is recorded, not silently skipped.
+            (mid / "cgroup.controllers").write_text("cpuset memory\n")
+            observed = ex.kernel_cpu_max("0::/slice-a/libpod-test.scope\n", root)
+            self.assertEqual(observed["value"], "200000 100000")
+            self.assertIn(str(mid), observed["coverage"]["missing"])
+            self.assertIsNone(observed["effective_source"])
+            self.assertFalse(ex.quota_diagnostic(
+                observed, host_scope_proven=True)["matched"])
+
+            # Root-only reading cannot be presented as the leaf.
+            (leaf / "cpu.max").unlink()
+            root_only = ex.kernel_cpu_max("0::/slice-a/libpod-test.scope\n", root)
+            self.assertEqual(root_only["leaf_status"], "unavailable")
+            self.assertEqual(root_only["value"], "200000 100000")
+            self.assertIsNone(root_only["leaf_value"])
+            self.assertIsNone(root_only["effective_source"])
+
+    def test_natural_exit_gap_does_not_poison_earlier_samples(self) -> None:
+        previous = dict(OBSERVED_QUOTA)
+        bound = {"cid": "a" * 64, "pid": 4242, "fingerprint": [5, 7]}
+        zombie = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound, terminal_proof=TERMINAL_PROOF), "terminal")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, {}, bound, terminal_proof=TERMINAL_PROOF), "drift")
+        self.assertIsNone(ex.sampling_gap_kind(
+            None, zombie, bound, terminal_proof=TERMINAL_PROOF))
+
+    def test_zombie_terminal_requires_full_bound_fingerprint(self) -> None:
+        previous = dict(OBSERVED_QUOTA)
+        bound = {"cid": "a" * 64, "pid": 4242, "fingerprint": [5, 7]}
+        matching = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
+        changed_starttime = {4242: {"state": "Z", "starttime": 999, "pid_ns": 7}}
+        changed_namespace = {4242: {"state": "Z", "starttime": 5, "pid_ns": 999}}
+        no_fingerprint = {4242: {"state": "Z"}}
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, matching, bound, terminal_proof=TERMINAL_PROOF), "terminal")
+        for record in (changed_starttime, changed_namespace, no_fingerprint):
+            self.assertEqual(ex.sampling_gap_kind(
+                previous, record, bound, terminal_proof=TERMINAL_PROOF), "drift")
+
+    def test_natural_exit_needs_guard_owned_terminal_proof(self) -> None:
+        previous = dict(OBSERVED_QUOTA)
+        bound = {"cid": "a" * 64, "pid": 4242, "fingerprint": [5, 7]}
+        zombie = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound, terminal_proof=TERMINAL_PROOF), "terminal")
+        # No proof, a caller assertion, or a malformed/foreign proof is drift.
+        self.assertEqual(ex.sampling_gap_kind(previous, zombie, bound), "drift")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound, terminal_proof=True), "drift")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound,
+            terminal_proof={**TERMINAL_PROOF, "cid": "b" * 64}), "drift")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound,
+            terminal_proof={**TERMINAL_PROOF, "method": "caller_asserted"}), "drift")
+        self.assertEqual(ex.sampling_gap_kind(
+            previous, zombie, bound, terminal_proof={
+                **TERMINAL_PROOF,
+                "absence_proof": {"observed_absent": True,
+                                  "inspected_absent_twice": False}}), "drift")
+
+    def test_guard_terminal_proof_is_guard_owned(self) -> None:
+        self.assertEqual(
+            ex.guard_terminal_proof(TERMINAL_PROOF, cid="a" * 64), TERMINAL_PROOF)
+        self.assertIsNone(ex.guard_terminal_proof(TERMINAL_PROOF, cid="b" * 64))
+        self.assertIsNone(ex.guard_terminal_proof(None))
+        self.assertIsNone(ex.guard_terminal_proof({"method": "exact_cid_inspect"}))
+
+    def test_caller_assertion_cannot_set_host_scope_proven(self) -> None:
+        self.assertFalse(ex.host_scope_proven_from_proof(True))
+        self.assertFalse(ex.host_scope_proven_from_proof("host_scope_proven"))
+        self.assertFalse(ex.host_scope_proven_from_proof(
+            {"asserted": True, "scope": "host_scope_proven"}))
+        # Only a structured, separately attested proof is recognized.
+        self.assertTrue(ex.host_scope_proven_from_proof({
+            "schema": ex.HOST_SCOPE_PROOF_SCHEMA,
+            "cgroup_root": "/sys/fs/cgroup",
+            "attested_by": "operator-review",
+        }))
+        # A caller assertion fed through the diagnostic stays diagnostic-only.
+        diagnostic = ex.quota_diagnostic(
+            OBSERVED_QUOTA,
+            host_scope_proven=ex.host_scope_proven_from_proof(True))
+        self.assertFalse(diagnostic["host_scope_proven"])
+        self.assertFalse(diagnostic["matched"])
+        self.assertIn("visible hierarchy only; host scope not proven",
+                      diagnostic["reasons"])
+
+    def test_production_gap_is_terminal_only_with_guard_proof(self) -> None:
+        cid = "a" * 64
+        bound = {"cid": cid, "pid": 4242, "fingerprint": [5, 7]}
+        live = {4242: {"cgroup": "0::/libpod-" + cid + ".scope",
+                       "starttime": 5, "pid_ns": 7}}
+        zombie = {4242: {"state": "Z", "starttime": 5, "pid_ns": 7}}
+        captured: dict[str, Any] = {}
+
+        def local_runner_factory(**kwargs):
+            captured["snapshot"] = kwargs["snapshot"]
+            captured["bind"] = kwargs["bind_container"]
+
+            def run(step, argv, arm_dir, *, deadline=None):
+                captured["bind"](cid, {})
+                captured["tables"] = [live, zombie]
+                captured["snapshot"]()  # records a live quota observation
+                captured["snapshot"]()  # records the terminal gap candidate
+                return {"status": "completed", "guard_outcome": {
+                    "result": {"natural_exit": captured.get("proof")}}}
+            return run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            scope = root / ("libpod-" + cid + ".scope")
+            scope.mkdir()
+            (scope / "cpu.max").write_text("200000 100000\n")
+            att = root / "att.json"
+            att.write_text("{}")
+
+            with mock.patch.object(ex.plan, "readiness",
+                                   return_value={"ready": True, "reasons": []}), \
+                    mock.patch.object(ex, "guarded_podman_arm_runner",
+                                      side_effect=local_runner_factory), \
+                    mock.patch("fail_closed_guard.binding.bind_container",
+                               return_value=bound), \
+                    mock.patch("fail_closed_guard.proc.snapshot",
+                               side_effect=lambda: captured["tables"].pop(0)):
+                runner = ex.build_production_arm_runner(
+                    owner="o", lease_root=root / "leases",
+                    stop_path=root / "STOP", disk_path=root,
+                    lock_path=root / "lock", watchdog_path=root / "wd",
+                    watchdog_graphroot=root, attestation=att,
+                    cgroup_root=root)
+                step = {"case": "c", "arm": "frozen"}
+                # Guard-owned proof plus matching fingerprint: natural exit.
+                captured["proof"] = TERMINAL_PROOF
+                result = runner(step, [], root / "arm1")
+                self.assertTrue(result["terminal_sample_gap"])
+                self.assertEqual(result["quota_drift"], [])
+                self.assertFalse(result["host_scope_proven"])
+                # The same gap without a guard proof is drift, not terminal.
+                captured["proof"] = None
+                result = runner(step, [], root / "arm2")
+                self.assertFalse(result["terminal_sample_gap"])
+                self.assertIn("bound init disappeared or became unreadable",
+                              result["quota_drift"])
+
+    def test_missing_observed_quota_fails_comparability(self) -> None:
+        def no_quota(step, argv, arm_dir, *, deadline=None):
+            result = fake_arm_runner(step, argv, arm_dir, deadline=deadline)
+            result.pop("observed_cpu_quota")
+            result.pop("observed_container_cpu_max")
+            return result
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp) / "out"
+            emitted = plan.build_plan(RECEIPT, out)
+            receipt = ex.execute_plan(
+                emitted, output_root=out, arm_runner=no_quota,
+                allow_unready=True, host_evidence=calm_host_evidence)
+            self.assertTrue(receipt["comparability"]["abort"])
+            self.assertTrue(any("kernel CPU quota" in r
+                                for r in receipt["comparability"]["reasons"]))
+            for rec in receipt["records"]:
+                self.assertFalse(rec["cpu_quota_complete"])
+                self.assertIsNone(rec["cpu_quota"]["observed_cpu_max_origin"])
+                self.assertEqual(rec["cpu_quota"]["requested_container_cpu_max"],
+                                 "200000 100000")
+            evidence = json.loads((out / plan.CASES[0] / "frozen" / "host-evidence.json").read_text())
+            self.assertIsNone(evidence["cpu_quota"]["observed_container_cpu_max"])
+
+    def test_operator_environment_is_real_and_store_pinned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = pathlib.Path(tmp) / "storage.conf"
+            conf.write_text('[storage]\ndriver = "overlay"\ngraphroot = "/tmp/graph"\nrunroot = "/tmp/run"\n')
+            env = ex.operator_environment(
+                conf, base_env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                                "HOME": "/home/lubko", "CONTAINERS_CONF": "/foreign"})
+            self.assertIn("PATH", env)
+            self.assertIn("HOME", env)
+            self.assertNotIn("CONTAINERS_CONF", env)
+            self.assertEqual(env["CONTAINERS_STORAGE_CONF"], str(conf))
+            with self.assertRaises(plan.Refusal):
+                ex.operator_environment(conf, base_env={"HOME": "/home/lubko"})
+
     def test_comparability_check_accepts_case_count(self) -> None:
         records = []
         for step in plan.alternating_schedule(plan.ALL_CASES):
@@ -208,9 +537,38 @@ class ExecutorTest(unittest.TestCase):
                  "cpuset_effective": "0-1", "cpu_stat": {"nr_periods": 100, "nr_throttled": 0},
                  "memory_current": 1},
                 {"seconds": 100.0, "exit_code": 0},
-                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000"))
+                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
+                requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA,
+            quota_diagnostic=DIAGNOSTIC_OK))
         decision = plan.comparability_check(records, cases=plan.ALL_CASES)
         self.assertTrue(decision["comparable"])
+
+
+    def test_mismatch_is_preserved_as_diagnostic_receipt(self) -> None:
+        def mismatched(step, argv, arm_dir, *, deadline=None):
+            result = fake_arm_runner(step, argv, arm_dir, deadline=deadline)
+            result["observed_cpu_quota"] = {
+                **OBSERVED_QUOTA, "value": "150000 100000"}
+            result["observed_container_cpu_max"] = "150000 100000"
+            result["quota_diagnostic"] = ex.quota_diagnostic(
+                result["observed_cpu_quota"], host_scope_proven=True)
+            return result
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp) / "out"
+            emitted = plan.build_plan(RECEIPT, out)
+            receipt = ex.execute_plan(
+                emitted, output_root=out, arm_runner=mismatched,
+                allow_unready=True, host_evidence=calm_host_evidence)
+            self.assertTrue((out / "receipt.json").is_file())
+            self.assertTrue(receipt["comparability"]["abort"])
+            for record in receipt["records"]:
+                self.assertFalse(record["cpu_quota_complete"])
+                self.assertEqual(record["cpu_quota"]["observed_container_cpu_max"],
+                                 "150000 100000")
+                self.assertFalse(record["cpu_quota_diagnostic"]["matched"])
+                self.assertIn("quota value differs from request",
+                              record["cpu_quota_diagnostic"]["reasons"])
 
 
 if __name__ == "__main__":

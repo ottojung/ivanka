@@ -145,7 +145,36 @@ class GuardHarness:
 
         def rearming(step, argv, arm_dir, **kwargs):
             self.arm_stop()
-            return inner(step, argv, arm_dir, **kwargs)
+            result = inner(step, argv, arm_dir, **kwargs)
+            result["requested_container_cpu_max"] = "200000 100000"
+            result["container_cpu_max"] = "200000 100000"
+            result["observed_cpu_quota"] = {
+                "value": "200000 100000",
+                "origin": "kernel_cgroup_v2_cpu_max",
+                "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
+                "source": "/sys/fs/cgroup/cpu.max", "pid": PID,
+                "cgroup": "0::/libpod-test.scope", "cid": CID,
+                "fingerprint": [5, 7], "leaf_value": "200000 100000",
+                "leaf_only": True, "effective_source": "/libpod-test.scope",
+                "chain": [{"path": "/libpod-test.scope", "raw": "200000 100000",
+                           "value": "200000 100000", "status": "ok"}],
+                "chain_normalized": [["/libpod-test.scope", "200000 100000"]],
+                "leaf_status": "ok", "scope": "host_scope_proven",
+                "coverage": {"expected": 1, "read": 1, "missing": [],
+                             "unreadable": [], "complete": True},
+                "sample_identity": {
+                    "cid": CID, "pid": PID, "fingerprint": [5, 7],
+                    "cgroup": "0::/libpod-test.scope",
+                    "chain_normalized": [["/libpod-test.scope",
+                                          "200000 100000"]]},
+            }
+            result["observed_container_cpu_max"] = "200000 100000"
+            result["quota_diagnostic"] = {
+                "matched": True, "reasons": [], "host_scope_proven": True,
+                "observed_value": "200000 100000"}
+            result["quota_drift"] = []
+            result["host_scope_proven"] = True
+            return result
 
         return rearming
 

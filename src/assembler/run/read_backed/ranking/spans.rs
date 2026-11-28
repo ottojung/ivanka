@@ -2,19 +2,25 @@ use std::collections::HashSet;
 
 pub(in super::super) const SEED: usize = 12;
 
-/// Canonical short seed: survives a diverged second traversal.
+fn digit(base: u8) -> Option<u64> {
+    match base {
+        b'A' => Some(0),
+        b'C' => Some(1),
+        b'G' => Some(2),
+        b'T' => Some(3),
+        _ => None,
+    }
+}
+
+/// Canonical short seed: forward encoding paired with the true reverse
+/// complement built from the opposite end, so either strand gives one key.
 pub(in super::super) fn seed(window: &[u8]) -> Option<u64> {
     let (mut forward, mut reverse) = (0u64, 0u64);
     for &base in window {
-        let digit = match base {
-            b'A' => 0,
-            b'C' => 1,
-            b'G' => 2,
-            b'T' => 3,
-            _ => return None,
-        };
-        forward = (forward << 2) | digit;
-        reverse = (reverse << 2) | (3 - digit);
+        forward = (forward << 2) | digit(base)?;
+    }
+    for &base in window.iter().rev() {
+        reverse = (reverse << 2) | (3 - digit(base)?);
     }
     Some(forward.min(reverse))
 }

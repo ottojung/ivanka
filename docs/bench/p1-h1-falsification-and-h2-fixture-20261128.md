@@ -14,7 +14,9 @@ Exact base for this increment: `fc27fb87b7febd76236fde3b18d9035e97fd9710` (the s
 
 Hypothesis: an approximate second traversal of one read-supported path can be extended without the exact-31-mer cycle stop (`CYCLE_MATCH = 512`). Sequence similarity alone is not enough to split it: a homologous repeat or a genuine tandem repeat can look similar. A split is justified only when there is *independent read-derived evidence of an unsupported transition* between two disjoint, read-supported approximate copies.
 
-Implementation (`read_backed/ranking/approximate.rs`, `spans.rs`, `junction`, `output.rs`):
+Review repairs on 2026-11-28: (a) similar-window endpoints are not a localized unsupported transition, so approximate-repeat rendering now emits the intervening read-supported middle as its own native fragment (`pieces_keep_middle`); a test proves the rendered intervals cover every base of the fixture and each is a native substring, so no depth-120 middle base is dropped. Localized depth-valley joins keep the existing two-flank rule. (b) `spans::seed` now builds the reverse complement from the opposite end; strand invariance is tested on an asymmetric word and a long path. (c) pair-support fixtures use varied short localized spans plus genuinely crossing pairs, not repeated copies of one wide interval. Promotion/experiment remains blocked until re-review.
+
+Implementation (`read_backed/ranking/approximate.rs`, `spans.rs`, `related/render.rs`, `output.rs`):
 
 - Two disjoint windows (generic 2000/1000 spacing, matching existing cycle spacing) are compared by canonical 12-mer seeds. Only positions with original-pair depth >= 3 contribute seeds, so the signal is read-derived.
 - A candidate is raised only when the shared fraction is at least one quarter of the smaller seed set (250 per mille) **and** `spans::unsupported` finds far fewer original pairs crossing the boundary than comparable flanks **and** both flanks are read-supported (`spans::dense`). Those are the existing read-derived unsupported-join rules, not new fitted thresholds.

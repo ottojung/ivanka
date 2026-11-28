@@ -24,8 +24,7 @@ pub(super) fn component(
     chosen: usize,
 ) -> Vec<Entry> {
     let native = &contigs[chosen];
-    let joined =
-        ranking::any_junction(native, &statistics.depth[chosen], &statistics.spans[chosen]);
+    let joined = ranking::junction(&statistics.depth[chosen], &statistics.spans[chosen]);
     let repaired = if joined.is_some() {
         None
     } else {
@@ -39,7 +38,7 @@ pub(super) fn component(
     if repaired.is_some() {
         eprintln!("IVANKA_READ_BACKED_REOPENED_CYCLE len={}", sequence.len());
     }
-    ranking::pieces(joined, sequence.len())
+    ranking::render(joined, sequence, depth, &statistics.spans[chosen])
         .into_iter()
         .enumerate()
         .flat_map(|(index, (from, to))| {

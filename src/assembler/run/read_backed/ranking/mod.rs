@@ -12,24 +12,7 @@ pub(super) use independent::additional;
 pub(super) use junction::junction;
 use std::cmp::Ordering;
 
-/// Prefer an established unsupported valley; otherwise a conservative
-/// approximate-repeat split with independent pair evidence.
-pub(super) fn any_junction(
-    seq: &[u8],
-    depth: &[u32],
-    pairs: &[(usize, usize)],
-) -> Option<(usize, usize)> {
-    junction(depth, pairs).or_else(|| approximate_junction(seq, depth, pairs))
-}
-
-/// Render intervals in contig coordinates; without a detected unsupported
-/// join this is the single whole contig and the established path is unchanged.
-pub(super) fn pieces(joined: Option<(usize, usize)>, length: usize) -> Vec<(usize, usize)> {
-    joined.map_or_else(
-        || vec![(0, length)],
-        |(a, b)| vec![(0, (a + K).min(length)), (b, length)],
-    )
-}
+pub(super) use related::render::{pieces, render};
 
 /// Read-covered breadth squared, weighted by supporting original fragments.
 fn compare(a: usize, b: usize, contigs: &[Vec<u8>], stats: &Statistics) -> Ordering {

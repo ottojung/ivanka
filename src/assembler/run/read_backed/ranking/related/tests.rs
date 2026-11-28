@@ -1,4 +1,6 @@
-pub(super) use super::{additional, approximate_junction, counts, Statistics};
+pub(super) use super::{
+    additional, approximate_junction, counts, pieces_keep_middle, short_seed, Statistics,
+};
 
 mod approximate_fixtures;
 mod approximate_tests;

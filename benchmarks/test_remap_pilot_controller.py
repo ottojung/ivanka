@@ -787,11 +787,14 @@ class LogDrainAndRetentionTests(unittest.TestCase):
             expected_logs={"launcher.stderr.log": digest})
         self.assertEqual(manifest["logs"]["launcher.stderr.log"], digest)
         (attempt / "logs" / "launcher.stderr.log").unlink()
-        with self.assertRaises(ValueError):
-            ctl.retain_case_artifacts(
-                attempt_dir=attempt, receipt={"schema": "test"},
-                logs={"launcher.stderr.log": str(source)},
-                expected_logs={"launcher.stderr.log": "0" * 64})
+        altered = ctl.retain_case_artifacts(
+            attempt_dir=attempt, receipt={"schema": "test"},
+            logs={"launcher.stderr.log": str(source)},
+            expected_logs={"launcher.stderr.log": "0" * 64})
+        self.assertEqual(
+            altered["log_integrity_failure"]["launcher.stderr.log"],
+            {"source_sha256": "0" * 64, "copy_sha256": digest})
+        self.assertTrue((attempt / "receipt.json").is_file())
 
 
 if __name__ == "__main__":

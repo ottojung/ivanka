@@ -408,11 +408,17 @@ def run_guarded_case(plan: dict, original_manifest: dict, *, output_dir, attempt
         failure = str(state.get("failure_reason") or "")
         state["failure_reason"] = (failure + ":launcher_exit_unproven")[:320] \
             if failure else "launcher_exit_unproven"
+        # No exit proof means bytes may still be written: do not describe them
+        # as drained, hashed or terminally retained.
+        state["log_observation"] = {"terminal": False,
+                                    "reason": "launcher_exit_unproven"}
+        return state
     log_hashes = {}
     for path in (stdout, stderr):
         if path.is_file():
             log_hashes[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
     state["log_sha256"] = log_hashes
+    state["log_observation"] = {"terminal": True, "reason": None}
     return state
 
 

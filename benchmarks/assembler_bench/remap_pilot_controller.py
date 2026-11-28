@@ -432,6 +432,7 @@ def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
     attempt_dir = Path(attempt_dir)
     attempt_dir.mkdir(parents=True, exist_ok=True)
     kept_logs = {}
+    integrity = {}
     for name, src in (logs or {}).items():
         if src is None:
             continue
@@ -440,8 +441,8 @@ def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
         if digest:
             expected = (expected_logs or {}).get(dest.name)
             if expected is not None and digest != expected:
-                raise ValueError(
-                    f"retained log digest mismatch: {dest.name}")
+                integrity[dest.name] = {"source_sha256": expected,
+                                        "copy_sha256": digest}
             kept_logs[dest.name] = digest
     receipt_path = attempt_dir / "receipt.json"
     receipt_sha = _write_json(receipt_path, receipt)
@@ -450,6 +451,7 @@ def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
         "attempt_dir": str(attempt_dir),
         "receipt_sha256": receipt_sha,
         "logs": kept_logs,
+        "log_integrity_failure": integrity,
         "extra": dict(extra or {}),
         "retained": True,
     }
@@ -608,6 +610,24 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
             "qualification_claim": "NONE",
         }
 
+    # Copy/verify logs BEFORE the receipt is digested: a copy mismatch is an
+    # explicit diagnostic in the receipt, never a silently dropped receipt.
+    integrity_failures = {}
+    for name, src in log_paths.items():
+        if src is None:
+            continue
+        dest = attempt_dir / "logs" / Path(name).name
+        copied = _copy_log(Path(src), dest)
+        expected = (run.get("log_sha256") or {}).get(dest.name)
+        if copied and expected is not None and copied != expected:
+            integrity_failures[dest.name] = {"source_sha256": expected,
+                                             "copy_sha256": copied}
+    if integrity_failures:
+        diagnostics["log_integrity_failure"] = integrity_failures
+        if status == "measured":
+            status = "failed"
+            failure_reason = "log_integrity_failure"
+
     receipt = remap_runner.build_receipt(
         plan,
         status=status,
@@ -621,7 +641,9 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
     )
     retain_case_artifacts(attempt_dir=attempt_dir, receipt=receipt,
                           logs=log_paths,
-                          expected_logs=run.get("log_sha256"))
+                          expected_logs=run.get("log_sha256"),
+                          extra={"log_integrity_failure": integrity_failures}
+                          if integrity_failures else None)
     return receipt
 
 

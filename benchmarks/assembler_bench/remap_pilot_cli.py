@@ -475,7 +475,7 @@ def _watchdog_checker(path, *, config, graphroot, snapshot=None,
     """
     wall = clock or time.time
     observe = snapshot or proc.snapshot
-    initial = {"pending": True}
+    initial = {"pending": True, "identity": None}
 
     def live_check():
         try:
@@ -484,6 +484,10 @@ def _watchdog_checker(path, *, config, graphroot, snapshot=None,
                 snapshot=observe, wall=wall)
         except guard_errors.GuardExceeded as exc:
             raise ValueError("watchdog_checker_alive_" + exc.reason) from exc
+        authorized = initial["identity"]
+        if (authorized is not None
+                and (bound["starttime"], bound["pid_ns"]) != authorized):
+            raise ValueError("watchdog_checker_identity_drift")
         alive = json.loads(Path(config.watchdog_path).read_text())
         observed = observe().get(alive.get("pid"))
         if (observed is None
@@ -515,6 +519,7 @@ def _watchdog_checker(path, *, config, graphroot, snapshot=None,
         fresh = live_check()
         if (fresh["starttime"], fresh["pid_ns"]) != (starttime, pid_ns):
             raise ValueError("watchdog_checker_alive_mismatch")
+        initial["identity"] = (starttime, pid_ns)
         initial["pending"] = False
         return {"schema": WATCHDOG_CHECKER_SCHEMA, "ready": True,
                 "identity_bound": True, "pid_ns": pid_ns,

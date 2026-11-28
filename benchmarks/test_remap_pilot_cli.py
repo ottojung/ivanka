@@ -483,6 +483,29 @@ class RemapPilotCliTests(unittest.TestCase):
             checker()
         self.watchdog_path.write_text(original)
 
+    def test_checker_rejects_replacement_watchdog_identity(self):
+        checker = cli._watchdog_checker(
+            self.checker_file, config=self.config, graphroot=self.graphroot,
+            snapshot=lambda: self.snapshot)
+        self.assertTrue(checker()["ready"])
+        original = self.watchdog_path.read_text()
+        replacement_pid = self.identity["pid"] + 1 if "pid" in self.identity \
+            else os.getpid() + 1
+        fingerprint = [111, 222]
+        self.snapshot[replacement_pid] = {
+            "starttime": fingerprint[0], "pid_ns": fingerprint[1]}
+        replacement = {
+            "schema": "ivanka.watchdog-alive.v1",
+            "at_utc": time.time(),
+            "graphroot": self.graphroot,
+            "pid": replacement_pid,
+            "fingerprint": fingerprint,
+            "cmdline_sha": self.identity["cmdline_sha"]}
+        self.watchdog_path.write_text(json.dumps(replacement, sort_keys=True))
+        with self.assertRaisesRegex(ValueError, "identity_drift"):
+            checker()
+        self.watchdog_path.write_text(original)
+
     def test_execute_rejects_stale_alive_and_future_checker(self):
         original = self.watchdog_path.read_text()
         alive = json.loads(original)

@@ -15,11 +15,33 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fail_closed_guard import (disk, lease, p1_harness, p1_helper, proc, stop,
-                               teardown, tree, watch)
-from fail_closed_guard.errors import GuardExceeded
+                               teardown, tree, watch, watchdog)
+from fail_closed_guard.errors import GuardExceeded, TeardownError
 
 CID = "a" * 64
 CID_B = "b" * 64
+
+
+class PollLauncher:
+    """Injected poll seam (never an exact returned handle to signal)."""
+
+    def poll(self):
+        return None
+
+
+class LauncherHandle:
+    """Exact spawn result with a real PGID identity and reap seam."""
+
+    def __init__(self, pid=400):
+        self.pid = pid
+        self.waited = []
+
+    def poll(self):
+        return None
+
+    def wait(self, timeout=None):
+        self.waited.append(timeout)
+        return 0
 
 
 def rec(pid, ppid, start, ns, rss, cmd="x", cgroup="0::/"):
@@ -311,7 +333,9 @@ class P1HarnessLifecycleTests(unittest.TestCase):
 
     def _run(self, *, owner="real-owner", spawn=None, attestation=None,
              disk_usage=None, lock=None, watchdog_ready=None, lock_path=None,
-             deadline_utc=None):
+             deadline_utc=None, clock=None, sleep=None, launcher=None,
+             wall_seconds=30, interval=0.5, running=None, snapshot=None,
+             bind_container=None, stop_cid=None):
         ticks = iter([True, False])
         return p1_harness.run_prospective(
             owner=owner, lease_root=self.root, stop_path=self.stop_path,
@@ -324,12 +348,18 @@ class P1HarnessLifecycleTests(unittest.TestCase):
                             else watchdog_ready),
             disk_reserve_bytes=p1_harness.DEFAULT_RESERVE_BYTES,
             disk_usage=disk_usage or self._usage(),
-            limit=4_000_000, wall_seconds=30, deadline_utc=deadline_utc,
-            running=lambda: next(ticks, None) is not None,
-            measure=lambda: True, snapshot=lambda: self.table,
-            clock=lambda: 0, sleep=lambda _: None,
-            attestation=attestation, bind_container=self._binder,
-            stop_cid=self._stopper)
+            limit=4_000_000, wall_seconds=wall_seconds,
+            deadline_utc=deadline_utc,
+            running=running or (lambda: next(ticks, None) is not None),
+            measure=lambda: True,
+            snapshot=snapshot if snapshot is not None else (lambda: self.table),
+            clock=clock if clock is not None else (lambda: 0),
+            sleep=sleep if sleep is not None else (lambda _: None),
+            attestation=attestation,
+            bind_container=(self._binder if bind_container is None
+                            else bind_container),
+            stop_cid=self._stopper if stop_cid is None else stop_cid,
+            launcher=launcher, interval=interval)
 
     def test_pre_spawn_order_watchdog_disk_then_spawn_then_bind(self):
         outcome = self._run()
@@ -438,6 +468,647 @@ class P1HarnessLifecycleTests(unittest.TestCase):
         self.assertEqual(result["rss_sample_scope"],
                          "whole_container_process_tree")
         self.assertEqual(result["method"], "caller-method")
+
+    def test_delayed_cidfile_binds_after_async_write(self):
+        cidfile_holder = {}
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            cidfile_holder["path"] = cidfile
+            # Podman writes --cidfile asynchronously; simulate delayed write.
+
+        class Proc:
+            def poll(self):
+                return None
+
+        now = [0.0]
+
+        def clock():
+            return now[0]
+
+        def sleep(seconds):
+            now[0] += seconds
+            if now[0] >= 0.5 and "path" in cidfile_holder:
+                Path(cidfile_holder["path"]).write_text(CID + "\n")
+
+        with patch("fail_closed_guard.p1_harness.natural_exit.wait_and_attest",
+                   return_value={"cid": CID, "launcher_result": 0,
+                                 "natural_exit_confirmed": True}):
+            outcome = self._run(spawn=spawn, launcher=Proc(), clock=clock,
+                                sleep=sleep, wall_seconds=30)
+        self.assertEqual(outcome["status"], "completed")
+        self.assertEqual(self.calls["bind"], [CID])
+        self.assertGreaterEqual(len(self.calls["watchdog"]), 2)
+        self.assertGreaterEqual(len(self.calls["disk"]), 2)
+
+    def test_launcher_exit_before_cid_fails_closed(self):
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+
+        class Proc:
+            def poll(self):
+                return 1
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=Proc())
+        self.assertEqual(caught.exception.reason, "binding_unavailable")
+        self.assertEqual(self.calls["bind"], [])
+        self.assertEqual(self.calls["stop"], [])
+        self.assertTrue(any(e.get("event") == "bind_unavailable"
+                            for e in lease.events(self.root)))
+        self.assertTrue(any(e.get("state") == "active"
+                            for e in lease.events(self.root)))
+
+    def test_malformed_cidfile_fails_closed_without_retry(self):
+        sleeps = []
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            Path(cidfile).write_text("not-a-cid\n")
+
+        class Proc:
+            def poll(self):
+                return None
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=Proc(),
+                      sleep=lambda s: sleeps.append(s))
+        self.assertEqual(caught.exception.reason, "binding_unavailable")
+        self.assertEqual(sleeps, [])
+        self.assertEqual(self.calls["bind"], [])
+        self.assertEqual(self.calls["stop"], [])
+
+    def test_symlink_cidfile_fails_closed_without_retry(self):
+        sleeps = []
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            target = Path(self.root) / "target.cid"
+            target.write_text(CID + "\n")
+            os.symlink(target, cidfile)
+
+        class Proc:
+            def poll(self):
+                return None
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=Proc(),
+                      sleep=lambda s: sleeps.append(s))
+        self.assertEqual(caught.exception.reason, "binding_unavailable")
+        self.assertEqual(sleeps, [])
+        self.assertEqual(self.calls["bind"], [])
+
+    def test_bind_wait_deadline_fails_closed(self):
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+
+        class Proc:
+            def poll(self):
+                return None
+
+        now = [0.0]
+
+        def clock():
+            return now[0]
+
+        def sleep(s):
+            now[0] += s
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=Proc(), clock=clock, sleep=sleep,
+                      wall_seconds=1, interval=0.2)
+        self.assertEqual(caught.exception.reason, "binding_unavailable")
+        self.assertEqual(self.calls["bind"], [])
+        self.assertEqual(self.calls["stop"], [])
+
+    def test_bind_wait_heartbeat_failure_fails_closed(self):
+        class BadEmitter:
+            def __init__(self, *a, **k):
+                pass
+
+            def before_spawn(self):
+                pass
+
+            def refresh(self):
+                raise RuntimeError("disk full")
+
+            def bound(self, cid):
+                pass
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+
+        class Proc:
+            def poll(self):
+                return None
+
+        with patch("fail_closed_guard.p1_harness.heartbeat.Emitter", BadEmitter):
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(spawn=spawn, launcher=Proc())
+        self.assertEqual(caught.exception.reason, "heartbeat_unavailable")
+        self.assertEqual(self.calls["bind"], [])
+
+    def test_bind_wait_watchdog_failure_fails_closed(self):
+        calls = {"n": 0}
+
+        def checker():
+            calls["n"] += 1
+            if calls["n"] >= 2:
+                return {"ready": False, "identity_bound": True}
+            return {"ready": True, "identity_bound": True, "pid_ns": 7,
+                    "starttime": 5, "cid": CID}
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+
+        class Proc:
+            def poll(self):
+                return None
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=Proc(), watchdog_ready=checker)
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        self.assertEqual(self.calls["bind"], [])
+
+    def test_bind_wait_stop_owner_change_fails_closed(self):
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+
+        class Proc:
+            def poll(self):
+                return None
+
+        now = [0.0]
+
+        def clock():
+            return now[0]
+
+        def sleep(s):
+            now[0] += s
+            self.stop_path.write_text("other-owner\n")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=Proc(), clock=clock, sleep=sleep,
+                      wall_seconds=30)
+        self.assertEqual(caught.exception.reason, "stop_owner_unauthorized")
+        self.assertEqual(self.calls["bind"], [])
+
+    def test_bind_wait_disk_reserve_failure_fails_closed(self):
+        calls = {"n": 0}
+
+        def usage(_):
+            calls["n"] += 1
+            free = 40_000_000_000 if calls["n"] < 2 else 99
+            return DiskHelper(free=free)
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+
+        class Proc:
+            def poll(self):
+                return None
+
+        now = [0.0]
+
+        def clock():
+            return now[0]
+
+        def sleep(s):
+            now[0] += s
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=Proc(), clock=clock, sleep=sleep,
+                      disk_usage=usage, wall_seconds=30)
+        self.assertEqual(caught.exception.reason, "reserve_shortfall")
+        self.assertEqual(self.calls["bind"], [])
+
+    def test_delayed_cid_bind_failure_tears_down_exact_cid(self):
+        cidfile_holder = {}
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            cidfile_holder["path"] = cidfile
+
+        class Proc:
+            def poll(self):
+                return None
+
+        now = [0.0]
+
+        def clock():
+            return now[0]
+
+        def sleep(s):
+            now[0] += s
+            if "path" in cidfile_holder and not Path(
+                    cidfile_holder["path"]).exists():
+                Path(cidfile_holder["path"]).write_text(CID + "\n")
+
+        def bad_binder(cid, env, snapshot=None):
+            self.calls["bind"].append(cid)
+            raise GuardExceeded("identity_lost")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=Proc(), clock=clock, sleep=sleep,
+                      bind_container=bad_binder)
+        self.assertEqual(caught.exception.reason, "identity_lost")
+        self.assertEqual(self.calls["bind"], [CID])
+        self.assertEqual(self.calls["stop"], [CID])
+
+
+class P1HarnessStartupAbortTests(P1HarnessLifecycleTests):
+    """Post-spawn failures never abandon a live exact CID or release a lease."""
+
+    def spawn_with_cid(self):
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            Path(cidfile).write_text(CID + "\n")
+        return spawn
+
+    def abort_events(self):
+        return [event for event in lease.events(self.root)
+                if event.get("event") == "startup_abort"]
+
+    def assert_no_release(self):
+        journal = lease.events(self.root)
+        self.assertNotIn("released", [e.get("state") for e in journal])
+        self.assertTrue(any(e.get("state") == "active" for e in journal))
+
+    def ready_then_unready(self):
+        return iter([
+            {"ready": True, "identity_bound": True, "pid_ns": 7,
+             "starttime": 5, "cid": CID},
+            {"ready": False, "identity_bound": True},
+        ])
+
+    def test_stop_loss_after_cid_write_removes_exact_cid(self):
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            Path(cidfile).write_text(CID + "\n")
+            self.stop_path.write_text("other-owner\n")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=PollLauncher())
+        self.assertEqual(caught.exception.reason, "stop_owner_unauthorized")
+        self.assertEqual(self.calls["bind"], [])
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assertTrue(event["teardown"]["fresh_absence_check"])
+        self.assertEqual(event["lease_state"], "active_unreleased")
+        self.assert_no_release()
+
+    def test_watchdog_loss_after_cid_write_removes_exact_cid(self):
+        states = self.ready_then_unready()
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=self.spawn_with_cid(), launcher=PollLauncher(),
+                      watchdog_ready=lambda: next(states))
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assertEqual(event["lease_state"], "active_unreleased")
+        self.assert_no_release()
+
+    def test_disk_loss_after_cid_write_removes_exact_cid(self):
+        calls = {"n": 0}
+
+        def usage(_):
+            calls["n"] += 1
+            return DiskHelper(free=40_000_000_000 if calls["n"] == 1 else 99)
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=self.spawn_with_cid(), launcher=PollLauncher(),
+                      disk_usage=usage)
+        self.assertEqual(caught.exception.reason, "reserve_shortfall")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_deadline_loss_after_cid_write_removes_exact_cid(self):
+        values = iter([0.0, 40.0])
+
+        def clock():
+            return next(values, 40.0)
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=self.spawn_with_cid(), launcher=PollLauncher(),
+                      clock=clock, wall_seconds=30)
+        self.assertEqual(caught.exception.reason, "binding_unavailable")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["reason"], "binding_unavailable")
+        self.assertTrue(any(e.get("event") == "bind_unavailable"
+                            and e.get("detail") == "deadline"
+                            for e in lease.events(self.root)))
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_no_late_cid_reaps_only_exact_launcher_group(self):
+        handle = LauncherHandle(pid=401)
+        states = self.ready_then_unready()
+        bound = {"pgid": 401, "pid": 401, "stable": True,
+                 "fingerprint": [5, 7]}
+        def killpg(pgid, sig):
+            if sig == 0:
+                raise ProcessLookupError  # exact group proved gone
+            return None
+
+        with patch("fail_closed_guard.build.bind_launcher",
+                   return_value=bound) as bind_launcher, \
+                patch("fail_closed_guard.build.os.killpg",
+                      side_effect=killpg) as killpg_mock:
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(spawn=lambda cidfile, env: handle,
+                          watchdog_ready=lambda: next(states))
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        self.assertEqual(bind_launcher.call_count, 2)  # capture and reverify
+        self.assertTrue(all(call.args == (401,)
+                            and call.kwargs == {"snapshot": self.table}
+                            for call in bind_launcher.call_args_list))
+        self.assertEqual([call.args[0] for call in killpg_mock.call_args_list],
+                         [401, 401])
+        self.assertEqual(handle.waited, [5])
+        self.assertEqual(self.calls["stop"], [])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["late_cid"], "absent")
+        self.assertEqual(event["late_cid_after_reap"], "absent")
+        self.assertEqual(event["launcher_group"]["process_group"], 401)
+        self.assertNotIn("cid", event)
+        self.assert_no_release()
+
+    def test_launcher_poll_fault_during_abort_keeps_original_failure(self):
+        class BrokenHandle(LauncherHandle):
+            def poll(self):
+                raise RuntimeError("launcher observer unavailable")
+
+        states = self.ready_then_unready()
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=lambda cidfile, env: BrokenHandle(pid=403),
+                      watchdog_ready=lambda: next(states))
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        event = self.abort_events()[-1]
+        self.assertIn("launcher observer unavailable",
+                      event["launcher_teardown_error"])
+        self.assert_no_release()
+
+    def test_late_cid_after_launcher_reap_is_removed_by_exact_cid(self):
+        handle = LauncherHandle(pid=402)
+        holder = {}
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            holder["cidfile"] = cidfile
+            return handle
+
+        def reap(_bound, _handle):
+            Path(holder["cidfile"]).write_text(CID + "\n")
+            return {"process_group": 402, "stopped": True}
+
+        states = self.ready_then_unready()
+        with patch("fail_closed_guard.build.bind_launcher",
+                   return_value={"pgid": 402}), \
+                patch("fail_closed_guard.build.stop_group", side_effect=reap):
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(spawn=spawn,
+                          watchdog_ready=lambda: next(states))
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_failed_exact_teardown_is_evidence_and_never_releases(self):
+        states = self.ready_then_unready()
+
+        def bad_stop(cid):
+            self.calls["stop"].append(cid)
+            raise TeardownError("podman rm failed")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=self.spawn_with_cid(), launcher=PollLauncher(),
+                      watchdog_ready=lambda: next(states), stop_cid=bad_stop)
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["teardown_result"], "unproven")
+        self.assertIn("podman rm failed", event["teardown_error"])
+        self.assert_no_release()
+        evidence = watchdog.read_evidence(self.root)
+        self.assertTrue(any(e.get("reason") == "watchdog_unbound"
+                            and e.get("result") == "fail_closed"
+                            for e in evidence))
+
+    def test_unproven_teardown_proof_never_releases(self):
+        states = self.ready_then_unready()
+
+        def unproven_stop(cid):
+            self.calls["stop"].append(cid)
+            return {"cid": cid, "container_removed": True}
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=self.spawn_with_cid(), launcher=PollLauncher(),
+                      watchdog_ready=lambda: next(states),
+                      stop_cid=unproven_stop)
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        event = self.abort_events()[-1]
+        self.assertEqual(event["teardown_result"], "unproven")
+        self.assertIn("teardown_unverified", str(event["teardown_error"]))
+        self.assert_no_release()
+
+    def test_invalid_interval_refused_before_spawn(self):
+        for bad in (0, -0.1, 1.5, True, float("nan")):
+            with self.subTest(interval=bad):
+                with self.assertRaises(GuardExceeded) as caught:
+                    self._run(interval=bad)
+                self.assertEqual(caught.exception.reason, "invalid_config")
+                self.assertEqual(self.calls["spawn"], [])
+                self.assertEqual(lease.events(self.root), [])
+
+    def test_cid_wait_capped_at_watchdog_startup_grace(self):
+        # The shared total budget is deliberately huge; only the reviewed
+        # watchdog startup grace from durable acquisition may stop the wait.
+        with patch.object(watchdog, "DEFAULT_STARTUP_BIND_GRACE", 0.0):
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(spawn=lambda cidfile, env: None,
+                          launcher=PollLauncher(), wall_seconds=2400)
+        self.assertEqual(caught.exception.reason, "binding_unavailable")
+        self.assertEqual(self.calls["stop"], [])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["reason"], "binding_unavailable")
+        self.assertTrue(any(e.get("event") == "bind_unavailable"
+                            and e.get("detail") == "deadline"
+                            for e in lease.events(self.root)))
+        self.assert_no_release()
+
+    def test_ownership_fault_with_known_cid_never_tears_down(self):
+        ident = "p1-ownership-fault"
+        cidfile = self.root / "cidfiles" / "ownership.cid"
+        cidfile.parent.mkdir(parents=True, exist_ok=True)
+        lease.acquire(self.root, ident, "pilot", owner="real-owner",
+                      cidfile=str(cidfile))
+        for problem in ("journal_unavailable", "owner_mismatch",
+                        "cidfile_mismatch", "cid_mismatch"):
+            with self.subTest(problem=problem):
+                with patch("fail_closed_guard.p1_harness._late_cid",
+                           return_value=(None, problem)):
+                    evidence = p1_harness._startup_abort(
+                        self.root, ident, "real-owner", str(cidfile),
+                        GuardExceeded("watchdog_unbound"),
+                        stopper=self._stopper, snapshot=lambda: self.table,
+                        handle=None, known_cid=CID)
+                self.assertEqual(evidence["late_cid"], problem)
+                self.assertNotIn("cid", evidence)
+        self.assertEqual(self.calls["stop"], [])
+
+    def test_known_cid_survives_cidfile_disappearing_after_read(self):
+        holder = {}
+
+        def spawn(cidfile, env):
+            holder["cidfile"] = cidfile
+            Path(cidfile).write_text(CID + "\n")
+
+        def bad_binder(cid, env, snapshot=None):
+            Path(holder["cidfile"]).unlink()
+            raise GuardExceeded("identity_lost")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=PollLauncher(),
+                      bind_container=bad_binder)
+        self.assertEqual(caught.exception.reason, "identity_lost")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertNotIn("late_cid", event)
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_late_cid_after_launcher_exit_is_removed_by_exact_cid(self):
+        holder = {}
+
+        class ExitedLauncher(LauncherHandle):
+            def poll(self):
+                holder["polls"] = holder.get("polls", 0) + 1
+                if holder["polls"] >= 2:
+                    Path(holder["cidfile"]).write_text(CID + "\n")
+                return 0
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            holder["cidfile"] = cidfile
+            return ExitedLauncher(pid=405)
+
+        states = self.ready_then_unready()
+        with patch("fail_closed_guard.build.bind_launcher",
+                   return_value={"pgid": 405}) as bind_launcher, \
+                patch("fail_closed_guard.build.os.killpg") as killpg:
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(spawn=spawn,
+                          watchdog_ready=lambda: next(states))
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        bind_launcher.assert_not_called()  # launcher exited before capture
+        killpg.assert_not_called()
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertIs(event["launcher_alive"], False)
+        self.assertEqual(event["late_cid"], "absent")
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_spawn_error_after_cid_write_removes_exact_cid(self):
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            Path(cidfile).write_text(CID + "\n")
+            raise RuntimeError("launcher failed after writing cid")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn)
+        self.assertEqual(caught.exception.reason, "spawn_failed")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["reason"], "spawn_failed")
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_journal_cid_conflict_blocks_known_cid_fallback(self):
+        ident = "p1-journal-conflict"
+        cidfile = self.root / "cidfiles" / "journal.cid"
+        cidfile.parent.mkdir(parents=True, exist_ok=True)
+        lease.acquire(self.root, ident, "pilot", cid=CID_B, owner="real-owner",
+                      cidfile=str(cidfile))
+        evidence = p1_harness._startup_abort(
+            self.root, ident, "real-owner", str(cidfile),
+            GuardExceeded("watchdog_unbound"), stopper=self._stopper,
+            snapshot=lambda: self.table, handle=None, known_cid=CID)
+        self.assertEqual(self.calls["stop"], [])
+        self.assertEqual(evidence["late_cid"], "cid_mismatch")
+        self.assertNotIn("cid", evidence)
+
+    def test_malformed_or_symlinked_cidfile_blocks_known_cid_fallback(self):
+        base = self.root / "cidfiles"
+        base.mkdir(parents=True, exist_ok=True)
+        for label, prepare in (
+                ("malformed", lambda p: p.write_text("not-a-cid\n")),
+                ("symlink", lambda p: p.symlink_to(self.root / "other.cid"))):
+            with self.subTest(label=label):
+                ident = "p1-" + label
+                cidfile = base / (label + ".cid")
+                prepare(cidfile)
+                lease.acquire(self.root, ident, "pilot", owner="real-owner",
+                              cidfile=str(cidfile))
+                evidence = p1_harness._startup_abort(
+                    self.root, ident, "real-owner", str(cidfile),
+                    GuardExceeded("watchdog_unbound"), stopper=self._stopper,
+                    snapshot=lambda: self.table, handle=None, known_cid=CID)
+                self.assertEqual(evidence["late_cid"],
+                                 "cidfile_unavailable")
+                self.assertNotIn("cid", evidence)
+        self.assertEqual(self.calls["stop"], [])
+
+    def test_late_recheck_respects_known_cid_mismatch(self):
+        ident = "p1-known-mismatch"
+        cidfile = self.root / "cidfiles" / "mismatch.cid"
+        cidfile.parent.mkdir(parents=True, exist_ok=True)
+        cidfile.write_text(CID_B + "\n")
+        lease.acquire(self.root, ident, "pilot", cid=CID_B, owner="real-owner",
+                      cidfile=str(cidfile))
+        evidence = p1_harness._startup_abort(
+            self.root, ident, "real-owner", str(cidfile),
+            GuardExceeded("watchdog_unbound"), stopper=self._stopper,
+            snapshot=lambda: self.table, handle=None, known_cid=CID)
+        self.assertEqual(evidence["late_cid"], "cid_mismatch")
+        self.assertEqual(evidence["late_cid_after_reap"], "cid_mismatch")
+        self.assertNotIn("cid", evidence)
+        self.assertEqual(self.calls["stop"], [])
+
+    def test_launcher_group_reverify_mismatch_prevents_signal(self):
+        ident = "p1-reverify"
+        cidfile = self.root / "cidfiles" / "reverify.cid"
+        cidfile.parent.mkdir(parents=True, exist_ok=True)
+        lease.acquire(self.root, ident, "pilot", owner="real-owner",
+                      cidfile=str(cidfile))
+        captured = {"pgid": 407, "pid": 407, "fingerprint": [5, 7]}
+        fresh = {"pgid": 999, "pid": 999, "fingerprint": [9, 9]}
+        with patch("fail_closed_guard.build.bind_launcher",
+                   side_effect=[fresh]), \
+                patch("fail_closed_guard.build.stop_group") as stop_group:
+            evidence = p1_harness._startup_abort(
+                self.root, ident, "real-owner", str(cidfile),
+                GuardExceeded("watchdog_unbound"), stopper=self._stopper,
+                snapshot=lambda: self.table, handle=LauncherHandle(pid=407),
+                launcher_group=captured)
+        stop_group.assert_not_called()
+        self.assertIn("launcher_identity_lost",
+                      evidence["launcher_teardown_error"])
+        self.assertEqual(self.calls["stop"], [])
 
 
 if __name__ == "__main__":

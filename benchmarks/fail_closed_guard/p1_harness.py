@@ -29,8 +29,8 @@ import secrets
 import time
 from pathlib import Path
 
-from . import (binding, disk, heartbeat, lease, natural_exit, proc, startup,
-               stop, teardown, watch, watchdog_contract)
+from . import (binding, build, disk, heartbeat, lease, natural_exit, proc,
+               startup, stop, teardown, watch, watchdog, watchdog_contract)
 from .errors import GuardExceeded
 
 DEFAULT_RESERVE_BYTES = 32 * 1024 ** 3  # independent project filesystem reserve
@@ -207,6 +207,144 @@ def _bounded_deadline(caller_deadline, durable_cap):
     return min(float(caller_deadline), durable_cap)
 
 
+def _late_cid(lease_root, ident, owner, cidfile):
+    """Read a valid exact CID only from THIS lease's pinned cidfile.
+
+    Ownership is proven from the append-only lease journal (same active lease,
+    owner, mode and pinned path) before the safe file is read. Nothing is
+    discovered by container naming or listing, and a journal fault is never
+    downgraded into permission to signal or release.
+    """
+    try:
+        current = lease.latest(lease.events(lease_root)).get(str(ident))
+    except (GuardExceeded, OSError, ValueError):
+        return None, "journal_unavailable"
+    if current is None or current.get("state") != "active":
+        return None, "lease_inactive"
+    if str(current.get("owner")) != str(owner):
+        return None, "owner_mismatch"
+    if current.get("mode") != "pilot":
+        return None, "mode_mismatch"
+    if current.get("cidfile") != str(cidfile):
+        return None, "cidfile_mismatch"
+    journal_cid = current.get("cid")
+    try:
+        cid = binding.read_cid(cidfile)
+    except (GuardExceeded, OSError):
+        # A journal CID that was already attested conflicts with a CID that is
+        # now absent or unreadable. Never let a caller's prior observation
+        # override that conflict, and never treat a symlink or malformed file
+        # as a benign absence.
+        if journal_cid is not None:
+            return None, "cid_mismatch"
+        return None, ("absent" if binding.cidfile_absent(cidfile)
+                      else "cidfile_unavailable")
+    if journal_cid is not None and journal_cid != cid:
+        return None, "cid_mismatch"
+    return cid, None
+
+
+def _startup_abort(lease_root, ident, owner, cidfile, exc, *, stopper,
+                   snapshot, handle, known_cid=None, launcher_group=None):
+    """Fail-closed startup abort after a post-spawn failure.
+
+    A valid exact CID is torn down only after durable ownership is proved.
+    A CID read earlier from this lease's pinned cidfile may fill a genuinely
+    absent or unreadable file, but journal, lease, owner and CID mismatches
+    are terminal: a local observation never overrides a failed ownership
+    proof. With no CID, the exact launcher handle may be reaped only through
+    the process-group identity captured at spawn; rereading its PID here can
+    select a reused process. The pinned cidfile is rechecked after launcher
+    handling even when the launcher already exited, because Podman can write
+    the CID just before termination. No arbitrary PID is signalled, no lease
+    is released, and every outcome is durable evidence.
+    """
+    reason = exc.reason if isinstance(exc, GuardExceeded) else "startup_failure"
+    evidence = {
+        "event": "startup_abort", "lease_id": str(ident), "owner": str(owner),
+        "cidfile": str(cidfile), "reason": reason, "detail": str(exc)[:200],
+        "lease_state": "active_unreleased",
+    }
+    cid, problem = _late_cid(lease_root, ident, owner, cidfile)
+    if known_cid is not None and cid is None and problem == "absent":
+        # Only a genuinely absent pinned file may be filled by the exact CID
+        # read from that same path earlier. Malformed, symlinked and journal
+        # conflicting paths remain terminal.
+        cid, problem = known_cid, None
+    elif cid is not None and known_cid is not None and cid != known_cid:
+        cid, problem = None, "cid_mismatch"
+
+    def remove_exact(target):
+        try:
+            proof = stopper(target)
+            teardown.require_proof(proof, target)
+            evidence["teardown"] = proof
+            evidence["teardown_result"] = "proven"
+        except Exception as stop_exc:
+            evidence["teardown_error"] = str(stop_exc)[:200]
+            evidence["teardown_result"] = "unproven"
+
+    if cid is not None:
+        evidence["cid"] = cid
+        remove_exact(cid)
+    else:
+        evidence["late_cid"] = problem or "absent"
+        # Only the exact handle returned by spawn may be reaped. An injected
+        # poll seam is never a licence to signal a PID.
+        if (handle is not None and not isinstance(handle, bool)
+                and callable(getattr(handle, "poll", None))
+                and callable(getattr(handle, "wait", None))
+                and getattr(handle, "pid", None) is not None):
+            try:
+                if handle.poll() is not None:
+                    # The exact launcher is gone. Its PID may already be
+                    # reused, so no process group may be signalled here.
+                    evidence["launcher_alive"] = False
+                elif launcher_group is None:
+                    raise GuardExceeded("launcher_identity_unavailable")
+                else:
+                    # Re-derive the group from a fresh snapshot and require the
+                    # same identity immediately before any signal is sent.
+                    fresh = snapshot() if callable(snapshot) else snapshot
+                    current_group = build.bind_launcher(
+                        int(handle.pid), snapshot=fresh)
+                    if (current_group.get("pgid") != launcher_group.get("pgid")
+                            or current_group.get("fingerprint")
+                            != launcher_group.get("fingerprint")):
+                        raise GuardExceeded("launcher_identity_lost")
+                    if handle.poll() is not None:
+                        evidence["launcher_alive"] = False
+                    else:
+                        evidence["launcher_group"] = build.stop_group(
+                            launcher_group, handle)
+            except Exception as stop_exc:
+                evidence["launcher_teardown_error"] = str(stop_exc)[:200]
+        # A container can appear before or during launcher exit, so the pinned
+        # cidfile is rechecked on every no-CID abort path. A prior known CID
+        # mismatch is never bypassed by a later read of a different CID.
+        late, late_problem = _late_cid(lease_root, ident, owner, cidfile)
+        if late is not None and (known_cid is None or late == known_cid):
+            evidence["cid"] = late
+            remove_exact(late)
+        else:
+            evidence["late_cid_after_reap"] = (
+                "cid_mismatch" if late is not None and known_cid is not None
+                else late_problem or "absent")
+
+    # Explicit durable evidence before any caller is told the arm failed; no
+    # silent gap when teardown itself is unavailable or unproven.
+    try:
+        watchdog.blocked_evidence(
+            lease_root, ident, reason,
+            detail=(evidence.get("teardown_error")
+                    or evidence.get("launcher_teardown_error")
+                    or evidence.get("detail")))
+    except Exception as exc2:
+        evidence["watchdog_evidence_error"] = str(exc2)[:200]
+    _audit(lease_root, evidence)
+    return evidence
+
+
 def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                     env=None, lock_path=None, lock=None,
                     watchdog_ready=None, watchdog_path=None,
@@ -227,6 +365,11 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
     before the lease exists leaves no spurious active pending lease.
     """
     if not owner or running is None or measure is None:
+        raise GuardExceeded("invalid_config")
+    if (isinstance(interval, bool) or not isinstance(interval, (int, float))
+            or not math.isfinite(interval) or interval <= 0 or interval > 1):
+        # Same reviewed sampling bound as the watcher/monitor, before any
+        # lock, lease, heartbeat or spawn side effect.
         raise GuardExceeded("invalid_config")
     if launcher is not None and not callable(
             getattr(launcher, "poll", None)) and not callable(launcher):
@@ -258,6 +401,14 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         ident = "p1-%s-%s" % (str(owner), token)
         cidfile = pin_cidfile(lease_root, ident)
         lease.acquire(lease_root, ident, "pilot", owner=owner, cidfile=cidfile)
+        acquired = lease.acquisition_start(lease_root, ident)
+        if (not isinstance(acquired, (int, float))
+                or not math.isfinite(acquired)):
+            raise GuardExceeded("invalid_lease")
+        # The independent watchdog stops granting startup grace 120s after
+        # durable acquisition. Never wait past that boundary, even when the
+        # caller's wall/absolute budget is longer.
+        grace_deadline = acquired + watchdog.DEFAULT_STARTUP_BIND_GRACE
         # One absolute epoch deadline covers pre-spawn gates, bind and
         # sampling. A caller may shorten it but never extend the durable cap.
         durable_cap = watchdog_contract.durable_deadline(
@@ -275,25 +426,101 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         except Exception as exc:
             raise GuardExceeded("heartbeat_unavailable") from exc
 
+        stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))
         try:
             spawned = spawn(cidfile, env)
         except Exception as exc:
+            failure = GuardExceeded("spawn_failed")
             _audit(lease_root, {"event": "spawn_failed", "lease_id": ident,
                                 "owner": str(owner), "cidfile": cidfile,
                                 "detail": str(exc)[:200]})
-            raise GuardExceeded("spawn_failed") from exc
+            # A launcher that wrote its pinned cidfile before raising may
+            # already own a live container; it must not be abandoned.
+            _startup_abort(lease_root, ident, owner, cidfile, failure,
+                           stopper=stopper, snapshot=snapshot, handle=None)
+            raise failure from exc
 
-        # Exact CID comes only from the cidfile pinned to THIS lease. Bind it
-        # after inspecting, snapshotting and re-inspecting the exact CID; a
-        # changed init PID is terminal identity_lost with exact-CID teardown.
+        # Exact CID comes only from the cidfile pinned to THIS lease. Podman
+        # writes --cidfile asynchronously after spawn; only true absence of a
+        # safe cidfile may be retried while the exact launcher is still alive,
+        # within the shared finite monotonic/absolute total budget AND the
+        # watchdog's reviewed startup grace from durable acquisition. Every
+        # wait pass refreshes the controller heartbeat and re-verifies the
+        # live independent watchdog, STOP ownership and disk reserve. Any
+        # post-spawn failure goes through _startup_abort: a valid late CID is
+        # removed by exact CID with fresh absence proof, otherwise only the
+        # exact returned launcher group may be reaped, and no lease is ever
+        # released without proof.
+        tick = clock if clock is not None else time.monotonic
+        start = tick()
+        poll = (launcher.poll if callable(getattr(launcher, "poll", None))
+                else launcher)
+        if launcher is None and callable(getattr(spawned, "poll", None)):
+            launcher = spawned
+            poll = spawned.poll
+        # Only the exact handle returned by spawn may ever be reaped; an
+        # injected poll seam is never a licence to signal a PID.
+        owned_launcher = (
+            spawned if callable(getattr(spawned, "poll", None))
+            and callable(getattr(spawned, "wait", None)) else None)
+        # Bind the launcher's process-group identity now, while the exact
+        # handle just returned by spawn is still live. Reading handle.pid in
+        # the abort path could resolve a PID that has since been reused.
+        launcher_group = None
+        if (owned_launcher is not None
+                and callable(getattr(owned_launcher, "poll", None))
+                and getattr(owned_launcher, "pid", None) is not None):
+            try:
+                if owned_launcher.poll() is None:
+                    launcher_pid = int(owned_launcher.pid)
+                    if launcher_pid <= 0:
+                        raise GuardExceeded("invalid_launcher")
+                    table = snapshot() if callable(snapshot) else snapshot
+                    launcher_group = build.bind_launcher(
+                        launcher_pid, snapshot=table)
+            except Exception as capture_exc:
+                _audit(lease_root, {
+                    "event": "launcher_identity_unavailable",
+                    "lease_id": ident, "owner": str(owner),
+                    "detail": str(capture_exc)[:200]})
+        sleep_fn = sleep if sleep is not None else time.sleep
+        cid = None
         try:
-            cid = binding.read_cid(cidfile)
-        except GuardExceeded as exc:
-            _audit(lease_root, {"event": "bind_unavailable", "lease_id": ident,
-                                "owner": str(owner), "cidfile": cidfile})
-            raise exc
-        stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))
-        try:
+            while True:
+                remaining_mono = wall_seconds - (tick() - start)
+                remaining_epoch = deadline_utc - time.time()
+                remaining = min(remaining_mono, remaining_epoch,
+                                grace_deadline - time.time())
+                if remaining <= 0:
+                    _audit(lease_root, {"event": "bind_unavailable",
+                                        "lease_id": ident, "owner": str(owner),
+                                        "cidfile": cidfile,
+                                        "detail": "deadline"})
+                    raise GuardExceeded("binding_unavailable")
+                require_owned_stop(stop_path, owner)
+                try:
+                    emitter.refresh()
+                except Exception as exc:
+                    raise GuardExceeded("heartbeat_unavailable") from exc
+                require_watchdog_ready(checker=watchdog_ready,
+                                       path=watchdog_path,
+                                       graphroot=watchdog_graphroot,
+                                       wall=watchdog_wall,
+                                       snapshot=watchdog_snapshot)
+                disk.check_reserve(disk_path, reserve, usage=disk_usage)
+                try:
+                    cid = binding.read_cid(cidfile)
+                    break
+                except (GuardExceeded, OSError) as exc:
+                    launcher_alive = callable(poll) and poll() is None
+                    if not launcher_alive or not binding.cidfile_absent(
+                            cidfile):
+                        _audit(lease_root, {"event": "bind_unavailable",
+                                            "lease_id": ident,
+                                            "owner": str(owner),
+                                            "cidfile": cidfile})
+                        raise GuardExceeded("binding_unavailable") from exc
+                    sleep_fn(min(interval, remaining))
             pid_before = binding.inspect_pid(cid, env)
             table = snapshot() if callable(snapshot) else (
                 snapshot if snapshot is not None else proc.snapshot())
@@ -311,28 +538,34 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
             if list(bound.get("fingerprint") or []) != expected:
                 raise GuardExceeded("identity_lost")
         except Exception as exc:
+            _startup_abort(lease_root, ident, owner, cidfile, exc,
+                           stopper=stopper, snapshot=snapshot,
+                           handle=owned_launcher, known_cid=cid,
+                           launcher_group=launcher_group)
             reason = exc.reason if isinstance(exc, GuardExceeded) \
                 else "measurement_unavailable"
-            try:
-                stopper(cid)
-            except Exception:
-                pass
-            _audit(lease_root, {"event": "bind_failed", "lease_id": ident,
-                                "owner": str(owner), "cid": cid,
-                                "reason": reason})
             raise GuardExceeded(reason) from exc
 
         # The exact CID is now durably attached to the SAME pre-spawn lease.
-        lease.bind_cid(lease_root, ident, cid, owner=owner, cidfile=cidfile,
-                       pid=bound.get("pid"), fingerprint=bound.get("fingerprint"))
+        try:
+            lease.bind_cid(lease_root, ident, cid, owner=owner,
+                           cidfile=cidfile, pid=bound.get("pid"),
+                           fingerprint=bound.get("fingerprint"))
+        except Exception as exc:
+            _startup_abort(lease_root, ident, owner, cidfile, exc,
+                           stopper=stopper, snapshot=snapshot,
+                           handle=owned_launcher, known_cid=cid,
+                           launcher_group=launcher_group)
+            raise GuardExceeded("lease_journal_unavailable") from exc
         try:
             emitter.bound(cid)
         except Exception as exc:
-            try:
-                stopper(cid)
-            except Exception:
-                pass
-            raise GuardExceeded("heartbeat_unavailable") from exc
+            failure = GuardExceeded("heartbeat_unavailable")
+            _startup_abort(lease_root, ident, owner, cidfile, failure,
+                           stopper=stopper, snapshot=snapshot,
+                           handle=owned_launcher, known_cid=cid,
+                           launcher_group=launcher_group)
+            raise failure from exc
 
         def refresh_ready():
             # The controller keeps its own heartbeat fresh and re-checks that
@@ -346,17 +579,9 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
                                    snapshot=watchdog_snapshot)
             return emitted
 
-        # One monotonic start covers the watcher and natural-exit attestation,
-        # so a lagging launcher cannot grant the arm a second wall budget.
-        tick = clock if clock is not None else time.monotonic
-        start = tick()
-        poll = (launcher.poll if callable(getattr(launcher, "poll", None))
-                else launcher)
-        if launcher is None and callable(getattr(spawned, "poll", None)):
-            # A spawn that returns its launcher handle lets the adapter attest
-            # the real integer result instead of relying on a lagging poll.
-            launcher = spawned
-            poll = spawned.poll
+        # The one monotonic start above covers bind-wait, watcher and
+        # natural-exit attestation; launcher/poll were resolved before spawn
+        # binding so the abort path and attestation use the same exact handle.
         kwargs = {}
         for key, value in (("clock", clock), ("sleep", sleep), ("audit", audit)):
             if value is not None:

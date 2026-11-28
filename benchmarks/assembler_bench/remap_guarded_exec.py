@@ -12,6 +12,7 @@ No frozen source, image, result, registry or qualification input is changed.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -386,6 +387,32 @@ def run_guarded_case(plan: dict, original_manifest: dict, *, output_dir, attempt
         state["lease_state"] = "active_unreleased_or_unproven"
         state["status"] = "failed"
     state["log_paths"] = {LOG_NAMES[0]: str(stdout), LOG_NAMES[1]: str(stderr)}
+    # A failed pre-bind launch can copy logs before the child has exited and
+    # flushed. Prove the exact launcher exited (bounded), then hash the final
+    # bytes. Blind sleeps with a live unbound container are never used.
+    proc_handle = holder.get("proc")
+    if proc_handle is not None and proc_handle.poll() is None:
+        waiter = getattr(proc_handle, "wait", None)
+        if not callable(waiter):
+            state.update(status="failed", failure_reason="launcher_exit_unproven")
+        else:
+            try:
+                waiter(timeout=30)
+            except Exception as exc:
+                state.update(status="failed",
+                             failure_reason="launcher_exit_unproven:" +
+                             type(exc).__name__)
+    state["launcher_exited"] = (proc_handle is None
+                                or proc_handle.poll() is not None)
+    if not state["launcher_exited"]:
+        failure = str(state.get("failure_reason") or "")
+        state["failure_reason"] = (failure + ":launcher_exit_unproven")[:320] \
+            if failure else "launcher_exit_unproven"
+    log_hashes = {}
+    for path in (stdout, stderr):
+        if path.is_file():
+            log_hashes[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    state["log_sha256"] = log_hashes
     return state
 
 

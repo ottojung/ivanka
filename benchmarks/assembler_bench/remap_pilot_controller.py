@@ -427,7 +427,8 @@ def classify_execution(*, returncode: int | None, final_max_exists: bool,
 
 def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
                           logs: dict[str, str | None] | None = None,
-                          extra: dict[str, str] | None = None) -> dict:
+                          extra: dict[str, str] | None = None,
+                          expected_logs: dict[str, str] | None = None) -> dict:
     attempt_dir = Path(attempt_dir)
     attempt_dir.mkdir(parents=True, exist_ok=True)
     kept_logs = {}
@@ -437,6 +438,10 @@ def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
         dest = attempt_dir / "logs" / Path(name).name
         digest = _copy_log(Path(src), dest)
         if digest:
+            expected = (expected_logs or {}).get(dest.name)
+            if expected is not None and digest != expected:
+                raise ValueError(
+                    f"retained log digest mismatch: {dest.name}")
             kept_logs[dest.name] = digest
     receipt_path = attempt_dir / "receipt.json"
     receipt_sha = _write_json(receipt_path, receipt)
@@ -614,7 +619,9 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
         score=score,
         seconds=seconds if status == "measured" else None,
     )
-    retain_case_artifacts(attempt_dir=attempt_dir, receipt=receipt, logs=log_paths)
+    retain_case_artifacts(attempt_dir=attempt_dir, receipt=receipt,
+                          logs=log_paths,
+                          expected_logs=run.get("log_sha256"))
     return receipt
 
 

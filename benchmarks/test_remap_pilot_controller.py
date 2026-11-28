@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import os
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -713,6 +714,84 @@ class RealGuardedExecutionTests(unittest.TestCase):
                 scorer=lambda *a: self.fail("scorer ran without unmount"))
         self.assertEqual(receipt["status"], "failed")
         self.assertIsNone(receipt["score"])
+
+
+class LogDrainAndRetentionTests(unittest.TestCase):
+    """Failed pre-bind launches must hash drained logs, never racing bytes."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.case, self.plan = make_plan(self.root / "real", alias="R001",
+                                          cohort="real")
+        self.manifest = {
+            "schema": gexec.BINDING_SCHEMA,
+            "manifest_sha256": gexec.ORIGINAL_MANIFEST_SHA256,
+            "physical_manifest_sha256": "1" * 64,
+            "synthetic_cohort_sha256": "2" * 64,
+            "truth_opened": False,
+            "cases": [{"alias": "R001", "cohort": "real",
+                       "read_sha256": dict(self.plan["inputs"]["read_sha256"]),
+                       "source_verified": True}],
+        }
+
+    def test_guard_hashes_logs_only_after_child_exit(self):
+        attempt = self.root / "attempt"
+        attempt.mkdir()
+
+        def spawn(plan, cidfile, env, stdout, stderr, groot):
+            return subprocess.Popen(
+                ["/bin/sh", "-c", "printf late >&2"],
+                stdout=open(stdout, "wb"), stderr=open(stderr, "wb"),
+                start_new_session=True)
+
+        class Harness:
+            class ExclusiveLock:
+                def __init__(self, *args, **kwargs):
+                    pass
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    return False
+
+            @staticmethod
+            def run_prospective(**kwargs):
+                kwargs["spawn"](attempt / "cid", kwargs["env"])
+                raise RuntimeError("early-guard-stop")
+
+        usage = lambda target: SimpleNamespace(free=40 * 1024**3)
+        state = gexec.run_guarded_case(
+            self.plan, self.manifest,
+            output_dir=self.root / "output", attempt_dir=attempt,
+            owner="operator-test",
+            stop_path=self.root / "STOP", watchdog_ready=lambda: {
+                "ready": True, "pid_ns": 1, "starttime": 1},
+            guard_root=self.root, disk_path=self.root,
+            spawn=spawn, harness=Harness(), disk_usage=usage)
+        self.assertTrue(state["launcher_exited"])
+        self.assertEqual(state["log_sha256"]["launcher.stderr.log"],
+                         hashlib.sha256(b"late").hexdigest())
+
+    def test_retention_refuses_copied_log_hash_mismatch(self):
+        attempt = self.root / "attempt"
+        attempt.mkdir()
+        source = self.root / "launcher.stderr.log"
+        source.write_bytes(b"original bytes")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        manifest = ctl.retain_case_artifacts(
+            attempt_dir=attempt, receipt={"schema": "test"},
+            logs={"launcher.stderr.log": str(source)},
+            expected_logs={"launcher.stderr.log": digest})
+        self.assertEqual(manifest["logs"]["launcher.stderr.log"], digest)
+        (attempt / "logs" / "launcher.stderr.log").unlink()
+        with self.assertRaises(ValueError):
+            ctl.retain_case_artifacts(
+                attempt_dir=attempt, receipt={"schema": "test"},
+                logs={"launcher.stderr.log": str(source)},
+                expected_logs={"launcher.stderr.log": "0" * 64})
 
 
 if __name__ == "__main__":

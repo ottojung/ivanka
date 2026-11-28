@@ -461,6 +461,28 @@ class RemapPilotCliTests(unittest.TestCase):
                 self.assertFalse(report["executed"])
                 self.assertEqual(calls, [])
 
+    def test_checker_is_fresh_once_then_uses_live_alive_each_sample(self):
+        checker = cli._watchdog_checker(
+            self.checker_file, config=self.config, graphroot=self.graphroot,
+            snapshot=lambda: self.snapshot)
+        first = checker()
+        self.assertEqual((first["starttime"], first["pid_ns"]),
+                         (self.identity["fingerprint"][0],
+                          self.identity["fingerprint"][1]))
+        # A stale or removed operator file must not age out an armed case;
+        # the live watchdog record is verified independently every sample.
+        self._write_checker(at_utc=time.time() - 3600)
+        later = checker()
+        self.assertTrue(later["ready"])
+        self.assertGreaterEqual(later["at_utc"], first["at_utc"])
+        original = self.watchdog_path.read_text()
+        stale = json.loads(original)
+        stale["at_utc"] = time.time() - 3600
+        self.watchdog_path.write_text(json.dumps(stale, sort_keys=True))
+        with self.assertRaises(ValueError):
+            checker()
+        self.watchdog_path.write_text(original)
+
     def test_execute_rejects_stale_alive_and_future_checker(self):
         original = self.watchdog_path.read_text()
         alive = json.loads(original)

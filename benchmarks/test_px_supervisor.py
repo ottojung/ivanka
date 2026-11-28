@@ -13,6 +13,7 @@ from assembler_bench import px_retry_authorization as authz
 from assembler_bench import px_supervisor as sup
 
 ROOT = Path(__file__).resolve().parents[1]
+GUARD_FIXTURE = ROOT / "benchmarks" / "fixtures" / "px_guard_pins"
 REGISTRY = ROOT / "benchmarks/assembler_bench/exploratory_candidates.json"
 TOOLS = ("skesa", "minia")
 
@@ -276,13 +277,10 @@ class SupervisorTests(unittest.TestCase):
             sched.record_outcome(self.px, arm, None, "failure",
                                  failure_reason="measurement_unavailable",
                                  runner_receipt_sha256="b" * 64)
-        fixture = (Path(__file__).resolve().parent / "fixtures"
-                   / "px_guard_pins")
-        real_verify = guard_source.verify
-
-        def fixture_verify(root=None):
-            return real_verify(root=fixture)
-
+        # Hermetic guard identity: inject the pinned fixture module map instead
+        # of reading whatever deployment/control root this host happens to have.
+        guard_modules = json.loads(
+            (GUARD_FIXTURE / guard_source.IDENTITY_NAME).read_bytes())["sources"]
         calls, claims = [], []
         real_admit = sched.admit_arm
 
@@ -294,7 +292,7 @@ class SupervisorTests(unittest.TestCase):
         def spy_claim(root_arg, arm_arg):
             claims.append(sched.receipt_id(arm_arg))
 
-        with patch.object(guard_source, "verify", side_effect=fixture_verify):
+        with patch.object(guard_source, "verify", return_value=guard_modules):
             authz.authorize(self.px, arm)
             self.assertIsNotNone(authz.verify(self.px, arm))
             with (patch.object(sched, "admit_arm", side_effect=admit_then_stop),

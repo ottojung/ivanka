@@ -266,12 +266,15 @@ AMBIENT_CONTAINER_SELECTORS = ("CONTAINERS_CONF", "CONTAINERS_STORAGE_CONF",
                                "CONTAINERS_STORAGE_DRIVER", "CONTAINERS_ROOTLESS")
 
 
-# Prospective pin to the reviewed, MERGED PR535/PR553 combined guard. Deployment
-# is a separate operator action; this source pin must never imply readiness.
-# The previous live PR536 head is retained for old-root verification only: it is
-# not an alternative accepted identity and never bypasses a source or live check.
-PREVIOUS_REVIEWED_GUARD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
-REVIEWED_GUARD_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+# Prospective pin to the reviewed, MERGED guard source at signed integration
+# 1e510408 (PR592 quiescence on the PR579 guard base). Deployment is a separate
+# operator action; this source pin must never imply readiness. The immediately
+# previous live guard (165a86b3) and older PR536 guard (091f5627) are retained
+# for old-root verification and provenance only; neither is an alternative
+# accepted identity and neither bypasses a source or live check.
+LEGACY_REVIEWED_GUARD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
+PREVIOUS_REVIEWED_GUARD_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+REVIEWED_GUARD_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
 REVIEWED_GUARD_DIGESTS = {
     "natural_exit": ("fail_closed_guard/natural_exit.py",
                      "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6"),

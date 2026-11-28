@@ -10,7 +10,7 @@ Two explicit, non-self-referential identities are bound by reviewed source
 hashes and operator-attested manifests:
 
 * the immutable guard deployment checkout (``DEPLOYED_ROOT``) is the reviewed,
-  signed integration ``2889cf1c``. It may be staged as a git checkout or a COPY
+  signed integration ``1e510408``. It may be staged as a git checkout or a COPY
   image. If ``.git`` exists, HEAD is checked against ``DEPLOYED_HEAD``. In all
   cases the reviewed manifest and exact module-byte chain are required.
   ``DEPLOYED_EXPECTED`` binds those new bytes; ``EXPECTED`` remains the

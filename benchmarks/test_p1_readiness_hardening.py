@@ -143,13 +143,13 @@ class LiveFingerprintTests(unittest.TestCase):
         exp = w.default_expected()
         self.assertNotIn("WATCHDOG_CODE", exp)
         self.assertEqual(exp["watchdog_service_head"],
-                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+                         "1e5104082c4366f30c93fd759e3f46307a142e63")
         self.assertEqual(w.PREVIOUS_WATCHDOG_SERVICE_HEAD,
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(w.LEGACY_WATCHDOG_SERVICE_HEAD,
                          "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
         self.assertNotEqual(exp["watchdog_service_head"],
                             w.PREVIOUS_WATCHDOG_SERVICE_HEAD)
-        self.assertNotEqual(exp["watchdog_service_head"],
-                            "f861f25b6e62e1266a498340e7d3cf9a09a9087f")
 
     def test_probe_alive_checks_live_fingerprint(self):
         tmp = tempfile.TemporaryDirectory()
@@ -359,8 +359,10 @@ class LiveWatchdogCheckTests(unittest.TestCase):
 class ProspectiveGuardPinTests(unittest.TestCase):
     def test_reviewed_guard_head_pinned_source_only(self):
         proof = r.verify_guard_source_pins()
-        self.assertEqual(proof["head"], "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(proof["head"], "1e5104082c4366f30c93fd759e3f46307a142e63")
         self.assertEqual(r.PREVIOUS_REVIEWED_GUARD_HEAD,
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(r.LEGACY_REVIEWED_GUARD_HEAD,
                          "091f56275ae823cb3291b81dbdf016fcf16c3ea0")
         self.assertNotEqual(proof["head"], r.PREVIOUS_REVIEWED_GUARD_HEAD)
         self.assertTrue(proof["prospective"])
@@ -384,7 +386,7 @@ class ProspectiveGuardPinTests(unittest.TestCase):
         self.assertEqual(identity["source_commit"],
                          guard_source.DEPLOYED_HEAD)
         self.assertEqual(r.REVIEWED_GUARD_HEAD,
-                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+                         "1e5104082c4366f30c93fd759e3f46307a142e63")
         sources = identity["sources"]
         for name, (relative, digest) in r.REVIEWED_GUARD_DIGESTS.items():
             key = "benchmarks/" + relative

@@ -2,6 +2,7 @@
 pub(super) use super::additional;
 #[cfg(test)]
 pub(super) use super::Statistics;
+mod diversity;
 #[cfg(test)]
 mod tests;
 
@@ -50,11 +51,23 @@ pub(super) fn uniform(depth: &[u32]) -> bool {
 /// Conservative, reference-blind admission for a related component.
 ///
 /// `minimum` is one tenth of all discriminating pairs (with an absolute
-/// floor), so the extra component must be supported by a substantial share
-/// of the private evidence. Requiring at least one fifth of the candidate's
-/// own original pairs prevents a tiny private island from carrying a phase,
-/// and `uniform` excludes a tiled, gap-ridden candidate. Every input derives
-/// from read pairs and candidate 31-mers only; truth never reaches this rule.
-pub(super) fn qualifies(related: usize, minimum: usize, pairs: usize, depth: &[u32]) -> bool {
-    related >= minimum && related * 5 >= pairs && uniform(depth)
+/// floor). The raw pair count is preserved; distinct read-pair signatures
+/// and non-overlapping exclusive locus clusters are a lower-bound diversity
+/// guard. A single-locus genuine strain is not impossible when many distinct
+/// fragments support it, but ambiguous single-signature or overlapping-window
+/// evidence is withheld conservatively. Truth never reaches this rule.
+pub(super) fn qualifies(
+    related: usize,
+    minimum: usize,
+    pairs: usize,
+    stats: &super::Statistics,
+    selected: u16,
+    i: usize,
+) -> bool {
+    let (signatures, clusters) = diversity::diversity(stats, selected, i);
+    related >= minimum
+        && related * 5 >= pairs
+        && uniform(stats.depth.get(i).map_or(&[], Vec::as_slice))
+        && signatures >= 2
+        && (clusters >= 2 || signatures >= minimum)
 }

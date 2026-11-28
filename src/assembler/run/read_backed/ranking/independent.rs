@@ -34,10 +34,9 @@ pub(in super::super) fn additional(
                     return false;
                 }
                 let pairs = stats.pairs[i];
-                let depth = stats.depth.get(i).map_or(&[][..], Vec::as_slice);
                 let strong = counts[i] >= minimum && counts[i] * 5 >= pairs * 4
                     || balanced::qualifies(contigs, stats, selected, primary, i)
-                    || related::qualifies(related[i], related_minimum, pairs, depth);
+                    || related::qualifies(related[i], related_minimum, pairs, stats, selected, i);
                 private::qualifies(evidence[i], positions, strong)
             })
             .max_by_key(|&i| {

@@ -10,8 +10,8 @@ fn stats(masks: Vec<u16>, coverage: Vec<usize>) -> Statistics {
         pairs,
         coverage,
         pair_masks: masks,
-        exclusive_masks: Vec::new(),
         spans,
+        ..Statistics::blank(coverage.len())
     }
 }
 

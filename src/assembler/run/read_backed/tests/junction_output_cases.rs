@@ -18,9 +18,8 @@ fn join_is_replaced_by_two_native_flanks_and_no_bridge() {
         depth: vec![[vec![120; 1200], vec![4; 70], vec![120; 1200]].concat()],
         pairs: vec![4400],
         coverage: vec![4400],
-        pair_masks: vec![],
-        exclusive_masks: vec![],
         spans: vec![dense_spans()],
+        ..Statistics::blank(1)
     };
     let parts = output::component(std::slice::from_ref(&seq), &reads(), &stats, 0);
     assert_eq!(parts.len(), 2);
@@ -43,8 +42,7 @@ fn unrelated_high_coverage_components_without_cooccurring_pairs_stay_separate() 
         pairs: vec![4000, 4000],
         coverage: vec![2470, 2470],
         pair_masks: vec![1, 2],
-        exclusive_masks: vec![],
-        spans: vec![vec![], vec![]],
+        ..Statistics::blank(2)
     };
     for (chosen, expected) in [(0, &a), (1, &c)] {
         let parts = output::component(&[a.clone(), c.clone()], &reads(), &stats, chosen);

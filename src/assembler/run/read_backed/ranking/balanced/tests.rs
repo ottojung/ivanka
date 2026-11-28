@@ -16,9 +16,7 @@ fn stats(primary: u32, alt: u32, primary_pairs: usize, alt_pairs: usize) -> Stat
         depth: vec![vec![primary; POS], vec![alt; POS]],
         pairs: vec![primary_pairs, alt_pairs],
         coverage: vec![POS; 2],
-        pair_masks: Vec::new(),
-        exclusive_masks: Vec::new(),
-        spans: Vec::new(),
+        ..Statistics::blank(2)
     }
 }
 

@@ -173,9 +173,12 @@ def _archive_one(path, item, root):
             retention._regular_variant(meta)
             if codec.logical_digest(path, format=codec.SCRATCH_FORMAT) != expected:
                 raise ValueError("archived scratch changed")
+            # The pair was allocated by an earlier interrupted run; this run
+            # frees exactly the plain file's allocated bytes by unlinking it.
+            before = path.stat().st_blocks * 512
             path.unlink()
             retention._fsync_dir(path.parent)
-            return
+            return before
         retention._discard_partial_pair(path)
     _maintenance_headroom(root, retention._temp_bound(item["bytes"]))
     frame, proof = codec.prepare_scratch(path)

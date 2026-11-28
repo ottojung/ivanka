@@ -282,7 +282,7 @@ REVIEWED_GUARD_DIGESTS = {
     "p1_helper": ("fail_closed_guard/p1_helper.py",
                   "b950ff947da8144271d8f4f0064fe72b4d6b1a492591e36610b942a553f21a27"),
     "p1_harness": ("fail_closed_guard/p1_harness.py",
-                   "82c86684168fd1191d592fe9fe6a326a82e725b48841395730ae683ec8962a48"),
+                   "11c8fae10c220b7203756bf1ff72bda0facfed755d1a0992b62c11fc3b26ebfe"),
 }
 
 

@@ -468,5 +468,50 @@ class AttemptRetentionTests(unittest.TestCase):
         self.assert_untouched()
 
 
+    def test_rebound_foreign_cid_then_historical_close_refused(self):
+        self.rows[:] = [
+            {"schema": "ivanka.worker-lease.v1", "lease": self.lease,
+             "owner": self.lease, "state": "active", "cid": self.cid},
+            {"schema": "ivanka.worker-lease.v1", "lease": self.lease,
+             "owner": "foreign-owner", "state": "active", "cid": "1" * 64},
+            {"schema": "ivanka.worker-lease.v1", "lease": self.lease,
+             "owner": self.lease, "state": "released",
+             "cid": self.cid, "proof": self.proof},
+        ]
+        self.write_leases()
+        self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
+        self.assert_untouched()
+
+    def test_foreign_owner_with_different_cid_close_refused(self):
+        self.rows[-1]["owner"] = "foreign-owner"
+        self.rows[-1]["cid"] = "1" * 64
+        self.write_leases()
+        self.assertEqual(self.run_retire(True)["reclaimed_bytes"], 0)
+        self.assert_untouched()
+
+    def test_exact_rebind_after_foreign_active_is_accepted(self):
+        self.rows[:] = [
+            {"schema": "ivanka.worker-lease.v1", "lease": self.lease,
+             "owner": self.lease, "state": "active", "cid": self.cid},
+            {"schema": "ivanka.worker-lease.v1", "lease": self.lease,
+             "owner": "foreign-owner", "state": "active", "cid": "1" * 64},
+            {"schema": "ivanka.worker-lease.v1", "lease": self.lease,
+             "owner": self.lease, "state": "active", "cid": self.cid},
+            self.rows[-1],
+        ]
+        self.write_leases()
+        self.assertGreater(self.run_retire(True)["reclaimed_bytes"], 0)
+
+    def test_audit_non_finite_or_bool_timestamp_refused(self):
+        for stamp in (True, float("nan")):
+            bad = self._audit_bind_unavailable("p1-audit", "agent-a")
+            bad["at_utc"] = stamp
+            self.rows[:] = [self.rows[0], bad, self.rows[1]]
+            self.write_leases()
+            with self.assertRaises(ValueError):
+                retention._leases(self.root)
+        self.assert_untouched()
+
+
 if __name__ == "__main__":
     unittest.main()

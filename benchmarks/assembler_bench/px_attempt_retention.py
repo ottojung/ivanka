@@ -11,6 +11,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -132,13 +133,40 @@ def _leases(root):
             raise ValueError("unknown worker lease schema")
         ident = (record.get("lease") if event == "stop_retired"
                  else record.get("lease_id"))
+        stamp = record.get("at_utc")
+        owner = record.get("owner")
         if (not isinstance(ident, str) or not ident
-                or not isinstance(record.get("owner"), str)
-                or not isinstance(record.get("at_utc"), (int, float))
+                or not isinstance(owner, str) or not owner
+                or isinstance(stamp, bool) or not isinstance(stamp, (int, float))
+                or not math.isfinite(stamp)
                 or (event == "startup_abort"
                     and not isinstance(record.get("lease_state"), str))):
             raise ValueError("unknown worker lease schema")
     return records
+
+
+def _latest_active(rows):
+    """Replay lease.latest ownership semantics over pre-close rows only.
+
+    A close is ignored unless it matches the owner and CID of the current
+    active lease, so a later foreign/rebound active state remains authoritative
+    and a historical close cannot release it.
+    """
+    active = None
+    for _, row in rows:
+        state = row.get("state")
+        if state == "active":
+            active = row
+        elif state in ("released", "reconciled"):
+            if active is None:
+                continue
+            close_cid = row.get("cid")
+            active_cid = active.get("cid")
+            if (_owner_of(row) == _owner_of(active)
+                    and (close_cid is None or active_cid is None
+                         or close_cid == active_cid)):
+                active = None
+    return active
 
 
 def _bound_report(root, prior, reports, leases):
@@ -167,16 +195,17 @@ def _bound_report(root, prior, reports, leases):
     if not rows:
         raise ValueError("missing worker lease")
     line, last = rows[-1]
-    active = [(row_line, row) for row_line, row in rows[:-1]
-              if row.get("state") == "active" and row.get("cid") == cid]
     if (last.get("state") != "released" or last.get("cid") != cid
-            or not _absence(last.get("proof"), cid) or not active):
+            or not _absence(last.get("proof"), cid)):
         raise ValueError("worker lease not released for exact CID")
-    # Mirror lease.latest: a close is authorized only for the owner of the
-    # active lease and the exact bound CID. A foreign close never releases it.
-    owner = _owner_of(last)
-    if any(_owner_of(row) != owner for _, row in active):
-        raise ValueError("foreign owner lease close")
+    # The authoritative immediately-prior ownership state must be the exact
+    # active lease this close claims: a later foreign/rebound active row must
+    # not be ignored in favour of an older matching one.
+    active = _latest_active(rows[:-1])
+    if (active is None or active.get("state") != "active"
+            or active.get("cid") != cid
+            or _owner_of(active) != _owner_of(last)):
+        raise ValueError("foreign or rebound active lease state")
     return cid, {"launcher_report": _sha(path), "launcher_log": digest,
                  "released_lease": hashlib.sha256(line.encode()).hexdigest()}
 

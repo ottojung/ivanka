@@ -90,7 +90,7 @@ class GuardSourceIdentityTests(unittest.TestCase):
     def test_no_self_referential_commit_pin(self):
         self.assertFalse(hasattr(guard_source, "CONTROL_HEAD"))
         self.assertEqual(guard_source.DEPLOYED_HEAD,
-                         "1e5104082c4366f30c93fd759e3f46307a142e63")
+                         "b777f34976bb338ba3652239feffe99510326e44")
 
     def test_staged_git_checkout_head_is_checked(self):
         _init_git(self.deployed)

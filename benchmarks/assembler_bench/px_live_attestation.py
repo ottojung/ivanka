@@ -28,8 +28,8 @@ from . import px_guard_source as guard_source
 # The rollback guard is the previously deployed reviewed guard. Its 19-module
 # map is the control-compatible EXPECTED chain still verified by the unchanged
 # control checkout; a staged guard swap does not repin control verification.
-OLD_ROOT = "/workspace/ivanka-guard-pr535-staged-20261127"
-OLD_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+OLD_ROOT = "/workspace/ivanka-guard-pr592-candidate-1e510408-20261128"
+OLD_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
 NEW_ROOT = str(guard_source.DEPLOYED_ROOT)
 
 # The supervisor loads control code (px_execution, px_supervisor, retry and disk
@@ -55,10 +55,49 @@ S6_ROOT = Path("/run/s6/legacy-services")
 WATCHDOG_OPTION_NAMES = ("--storage-conf", "--stop", "--min-free", "--reserve",
                          "--rss-limit", "--wall-seconds", "--max-age")
 
-# Reviewed bytes of the live rollback guard (PR535, 19 modules). Kept as
-# explicit evidence for the pre-cutover phase; it is never used to attest the
-# new code. This is the same chain the live control checkout verifies.
-OLD_MODULES = dict(guard_source.EXPECTED)
+# Reviewed bytes of the live rollback guard (PR593 staged root, 19 modules).
+# Kept as explicit evidence for the pre-cutover phase; it is never used to
+# attest the new PR597 code. The control checkout stays at b8720600.
+OLD_MODULES = {
+    "benchmarks/assembler_bench/exploratory_runtime/monitor.py":
+        "b0bbefa221ff092acf33021b0203f2b07a912c250fc0893e8fdd59dad642293c",
+    "benchmarks/assembler_bench/exploratory_space.py":
+        "bffdc90b703475aeb68f31c2df4334cb36a8912ebaba806cd7baee4d2bc18943",
+    "benchmarks/fail_closed_guard/binding.py":
+        "1e764c6a358ddc3b58fe09aa0948d6309b00942936ac525d93ef17d19516e945",
+    "benchmarks/fail_closed_guard/build.py":
+        "4d01b152b5970b14d9084b1137af5c776b5b742fe257509c69038207c3a64119",
+    "benchmarks/fail_closed_guard/copy_overlay.py":
+        "7f4158ebf99af727aaa59528dabb5979624c5ce55ab2875c3f8a68764a25f53e",
+    "benchmarks/fail_closed_guard/copy_overlay_helper.py":
+        "8242d81c9c6b169dfbfac1b837ae9c23e1e3f1259190438871dee89dccdf0bc5",
+    "benchmarks/fail_closed_guard/identity.py":
+        "1feecc9e75e71c4bf54b2dbd960cc92886fa00cd9a564c7d220e90f4163aa973",
+    "benchmarks/fail_closed_guard/lease.py":
+        "02f9e4932ce01697a6baa6b3200673cf3df0d52f7be7292d657991a10184ac03",
+    "benchmarks/fail_closed_guard/natural_exit.py":
+        "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
+    "benchmarks/fail_closed_guard/orphans.py":
+        "6d5e7d3c62a2bdba7a15af2ea69b99b8c6674cab72996e660d39a148587e41b2",
+    "benchmarks/fail_closed_guard/proc.py":
+        "ee1438ba99b936a1a799913407e391f03bf90b0c22c89fd73a42570cdddef78a",
+    "benchmarks/fail_closed_guard/startup.py":
+        "80b07ce334fa99691ed0a89baf9aa803d4e67631be72c022188963f094ae7b6d",
+    "benchmarks/fail_closed_guard/watch.py":
+        "07356fc4b29e1e6bc5b11659048bc5437a70037a29dde197dd795540fd66da96",
+    "benchmarks/fail_closed_guard/watchdog.py":
+        "95f2877f356747aa7601261081ed76bd645d8065c488813025155d160e5da2c4",
+    "benchmarks/fail_closed_guard/watchdog_cli.py":
+        "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369",
+    "benchmarks/fail_closed_guard/watchdog_contract.py":
+        "6bede6e674d633caf503877af2bd3ca444d96846650ed56418bf21250e00076b",
+    "benchmarks/memory_guard/guard.py":
+        "6e096ffb7cae5014595a6aaa889beb2ed7d05172588556adb6a82ffa23e32dbe",
+    "benchmarks/memory_guard/proc.py":
+        "086ce9aca6d73703216e841d8e9b580cab6678e743f868d6e133a50ba0d69e72",
+    "benchmarks/memory_guard/signals.py":
+        "b5a4dc351da3fc9144bcfad7a26059a849e9c5a58980c26e3c004ad817d88c53",
+}
 
 PHASES = {
     "pre_cutover": {

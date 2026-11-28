@@ -272,9 +272,9 @@ AMBIENT_CONTAINER_SELECTORS = ("CONTAINERS_CONF", "CONTAINERS_STORAGE_CONF",
 # previous live guard (165a86b3) and older PR536 guard (091f5627) are retained
 # for old-root verification and provenance only; neither is an alternative
 # accepted identity and neither bypasses a source or live check.
-LEGACY_REVIEWED_GUARD_HEAD = "091f56275ae823cb3291b81dbdf016fcf16c3ea0"
-PREVIOUS_REVIEWED_GUARD_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
-REVIEWED_GUARD_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
+LEGACY_REVIEWED_GUARD_HEAD = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
+PREVIOUS_REVIEWED_GUARD_HEAD = "1e5104082c4366f30c93fd759e3f46307a142e63"
+REVIEWED_GUARD_HEAD = "b777f34976bb338ba3652239feffe99510326e44"
 REVIEWED_GUARD_DIGESTS = {
     "natural_exit": ("fail_closed_guard/natural_exit.py",
                      "9e7e4dda884896fa102e0d5af50d743780aa5617025698ea2574284b7af55daa"),

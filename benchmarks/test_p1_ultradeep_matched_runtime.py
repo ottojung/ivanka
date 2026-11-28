@@ -15,6 +15,30 @@ RECEIPT = (
 )
 
 
+OBSERVED_QUOTA = {
+    "value": "200000 100000", "origin": plan.KERNEL_QUOTA_ORIGINS[0],
+    "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
+    "source": "/sys/fs/cgroup/libpod-test.scope/cpu.max",
+    "pid": 4242, "cgroup": "0::/libpod-test.scope", "cid": "a" * 64,
+    "fingerprint": [5, 7], "leaf_value": "200000 100000",
+    "leaf_only": True, "effective_source": "/libpod-test.scope",
+    "chain": [{"path": "/libpod-test.scope", "raw": "200000 100000",
+               "value": "200000 100000", "status": "ok"}],
+    "chain_normalized": [["/libpod-test.scope", "200000 100000"]],
+    "leaf_status": "ok", "scope": "host_scope_proven",
+    "coverage": {"expected": 1, "read": 1, "missing": [],
+                 "unreadable": [], "complete": True},
+    "sample_identity": {"cid": "a" * 64, "pid": 4242,
+                        "fingerprint": [5, 7],
+                        "cgroup": "0::/libpod-test.scope",
+                        "chain_normalized": [["/libpod-test.scope",
+                                              "200000 100000"]]},
+}
+DIAGNOSTIC_OK = {"matched": True, "reasons": [],
+                "host_scope_proven": True,
+                "observed_value": "200000 100000"}
+
+
 def host(load: float = 1.0, cpu_max: str = "200000 100000",
          cpuset: str = "0-1", periods: int = 100, throttled: int = 0) -> dict:
     return {"loadavg": [load, load, load], "cpu_max": cpu_max,
@@ -25,14 +49,14 @@ def host(load: float = 1.0, cpu_max: str = "200000 100000",
 
 
 def attestation() -> dict:
-    """Truthful record: exact merged sources, still-old PR536 deployment."""
+    """Truthful record: exact merged sources and reviewed deployed guard pins."""
     return {
         "schema": plan.ATTESTATION_SCHEMA,
         "PR535": {"state": "merged", "head": plan.SOURCE_PINS["PR535"]["head"],
                   "merge_commit": plan.SOURCE_PINS["PR535"]["merge_commit"]},
         "PR536": {"state": "merged", "head": plan.SOURCE_PINS["PR536"]["head"],
                   "merge_commit": plan.SOURCE_PINS["PR536"]["merge_commit"]},
-        "deployed_sources": {"PR535": False, "PR536": True},
+        "deployed_sources": {"PR535": True, "PR536": True},
         "deployed_guard": {
             "source_head": plan.DEPLOYED_PINS["guard_source_head"],
             "root_head": plan.DEPLOYED_PINS["deployed_root_head"],
@@ -153,22 +177,23 @@ class HostEvidenceTest(unittest.TestCase):
 
 
 class GuardTest(unittest.TestCase):
-    def test_merged_only_attestation_stays_blocked(self) -> None:
+    def test_incomplete_attestation_stays_blocked(self) -> None:
         record = attestation()
-        for name in plan.SOURCE_PINS:
-            record[name] = {"state": "deployed", "head": plan.SOURCE_PINS[name]["head"]}
+        record["deployed_guard"]["watchdog_alive_fresh"] = False
+        record["deployed_guard"]["lease_clear"] = False
         with tempfile.TemporaryDirectory() as tmp:
             gate = plan.readiness(write_attestation(pathlib.Path(tmp), record))
         self.assertFalse(gate["ready"])
-        self.assertIn("PR535", gate["blocked_by"])
-        self.assertIn("PR536", gate["blocked_by"])
+        self.assertIn("deployed_guard", gate["blocked_by"])
+        self.assertIn("watchdog ALIVE not fresh", gate["reasons"])
+        self.assertIn("shared lease not clear", gate["reasons"])
 
-    def test_truthful_still_old_deployment_is_not_reported_ready(self) -> None:
+    def test_truthful_reviewed_deployed_guard_is_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             gate = plan.readiness(write_attestation(pathlib.Path(tmp)))
-        self.assertFalse(gate["ready"])
-        self.assertEqual(gate["blocked_by"], ["PR535"])
-        self.assertIn("PR535 merged source is still not deployed", gate["reasons"])
+        self.assertTrue(gate["ready"])
+        self.assertEqual(gate["blocked_by"], [])
+        self.assertEqual(gate["reasons"], [])
 
     def test_deployed_pins_are_separate_and_exact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -185,8 +210,8 @@ class GuardTest(unittest.TestCase):
                 lambda r: r["deployed_guard"].update(watchdog_alive_fresh=False),
                 lambda r: r["deployed_guard"].update(lease_clear=False),
                 lambda r: r["deployed_guard"].update(idle_boundary_attested=False),
-                lambda r: r["deployed_sources"].update(PR535=True),
-                lambda r: r["deployed_sources"].update(PR536=False),
+                lambda r: r["deployed_sources"].update(PR535=False),
+                lambda r: r["deployed_sources"].update(PR535="yes"),
                 lambda r: r.update(schema="wrong"),
             ):
                 record = attestation()
@@ -198,10 +223,10 @@ class GuardTest(unittest.TestCase):
                          "39317f021f4e5c00f5da859bcdcf755de4c6d353")
         self.assertEqual(plan.SOURCE_PINS["PR535"]["merge_commit"],
                          "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
+        self.assertEqual(plan.DEPLOYED_PINS["deployed_root_head"],
+                         "165a86b38c0bc29b4f8e0281a39ca59b909a6563")
         self.assertEqual(plan.DEPLOYED_PINS["px_service_head"],
-                         plan.DEPLOYED_PINS["deployed_root_head"])
-        self.assertNotEqual(plan.DEPLOYED_PINS["guard_source_head"],
-                            plan.DEPLOYED_PINS["deployed_root_head"])
+                         "b8720600c9f10e71472b2b55210badeabc257a81")
 
     def test_output_root_guards(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -216,13 +241,13 @@ class GuardTest(unittest.TestCase):
             with self.assertRaises(plan.Refusal):
                 plan.check_output_root(plan.PROTECTED_ROOTS[0] / "new-root")
 
-    def test_plan_is_inert_with_truthful_still_old_attestation(self) -> None:
+    def test_plan_is_inert_with_truthful_attested_deployed_guard(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp) / "out"
             attestation_path = write_attestation(pathlib.Path(tmp))
             built = plan.build_plan(RECEIPT, root, attestation=attestation_path)
-            self.assertFalse(built["dependencies"]["ready"])
-            self.assertEqual(built["dependencies"]["blocked_by"], ["PR535"])
+            self.assertTrue(built["dependencies"]["ready"])
+            self.assertEqual(built["dependencies"]["blocked_by"], [])
             self.assertEqual(built["execution"], "blocked")
             self.assertFalse(built["scientific_gates_changed"])
             self.assertFalse(built["formal_qualification"])
@@ -242,7 +267,9 @@ class EvidenceTest(unittest.TestCase):
             step, host(), host(load=1.1),
             {"timing_origin": "micall_in_container_monotonic_v1",
              "seconds": 836.2, "exit_code": 0},
-            sampled_rss_bytes=1_500_000_000, container_cpu_max="200000 100000")
+            sampled_rss_bytes=1_500_000_000, container_cpu_max="200000 100000",
+            requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA,
+            quota_diagnostic=DIAGNOSTIC_OK)
         self.assertEqual(record["sampled_peak_rss_bytes"], 1_500_000_000)
         self.assertEqual(record["cpu_quota"]["container_effective_cpus"], 2.0)
         self.assertTrue(plan.evidence_complete(record))
@@ -254,10 +281,16 @@ class EvidenceTest(unittest.TestCase):
 
     def test_incomplete_evidence_is_refused(self) -> None:
         step = {"case": "ultradeep-s006", "arm": "frozen"}
-        for rss, quota in ((None, "200000 100000"), (10, None), (True, "200000 100000")):
+        for rss, quota, observed in (
+            (None, "200000 100000", OBSERVED_QUOTA),
+            (10, None, OBSERVED_QUOTA),
+            (True, "200000 100000", OBSERVED_QUOTA),
+            (10, "200000 100000", None),
+        ):
             record = plan.arm_evidence_record(
                 step, host(), host(), {"seconds": 1.0, "exit_code": 0},
-                sampled_rss_bytes=rss, container_cpu_max=quota)
+                sampled_rss_bytes=rss, container_cpu_max=quota,
+                requested_cpu_max=quota, observed_cpu_quota=observed)
             self.assertFalse(plan.evidence_complete(record))
 
     def test_comparability_of_a_full_ab_ba_set(self) -> None:
@@ -266,7 +299,9 @@ class EvidenceTest(unittest.TestCase):
             records.append(plan.arm_evidence_record(
                 step, host(), host(load=1.1),
                 {"seconds": 100.0, "exit_code": 0},
-                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000"))
+                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
+                requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA,
+            quota_diagnostic=DIAGNOSTIC_OK))
         decision = plan.comparability_check(records)
         self.assertTrue(decision["comparable"])
         self.assertFalse(decision["abort"])
@@ -280,7 +315,9 @@ class EvidenceTest(unittest.TestCase):
                     step, host(load=load, throttled=throttled), host(load=load),
                     {"seconds": 100.0, "exit_code": 0},
                     sampled_rss_bytes=1_000_000_000,
-                    container_cpu_max="200000 100000"))
+                    container_cpu_max="200000 100000",
+                    requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA,
+            quota_diagnostic=DIAGNOSTIC_OK))
             return result
 
         self.assertTrue(plan.comparability_check(full(throttled=20))["abort"])
@@ -294,6 +331,23 @@ class EvidenceTest(unittest.TestCase):
         mixed[0]["host_after"] = host(load=0.2)
         self.assertTrue(plan.comparability_check(mixed)["abort"])
         self.assertTrue(plan.comparability_check(full()[:4])["abort"])
+
+    def test_comparability_rejects_missing_or_foreign_kernel_quota(self) -> None:
+        def records_for(observed):
+            return [plan.arm_evidence_record(
+                step, host(), host(), {"seconds": 1.0, "exit_code": 0},
+                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
+                requested_cpu_max="200000 100000", observed_cpu_quota=observed,
+                quota_diagnostic=DIAGNOSTIC_OK if observed else None)
+                for step in plan.alternating_schedule(("ultradeep-s006",))]
+
+        self.assertFalse(plan.comparability_check(
+            records_for(OBSERVED_QUOTA), cases=("ultradeep-s006",))["abort"])
+        for observed in (None, {"value": "200000 100000", "origin": "podman_hostconfig"}):
+            decision = plan.comparability_check(
+                records_for(observed), cases=("ultradeep-s006",))
+            self.assertTrue(decision["abort"])
+            self.assertTrue(any("kernel CPU quota" in r for r in decision["reasons"]))
 
 
 if __name__ == "__main__":

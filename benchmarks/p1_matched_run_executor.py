@@ -22,7 +22,9 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import time
@@ -60,24 +62,292 @@ def default_arm_runner(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     raise Refusal("no arm runner; live execution not authorized")
 
 
-def observe_container_cpu_max(env: dict[str, str], cid: str) -> str | None:
-    """Read live container CPU quota via podman inspect; None if unavailable."""
+REQUESTED_CPU_MAX = plan.COMPARABILITY["required_container_cpu_max"]
+CPU_MAX_ORIGIN_V2 = "kernel_cgroup_v2_cpu_max"
+CPU_MAX_ORIGIN_V1 = "kernel_cgroup_v1_cpu_cfs"
+KERNEL_QUOTA_ORIGINS = (CPU_MAX_ORIGIN_V2, CPU_MAX_ORIGIN_V1)
+
+# Host scope is never inferred from a /proc mount or a caller assertion; only
+# a separately reviewed, structured operator proof may set host_scope_proven.
+HOST_SCOPE_PROOF_SCHEMA = "ivanka.p1.host-cgroup-scope-proof.v1"
+
+
+def normalize_cpu_max(raw: str) -> str | None:
+    """Normalize a kernel cpu.max / CFS pair to the reviewed 'quota period' form."""
+    parts = raw.split()
+    if len(parts) != 2 or not parts[1].isdigit() or int(parts[1]) <= 0:
+        return None
+    if parts[0] == "max":
+        return "max " + parts[1]
+    if parts[0].isdigit():
+        return parts[0] + " " + parts[1]
+    return None
+
+
+def _quota_ratio(value: str) -> float | None:
+    quota, period = value.split()
+    if quota == "max":
+        return float("inf")
     try:
-        out = subprocess.run(
-            ["podman", "inspect", "--format",
-             "{{.HostConfig.CpuQuota}} {{.HostConfig.CpuPeriod}}", cid],
-            env=env, check=True, capture_output=True, text=True, timeout=15,
-        ).stdout.strip().split()
-    except Exception:
+        return int(quota) / int(period)
+    except (ValueError, ZeroDivisionError):
         return None
-    if len(out) != 2 or not all(part.lstrip("-").isdigit() for part in out):
+
+
+def _cgroup_dirs(v2_path: str, cgroup_root: pathlib.Path) -> list[pathlib.Path]:
+    """Every directory from the cgroup root to the process leaf, in order."""
+    parts = [part for part in v2_path.split("/") if part]
+    return [cgroup_root.joinpath(*parts[:index]) for index in range(len(parts) + 1)]
+
+
+def _read_quota_file(path: pathlib.Path, raw: str) -> tuple[str, str | None, str | None]:
+    value = normalize_cpu_max(raw)
+    if value is None:
+        return "unreadable", None, "malformed"
+    return "ok", value, None
+
+
+def kernel_cpu_max(cgroup_text: str, cgroup_root: pathlib.Path) -> dict[str, Any] | None:
+    """Inspect the visible cgroup hierarchy of one live process.
+
+    Every directory from the mounted cgroup root to the process leaf is checked.
+    A missing cpu controller is distinct from an unreadable/malformed file. The
+    result always records coverage, leaf status and the full normalized chain;
+    it is a visible-hierarchy observation, never an absolute effective-quota
+    proof unless an operator separately supplies host-scope provenance.
+    """
+    for line in cgroup_text.splitlines():
+        fields = line.split(":", 2)
+        if len(fields) != 3:
+            continue
+        hierarchy, controller, path = fields
+        if hierarchy != "0" or controller != "":
+            continue
+        directories = _cgroup_dirs(path, cgroup_root)
+        chain, missing, unreadable = [], [], []
+        for directory in directories:
+            candidate = directory / "cpu.max"
+            if candidate.is_symlink():
+                unreadable.append(str(directory))
+                continue
+            if not candidate.is_file():
+                if (directory / "cgroup.controllers").is_file():
+                    missing.append(str(directory))
+                else:
+                    unreadable.append(str(directory))
+                continue
+            try:
+                raw = candidate.read_text().strip()
+            except OSError:
+                unreadable.append(str(directory))
+                continue
+            status, value, reason = _read_quota_file(candidate, raw)
+            if status == "ok":
+                chain.append({"path": str(directory), "raw": raw,
+                              "value": str(value), "status": "ok"})
+            else:
+                unreadable.append(str(directory))
+        leaf = directories[-1]
+        leaf_status = "ok" if any(item["path"] == str(leaf) for item in chain) else "unavailable"
+        tightest = None
+        if chain:
+            tightest = min(chain, key=lambda item: _quota_ratio(item["value"]) or float("inf"))
+        complete = not missing and not unreadable and leaf_status == "ok"
+        return {
+            "origin": CPU_MAX_ORIGIN_V2,
+            "value": tightest["value"] if tightest else None,
+            "raw": tightest["raw"] if tightest else None,
+            "cgroup_path": path,
+            "source": tightest["path"] + "/cpu.max" if tightest else None,
+            "chain": chain, "chain_normalized": [
+                [item["path"], item["value"]] for item in chain],
+            "leaf_value": next((item["value"] for item in chain
+                                if item["path"] == str(leaf)), None),
+            "leaf_status": leaf_status,
+            "leaf_only": len(chain) == 1 and leaf_status == "ok",
+            "effective_source": tightest["path"] if complete and tightest else None,
+            "coverage": {"expected": len(directories), "read": len(chain),
+                         "missing": missing, "unreadable": unreadable,
+                         "complete": complete},
+            "scope": "visible_hierarchy_only",
+            "absolute_effective_claim": False,
+        }
+    return None
+
+
+def observe_bound_cpu_quota(table: dict[int, Any], bound: dict[str, Any],
+                            cgroup_root: pathlib.Path = pathlib.Path("/sys/fs/cgroup"),
+                            ) -> dict[str, Any] | None:
+    """Observe quota only from the guard-bound init PID with unchanged identity."""
+    if not isinstance(bound, dict):
         return None
-    quota, period = int(out[0]), int(out[1])
-    if period <= 0:
+    from fail_closed_guard import binding
+    cid, pid = bound.get("cid"), bound.get("pid")
+    fingerprint = bound.get("fingerprint")
+    if (not isinstance(cid, str) or not binding.CID.fullmatch(cid)
+            or not isinstance(pid, int) or isinstance(pid, bool)
+            or not isinstance(fingerprint, (list, tuple))
+            or len(fingerprint) != 2):
         return None
-    if quota <= 0:
-        return "max " + str(period)
-    return str(quota) + " " + str(period)
+    record = table.get(pid) if isinstance(table, dict) else None
+    if not isinstance(record, dict):
+        return None
+    actual = [record.get("starttime"), record.get("pid_ns")]
+    if actual != list(fingerprint):
+        return None
+    cgroup_text = record.get("cgroup")
+    if not isinstance(cgroup_text, str) or not cgroup_text.strip():
+        return None
+    observed = kernel_cpu_max(cgroup_text, cgroup_root)
+    if observed is not None:
+        observed["pid"] = pid
+        observed["cgroup"] = cgroup_text
+        observed["cid"] = cid
+        observed["fingerprint"] = list(fingerprint)
+        observed["sample_identity"] = {
+            "cid": cid, "pid": pid, "fingerprint": list(fingerprint),
+            "cgroup": cgroup_text,
+            "chain_normalized": observed.get("chain_normalized"),
+        }
+    return observed
+
+
+def compare_quota_samples(previous: dict[str, Any] | None,
+                          current: dict[str, Any]) -> list[str]:
+    """Report any change in the full bound sample, not just the quota value."""
+    if previous is None:
+        return []
+    before = previous.get("sample_identity") or {}
+    after = current.get("sample_identity") or {}
+    reasons = []
+    for key in ("cid", "pid", "fingerprint", "cgroup", "chain_normalized"):
+        if before.get(key) != after.get(key):
+            reasons.append("bound " + key + " changed")
+    if previous.get("value") != current.get("value"):
+        reasons.append("quota value changed")
+    if (previous.get("coverage") or {}).get("complete") != (
+            current.get("coverage") or {}).get("complete"):
+        reasons.append("quota coverage changed")
+    return reasons
+
+
+def guard_terminal_proof(proof: Any, *, cid: str | None = None) -> dict[str, Any] | None:
+    """Recognize only the shared guard's own exact-CID natural-exit proof.
+
+    The guard's ``natural_exit.attest`` is the sole terminal proof: it requires
+    the exact bound CID to be proven absent twice together with a real integer
+    launcher result. A zombie /proc record, a launcher poll or a caller
+    assertion is never a guard-owned terminal proof.
+    """
+    if not isinstance(proof, dict):
+        return None
+    from fail_closed_guard import binding
+    absence = proof.get("absence_proof")
+    proof_cid = proof.get("cid")
+    if (proof.get("method") != "exact_cid_inspect"
+            or not isinstance(proof_cid, str)
+            or not binding.CID.fullmatch(proof_cid)
+            or (cid is not None and proof_cid != cid)
+            or isinstance(proof.get("returncode"), bool)
+            or not isinstance(proof.get("returncode"), int)
+            or not isinstance(absence, dict)
+            or absence.get("observed_absent") is not True
+            or absence.get("inspected_absent_twice") is not True):
+        return None
+    return proof
+
+
+def host_scope_proven_from_proof(proof: Any) -> bool:
+    """True only for a structured, separately attested host-scope proof.
+
+    A bare boolean or caller assertion is never host evidence. Production has
+    no such proof today, so ``host_scope_proven`` stays False and comparability
+    remains diagnostic-only until an operator supplies a reviewed proof.
+    """
+    if not isinstance(proof, dict):
+        return False
+    return (proof.get("schema") == HOST_SCOPE_PROOF_SCHEMA
+            and isinstance(proof.get("cgroup_root"), str)
+            and bool(proof.get("cgroup_root"))
+            and isinstance(proof.get("attested_by"), str)
+            and bool(proof.get("attested_by")))
+
+
+def sampling_gap_kind(previous: dict[str, Any] | None,
+                      table: dict[int, Any], bound: dict[str, Any], *,
+                      terminal_proof: Any = None) -> str | None:
+    """A zombie at the bound PID is terminal only with identity and guard proof.
+
+    State Z for the bound init PID is a natural-exit candidate only when the
+    full guard-bound fingerprint (starttime, pid_ns) still matches. Even then
+    it is accepted as terminal only when backed by the shared guard's own
+    exact-CID natural-exit proof. PID reuse, a foreign process and a caller
+    assertion without that proof are all drift.
+    """
+    if previous is None:
+        return None
+    live = table.get(bound.get("pid")) if isinstance(table, dict) else None
+    if not isinstance(live, dict) or live.get("state") != "Z":
+        return "drift"
+    fingerprint = bound.get("fingerprint")
+    if (not isinstance(fingerprint, (list, tuple)) or len(fingerprint) != 2
+            or [live.get("starttime"), live.get("pid_ns")] != list(fingerprint)):
+        return "drift"
+    if guard_terminal_proof(terminal_proof, cid=bound.get("cid")) is None:
+        return "drift"
+    return "terminal"
+
+
+def quota_diagnostic(observed: dict[str, Any] | None, *,
+                     host_scope_proven: bool = False,
+                     drift: list[str] | None = None) -> dict[str, Any]:
+    """Classify an observation as evidence; never silently qualify a gap.
+
+    Mismatch, incomplete ancestry and delegated visibility are recorded as
+    diagnostics so the measured arm evidence survives even when comparability
+    must fail closed.
+    """
+    reasons = []
+    if observed is None:
+        reasons.append("no observed kernel quota")
+    else:
+        if observed.get("origin") not in KERNEL_QUOTA_ORIGINS:
+            reasons.append("non-kernel quota origin")
+        if observed.get("value") != REQUESTED_CPU_MAX:
+            reasons.append("quota value differs from request")
+        coverage = observed.get("coverage") or {}
+        if not coverage.get("complete"):
+            reasons.append("invisible or unreadable cgroup ancestry")
+        if observed.get("leaf_status") != "ok":
+            reasons.append("leaf cpu quota unreadable")
+        if not host_scope_proven:
+            reasons.append("visible hierarchy only; host scope not proven")
+    if drift:
+        reasons.extend(drift)
+    return {"matched": not reasons, "reasons": reasons,
+            "host_scope_proven": bool(host_scope_proven),
+            "observed_value": observed.get("value") if observed else None}
+
+
+def operator_environment(storage_conf: pathlib.Path,
+                         base_env: dict[str, str] | None = None) -> dict[str, str]:
+    """Build the real Podman environment used by spawn and shared-guard inspect.
+
+    An empty environment makes both the launcher and the guard's exact-CID
+    inspection fail before any arm can be measured. Inherit the operator shell
+    only for the executable search path and home, then pin the project storage
+    namespace through the reviewed shared helper so no inherited store config
+    can redirect the arm.
+    """
+    source = dict(os.environ if base_env is None else base_env)
+    for key in ("PATH", "HOME"):
+        if not source.get(key):
+            raise Refusal("operator environment missing " + key)
+    from fail_closed_guard import store
+    env = store.pin_env(source, storage_conf=storage_conf)
+    if shutil.which("podman", path=env.get("PATH")) is None:
+        raise Refusal("podman not found in operator PATH")
+    return env
 
 
 def production_podman_spawn(argv: list[str], cidfile: str, env: dict[str, str],
@@ -114,6 +384,8 @@ def build_production_arm_runner(
     watchdog_graphroot: pathlib.Path,
     attestation: pathlib.Path,
     env: dict[str, str] | None = None,
+    cgroup_root: pathlib.Path = pathlib.Path("/sys/fs/cgroup"),
+    host_scope_proof: dict[str, Any] | None = None,
 ) -> Callable[..., dict[str, Any]]:
     """Build a real guarded runner for live operator use.
 
@@ -121,13 +393,16 @@ def build_production_arm_runner(
     shared guard, and observed container CPU quota. It does NOT bypass the guard:
     run_prospective still enforces STOP/lease/watchdog/disk/admission. Callers
     must supply reviewed attestation and explicit operator authorization; absence
-    of those inputs must refuse before spawn.
+    of those inputs must refuse before spawn. ``host_scope_proof`` must be a
+    separate, structured operator proof; a bare assertion cannot set
+    ``host_scope_proven`` in any receipt.
     """
     if not attestation.is_file():
         raise Refusal("deployment attestation file missing")
     deps = plan.readiness(attestation)
     if deps.get("ready") is not True:
         raise Refusal("dependencies not ready: " + "; ".join(deps.get("reasons", [])))
+    proven = host_scope_proven_from_proof(host_scope_proof)
     run_env = dict(env or {})
 
     def _spawn(cidfile: str, spawn_env: dict[str, str], *, argv: list[str], arm_dir: pathlib.Path):
@@ -138,25 +413,67 @@ def build_production_arm_runner(
         return bool(proc is not None and proc.poll() is None)
 
     inner_holder: dict[str, Any] = {}
+    from fail_closed_guard import binding, proc as proc_sampler
 
     def _measure():
         # watch_bound requires a non-None measurement; actual RSS is sampled by
         # the guard's bound tree sampler.
         return True
 
+    def _monitored_snapshot():
+        """Guard-owned PID table; observe quota only from its validated bind.
+
+        The shared guard calls this for binding and on every watch sample. The
+        exact CID, init PID and immutable fingerprint come from the guard's own
+        bind_container; a changed or unreadable identity stops the observation
+        instead of attributing another process's cgroup to this arm.
+        """
+        table = proc_sampler.snapshot()
+        bound = inner_holder.get("bound")
+        if bound is None:
+            return table
+        observed = observe_bound_cpu_quota(table, bound, cgroup_root)
+        previous = inner_holder.get("observed_cpu_quota")
+        if observed is not None:
+            drift = compare_quota_samples(previous, observed)
+            if drift:
+                inner_holder["quota_drift"] = drift
+            inner_holder["observed_cpu_quota"] = observed
+            # The bound identity was observed live again; a prior gap cannot
+            # be a terminal natural exit and must not be promoted later.
+            inner_holder.pop("pending_sample_gap", None)
+            return table
+        if previous is not None:
+            # Defer terminal classification: the guard has not produced its
+            # exact-CID natural-exit proof yet at sampling time. Keep the raw
+            # table so the decision uses guard-owned evidence after the run.
+            inner_holder["pending_sample_gap"] = table
+        return table
+
+    def _bind(cid, env, snapshot=None):
+        bound = binding.bind_container(cid, env, snapshot=snapshot)
+        inner_holder["bound"] = {
+            "cid": bound.get("cid"), "pid": bound.get("pid"),
+            "fingerprint": bound.get("fingerprint"),
+        }
+        return bound
+
     def _runner(step: dict[str, str], argv: list[str], arm_dir: pathlib.Path,
                 *, deadline: float | None = None) -> dict[str, Any]:
+        inner_holder.clear()
+
         def wrapped_spawn(cidfile, spawn_env, *, argv, arm_dir):
-            proc = production_podman_spawn(argv, cidfile, spawn_env, arm_dir)
-            inner_holder["proc"] = proc
-            return proc
+            inner_holder["cidfile"] = cidfile
+            spawned = production_podman_spawn(argv, cidfile, spawn_env, arm_dir)
+            inner_holder["proc"] = spawned
+            return spawned
 
         local_runner = guarded_podman_arm_runner(
             owner=owner,
             lease_root=lease_root,
             stop_path=stop_path,
             disk_path=disk_path,
-            container_cpu_max="200000 100000",
+            container_cpu_max=REQUESTED_CPU_MAX,
             lock_path=lock_path,
             env=run_env,
             watchdog_path=watchdog_path,
@@ -165,21 +482,38 @@ def build_production_arm_runner(
             spawn=wrapped_spawn,
             running=lambda: _running(inner_holder),
             measure=_measure,
+            snapshot=_monitored_snapshot,
+            bind_container=_bind,
         )
         result = local_runner(step, argv, arm_dir, deadline=deadline)
-        cidfiles = result.get("pinned_cidfiles") or []
-        if cidfiles:
-            try:
-                cid = pathlib.Path(cidfiles[0]).read_text().strip()
-                observed = observe_container_cpu_max(run_env, cid)
-                if observed is not None:
-                    result["observed_container_cpu_max"] = observed
-                    if observed != "200000 100000":
-                        raise Refusal("observed container cpu.max mismatch: " + observed)
-            except Refusal:
-                raise
-            except Exception:
-                pass
+        observed = inner_holder.get("observed_cpu_quota")
+        drift = list(inner_holder.get("quota_drift") or [])
+        bound = inner_holder.get("bound") or {}
+        guard_outcome = result.get("guard_outcome")
+        guard_result = guard_outcome.get("result") if isinstance(guard_outcome, dict) else None
+        proof = guard_terminal_proof(
+            guard_result.get("natural_exit") if isinstance(guard_result, dict) else None,
+            cid=bound.get("cid"))
+        pending = inner_holder.get("pending_sample_gap")
+        terminal_gap = False
+        if pending is not None and observed is not None:
+            if sampling_gap_kind(observed, pending, bound,
+                                terminal_proof=proof) == "terminal":
+                # A guard-owned natural exit legitimately ends sampling; earlier
+                # samples stay as evidence and are not poisoned by the gap.
+                terminal_gap = True
+            else:
+                drift.append("bound init disappeared or became unreadable")
+        # Requested/configured values are preserved but never used as proof.
+        result["requested_container_cpu_max"] = REQUESTED_CPU_MAX
+        result["container_cpu_max"] = REQUESTED_CPU_MAX
+        result["observed_cpu_quota"] = observed
+        result["observed_container_cpu_max"] = observed.get("value") if observed else None
+        result["quota_drift"] = drift
+        result["terminal_sample_gap"] = terminal_gap
+        result["host_scope_proven"] = proven
+        result["quota_diagnostic"] = quota_diagnostic(
+            observed, host_scope_proven=proven, drift=drift)
         return result
 
     return _runner
@@ -506,6 +840,10 @@ def execute_plan(
             {"case": case, "arm": arm}, before, after, timing,
             sampled_rss_bytes=raw.get("sampled_rss_bytes"),
             container_cpu_max=raw.get("container_cpu_max"),
+            requested_cpu_max=raw.get("requested_container_cpu_max"),
+            observed_cpu_quota=raw.get("observed_cpu_quota"),
+            quota_diagnostic=raw.get("quota_diagnostic"),
+            quota_drift=raw.get("quota_drift"),
             stage_timing=stage_timing,
             log_sha256=log_sha,
         )
@@ -515,7 +853,10 @@ def execute_plan(
             "before": plan.contention_check(before),
             "after": plan.contention_check(after),
         }
-        for key in ("guard_outcome", "pinned_cidfiles"):
+        for key in ("guard_outcome", "pinned_cidfiles",
+                    "requested_container_cpu_max", "observed_cpu_quota",
+                    "observed_container_cpu_max", "quota_diagnostic",
+                    "quota_drift", "terminal_sample_gap", "host_scope_proven"):
             if key in raw:
                 record[key] = raw[key]
         _write_json_exclusive(arm_dir / "argv.json", {
@@ -561,6 +902,8 @@ def main() -> None:
     parser.add_argument("--lock-path", type=pathlib.Path)
     parser.add_argument("--watchdog-path", type=pathlib.Path)
     parser.add_argument("--watchdog-graphroot", type=pathlib.Path)
+    parser.add_argument("--storage-conf", type=pathlib.Path,
+                        help="reviewed Podman storage.conf; required for --arm-runner production")
     args = parser.parse_args()
     cases = tuple(c.strip() for c in args.cases.split(",") if c.strip())
     try:
@@ -577,6 +920,7 @@ def main() -> None:
                 "--watchdog-path": args.watchdog_path,
                 "--watchdog-graphroot": args.watchdog_graphroot,
                 "--attestation": args.attestation,
+                "--storage-conf": args.storage_conf,
             }
             missing = [k for k, v in required.items() if v is None]
             if missing:
@@ -590,6 +934,7 @@ def main() -> None:
                 watchdog_path=args.watchdog_path,
                 watchdog_graphroot=args.watchdog_graphroot,
                 attestation=args.attestation,
+                env=operator_environment(args.storage_conf),
             )
         else:
             runner = default_arm_runner

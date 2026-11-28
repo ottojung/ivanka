@@ -113,15 +113,14 @@ SOURCE_PINS = {
 # Retained for callers that only need the exact source heads (never deployment).
 DEPENDENCIES = {name: pin["head"] for name, pin in SOURCE_PINS.items()}
 
-# Still-old deployed truth, read from the live s6 run scripts and the staged
-# tree. The reviewed guard source head, the deployed root HEAD and the two
-# service pins are separate immutable values; they are checked separately rather
-# than assumed equal. These digests were recomputed in that deployed tree.
+# Reviewed actual deployed roots, read from live s6 run scripts and staged
+# trees. Guard source/root and service pins are separate immutable values and
+# must be attested separately. Digests are recomputed from the deployed tree.
 DEPLOYED_PINS = {
-    "guard_source_head": "6e6886a824a7cb0f1b812f1c24c233f8100a9d8b",
-    "deployed_root_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
-    "px_service_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
-    "watchdog_service_head": "091f56275ae823cb3291b81dbdf016fcf16c3ea0",
+    "guard_source_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
+    "deployed_root_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
+    "px_service_head": "b8720600c9f10e71472b2b55210badeabc257a81",
+    "watchdog_service_head": "165a86b38c0bc29b4f8e0281a39ca59b909a6563",
     "guard_sha256": {
         "natural_exit_sha256":
             "f7f6028273a5d7775b8d4ca6139e9659ca475a0aa36a3d12b1a736e429202cd6",
@@ -135,6 +134,7 @@ DEPLOYED_PINS = {
             "c193ca79b23fc6f2190b92ae7ce70d46de582a3fd71d9c17d09c6b6704d185fb",
     },
 }
+KERNEL_QUOTA_ORIGINS = ("kernel_cgroup_v2_cpu_max", "kernel_cgroup_v1_cpu_cfs")
 COMPARABILITY = {
     "required_container_cpu_max": "200000 100000",
     "required_container_effective_cpus": 2.0,
@@ -353,18 +353,18 @@ def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
     """Describe whether an exact-identity guard may be considered.
 
     Source pins and deployment pins are deliberately separate. Every dependency
-    must be attested at its exact MERGED source head and merge commit, while the
-    deployed truth must still be the older PR536 guard stack: its reviewed guard
-    source head, deployed root HEAD and two service pins are independent
-    immutable values, each checked on its own. While PR535's merged source is
-    not deployed, readiness stays blocked: a merge record is not a deployment
-    and must never be reported as ready. Even a ready-shaped record leaves
-    execution='blocked' with no execute mode.
+    must be attested at its exact merged source head and merge commit, while the
+    deployed guard identity must match the reviewed actual deployed roots and
+    guard file digests. A merge record is not a deployment and must never be
+    reported as ready. Readiness requires exact deployed guard/root/service pins,
+    clean tree, fresh watchdog, clear lease, attested idle boundary, and explicit
+    attestation metadata. Even a ready-shaped record leaves execution='blocked'
+    in the plan; only the explicit executor path can run arms.
 
-    A later cutover may only be recognised by a reviewed change to these exact
-    pins plus a fresh live attestation of the deployed stack. Attestation text
-    alone cannot rebind the deployed truth, and this function never deletes or
-    relaxes a guard block to make a run possible.
+    A cutover may only be recognised by a reviewed change to these exact pins
+    plus a fresh live attestation of the deployed stack. Attestation text alone
+    cannot rebind the deployed truth, and this function never deletes or relaxes
+    a guard block to make a run possible.
     """
     all_blocked = sorted(SOURCE_PINS)
     if attestation is None or not attestation.is_file():
@@ -396,17 +396,19 @@ def readiness(attestation: pathlib.Path | None) -> dict[str, Any]:
 
     deployed = record.get("deployed_sources") if isinstance(
         record.get("deployed_sources"), dict) else {}
-    # A source with no pinned deployed head cannot become deployed by
-    # attestation: the live guard stack is pinned separately below. Readiness
-    # therefore stays blocked for that source either way.
-    blocked.append("PR535")
-    if deployed.get("PR535") is False or "PR535" not in deployed:
-        reasons.append("PR535 merged source is still not deployed")
-    else:
-        reasons.append("PR535 deployed claim has no pinned deployed head")
-    if deployed.get("PR536") is not True:
+    # Source merge facts and deployed guard identity are separate. The deployed
+    # guard identity below is authoritative; deployed_sources must be honest.
+    for name in SOURCE_PINS:
+        value = deployed.get(name, False)
+        if not isinstance(value, bool):
+            blocked.append(name)
+            reasons.append(name + " deployed state not boolean")
+    if deployed.get("PR535") is not True:
+        blocked.append("PR535")
+        reasons.append("PR535 deployed truth not attested")
+    if "PR536" in deployed and not isinstance(deployed.get("PR536"), bool):
         blocked.append("PR536")
-        reasons.append("PR536 deployed truth not attested")
+        reasons.append("PR536 deployed state not boolean")
 
     guard = record.get("deployed_guard")
     if not isinstance(guard, dict):
@@ -477,18 +479,44 @@ def arm_evidence_record(
     step: dict[str, str], before: dict[str, Any], after: dict[str, Any],
     timing: dict[str, Any], *, sampled_rss_bytes: int | None = None,
     container_cpu_max: str | None = None,
+    requested_cpu_max: str | None = None,
+    observed_cpu_quota: dict[str, Any] | None = None,
+    quota_diagnostic: dict[str, Any] | None = None,
+    quota_drift: list[str] | None = None,
     stage_timing: dict[str, Any] | None = None,
     log_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Durable per-arm record: matched timing, sampled RSS, quota and host state."""
+    """Durable per-arm record: matched timing, sampled RSS and kernel quota.
+
+    A requested or configured quota is preserved as a claim only. The
+    comparability decision uses the kernel cgroup value observed for the exact
+    bound CID/PID during the supervised arm.
+    """
     rss_ok = (isinstance(sampled_rss_bytes, int)
               and not isinstance(sampled_rss_bytes, bool) and sampled_rss_bytes > 0)
+    requested = requested_cpu_max if isinstance(requested_cpu_max, str) else container_cpu_max
+    observed = observed_cpu_quota if isinstance(observed_cpu_quota, dict) else None
+    observed_value = observed.get("value") if observed else None
+    origin = observed.get("origin") if observed else None
     quota_effective = None
-    if isinstance(container_cpu_max, str):
+    if isinstance(observed_value, str):
         try:
-            quota_effective = effective_cpus(container_cpu_max)
+            quota_effective = effective_cpus(observed_value)
         except ValueError:
             quota_effective = None
+    diagnostic = quota_diagnostic if isinstance(quota_diagnostic, dict) else {}
+    coverage = observed.get("coverage") if observed else None
+    quota_complete = bool(
+        observed
+        and requested == COMPARABILITY["required_container_cpu_max"]
+        and quota_effective == COMPARABILITY["required_container_effective_cpus"]
+        and origin in KERNEL_QUOTA_ORIGINS
+        and isinstance(observed.get("effective_source"), str)
+        and isinstance(observed.get("chain"), list)
+        and isinstance(coverage, dict) and coverage.get("complete") is True
+        and observed.get("leaf_status") == "ok"
+        and diagnostic.get("matched") is True
+        and not quota_drift)
     record = {
         "schema": "ivanka.p1.ultradeep.arm-evidence.v1",
         "case": step["case"], "arm": step["arm"],
@@ -502,12 +530,24 @@ def arm_evidence_record(
         "rss_evidence_complete": rss_ok,
         "cpu_quota": {
             "host_cpu_max": before.get("cpu_max"),
-            "container_cpu_max": container_cpu_max,
+            "requested_container_cpu_max": requested,
+            "container_cpu_max": requested,
+            "observed_container_cpu_max": observed_value,
+            "observed_cpu_max_origin": origin,
+            "observed_pid": observed.get("pid") if observed else None,
+            "observed_cgroup": observed.get("cgroup") if observed else None,
+            "observed_raw": observed.get("raw") if observed else None,
+            "observed_leaf_value": observed.get("leaf_value") if observed else None,
+            "observed_leaf_only": observed.get("leaf_only") if observed else None,
+            "observed_effective_source": observed.get("effective_source") if observed else None,
+            "observed_chain": observed.get("chain") if observed else None,
+            "observed_fingerprint": observed.get("fingerprint") if observed else None,
             "container_effective_cpus": quota_effective,
             "memory_limit_bytes": int(CONSTRAINTS["memory"]),
         },
-        "cpu_quota_complete": (
-            quota_effective == COMPARABILITY["required_container_effective_cpus"]),
+        "cpu_quota_complete": quota_complete,
+        "cpu_quota_diagnostic": diagnostic or None,
+        "cpu_quota_drift": list(quota_drift or []),
         "rss_enforcement": "sampled_userspace_observed",
         "kernel_enforcement": False,
         "constraints": CONSTRAINTS,
@@ -542,6 +582,8 @@ def comparability_check(
         if not evidence_complete(record):
             reasons.append(label + " missing sampled RSS or container CPU quota")
         quota = record.get("cpu_quota") or {}
+        if quota.get("observed_cpu_max_origin") not in KERNEL_QUOTA_ORIGINS:
+            reasons.append(label + " no observed kernel CPU quota")
         if quota.get("container_effective_cpus") != COMPARABILITY[
             "required_container_effective_cpus"
         ]:
@@ -660,10 +702,14 @@ def main() -> None:
     parser.add_argument("--attestation", type=pathlib.Path)
     parser.add_argument("--verify-files", action="store_true")
     parser.add_argument("--emit-plan", type=pathlib.Path)
+    parser.add_argument("--cases", default=",".join(CASES),
+                        help="comma-separated case IDs; includes ordinary controls when requested")
     args = parser.parse_args()
+    cases = tuple(c.strip() for c in args.cases.split(",") if c.strip())
     plan = build_plan(
         args.receipt, args.output_root,
         verify_files=args.verify_files, attestation=args.attestation,
+        cases=cases,
     )
     text = json.dumps(plan, indent=2, sort_keys=True) + "\n"
     if args.emit_plan is not None:

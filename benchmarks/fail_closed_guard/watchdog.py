@@ -39,6 +39,11 @@ DEFAULT_STARTUP_BIND_GRACE = 120.0
 # Keeping readiness intact lets admission name the unsupported mode itself.
 READINESS_PRESERVING_REASONS = frozenset({"unsupported_lease"})
 
+# Distinguishes "the caller did not pre-inspect" from "the exact CID was
+# inspected and proved absent". The latter is a verified observation, not an
+# omitted step, so it must still take the second-inspect absence path.
+_UNSET = object()
+
 
 def evidence_path(root):
     """Project-owned evidence journal; never supplied by the container."""
@@ -265,59 +270,120 @@ def verify_group_bound(bound, table):
 
 def verify_bound(bound, env, table, *, heartbeat_record=None, wall=None,
                  startup_bind_grace=DEFAULT_STARTUP_BIND_GRACE,
-                 controller_live=False):
+                 controller_live=False, first_pid=_UNSET):
     """Re-inspect the exact CID in the pinned store and measure its tree.
+
+    ``check_once`` inspects the exact CID *before* it samples ``table`` and
+    passes that result as ``first_pid``. This function then re-inspects the
+    same CID before measuring or permitting a pending bind: a different PID is
+    terminal identity drift. Neither form of pending bind (published or
+    unpublished heartbeat CID) outlives the bounded durable-start grace.
+    Direct callers that do not supply ``first_pid`` keep the legacy
+    single-inspect behaviour.
 
     A cidfile can appear before the controller publishes the bound fingerprint
     or updates its heartbeat CID from None. While the controller heartbeat is
-    fresh/live and the arm is within a bounded startup grace from durable
-    acquisition, that is a healthy bind in progress, not an orphan: observe it
-    without teardown. A dead/expired heartbeat never reaches this branch
-    (check_once fails closed first) and a heartbeat naming a different CID is
-    identity_lost, so pending_bind cannot mask an orphan.
+    fresh/live, the exact CID still resolves to the same PID, and the arm is
+    within a bounded startup grace from durable acquisition, that is a healthy
+    bind in progress, not an orphan: observe it without teardown. A dead/expired
+    heartbeat never reaches this branch (check_once fails closed first) and a
+    heartbeat naming a different CID is identity_lost, so pending_bind cannot
+    mask an orphan.
 
     A naturally exited or already removed CID is not a breach: a live controller
-    is allowed to finalize its own natural completion. Such absence is accepted
-    only when a freshly verified live controller is present and a second exact
-    CID inspection still proves absence. Malformed or mismatched inspect output
-    is a verification failure, never an absence, and a dead controller with an
-    absent CID still fails closed.
+    is allowed to finalize its own natural completion. Absence is accepted only
+    on two consecutive exact-CID inspections while a freshly verified, matching
+    live controller is present; a PID that was live at the first inspection
+    needs a third inspection proving it did not reappear or drift. No receipt
+    or lease is released by this observation. Malformed or mismatched inspect
+    output is a verification failure, never an absence, and a dead, foreign or
+    uncertain controller with an absent CID still fails closed.
     """
     if bound.get("state") == "bound_group":
         return verify_group_bound(bound, table)
     cid = bound["cid"]
-    pid = binding.inspect_pid_if_live(cid, env)
+    if not isinstance(cid, str) or not binding.CID.fullmatch(cid):
+        raise GuardExceeded("binding_unavailable")
+    diagnosis = None
+    absence_inspections = 2
+
+    def fail(reason):
+        exc = GuardExceeded(reason)
+        if diagnosis is not None:
+            exc.sample_diagnostic = diagnosis
+        raise exc
+
+    if first_pid is _UNSET:
+        pid = binding.inspect_pid_if_live(cid, env)
+    else:
+        pid = first_pid
+        # The sample was taken after `first_pid`, so this is the same CID's
+        # second inspection: nothing may be measured or granted grace unless
+        # it still names the identical init PID.
+        second = binding.inspect_pid_if_live(cid, env)
+        diagnosis = {"sample_after_inspect": True, "first_pid": pid,
+                     "second_pid": second}
+
+        if pid is None:
+            if second is not None:
+                fail("binding_unavailable")  # absence then reappearance
+        elif second is None:
+            # A PID that was live at the first inspection may have exited in
+            # between. Accept it as natural exit only for a matching, freshly
+            # verified live controller and only after a third inspection
+            # proves two consecutive absences with no reappearance or drift.
+            if not (controller_live and heartbeat_record is not None
+                    and heartbeat_record.get("cid") == cid):
+                fail("binding_unavailable")
+            third = binding.inspect_pid_if_live(cid, env)
+            diagnosis["third_pid"] = third
+            diagnosis["natural_exit_after_live"] = True
+            if third is not None:
+                fail("identity_lost" if third != pid
+                     else "binding_unavailable")
+            pid = None
+            absence_inspections = 3
+        elif second != pid:
+            fail("identity_lost")
     if pid is None:
         if not controller_live:
-            raise GuardExceeded("binding_unavailable")
-        if binding.inspect_pid_if_live(cid, env) is not None:
-            raise GuardExceeded("binding_unavailable")
-        return {"state": "natural_exit", "pid": None, "rss": None,
-                "members": 0, "identity": None,
-                "absence_proof": {"observed_absent": True,
-                                  "method": "exact_cid_inspect"}}
+            fail("binding_unavailable")
+        if first_pid is _UNSET and binding.inspect_pid_if_live(cid, env) is not None:
+            fail("binding_unavailable")
+        absence = {"observed_absent": True, "method": "exact_cid_inspect"}
+        if diagnosis is not None:
+            absence["inspections"] = absence_inspections
+        observed = {"state": "natural_exit", "pid": None, "rss": None,
+                    "members": 0, "identity": None, "absence_proof": absence}
+        if diagnosis is not None:
+            observed["sample_diagnostic"] = diagnosis
+        return observed
     if bound.get("pid") is not None and int(bound["pid"]) != pid:
-        raise GuardExceeded("identity_lost")
+        fail("identity_lost")
     finger = bound.get("fingerprint")
     if not isinstance(finger, (list, tuple)) or len(finger) < 2:
         beat_cid = (heartbeat_record.get("cid")
                     if heartbeat_record is not None else None)
         cid_match = beat_cid == cid
         cid_unpublished = (beat_cid is None and heartbeat_record is not None)
-        if cid_unpublished:
-            start = bound.get("durable_start")
-            clock = wall if wall is not None else time.time
-            if not (isinstance(start, (int, float)) and math.isfinite(start)
-                    and clock() - start <= startup_bind_grace):
-                cid_unpublished = False
-        if (heartbeat_record is not None and (cid_match or cid_unpublished)
+        # Both published and unpublished CID binds share the same finite
+        # durable-start grace; neither may wait indefinitely for a fingerprint.
+        start = bound.get("durable_start")
+        clock = wall if wall is not None else time.time
+        within_grace = (isinstance(start, (int, float)) and math.isfinite(start)
+                        and clock() - start <= startup_bind_grace)
+        if (controller_live and heartbeat_record is not None
+                and (cid_match or cid_unpublished) and within_grace
                 and pid in table):
-            return {"state": "pending_bind", "pid": pid, "rss": None,
-                    "members": 0, "identity": None,
-                    "pending_reason": ("heartbeat_cid_match"
-                                       if cid_match
-                                       else "startup_bind_grace")}
-        raise GuardExceeded("binding_unavailable")
+            observed = {"state": "pending_bind", "pid": pid, "rss": None,
+                        "members": 0, "identity": None,
+                        "pending_reason": ("heartbeat_cid_match"
+                                           if cid_match
+                                           else "startup_bind_grace")}
+            if diagnosis is not None:
+                observed["sample_diagnostic"] = diagnosis
+            return observed
+        fail("binding_unavailable")
     if bound.get("stable"):
         anchor = {"pid": pid, "fingerprint": list(finger),
                   "starttime": finger[0], "pid_ns": finger[1],
@@ -327,13 +393,23 @@ def verify_bound(bound, env, table, *, heartbeat_record=None, wall=None,
             found = startup.locate(anchor, table, bound_pid=pid)
         except GuardExceeded as exc:
             exc.identity_observation = observation
+            if diagnosis is not None:
+                exc.sample_diagnostic = diagnosis
             raise
     else:
-        found = identity.locate(tuple(finger), table, bound_pid=pid)
+        try:
+            found = identity.locate(tuple(finger), table, bound_pid=pid)
+        except GuardExceeded as exc:
+            if diagnosis is not None:
+                exc.sample_diagnostic = diagnosis
+            raise
         observation = None
     group = tree.members(table, found, tuple(finger))
-    return {"pid": found, "rss": tree.rss_bytes(table, group),
-            "members": len(group), "identity": observation}
+    observed = {"pid": found, "rss": tree.rss_bytes(table, group),
+                "members": len(group), "identity": observation}
+    if diagnosis is not None:
+        observed["sample_diagnostic"] = diagnosis
+    return observed
 
 
 def check_disk(free, *, min_free, reserve):
@@ -475,7 +551,11 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
 
     The wall deadline comes from the lease's durable start, so restarting the
     watchdog cannot extend an arm. Every fail-closed decision is written to
-    the evidence journal before it is raised.
+    the evidence journal before it is raised. For a CID-bound lease the exact
+    CID is inspected before the process sample; the same CID/PID is inspected
+    again before the sample is used for measurement or a pending bind, so a
+    PID issued during startup cannot be mistaken for identity drift or an
+    orphan.
     """
     mono = monotonic if monotonic is not None else time.monotonic
     wall = wall_clock if wall_clock is not None else time.time
@@ -520,20 +600,37 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
         observations["heartbeat"] = {
             "pid": beat["pid"], "cid": beat.get("cid"),
             "age_seconds": beat["age_seconds"]}
+        # Verify the exact CID before any /proc sample is used for this arm.
+        # The sample below must describe the process that inspection attests,
+        # not a table captured while the container was still being issued.
+        first_pid = _UNSET
+        if bound["state"] == "bound":
+            try:
+                first_pid = binding.inspect_pid_if_live(bound["cid"], pinned)
+            except GuardExceeded as exc:
+                exc.sample_diagnostic = {
+                    "sample_after_inspect": False,
+                    "stage": "first_exact_cid_inspect"}
+                raise
         table = take()
         observations["controller"] = observe_controller(beat, table)
         controller_live = observations["controller"].get("pid") is not None
         if bound["state"] in ("bound", "bound_group"):
             try:
+                kwargs = {}
+                if first_pid is not _UNSET:
+                    kwargs["first_pid"] = first_pid
                 observations["bound"] = verify_bound(
                     bound, pinned, table, heartbeat_record=beat, wall=wall,
                     startup_bind_grace=startup_bind_grace,
-                    controller_live=controller_live)
+                    controller_live=controller_live, **kwargs)
             except GuardExceeded as exc:
                 if getattr(exc, "identity_observation", None) is not None:
                     observations["bound"] = {
                         "state": "identity_failed",
                         "identity": exc.identity_observation}
+                if getattr(exc, "sample_diagnostic", None) is not None:
+                    observations["binding_sample"] = exc.sample_diagnostic
                 raise
         else:
             observations["bound"] = {"state": bound["state"]}
@@ -546,6 +643,8 @@ def check_once(root, worker, *, storage_conf, graphroot, env=None,
         failure = exc
         reason = exc.reason
         result = "fail_closed"
+        if getattr(exc, "sample_diagnostic", None) is not None:
+            observations.setdefault("binding_sample", exc.sample_diagnostic)
     except Exception as exc:
         # Inspection, journal or fsync failures are not clean observations.
         failure = GuardExceeded("inspection_unavailable")

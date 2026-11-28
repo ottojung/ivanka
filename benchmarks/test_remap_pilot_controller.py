@@ -209,6 +209,87 @@ class ExecuteCaseTests(unittest.TestCase):
             (self.root / "att-drift" / "retention.json").read_text())
         self.assertIn("container.log", retention["log_integrity_failure"])
 
+    def test_expected_log_absent_is_explicit_not_unclassified(self):
+        def runner_with_missing_expected(plan, output_dir, attempt_dir):
+            run = self.fake_runner()(plan, output_dir, attempt_dir)
+            run["log_sha256"] = {"expected-only.log": "a" * 64}
+            return run
+
+        receipt = ctl.execute_case(
+            self.pilot_case, plan=self.plan, preflight_result=self.preflight,
+            runner=runner_with_missing_expected,
+            output_dir=self.root / "out-missing",
+            attempt_dir=self.root / "att-missing",
+            scorer=lambda p, c, o: {
+                "schema": ctl.SCORING_SCHEMA, "method": "m", "cohort": "real",
+                "score": 9.0, "reference_panel_sha256": "f" * 64,
+                "best_reference": "x", "multitruth": None})
+        self.assertEqual(receipt["status"], "failed")
+        self.assertIn("log_artifact_missing", receipt["failure_reason"])
+        self.assertIn("expected-only.log",
+                      receipt["diagnostics"]["log_artifact_missing"])
+        manifest = json.loads(
+            (self.root / "att-missing" / "retention.json").read_text())
+        self.assertIn("expected-only.log", manifest["missing_logs"])
+        self.assertTrue((self.root / "att-missing" / "receipt.json").is_file())
+
+    def test_log_copied_once_and_source_mutation_after_copy_is_ignored(self):
+        real_copy = ctl._copy_log
+        calls = []
+
+        def copy_then_mutate(source, dest):
+            copied = real_copy(source, dest)
+            calls.append(source)
+            if len(calls) == 1:
+                Path(source).write_bytes(b"mutated-after-copy")
+            return copied
+
+        with patch.object(ctl, "_copy_log", side_effect=copy_then_mutate):
+            ctl.execute_case(
+                self.pilot_case, plan=self.plan,
+                preflight_result=self.preflight,
+                runner=self.fake_runner(), output_dir=self.root / "out-once",
+                attempt_dir=self.root / "att-once",
+                scorer=lambda p, c, o: {
+                    "schema": ctl.SCORING_SCHEMA, "method": "m",
+                    "cohort": "real", "score": 9.0,
+                    "reference_panel_sha256": "f" * 64,
+                    "best_reference": "x", "multitruth": None})
+        self.assertEqual(len(calls), 1)
+        manifest = json.loads(
+            (self.root / "att-once" / "retention.json").read_text())
+        self.assertEqual(
+            manifest["logs"]["container.log"],
+            hashlib.sha256(b"ok\n").hexdigest())
+        source = Path(calls[0])
+        self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(),
+                         hashlib.sha256(b"mutated-after-copy").hexdigest())
+        self.assertNotIn("container.log", manifest["log_integrity_failure"])
+
+    def test_undrained_log_observation_is_explicit(self):
+        def runner_undrained(plan, output_dir, attempt_dir):
+            run = self.fake_runner(returncode=None, write_final_max=False)(
+                plan, output_dir, attempt_dir)
+            run["log_observation"] = {"terminal": False,
+                                      "reason": "launcher_exit_unproven"}
+            return run
+
+        receipt = ctl.execute_case(
+            self.pilot_case, plan=self.plan, preflight_result=self.preflight,
+            runner=runner_undrained, output_dir=self.root / "out-undrained",
+            attempt_dir=self.root / "att-undrained",
+            scorer=lambda p, c, o: {
+                "schema": ctl.SCORING_SCHEMA, "method": "m", "cohort": "real",
+                "score": 9.0, "reference_panel_sha256": "f" * 64,
+                "best_reference": "x", "multitruth": None})
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["failure_reason"], "missing_exit_status")
+        self.assertEqual(
+            receipt["diagnostics"]["log_observation"]["terminal"], False)
+        self.assertEqual(receipt["diagnostics"]["logs_undrained"],
+                         "launcher_exit_unproven")
+        self.assertTrue((self.root / "att-undrained" / "receipt.json").is_file())
+
     def test_distinct_receipts_for_distinct_runs(self):
         r1 = ctl.execute_case(
             self.pilot_case, plan=self.plan, preflight_result=self.preflight,

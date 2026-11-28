@@ -425,25 +425,65 @@ def classify_execution(*, returncode: int | None, final_max_exists: bool,
     return "measured", None
 
 
+def copy_log_set(*, attempt_dir: Path,
+                 logs: dict[str, str | None] | None,
+                 expected_logs: dict[str, str] | None) -> tuple[dict, dict, dict]:
+    """Copy every expected/provided log exactly once and classify the result.
+
+    The union of expected and provided names prevents an expected artifact
+    from being silently skipped when the runner did not surface a path. Both
+    original bytes (in place) and one copied byte stream are preserved; the
+    returned hashes belong to those exact copied bytes.
+    """
+    attempt_dir = Path(attempt_dir)
+    names = set(expected_logs or {}) | set(logs or {})
+    kept: dict[str, str] = {}
+    missing: dict[str, dict] = {}
+    integrity: dict[str, dict] = {}
+    for name in sorted(names):
+        source_value = (logs or {}).get(name)
+        expected = (expected_logs or {}).get(name)
+        if source_value is None:
+            missing[name] = {"expected_sha256": expected,
+                             "reason": "not_provided"}
+            continue
+        source = Path(source_value)
+        if not source.is_file():
+            missing[name] = {"expected_sha256": expected,
+                             "reason": "source_missing"}
+            continue
+        dest = attempt_dir / "logs" / Path(name).name
+        copied = _copy_log(source, dest)
+        if copied is None:
+            missing[name] = {"expected_sha256": expected,
+                             "reason": "copy_failed"}
+            continue
+        kept[name] = copied
+        if expected is not None and copied != expected:
+            integrity[name] = {"source_sha256": expected,
+                               "copy_sha256": copied}
+    return kept, missing, integrity
+
+
 def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
                           logs: dict[str, str | None] | None = None,
                           extra: dict[str, str] | None = None,
-                          expected_logs: dict[str, str] | None = None) -> dict:
+                          expected_logs: dict[str, str] | None = None,
+                          copied_logs: dict[str, str] | None = None,
+                          missing_logs: dict[str, dict] | None = None,
+                          integrity_failures: dict[str, dict] | None = None) -> dict:
     attempt_dir = Path(attempt_dir)
     attempt_dir.mkdir(parents=True, exist_ok=True)
-    kept_logs = {}
-    integrity = {}
-    for name, src in (logs or {}).items():
-        if src is None:
-            continue
-        dest = attempt_dir / "logs" / Path(name).name
-        digest = _copy_log(Path(src), dest)
-        if digest:
-            expected = (expected_logs or {}).get(dest.name)
-            if expected is not None and digest != expected:
-                integrity[dest.name] = {"source_sha256": expected,
-                                        "copy_sha256": digest}
-            kept_logs[dest.name] = digest
+    if copied_logs is None:
+        # Direct callers without a precomputed transaction get one copy pass.
+        kept_logs, missing, integrity = copy_log_set(
+            attempt_dir=attempt_dir, logs=logs,
+            expected_logs=expected_logs)
+    else:
+        # Production passes the already-copied bytes/hashes: never recopy.
+        kept_logs = dict(copied_logs)
+        missing = dict(missing_logs or {})
+        integrity = dict(integrity_failures or {})
     receipt_path = attempt_dir / "receipt.json"
     receipt_sha = _write_json(receipt_path, receipt)
     manifest = {
@@ -451,6 +491,7 @@ def retain_case_artifacts(*, attempt_dir: Path, receipt: dict,
         "attempt_dir": str(attempt_dir),
         "receipt_sha256": receipt_sha,
         "logs": kept_logs,
+        "missing_logs": missing,
         "log_integrity_failure": integrity,
         "extra": dict(extra or {}),
         "retained": True,
@@ -612,28 +653,36 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
 
     # Copy/verify logs BEFORE the receipt is digested: a copy mismatch is an
     # explicit diagnostic in the receipt, never a silently dropped receipt.
-    integrity_failures = {}
-    for name, src in log_paths.items():
-        if src is None:
-            continue
-        dest = attempt_dir / "logs" / Path(name).name
-        copied = _copy_log(Path(src), dest)
-        expected = (run.get("log_sha256") or {}).get(dest.name)
-        if copied and expected is not None and copied != expected:
-            integrity_failures[dest.name] = {"source_sha256": expected,
-                                             "copy_sha256": copied}
+    copied_logs, missing_logs, integrity_failures = copy_log_set(
+        attempt_dir=attempt_dir, logs=log_paths,
+        expected_logs=run.get("log_sha256") or {})
+    observation = run.get("log_observation")
+    if observation is not None:
+        diagnostics["log_observation"] = observation
+        if observation.get("terminal") is False:
+            diagnostics["logs_undrained"] = observation.get("reason")
     if integrity_failures:
         diagnostics["log_integrity_failure"] = integrity_failures
+    expected_names = set(run.get("log_sha256") or {})
+    missing_expected = {name: info for name, info in missing_logs.items()
+                        if name in expected_names}
+    if missing_logs:
+        diagnostics["log_artifact_missing"] = missing_logs
+    if integrity_failures or missing_expected:
+        reason = ("log_integrity_failure" if integrity_failures
+                  else "log_artifact_missing")
         if status == "measured":
             status = "failed"
-            failure_reason = "log_integrity_failure"
-            # A failed receipt must not carry a measurement: build_receipt
-            # rejects finite score/seconds on unmeasured attempts.
-            score = None
-            seconds = None
-            execution["status"] = status
-            execution["failure_reason"] = failure_reason
-            _write_json(attempt_dir / "execution.json", execution)
+            failure_reason = reason
+        elif status == "failed" and failure_reason:
+            failure_reason = f"{failure_reason}:{reason}"[:320]
+        # A failed receipt must never carry a measurement: build_receipt
+        # rejects finite score/seconds on unmeasured attempts.
+        score = None
+        seconds = None
+        execution["status"] = status
+        execution["failure_reason"] = failure_reason
+        _write_json(attempt_dir / "execution.json", execution)
 
     receipt = remap_runner.build_receipt(
         plan,
@@ -647,10 +696,8 @@ def execute_case(pilot_case: PilotCase, *, plan: dict, preflight_result: dict,
         seconds=seconds if status == "measured" else None,
     )
     retain_case_artifacts(attempt_dir=attempt_dir, receipt=receipt,
-                          logs=log_paths,
-                          expected_logs=run.get("log_sha256"),
-                          extra={"log_integrity_failure": integrity_failures}
-                          if integrity_failures else None)
+                          copied_logs=copied_logs, missing_logs=missing_logs,
+                          integrity_failures=integrity_failures)
     return receipt
 
 

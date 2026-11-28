@@ -145,12 +145,21 @@ class BackgroundSupervisor:
                 raise HandoffRequired("no verified image-agent handoff for " + tool)
         pending = sched.resume(plan, self.root)
         completed, deferred = [], []
+        stopped = False
         for arm in balanced_pending(plan, pending):
-            if (self.root / STOP_FILE).is_file():
+            if self._stopped():
+                stopped = True
                 break
-            if self._run_arm(arm, plan, completed) == "deferred":
+            outcome = self._run_arm(arm, plan, completed)
+            if outcome == "stopped":
+                # The inner drain boundary may have observed a STOP that the
+                # owner retired before control returned here. Remember it so
+                # no later arm is dispatched and the status stays stopped.
+                stopped = True
+                break
+            if outcome == "deferred":
                 deferred.append(sched.receipt_id(arm))
-        status = "stopped" if (self.root / STOP_FILE).is_file() else (
+        status = "stopped" if (stopped or self._stopped()) else (
             "deferred" if deferred else "idle" if not pending else "advanced")
         return {"status": status, "completed": completed, "deferred": deferred,
                 "remaining": len(pending) - len(completed)}

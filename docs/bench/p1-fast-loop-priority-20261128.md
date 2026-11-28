@@ -18,6 +18,14 @@ shared reserve.
   lease/guard and 32 GiB reserve remain. When a P1 job is immediately ready,
   drain PX at the next case boundary. No idle holding when no eligible P1 job
   exists.
+- **Founder 07:59 UTC reconfirmation, clarified on the board at 08:08 UTC:**
+  "P1 first" is a claim on the worker, not a reservation created by source,
+  CI or review readiness alone. PX must keep backfilling continuously whenever
+  P1 has no READY execution request with an active owner. Pre-stage the exact
+  command, owner and rollback before arming the owner-bound STOP; keep the STOP
+  lifetime minimal and restore PX immediately on release or verified failure.
+  Never blindly retire an orphan STOP or interrupt an active arm. This adds no
+  new gate, no new coordinator and no reservation semantics.
 
 ## Two lanes
 

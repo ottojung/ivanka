@@ -318,6 +318,41 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(receipt["attempt"], sched.AUTHORIZED_EXTRA_ATTEMPT)
         self.assertEqual(receipt["outcome"], "success")
 
+    def test_inner_stop_is_remembered_if_owner_retires_sentinel(self):
+        """No later arm runs when the owner removes STOP during the return."""
+        registry = self.registry()
+        self.handoff_all(registry)
+        calls = []
+        supervisor = self.supervisor(self.fake_runner(calls), registry)
+        plan = sched.build_plan(registry, supervisor.source, self.px)
+        expected_remaining = len(sched.resume(plan, self.px))
+        stop_path = self.px / sup.STOP_FILE
+        real_admit = sched.admit_arm
+
+        def admit_then_stop(*args, **kwargs):
+            result = real_admit(*args, **kwargs)
+            stop_path.write_text("stop\n")
+            return result
+
+        seen = {"n": 0}
+
+        def stopped_then_retired():
+            seen["n"] += 1
+            if seen["n"] == 2 and stop_path.is_file():
+                stop_path.unlink()  # owner retires before start() sees return
+                return True
+            return stop_path.is_file()
+
+        with (patch.object(sched, "admit_arm", side_effect=admit_then_stop),
+              patch.object(supervisor, "_stopped",
+                           side_effect=stopped_then_retired)):
+            result = supervisor.start(armed=True)
+        self.assertEqual(result["status"], "stopped")
+        self.assertEqual(result["completed"], [])
+        self.assertEqual(result["remaining"], expected_remaining)
+        self.assertEqual(calls, [])
+        self.assertFalse(stop_path.exists())
+
     def test_runner_type_error_after_side_effect_is_never_replayed(self):
         calls = []
 

@@ -218,11 +218,15 @@ class RecoverMaintenanceTests(unittest.TestCase):
         self.assertTrue(result["skipped"])
         self.assertTrue(outside.exists())
 
-    def test_incompressible_scratch_refused(self):
-        self.reads.write_bytes(os.urandom(1 << 20))
+    def test_incompressible_scratch_preserved_without_aborting_archive(self):
+        raw = os.urandom(1 << 20)
+        self.reads.write_bytes(raw)
         result = self.run_apply(self.review())
-        self.assertTrue(result["skipped"])
-        self.assertTrue(self.reads.exists())
+        self.assertEqual(result["skipped"], [])
+        self.assertEqual(len(result["applied"]), 1)
+        self.assertGreater(result["applied"][0]["reclaimed_bytes"], 0)
+        self.assertEqual(self.reads.read_bytes(), raw)
+        self.assertFalse(self.mates.exists())
 
     def test_mixed_state_resume_completes_without_data_loss(self):
         review = self.review()
@@ -270,6 +274,87 @@ class RecoverMaintenanceTests(unittest.TestCase):
         self.assertTrue(result["skipped"])
         self.assertIn("absolute", result["skipped"][0]["reason"])
         self.assertEqual({p: p.read_bytes() for p in self.files}, self.originals)
+
+
+    def test_no_benefit_entry_is_preserved_and_later_entries_apply(self):
+        tiny = self.archive / "scratch/aaa_tiny.fastq"
+        raw = os.urandom(4096)
+        tiny.write_bytes(raw)
+        review = self.review()
+        result = self.run_apply(review)
+        self.assertEqual(result["skipped"], [])
+        self.assertEqual(len(result["applied"]), 1)
+        self.assertGreater(result["applied"][0]["reclaimed_bytes"], 0)
+        # No-benefit source keeps its original bytes; profitable files after
+        # it in sorted order are still archived.
+        self.assertTrue(tiny.is_file())
+        self.assertEqual(tiny.read_bytes(), raw)
+        self.assertFalse(self.reads.exists())
+        self.assertTrue(self.reads.with_name(
+            self.reads.name + codec.ZST_SUFFIX).is_file())
+        # Restore remains compatible: archived pair comes back, plain stays.
+        self.run_restore()
+        self.assertEqual(self.reads.read_bytes(), self.originals[self.reads])
+        self.assertEqual(tiny.read_bytes(), raw)
+
+    def test_partial_pair_discarded_with_no_benefit_sibling(self):
+        tiny = self.archive / "scratch/aaa_tiny.fastq"
+        tiny.write_bytes(os.urandom(4096))
+        partial = self.reads.with_name(self.reads.name + codec.ZST_SUFFIX)
+        partial.write_bytes(b"partial frame")
+        review = self.review()
+        result = self.run_apply(review)
+        self.assertEqual(result["skipped"], [])
+        self.assertGreater(result["applied"][0]["reclaimed_bytes"], 0)
+        self.assertTrue(tiny.is_file())
+        self.assertFalse(self.reads.exists())
+        proof = codec.load_meta(self.reads.with_name(
+            self.reads.name + codec.META_SUFFIX), format=codec.SCRATCH_FORMAT)
+        self.assertEqual((proof["original_sha256"], proof["original_size"]),
+                         (hashlib.sha256(self.originals[self.reads]).hexdigest(),
+                          len(self.originals[self.reads])))
+
+    def test_allocation_rounding_never_unlinks_for_logical_only_gain(self):
+        small = self.archive / "scratch/aaa_small.fastq"
+        small.write_text("a" * 200)
+        review = self.review()
+        result = self.run_apply(review)
+        self.assertEqual(result["skipped"], [])
+        self.assertGreater(result["applied"][0]["reclaimed_bytes"], 0)
+        # The frame is logically smaller, but frame + meta allocate more than
+        # the original block; the plain file must survive that rounding.
+        self.assertTrue(small.is_file())
+        self.assertEqual(small.read_text(), "a" * 200)
+        self.assertFalse(small.with_name(
+            small.name + codec.ZST_SUFFIX).exists())
+
+
+    def test_complete_pair_plus_plain_accounts_measured_freed_bytes(self):
+        # Interrupt after both os.replace() calls but before plain unlink:
+        # a complete pair coexists with its original plain file.
+        frame, proof = codec.prepare_scratch(self.mates)
+        meta = self.mates.with_name(self.mates.name + codec.META_SUFFIX)
+        with meta.open("w", encoding="utf-8") as target:
+            json.dump(proof, target, sort_keys=True, indent=2)
+            target.write("\n")
+        os.replace(frame, self.mates.with_name(
+            self.mates.name + codec.ZST_SUFFIX))
+        scratch = self.archive / "scratch"
+        allocated = lambda: sum(p.stat().st_blocks * 512
+                                for p in scratch.rglob("*") if p.is_file())
+        before = allocated()
+        result = self.run_apply(self.review())
+        self.assertEqual(result["skipped"], [])
+        self.assertEqual(len(result["applied"]), 1)
+        self.assertEqual(result["applied"][0]["reclaimed_bytes"],
+                         before - allocated())
+        self.assertEqual(result["reclaimed_bytes"], before - allocated())
+        self.assertFalse(self.mates.exists())
+        self.assertTrue(self.mates.with_name(
+            self.mates.name + codec.ZST_SUFFIX).is_file())
+        self.run_restore()
+        self.assertEqual(self.mates.read_bytes(), self.originals[self.mates])
+        self.assertEqual(self.reads.read_bytes(), self.originals[self.reads])
 
 
 if __name__ == "__main__":

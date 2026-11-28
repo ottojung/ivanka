@@ -217,7 +217,7 @@ def _late_cid(lease_root, ident, owner, cidfile):
     """
     try:
         current = lease.latest(lease.events(lease_root)).get(str(ident))
-    except (GuardExceeded, OSError, ValueError) as exc:
+    except (GuardExceeded, OSError, ValueError):
         return None, "journal_unavailable"
     if current is None or current.get("state") != "active":
         return None, "lease_inactive"
@@ -225,30 +225,39 @@ def _late_cid(lease_root, ident, owner, cidfile):
         return None, "owner_mismatch"
     if current.get("mode") != "pilot":
         return None, "mode_mismatch"
-    if (current.get("cidfile") is not None
-            and current.get("cidfile") != str(cidfile)):
+    if current.get("cidfile") != str(cidfile):
         return None, "cidfile_mismatch"
+    journal_cid = current.get("cid")
     try:
         cid = binding.read_cid(cidfile)
     except (GuardExceeded, OSError):
+        # A journal CID that was already attested conflicts with a CID that is
+        # now absent or unreadable. Never let a caller's prior observation
+        # override that conflict, and never treat a symlink or malformed file
+        # as a benign absence.
+        if journal_cid is not None:
+            return None, "cid_mismatch"
         return None, ("absent" if binding.cidfile_absent(cidfile)
                       else "cidfile_unavailable")
-    journal_cid = current.get("cid")
     if journal_cid is not None and journal_cid != cid:
         return None, "cid_mismatch"
     return cid, None
 
 
 def _startup_abort(lease_root, ident, owner, cidfile, exc, *, stopper,
-                   snapshot, handle, known_cid=None):
+                   snapshot, handle, known_cid=None, launcher_group=None):
     """Fail-closed startup abort after a post-spawn failure.
 
-    If a valid exact CID is available, verify its ownership and attempt exact
-    CID teardown with a fresh absence proof. If no CID exists yet, an exact
-    returned launcher handle that is still live may be reaped only through its
-    established process-group identity, then the pinned cidfile is rechecked
-    for a late CID. No arbitrary PID is signalled, no lease is released, and
-    every outcome (including failed/unproven teardown) is durable evidence.
+    A valid exact CID is torn down only after durable ownership is proved.
+    A CID read earlier from this lease's pinned cidfile may fill a genuinely
+    absent or unreadable file, but journal, lease, owner and CID mismatches
+    are terminal: a local observation never overrides a failed ownership
+    proof. With no CID, the exact launcher handle may be reaped only through
+    the process-group identity captured at spawn; rereading its PID here can
+    select a reused process. The pinned cidfile is rechecked after launcher
+    handling even when the launcher already exited, because Podman can write
+    the CID just before termination. No arbitrary PID is signalled, no lease
+    is released, and every outcome is durable evidence.
     """
     reason = exc.reason if isinstance(exc, GuardExceeded) else "startup_failure"
     evidence = {
@@ -257,11 +266,13 @@ def _startup_abort(lease_root, ident, owner, cidfile, exc, *, stopper,
         "lease_state": "active_unreleased",
     }
     cid, problem = _late_cid(lease_root, ident, owner, cidfile)
-    if known_cid is not None:
-        if cid is None:
-            cid, problem = known_cid, None
-        elif cid != known_cid:
-            cid, problem = None, "cid_mismatch"
+    if known_cid is not None and cid is None and problem == "absent":
+        # Only a genuinely absent pinned file may be filled by the exact CID
+        # read from that same path earlier. Malformed, symlinked and journal
+        # conflicting paths remain terminal.
+        cid, problem = known_cid, None
+    elif cid is not None and known_cid is not None and cid != known_cid:
+        cid, problem = None, "cid_mismatch"
 
     def remove_exact(target):
         try:
@@ -286,25 +297,39 @@ def _startup_abort(lease_root, ident, owner, cidfile, exc, *, stopper,
                 and getattr(handle, "pid", None) is not None):
             try:
                 if handle.poll() is not None:
+                    # The exact launcher is gone. Its PID may already be
+                    # reused, so no process group may be signalled here.
                     evidence["launcher_alive"] = False
+                elif launcher_group is None:
+                    raise GuardExceeded("launcher_identity_unavailable")
                 else:
-                    pid = int(handle.pid)
-                    if pid <= 0:
-                        raise GuardExceeded("invalid_launcher")
-                    table = snapshot() if callable(snapshot) else snapshot
-                    group = build.bind_launcher(pid, snapshot=table)
-                    evidence["launcher_group"] = build.stop_group(
-                        group, handle)
-                    late, late_problem = _late_cid(
-                        lease_root, ident, owner, cidfile)
-                    if late is not None:
-                        evidence["cid"] = late
-                        remove_exact(late)
+                    # Re-derive the group from a fresh snapshot and require the
+                    # same identity immediately before any signal is sent.
+                    fresh = snapshot() if callable(snapshot) else snapshot
+                    current_group = build.bind_launcher(
+                        int(handle.pid), snapshot=fresh)
+                    if (current_group.get("pgid") != launcher_group.get("pgid")
+                            or current_group.get("fingerprint")
+                            != launcher_group.get("fingerprint")):
+                        raise GuardExceeded("launcher_identity_lost")
+                    if handle.poll() is not None:
+                        evidence["launcher_alive"] = False
                     else:
-                        evidence["late_cid_after_reap"] = (
-                            late_problem or "absent")
+                        evidence["launcher_group"] = build.stop_group(
+                            launcher_group, handle)
             except Exception as stop_exc:
                 evidence["launcher_teardown_error"] = str(stop_exc)[:200]
+        # A container can appear before or during launcher exit, so the pinned
+        # cidfile is rechecked on every no-CID abort path. A prior known CID
+        # mismatch is never bypassed by a later read of a different CID.
+        late, late_problem = _late_cid(lease_root, ident, owner, cidfile)
+        if late is not None and (known_cid is None or late == known_cid):
+            evidence["cid"] = late
+            remove_exact(late)
+        else:
+            evidence["late_cid_after_reap"] = (
+                "cid_mismatch" if late is not None and known_cid is not None
+                else late_problem or "absent")
 
     # Explicit durable evidence before any caller is told the arm failed; no
     # silent gap when teardown itself is unavailable or unproven.
@@ -401,13 +426,19 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         except Exception as exc:
             raise GuardExceeded("heartbeat_unavailable") from exc
 
+        stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))
         try:
             spawned = spawn(cidfile, env)
         except Exception as exc:
+            failure = GuardExceeded("spawn_failed")
             _audit(lease_root, {"event": "spawn_failed", "lease_id": ident,
                                 "owner": str(owner), "cidfile": cidfile,
                                 "detail": str(exc)[:200]})
-            raise GuardExceeded("spawn_failed") from exc
+            # A launcher that wrote its pinned cidfile before raising may
+            # already own a live container; it must not be abandoned.
+            _startup_abort(lease_root, ident, owner, cidfile, failure,
+                           stopper=stopper, snapshot=snapshot, handle=None)
+            raise failure from exc
 
         # Exact CID comes only from the cidfile pinned to THIS lease. Podman
         # writes --cidfile asynchronously after spawn; only true absence of a
@@ -420,7 +451,6 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         # removed by exact CID with fresh absence proof, otherwise only the
         # exact returned launcher group may be reaped, and no lease is ever
         # released without proof.
-        stopper = stop_cid or (lambda c: teardown.stop_cid(env, c))
         tick = clock if clock is not None else time.monotonic
         start = tick()
         poll = (launcher.poll if callable(getattr(launcher, "poll", None))
@@ -433,6 +463,26 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         owned_launcher = (
             spawned if callable(getattr(spawned, "poll", None))
             and callable(getattr(spawned, "wait", None)) else None)
+        # Bind the launcher's process-group identity now, while the exact
+        # handle just returned by spawn is still live. Reading handle.pid in
+        # the abort path could resolve a PID that has since been reused.
+        launcher_group = None
+        if (owned_launcher is not None
+                and callable(getattr(owned_launcher, "poll", None))
+                and getattr(owned_launcher, "pid", None) is not None):
+            try:
+                if owned_launcher.poll() is None:
+                    launcher_pid = int(owned_launcher.pid)
+                    if launcher_pid <= 0:
+                        raise GuardExceeded("invalid_launcher")
+                    table = snapshot() if callable(snapshot) else snapshot
+                    launcher_group = build.bind_launcher(
+                        launcher_pid, snapshot=table)
+            except Exception as capture_exc:
+                _audit(lease_root, {
+                    "event": "launcher_identity_unavailable",
+                    "lease_id": ident, "owner": str(owner),
+                    "detail": str(capture_exc)[:200]})
         sleep_fn = sleep if sleep is not None else time.sleep
         cid = None
         try:
@@ -490,7 +540,8 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         except Exception as exc:
             _startup_abort(lease_root, ident, owner, cidfile, exc,
                            stopper=stopper, snapshot=snapshot,
-                           handle=owned_launcher, known_cid=cid)
+                           handle=owned_launcher, known_cid=cid,
+                           launcher_group=launcher_group)
             reason = exc.reason if isinstance(exc, GuardExceeded) \
                 else "measurement_unavailable"
             raise GuardExceeded(reason) from exc
@@ -503,7 +554,8 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
         except Exception as exc:
             _startup_abort(lease_root, ident, owner, cidfile, exc,
                            stopper=stopper, snapshot=snapshot,
-                           handle=owned_launcher, known_cid=cid)
+                           handle=owned_launcher, known_cid=cid,
+                           launcher_group=launcher_group)
             raise GuardExceeded("lease_journal_unavailable") from exc
         try:
             emitter.bound(cid)
@@ -511,7 +563,8 @@ def run_prospective(*, owner, lease_root, stop_path, disk_path, spawn,
             failure = GuardExceeded("heartbeat_unavailable")
             _startup_abort(lease_root, ident, owner, cidfile, failure,
                            stopper=stopper, snapshot=snapshot,
-                           handle=owned_launcher, known_cid=cid)
+                           handle=owned_launcher, known_cid=cid,
+                           launcher_group=launcher_group)
             raise failure from exc
 
         def refresh_ready():

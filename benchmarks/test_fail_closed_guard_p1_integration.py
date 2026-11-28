@@ -14,8 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from fail_closed_guard import (build, disk, lease, p1_harness, p1_helper, proc,
-                               stop, teardown, tree, watch, watchdog)
+from fail_closed_guard import (disk, lease, p1_harness, p1_helper, proc, stop,
+                               teardown, tree, watch, watchdog)
 from fail_closed_guard.errors import GuardExceeded, TeardownError
 
 CID = "a" * 64
@@ -827,7 +827,10 @@ class P1HarnessStartupAbortTests(P1HarnessLifecycleTests):
                 self._run(spawn=lambda cidfile, env: handle,
                           watchdog_ready=lambda: next(states))
         self.assertEqual(caught.exception.reason, "watchdog_unbound")
-        bind_launcher.assert_called_once_with(401, snapshot=self.table)
+        self.assertEqual(bind_launcher.call_count, 2)  # capture and reverify
+        self.assertTrue(all(call.args == (401,)
+                            and call.kwargs == {"snapshot": self.table}
+                            for call in bind_launcher.call_args_list))
         self.assertEqual([call.args[0] for call in killpg_mock.call_args_list],
                          [401, 401])
         self.assertEqual(handle.waited, [5])
@@ -943,6 +946,168 @@ class P1HarnessStartupAbortTests(P1HarnessLifecycleTests):
                             and e.get("detail") == "deadline"
                             for e in lease.events(self.root)))
         self.assert_no_release()
+
+    def test_ownership_fault_with_known_cid_never_tears_down(self):
+        for problem in ("journal_unavailable", "owner_mismatch",
+                        "cidfile_mismatch", "cid_mismatch"):
+            with self.subTest(problem=problem):
+                (self.root / lease.JOURNAL_NAME).unlink(missing_ok=True)
+                states = self.ready_then_unready()
+                with patch("fail_closed_guard.p1_harness._late_cid",
+                           return_value=(None, problem)):
+                    with self.assertRaises(GuardExceeded) as caught:
+                        self._run(spawn=self.spawn_with_cid(),
+                                  launcher=PollLauncher(),
+                                  watchdog_ready=lambda states=states: next(states))
+                self.assertEqual(caught.exception.reason, "watchdog_unbound")
+                self.assertEqual(self.calls["stop"], [])
+                event = self.abort_events()[-1]
+                self.assertEqual(event["late_cid"], problem)
+                self.assertNotIn("cid", event)
+                self.assert_no_release()
+
+    def test_known_cid_survives_cidfile_disappearing_after_read(self):
+        holder = {}
+
+        def spawn(cidfile, env):
+            holder["cidfile"] = cidfile
+            Path(cidfile).write_text(CID + "\n")
+
+        def bad_binder(cid, env, snapshot=None):
+            Path(holder["cidfile"]).unlink()
+            raise GuardExceeded("identity_lost")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn, launcher=PollLauncher(),
+                      bind_container=bad_binder)
+        self.assertEqual(caught.exception.reason, "identity_lost")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertNotIn("late_cid", event)
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_late_cid_after_launcher_exit_is_removed_by_exact_cid(self):
+        holder = {}
+
+        class ExitedLauncher(LauncherHandle):
+            def poll(self):
+                holder["polls"] = holder.get("polls", 0) + 1
+                if holder["polls"] >= 2:
+                    Path(holder["cidfile"]).write_text(CID + "\n")
+                return 0
+
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            holder["cidfile"] = cidfile
+            return ExitedLauncher(pid=405)
+
+        states = self.ready_then_unready()
+        with patch("fail_closed_guard.build.bind_launcher",
+                   return_value={"pgid": 405}) as bind_launcher, \
+                patch("fail_closed_guard.build.os.killpg") as killpg:
+            with self.assertRaises(GuardExceeded) as caught:
+                self._run(spawn=spawn,
+                          watchdog_ready=lambda: next(states))
+        self.assertEqual(caught.exception.reason, "watchdog_unbound")
+        bind_launcher.assert_not_called()  # launcher exited before capture
+        killpg.assert_not_called()
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertIs(event["launcher_alive"], False)
+        self.assertEqual(event["late_cid"], "absent")
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_spawn_error_after_cid_write_removes_exact_cid(self):
+        def spawn(cidfile, env):
+            self.calls["spawn"].append(cidfile)
+            Path(cidfile).write_text(CID + "\n")
+            raise RuntimeError("launcher failed after writing cid")
+
+        with self.assertRaises(GuardExceeded) as caught:
+            self._run(spawn=spawn)
+        self.assertEqual(caught.exception.reason, "spawn_failed")
+        self.assertEqual(self.calls["stop"], [CID])
+        event = self.abort_events()[-1]
+        self.assertEqual(event["reason"], "spawn_failed")
+        self.assertEqual(event["cid"], CID)
+        self.assertEqual(event["teardown_result"], "proven")
+        self.assert_no_release()
+
+    def test_journal_cid_conflict_blocks_known_cid_fallback(self):
+        ident = "p1-journal-conflict"
+        cidfile = self.root / "cidfiles" / "journal.cid"
+        cidfile.parent.mkdir(parents=True, exist_ok=True)
+        lease.acquire(self.root, ident, "pilot", cid=CID_B, owner="real-owner",
+                      cidfile=str(cidfile))
+        evidence = p1_harness._startup_abort(
+            self.root, ident, "real-owner", str(cidfile),
+            GuardExceeded("watchdog_unbound"), stopper=self._stopper,
+            snapshot=lambda: self.table, handle=None, known_cid=CID)
+        self.assertEqual(self.calls["stop"], [])
+        self.assertEqual(evidence["late_cid"], "cid_mismatch")
+        self.assertNotIn("cid", evidence)
+
+    def test_malformed_or_symlinked_cidfile_blocks_known_cid_fallback(self):
+        base = self.root / "cidfiles"
+        base.mkdir(parents=True, exist_ok=True)
+        for label, prepare in (
+                ("malformed", lambda p: p.write_text("not-a-cid\n")),
+                ("symlink", lambda p: p.symlink_to(self.root / "other.cid"))):
+            with self.subTest(label=label):
+                ident = "p1-" + label
+                cidfile = base / (label + ".cid")
+                prepare(cidfile)
+                lease.acquire(self.root, ident, "pilot", owner="real-owner",
+                              cidfile=str(cidfile))
+                evidence = p1_harness._startup_abort(
+                    self.root, ident, "real-owner", str(cidfile),
+                    GuardExceeded("watchdog_unbound"), stopper=self._stopper,
+                    snapshot=lambda: self.table, handle=None, known_cid=CID)
+                self.assertEqual(evidence["late_cid"],
+                                 "cidfile_unavailable")
+                self.assertNotIn("cid", evidence)
+        self.assertEqual(self.calls["stop"], [])
+
+    def test_late_recheck_respects_known_cid_mismatch(self):
+        ident = "p1-known-mismatch"
+        cidfile = self.root / "cidfiles" / "mismatch.cid"
+        cidfile.parent.mkdir(parents=True, exist_ok=True)
+        cidfile.write_text(CID_B + "\n")
+        lease.acquire(self.root, ident, "pilot", cid=CID_B, owner="real-owner",
+                      cidfile=str(cidfile))
+        evidence = p1_harness._startup_abort(
+            self.root, ident, "real-owner", str(cidfile),
+            GuardExceeded("watchdog_unbound"), stopper=self._stopper,
+            snapshot=lambda: self.table, handle=None, known_cid=CID)
+        self.assertEqual(evidence["late_cid"], "cid_mismatch")
+        self.assertEqual(evidence["late_cid_after_reap"], "cid_mismatch")
+        self.assertNotIn("cid", evidence)
+        self.assertEqual(self.calls["stop"], [])
+
+    def test_launcher_group_reverify_mismatch_prevents_signal(self):
+        ident = "p1-reverify"
+        cidfile = self.root / "cidfiles" / "reverify.cid"
+        cidfile.parent.mkdir(parents=True, exist_ok=True)
+        lease.acquire(self.root, ident, "pilot", owner="real-owner",
+                      cidfile=str(cidfile))
+        captured = {"pgid": 407, "pid": 407, "fingerprint": [5, 7]}
+        fresh = {"pgid": 999, "pid": 999, "fingerprint": [9, 9]}
+        with patch("fail_closed_guard.build.bind_launcher",
+                   side_effect=[fresh]), \
+                patch("fail_closed_guard.build.stop_group") as stop_group:
+            evidence = p1_harness._startup_abort(
+                self.root, ident, "real-owner", str(cidfile),
+                GuardExceeded("watchdog_unbound"), stopper=self._stopper,
+                snapshot=lambda: self.table, handle=LauncherHandle(pid=407),
+                launcher_group=captured)
+        stop_group.assert_not_called()
+        self.assertIn("launcher_identity_lost",
+                      evidence["launcher_teardown_error"])
+        self.assertEqual(self.calls["stop"], [])
 
 
 if __name__ == "__main__":

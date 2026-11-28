@@ -5,3 +5,14 @@ mod duplicates;
 mod loci;
 mod scan_equivalence;
 mod support;
+
+#[cfg(test)]
+pub(super) use super::count;
+#[cfg(test)]
+pub(super) use super::index;
+#[cfg(test)]
+pub(super) use super::ranking;
+#[cfg(test)]
+pub(super) use super::scan;
+#[cfg(test)]
+pub(super) use super::{Hits, Reads, K};

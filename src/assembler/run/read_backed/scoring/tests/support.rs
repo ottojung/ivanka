@@ -1,7 +1,7 @@
 //! Read-derived fixture helpers. Candidate sequences are synthetic ACGT only;
 //! no reference, panel or evaluator score is involved.
 
-use super::super::super::Reads;
+use super::Reads;
 
 pub(super) fn rc(seq: &[u8]) -> Vec<u8> {
     seq.iter()

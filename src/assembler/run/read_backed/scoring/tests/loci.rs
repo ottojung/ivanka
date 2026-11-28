@@ -2,13 +2,14 @@
 //! physical locus. These fixtures enter scoring as real mate records to show
 //! that the two-locus mask gate is met by overlapping windows.
 
-use super::super::super::{index, ranking};
-use super::super::count;
+use super::count;
+use super::index;
+use super::ranking;
 use super::support::{rc, reads, sequence, tiled};
 
 #[test]
 fn one_substitution_yields_an_exclusive_pair_mask() {
-    let mut a = sequence(160, 11);
+    let a = sequence(160, 11);
     let mut b = a.clone();
     b[80] = if b[80] == b'A' { b'C' } else { b'A' };
     let contigs = vec![a, b];

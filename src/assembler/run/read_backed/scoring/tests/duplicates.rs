@@ -2,8 +2,8 @@
 //! scoring currently casts one vote per record. These fixtures record that
 //! behaviour from raw mates rather than from hand-built Statistics.
 
-use super::super::super::index;
-use super::super::count;
+use super::count;
+use super::index;
 use super::support::{rc, reads, sequence};
 
 fn contigs() -> Vec<Vec<u8>> {

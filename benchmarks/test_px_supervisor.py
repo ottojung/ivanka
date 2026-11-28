@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 from assembler_bench import exploratory_policy
 from assembler_bench import px_cohort_scheduler as sched
+from assembler_bench import px_guard_source as guard_source
+from assembler_bench import px_retry_authorization as authz
 from assembler_bench import px_supervisor as sup
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -235,6 +237,86 @@ class SupervisorTests(unittest.TestCase):
         result = self.supervisor(self.fake_runner(calls), registry).start(armed=True)
         self.assertEqual(result["status"], "stopped")
         self.assertEqual(calls, [])
+
+    def test_stop_armed_during_admission_prevents_dispatch_and_resumes(self):
+        """A drain inside admission must not dispatch or complete an arm."""
+        registry = self.registry()
+        self.handoff_all(registry)
+        calls = []
+        real_admit = sched.admit_arm
+
+        def admit_then_stop(*args, **kwargs):
+            result = real_admit(*args, **kwargs)
+            (self.px / sup.STOP_FILE).write_text("stop\n")
+            return result
+
+        with patch.object(sched, "admit_arm", side_effect=admit_then_stop):
+            result = self.supervisor(self.fake_runner(calls), registry).start(
+                armed=True)
+        self.assertEqual(result["status"], "stopped")
+        self.assertEqual(result["completed"], [])
+        self.assertEqual(calls, [])
+        self.assertEqual(list((self.px / "receipts").glob("*.json")), [])
+
+        # Owner retires STOP; the untouched arm resumes and completes once.
+        (self.px / sup.STOP_FILE).unlink()
+        resumed = self.supervisor(self.fake_runner(calls, stop_after=1),
+                                  registry).start(armed=True)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(resumed["completed"], calls)
+
+    def test_stop_during_authorized_retry_admission_consumes_nothing(self):
+        """No claim, runner or completion when STOP arrives before attempt 3."""
+        registry = self.registry()
+        self.handoff_all(registry)
+        plan = sched.build_plan(registry, self.source(), self.px)
+        arm = next(iter(sup.balanced_pending(plan, sched.resume(plan, self.px))))
+        arm_id = sched.receipt_id(arm)
+        for _ in range(sched.MAX_INFRA_ATTEMPTS):
+            sched.record_outcome(self.px, arm, None, "failure",
+                                 failure_reason="measurement_unavailable",
+                                 runner_receipt_sha256="b" * 64)
+        fixture = (Path(__file__).resolve().parent / "fixtures"
+                   / "px_guard_pins")
+        real_verify = guard_source.verify
+
+        def fixture_verify(root=None):
+            return real_verify(root=fixture)
+
+        calls, claims = [], []
+        real_admit = sched.admit_arm
+
+        def admit_then_stop(*args, **kwargs):
+            result = real_admit(*args, **kwargs)
+            (self.px / sup.STOP_FILE).write_text("stop\n")
+            return result
+
+        def spy_claim(root_arg, arm_arg):
+            claims.append(sched.receipt_id(arm_arg))
+
+        with patch.object(guard_source, "verify", side_effect=fixture_verify):
+            authz.authorize(self.px, arm)
+            self.assertIsNotNone(authz.verify(self.px, arm))
+            with (patch.object(sched, "admit_arm", side_effect=admit_then_stop),
+                  patch.object(authz, "claim", side_effect=spy_claim)):
+                result = self.supervisor(self.fake_runner(calls), registry).start(
+                    armed=True)
+            self.assertEqual(result["status"], "stopped")
+            self.assertEqual(result["completed"], [])
+            self.assertEqual(calls, [])
+            self.assertEqual(claims, [])
+            self.assertIsNotNone(authz.verify(self.px, arm))
+            self.assertEqual(sched.verify_receipt(self.px, arm)["attempt"],
+                             sched.MAX_INFRA_ATTEMPTS)
+
+        (self.px / sup.STOP_FILE).unlink()
+        resumed = self.supervisor(self.fake_runner(calls, stop_after=1),
+                                  registry).start(armed=True)
+        self.assertEqual(calls, [arm_id])
+        self.assertEqual(resumed["completed"], [arm_id])
+        receipt = sched.verify_receipt(self.px, arm)
+        self.assertEqual(receipt["attempt"], sched.AUTHORIZED_EXTRA_ATTEMPT)
+        self.assertEqual(receipt["outcome"], "success")
 
     def test_runner_type_error_after_side_effect_is_never_replayed(self):
         calls = []

@@ -93,10 +93,10 @@ class FakePopen:
 
 
 class DesignAndSourceTests(unittest.TestCase):
-    def test_case_design_four_residual_two_control_one_canary(self):
+    def test_case_design_six_residual_two_control_one_canary(self):
         cases, _ = runner.load_case_manifest()
-        self.assertEqual(len(runner.explicit_cases(cases)), 6)
-        self.assertEqual(len(cases["residual_cases"]), 4)
+        self.assertEqual(len(runner.explicit_cases(cases)), 8)
+        self.assertEqual(len(cases["residual_cases"]), 6)
         self.assertEqual(len(cases["control_cases"]), 2)
         self.assertEqual(cases["physical_canary"]["case_id"],
                          "physical-canary-R042")
@@ -541,8 +541,9 @@ class PrepareTests(unittest.TestCase):
         self.assertTrue(manifest["portable_postbuild_receipt"]["image_identity_verified"])
         self.assertEqual(manifest["storage"]["graphroot"], graphroot)
         self.assertEqual(manifest["design"]["residual"],
-                         ["equal_strains-s000", "equal_strains-s002",
-                          "equal_strains-s006", "equal_strains-s015"])
+                         ["pcr_jackpot-s001", "pcr_jackpot-s003",
+                          "pcr_jackpot-s015", "equal_strains-s000",
+                          "equal_strains-s007", "equal_strains-s013"])
         self.assertEqual(len(manifest["design"]["control"]), 2)
         self.assertEqual(manifest["disk_admission"]["required_free_bytes"],
                          33 * 1024 ** 3)

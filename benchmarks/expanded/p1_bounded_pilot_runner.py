@@ -82,7 +82,7 @@ CONTAINERFILE = Path(__file__).with_name(
     "Containerfile.p1-pilot-950fe331-binary-only")
 
 PINS_V2 = {
-    "cases_manifest": "fda0e3105ec4a09869dbcd31fe199126ee5088495cd32a02c72b545a51c509de",
+    "cases_manifest": "629c8ec03802f7c2a29c36b863dc93ace675658e32d22bd7ccba183f9f258eea",
     "image_manifest": "1e2ac3fa6c688c3dc7bc45e04a59981d2dabbb4dddf7fb3e84c7aad0bf9dd9cb",
     "storage_conf": "fdf5ce294ebcd8a950d1ae2016032a2620e9b16cabf33c772dc43ab425ecec21",
     "physical_spec": "478c1b7b68943ac5e1ef565c257fd96ba6871184425ace80b026dd2b18cf8f87",
@@ -151,11 +151,11 @@ def load_image_manifest():
 
 
 def explicit_cases(cases_manifest):
-    """Exactly four residual + two control synthetic cases, no full464."""
+    """Exactly six residual + two control synthetic cases, no full464."""
     residual = tuple(cases_manifest["residual_cases"])
     control = tuple(cases_manifest["control_cases"])
-    if len(residual) != 4 or len(control) != 2:
-        raise ValueError("pilot case design must be 4 residual + 2 control")
+    if len(residual) != 6 or len(control) != 2:
+        raise ValueError("pilot case design must be 6 residual + 2 control")
     if set(residual) & set(control):
         raise ValueError("residual and control case sets overlap")
     return residual + control
@@ -350,7 +350,7 @@ def verify_copy_overlay_admission_pins(bench_dir=None):
 # Guix PT_INTERP that does not exist in the frozen base image; a portable
 # artifact must be retargeted and newly pinned, never silently substituted.
 PORTABLE_PLAN = Path(__file__).with_name("p1_pilot_portable_image_manifest.json")
-PORTABLE_PLAN_SHA256 = "cda9e1a836f789c257e8480651681dcefa3ea2105e609bef2e8de41d98c71cc0"
+PORTABLE_PLAN_SHA256 = "0384d9d5bb1bb7f68725e833cae081ee0317dd456df91400e941098299f19afc"
 PORTABLE_INTERP = "/lib64/ld-linux-x86-64.so.2"
 PORTABLE_NEEDED = ("libgcc_s.so.1", "libc.so.6", "ld-linux-x86-64.so.2")
 PORTABLE_MAX_GLIBC_MINOR = 34
@@ -390,8 +390,11 @@ def verify_portable_plan(plan=None):
             or not contract.get("post_build_image_identity_gate_required")):
         raise ValueError("portable plan contract weakened")
     candidates = doc.get("candidates")
-    if not isinstance(candidates, list) or len(candidates) != 2:
-        raise ValueError("portable plan must cover both exact candidates")
+    # The two original reviewed candidates remain pinned and preserved; the
+    # third row is the separately measured 87ce + native-fragment candidate.
+    # Extra rows are never accepted implicitly: each must pass every pin below.
+    if not isinstance(candidates, list) or len(candidates) not in (2, 3):
+        raise ValueError("portable plan must cover only reviewed exact candidates")
     produced = 0
     for row in candidates:
         native = row.get("native_binary_sha256")

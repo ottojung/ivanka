@@ -228,6 +228,19 @@ def group_absent(bound, table):
     return True
 
 
+def group_absence_proven(bound, table):
+    """True only when a trustworthy snapshot proves the exact group is gone.
+
+    An unreadable /proc record leaves the bound group's fate unknown, so a
+    partial snapshot cannot prove absence. This is the proof consumed by group
+    teardown, including the case where a fast COPY-only helper exited on its
+    own before its stop callback ran.
+    """
+    if any(item.get("structural_unavailable") for item in table.values()):
+        return False
+    return group_absent(bound, table)
+
+
 def verify_group_bound(bound, table):
     """Verify the exact session leader and its process group, never a reused PID."""
     finger = bound["fingerprint"]
@@ -360,7 +373,7 @@ def teardown_if_owned(root, worker, cid, env, *, stop=None,
 def group_callbacks(bound):
     """Conservative proof callbacks for an exact bound process group."""
     return (lambda _pgid, table: group_still_owned(bound, table),
-            lambda _pgid, table: group_absent(bound, table))
+            lambda _pgid, table: group_absence_proven(bound, table))
 
 
 def teardown_group_if_owned(root, worker, bound, env, *, stop=None,

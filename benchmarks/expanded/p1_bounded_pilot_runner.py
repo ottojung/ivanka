@@ -302,29 +302,34 @@ def verify_guard_source_pins(bench_dir=None):
             "prospective": True, "deployed": False}
 
 
-# PR535 copy-only build admission is merged into this base; bind its exact
-# source so a guarded pilot cannot silently use an ungated/altered launcher.
-# Deployment of a built image remains a separate operator action.
+# COPY_OVERLAY_ADMISSION_MERGE and COPY_OVERLAY_ADMISSION_PR_HEAD record the
+# historical PR535 lineage only; they are not the identity of the current
+# launcher bytes. The digests below are a separately reviewed amendment to
+# that lineage -- the original merge never contained these bytes -- and bind
+# a guarded pilot against an ungated or altered launcher. Deployment of a
+# built image remains a separate operator action.
 COPY_OVERLAY_ADMISSION_MERGE = "165a86b38c0bc29b4f8e0281a39ca59b909a6563"
 COPY_OVERLAY_ADMISSION_PR_HEAD = "39317f021f4e5c00f5da859bcdcf755de4c6d353"
 COPY_OVERLAY_ADMISSION_DIGESTS = {
     "copy_overlay": ("fail_closed_guard/copy_overlay.py",
-                     "e146c7eda1d06527c061ecd3c5765adfbf608966ca8d501b8005e7da75ac64e7"),
+                     "8e25f209a19e0bb86091ca48bf44366ab6877e8a597ef3f3fa7fe7fa5eb592b6"),
     "copy_overlay_helper": ("fail_closed_guard/copy_overlay_helper.py",
                             "8242d81c9c6b169dfbfac1b837ae9c23e1e3f1259190438871dee89dccdf0bc5"),
     "build": ("fail_closed_guard/build.py",
-              "edf6585f84f919db6d677e34a4597dc57e9dcc6d2d77ab06e81ee6c33c9c80dd"),
+              "fda6fcf0ef51fea327558ea5f9fcac512e62dfe00c4efc37696af87c9db293a7"),
     "watchdog_cli": ("fail_closed_guard/watchdog_cli.py",
                      "e00b83adfbf8356f2f92ce92ecd2226854a182d21a21e24ca87d35ed205b5369"),
 }
 
 
 def verify_copy_overlay_admission_pins(bench_dir=None):
-    """Prove the merged PR535 COPY-only admission source is exact.
+    """Prove the reviewed COPY-only admission amendment is exact.
 
-    This is a source/prospective pin only: it does not build, run, import,
-    deploy or claim a ready watchdog. The pilot still needs the live
-    operator-bound watchdog proof before any arm.
+    The lineage constants above name the historical PR535 merge; these digests
+    identify the current reviewed source, which is a later amendment and not
+    bytes contained in that merge. This is a source/prospective pin only: it
+    does not build, run, import, deploy or claim a ready watchdog. The pilot
+    still needs the live operator-bound watchdog proof before any arm.
     """
     base = Path(bench_dir) if bench_dir else Path(__file__).resolve().parents[1]
     got = {}

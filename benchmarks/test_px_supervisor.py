@@ -8,9 +8,12 @@ from unittest.mock import patch
 
 from assembler_bench import exploratory_policy
 from assembler_bench import px_cohort_scheduler as sched
+from assembler_bench import px_guard_source as guard_source
+from assembler_bench import px_retry_authorization as authz
 from assembler_bench import px_supervisor as sup
 
 ROOT = Path(__file__).resolve().parents[1]
+GUARD_FIXTURE = ROOT / "benchmarks" / "fixtures" / "px_guard_pins"
 REGISTRY = ROOT / "benchmarks/assembler_bench/exploratory_candidates.json"
 TOOLS = ("skesa", "minia")
 
@@ -235,6 +238,121 @@ class SupervisorTests(unittest.TestCase):
         result = self.supervisor(self.fake_runner(calls), registry).start(armed=True)
         self.assertEqual(result["status"], "stopped")
         self.assertEqual(calls, [])
+
+    def test_stop_armed_during_admission_prevents_dispatch_and_resumes(self):
+        """A drain inside admission must not dispatch or complete an arm."""
+        registry = self.registry()
+        self.handoff_all(registry)
+        calls = []
+        real_admit = sched.admit_arm
+
+        def admit_then_stop(*args, **kwargs):
+            result = real_admit(*args, **kwargs)
+            (self.px / sup.STOP_FILE).write_text("stop\n")
+            return result
+
+        with patch.object(sched, "admit_arm", side_effect=admit_then_stop):
+            result = self.supervisor(self.fake_runner(calls), registry).start(
+                armed=True)
+        self.assertEqual(result["status"], "stopped")
+        self.assertEqual(result["completed"], [])
+        self.assertEqual(calls, [])
+        self.assertEqual(list((self.px / "receipts").glob("*.json")), [])
+
+        # Owner retires STOP; the untouched arm resumes and completes once.
+        (self.px / sup.STOP_FILE).unlink()
+        resumed = self.supervisor(self.fake_runner(calls, stop_after=1),
+                                  registry).start(armed=True)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(resumed["completed"], calls)
+
+    def test_stop_during_authorized_retry_admission_consumes_nothing(self):
+        """No claim, runner or completion when STOP arrives before attempt 3.
+
+        The entire test stays hermetic: guard identity is injected from the
+        pinned fixture for authorization, resume and receipt recording too, so
+        no host deployment/control root is consulted.
+        """
+        registry = self.registry()
+        self.handoff_all(registry)
+        plan = sched.build_plan(registry, self.source(), self.px)
+        arm = next(iter(sup.balanced_pending(plan, sched.resume(plan, self.px))))
+        arm_id = sched.receipt_id(arm)
+        for _ in range(sched.MAX_INFRA_ATTEMPTS):
+            sched.record_outcome(self.px, arm, None, "failure",
+                                 failure_reason="measurement_unavailable",
+                                 runner_receipt_sha256="b" * 64)
+        guard_modules = json.loads(
+            (GUARD_FIXTURE / guard_source.IDENTITY_NAME).read_bytes())["sources"]
+        calls, claims = [], []
+        real_admit = sched.admit_arm
+
+        def admit_then_stop(*args, **kwargs):
+            result = real_admit(*args, **kwargs)
+            (self.px / sup.STOP_FILE).write_text("stop\n")
+            return result
+
+        def spy_claim(root_arg, arm_arg):
+            claims.append(sched.receipt_id(arm_arg))
+
+        with patch.object(guard_source, "verify", return_value=guard_modules):
+            authz.authorize(self.px, arm)
+            self.assertIsNotNone(authz.verify(self.px, arm))
+            with (patch.object(sched, "admit_arm", side_effect=admit_then_stop),
+                  patch.object(authz, "claim", side_effect=spy_claim)):
+                result = self.supervisor(self.fake_runner(calls), registry).start(
+                    armed=True)
+            self.assertEqual(result["status"], "stopped")
+            self.assertEqual(result["completed"], [])
+            self.assertEqual(calls, [])
+            self.assertEqual(claims, [])
+            self.assertIsNotNone(authz.verify(self.px, arm))
+            self.assertEqual(sched.verify_receipt(self.px, arm)["attempt"],
+                             sched.MAX_INFRA_ATTEMPTS)
+
+            (self.px / sup.STOP_FILE).unlink()
+            resumed = self.supervisor(self.fake_runner(calls, stop_after=1),
+                                      registry).start(armed=True)
+            self.assertEqual(calls, [arm_id])
+            self.assertEqual(resumed["completed"], [arm_id])
+            receipt = sched.verify_receipt(self.px, arm)
+            self.assertEqual(receipt["attempt"], sched.AUTHORIZED_EXTRA_ATTEMPT)
+            self.assertEqual(receipt["outcome"], "success")
+
+    def test_inner_stop_is_remembered_if_owner_retires_sentinel(self):
+        """No later arm runs when the owner removes STOP during the return."""
+        registry = self.registry()
+        self.handoff_all(registry)
+        calls = []
+        supervisor = self.supervisor(self.fake_runner(calls), registry)
+        plan = sched.build_plan(registry, supervisor.source, self.px)
+        expected_remaining = len(sched.resume(plan, self.px))
+        stop_path = self.px / sup.STOP_FILE
+        real_admit = sched.admit_arm
+
+        def admit_then_stop(*args, **kwargs):
+            result = real_admit(*args, **kwargs)
+            stop_path.write_text("stop\n")
+            return result
+
+        seen = {"n": 0}
+
+        def stopped_then_retired():
+            seen["n"] += 1
+            if seen["n"] == 2 and stop_path.is_file():
+                stop_path.unlink()  # owner retires before start() sees return
+                return True
+            return stop_path.is_file()
+
+        with (patch.object(sched, "admit_arm", side_effect=admit_then_stop),
+              patch.object(supervisor, "_stopped",
+                           side_effect=stopped_then_retired)):
+            result = supervisor.start(armed=True)
+        self.assertEqual(result["status"], "stopped")
+        self.assertEqual(result["completed"], [])
+        self.assertEqual(result["remaining"], expected_remaining)
+        self.assertEqual(calls, [])
+        self.assertFalse(stop_path.exists())
 
     def test_runner_type_error_after_side_effect_is_never_replayed(self):
         calls = []

@@ -50,6 +50,34 @@ class GuardianLauncherTests(unittest.TestCase):
         return (frozenset(token for token in argv if token not in mounts),
                 frozenset(mount.rsplit(":", 2)[0] for mount in mounts))
 
+    def test_exact_launch_image_id_is_used_and_validated(self):
+        image_id = "b" * 64
+        argv = launcher.build_command(
+            image="sha256:" + "a" * 64,
+            launch_image=image_id,
+            reads_dir=self.reads,
+            attempt_dir=self.attempt,
+            timer=self.timer,
+            cidfile=self.attempt / "cid-2",
+            storage_root=self.store,
+            runroot=self.runroot,
+            name="podman-name-test-2",
+        )
+        self.assertEqual(argv[argv.index("--entrypoint") + 2], image_id)
+        self.assertNotIn("sha256:" + "a" * 64, argv)
+        with self.assertRaises(launcher.UnsafeCommand):
+            launcher.build_command(
+                image="sha256:" + "a" * 64,
+                launch_image=image_id[:12],
+                reads_dir=self.reads,
+                attempt_dir=self.attempt,
+                timer=self.timer,
+                cidfile=self.attempt / "cid-3",
+                storage_root=self.store,
+                runroot=self.runroot,
+                name="podman-name-test-3",
+            )
+
     # --- failure mode 1: loose '.fa' vs '.fastq.gz' -------------------------
     def test_fastq_reads_allowed_fasta_reference_rejected(self):
         # Reproduce the prelaunch refusal: the old check rejected paired reads.

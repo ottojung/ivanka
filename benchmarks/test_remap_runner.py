@@ -67,8 +67,9 @@ class RemapPlanTests(unittest.TestCase):
         self.assertNotIn("--denovo", argv)
         for token in ("--keep_scratch", "--bad_cycles_csv",
                       "/results/bad_cycles.csv", "--all_projects",
-                      runner.IMAGE_DIGEST):
+                      runner.IMAGE_ID):
             self.assertIn(token, argv)
+        self.assertNotIn(runner.IMAGE_DIGEST, argv)
         self.assertEqual(argv[argv.index("--cpus=2")], "--cpus=2")
         self.assertEqual(argv[argv.index("--memory=4000000000")],
                          "--memory=4000000000")
@@ -79,7 +80,8 @@ class RemapPlanTests(unittest.TestCase):
         sources = frozenset(m.rsplit(":", 2)[0] for m in mounts)
         self.assertTrue(launcher.assert_reference_blind(
             argv, allowed_values=allowed, expected_sources=sources,
-            denovo=False, reads=(R1_NAME, R2_NAME)))
+            denovo=False, reads=(R1_NAME, R2_NAME),
+            image_id=runner.IMAGE_ID))
         self.assertEqual(self.plan["guard"]["wall_seconds"], 2400)
         self.assertEqual(self.plan["guard"]["rss_limit_bytes"], 4_000_000_000)
         self.assertIs(self.plan["guard"]["kernel_enforcement"], False)

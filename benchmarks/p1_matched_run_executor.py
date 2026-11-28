@@ -273,6 +273,32 @@ def host_scope_proven_from_proof(proof: Any) -> bool:
             and bool(proof.get("attested_by")))
 
 
+def guard_terminal_sample_gap(raw: dict[str, Any]) -> bool:
+    """Authenticate an arm result's terminal-gap claim against the guard proof.
+
+    ``execute_plan`` accepts a result from an arbitrary caller-supplied arm
+    runner. A ``terminal_sample_gap`` claim only becomes evidence when the very
+    same result carries the shared guard's own exact-CID natural-exit proof for
+    the observed bound CID. A bare assertion, a foreign CID or a non-guard
+    method is refused, so an unauthenticated gap cannot stick in the receipt.
+    """
+    if not isinstance(raw, dict) or raw.get("terminal_sample_gap") is not True:
+        return False
+    observed = raw.get("observed_cpu_quota")
+    cid = observed.get("cid") if isinstance(observed, dict) else None
+    if not isinstance(cid, str):
+        return False
+    from fail_closed_guard import binding
+    if not binding.CID.fullmatch(cid):
+        return False
+    outcome = raw.get("guard_outcome")
+    guard_result = outcome.get("result") if isinstance(outcome, dict) else None
+    proof = guard_terminal_proof(
+        guard_result.get("natural_exit") if isinstance(guard_result, dict) else None,
+        cid=cid)
+    return proof is not None
+
+
 def sampling_gap_kind(previous: dict[str, Any] | None,
                       table: dict[int, Any], bound: dict[str, Any], *,
                       terminal_proof: Any = None) -> str | None:
@@ -512,6 +538,9 @@ def build_production_arm_runner(
         result["quota_drift"] = drift
         result["terminal_sample_gap"] = terminal_gap
         result["host_scope_proven"] = proven
+        # Carry the structured proof (never a bare assertion) so execute_plan
+        # can re-derive the host-scope claim from guarded evidence.
+        result["host_scope_proof"] = host_scope_proof
         result["quota_diagnostic"] = quota_diagnostic(
             observed, host_scope_proven=proven, drift=drift)
         return result
@@ -772,8 +801,15 @@ def execute_plan(
     arm_runner: Callable[..., dict[str, Any]] = default_arm_runner,
     allow_unready: bool = False,
     host_evidence: Callable[[], dict[str, Any]] | None = None,
+    host_scope_proof: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Execute a previously emitted plan with an explicit arm runner."""
+    """Execute a previously emitted plan with an explicit arm runner.
+
+    Terminal-gap and host-scope claims are re-derived here from authenticated
+    proofs; they are never copied from an arbitrary arm runner result. With no
+    structured proof, ``host_scope_proven`` stays False and comparability
+    remains diagnostic-only.
+    """
     if arm_runner is default_arm_runner:
         raise Refusal("no arm runner; live execution not authorized")
     _require_ready(emitted_plan, allow_unready=allow_unready)
@@ -823,6 +859,11 @@ def execute_plan(
         raw = arm_runner(step, list(argv), arm_dir)
         if not isinstance(raw, dict):
             raise Refusal("arm runner returned invalid result")
+        # Re-authenticate the host-scope claim for this arm. An explicit,
+        # separately reviewed proof takes precedence; otherwise only a
+        # structured proof carried by the guarded runner is recognizable.
+        proof = host_scope_proof if host_scope_proof is not None else raw.get("host_scope_proof")
+        proven = host_scope_proven_from_proof(proof)
         before = raw.get("host_before") if isinstance(raw.get("host_before"), dict) else before_default
         after = raw.get("host_after") if isinstance(raw.get("host_after"), dict) else sample_host()
         timing = _normalize_timing(raw.get("timing"))
@@ -836,13 +877,17 @@ def execute_plan(
         stage_timing = raw.get("stage_timing")
         if stage_timing is None and log_text is not None:
             stage_timing = _stage_timing(log_text, timing["seconds"])
+        raw_diagnostic = raw.get("quota_diagnostic")
+        claim_diagnostic = dict(raw_diagnostic) if isinstance(raw_diagnostic, dict) else raw_diagnostic
+        if isinstance(claim_diagnostic, dict):
+            claim_diagnostic["host_scope_proven"] = proven
         record = plan.arm_evidence_record(
             {"case": case, "arm": arm}, before, after, timing,
             sampled_rss_bytes=raw.get("sampled_rss_bytes"),
             container_cpu_max=raw.get("container_cpu_max"),
             requested_cpu_max=raw.get("requested_container_cpu_max"),
             observed_cpu_quota=raw.get("observed_cpu_quota"),
-            quota_diagnostic=raw.get("quota_diagnostic"),
+            quota_diagnostic=claim_diagnostic,
             quota_drift=raw.get("quota_drift"),
             stage_timing=stage_timing,
             log_sha256=log_sha,
@@ -855,10 +900,18 @@ def execute_plan(
         }
         for key in ("guard_outcome", "pinned_cidfiles",
                     "requested_container_cpu_max", "observed_cpu_quota",
-                    "observed_container_cpu_max", "quota_diagnostic",
-                    "quota_drift", "terminal_sample_gap", "host_scope_proven"):
+                    "observed_container_cpu_max", "quota_drift"):
             if key in raw:
                 record[key] = raw[key]
+        record["quota_diagnostic"] = claim_diagnostic
+        # Gap and host-scope claims are authenticated here, never inherited
+        # from an arbitrary arm runner result.
+        terminal_gap = guard_terminal_sample_gap(raw)
+        record["terminal_sample_gap"] = terminal_gap
+        record["host_scope_proven"] = proven
+        if raw.get("terminal_sample_gap") is True and not terminal_gap:
+            record["cpu_quota_drift"] = list(record.get("cpu_quota_drift") or []) + [
+                "unauthenticated terminal_sample_gap claim refused"]
         _write_json_exclusive(arm_dir / "argv.json", {
             "case": case, "arm": arm, "argv": argv,
             "argv_sha256": record["argv_sha256"], "image": record["image"],

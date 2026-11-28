@@ -27,6 +27,7 @@ import argparse
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 
 from benchmarks import compressed_tables as codec
@@ -145,6 +146,21 @@ def _already_archived(archive, source):
     return None
 
 
+def _projected_allocated(path, frame, proof):
+    """Allocated bytes of the prepared frame plus its proof before install."""
+    payload = (json.dumps(proof, sort_keys=True, indent=2) + "\n").encode()
+    handle, temp_name = tempfile.mkstemp(
+        prefix=path.name + codec.META_SUFFIX + ".tmp.", dir=path.parent)
+    os.close(handle)
+    temp = Path(temp_name)
+    try:
+        temp.write_bytes(payload)
+        return (frame.stat().st_blocks * 512
+                + temp.stat().st_blocks * 512)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
 def _archive_one(path, item, root):
     """Archival step with the separate maintenance temporary floor."""
     expected = retention._expected(item)
@@ -170,8 +186,15 @@ def _archive_one(path, item, root):
         needed = proof["compressed_size"] + proof_bytes
         _maintenance_headroom(root, needed)
         if needed >= item["bytes"]:
-            raise ValueError("compression does not reduce scratch size")
+            return 0  # no logical benefit: preserve the plain source
+        before = path.stat().st_blocks * 512
+        after = _projected_allocated(path, frame, proof)
+        if after >= before:
+            # Allocated savings, not logical size, decide. Leave the plain
+            # file intact and let following entries still be processed.
+            return 0
         codec.install_scratch(path, frame, proof)
+        return before - after
     finally:
         codec.discard_scratch_frame(frame)
 
@@ -191,15 +214,11 @@ def _apply_one(archive, prior, cid, source, dead, root, review_path):
     for path, item in sorted(planned.items()):
         if states[path] in ("archived", "deleted"):
             continue
-        before = path.stat().st_blocks * 512
-        _archive_one(path, item, root)
-        frame = path.with_name(path.name + codec.ZST_SUFFIX)
-        meta = path.with_name(path.name + codec.META_SUFFIX)
-        after = sum(retention._regular_variant(p).stat().st_blocks * 512
-                    for p in (frame, meta))
-        if after >= before:
-            raise ValueError("no net reclaim for sealed scratch entry")
-        reclaimed += before - after
+        gained = _archive_one(path, item, root)
+        if gained:
+            reclaimed += gained
+        # A no-benefit entry keeps its original bytes and does not abort the
+        # remaining profitable entries in this archive.
     seal = archive / retention.SEAL
     return {"archive": archive.name, "reclaimed_bytes": reclaimed,
             "seal_sha256": sched.sha256_file(seal), "review": review}

@@ -188,7 +188,6 @@ class ExecuteCaseTests(unittest.TestCase):
     def test_log_copy_integrity_failure_keeps_explicit_failure_receipt(self):
         def runner_with_drifted_log(plan, output_dir, attempt_dir):
             run = self.fake_runner()(plan, output_dir, attempt_dir)
-            log = Path(run["log_paths"]["container.log"])
             run["log_sha256"] = {"container.log": "0" * 64}
             return run
 

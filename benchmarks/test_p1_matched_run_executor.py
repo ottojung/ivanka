@@ -29,6 +29,14 @@ def calm_host_evidence():
     return dict(CALM_HOST)
 
 
+OBSERVED_QUOTA = {
+    "value": "200000 100000", "origin": plan.KERNEL_QUOTA_ORIGINS[0],
+    "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
+    "source": "/sys/fs/cgroup/libpod-test.scope/cpu.max",
+    "pid": 4242, "cgroup": "0::/libpod-test.scope", "cid": "a" * 64,
+}
+
+
 def fake_arm_runner(step, argv, arm_dir, *, deadline=None):
     arm_dir.mkdir(parents=True, exist_ok=True)
     arm = step["arm"]
@@ -44,6 +52,9 @@ def fake_arm_runner(step, argv, arm_dir, *, deadline=None):
         "log_path": str(arm_dir / "podman.log"),
         "sampled_rss_bytes": 1_500_000_000,
         "container_cpu_max": "200000 100000",
+        "requested_container_cpu_max": "200000 100000",
+        "observed_cpu_quota": OBSERVED_QUOTA,
+        "observed_container_cpu_max": "200000 100000",
         "host_before": CALM_HOST,
         "host_after": {**CALM_HOST, "loadavg": [1.1, 1.0, 1.0], "cpu_stat": {"nr_periods": 110, "nr_throttled": 0}},
     }
@@ -197,21 +208,58 @@ class ExecutorTest(unittest.TestCase):
             self.assertEqual(payload["execution"], "refused")
             self.assertIn("missing required args", payload["reason"])
 
-    def test_starting_quota_observation_retries_until_cidfile_ready(self) -> None:
+    def test_kernel_cpu_max_reads_real_cgroup_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            cidfile = pathlib.Path(tmp) / "cid"
-            calls = []
+            root = pathlib.Path(tmp)
+            scope = root / "libpod-abcdef.scope"
+            scope.mkdir()
+            (scope / "cpu.max").write_text("200000 100000\n")
+            observed = ex.kernel_cpu_max("0::/libpod-abcdef.scope\n", root)
+            self.assertEqual(observed["value"], "200000 100000")
+            self.assertEqual(observed["origin"], ex.CPU_MAX_ORIGIN_V2)
+            self.assertEqual(observed["raw"], "200000 100000")
+            self.assertEqual(ex.normalize_cpu_max("max 100000"), "max 100000")
+            self.assertIsNone(ex.normalize_cpu_max("bogus 100000"))
+            self.assertIsNone(ex.kernel_cpu_max("0::/missing.scope\n", root))
 
-            def observer(env, cid):
-                calls.append(cid)
-                return "200000 100000" if len(calls) >= 2 else None
+    def test_observed_quota_binds_exact_cid_and_rejects_foreign(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            scope = root / "libpod-abcdef123456.scope"
+            scope.mkdir()
+            (scope / "cpu.max").write_text("200000 100000\n")
+            table = {
+                7: {"cgroup": "0::/init.scope"},
+                9: {"cgroup": "0::/libpod-abcdef123456.scope"},
+            }
+            observed = ex.find_observed_cpu_quota(table, "abcdef1234567890", root)
+            self.assertEqual(observed["pid"], 9)
+            self.assertEqual(observed["cid"], "abcdef1234567890")
+            self.assertIsNone(ex.find_observed_cpu_quota(table, "ffffffffffffffff", root))
 
-            cidfile.write_text("abcdef\n")
-            observed = ex.observe_starting_container_cpu_max(
-                str(cidfile), {"PATH": "/usr/bin"}, attempts=5, interval=0.001,
-                observer=observer)
-            self.assertEqual(observed, "200000 100000")
-            self.assertEqual(calls, ["abcdef", "abcdef"])
+    def test_missing_observed_quota_fails_comparability(self) -> None:
+        def no_quota(step, argv, arm_dir, *, deadline=None):
+            result = fake_arm_runner(step, argv, arm_dir, deadline=deadline)
+            result.pop("observed_cpu_quota")
+            result.pop("observed_container_cpu_max")
+            return result
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp) / "out"
+            emitted = plan.build_plan(RECEIPT, out)
+            receipt = ex.execute_plan(
+                emitted, output_root=out, arm_runner=no_quota,
+                allow_unready=True, host_evidence=calm_host_evidence)
+            self.assertTrue(receipt["comparability"]["abort"])
+            self.assertTrue(any("kernel CPU quota" in r
+                                for r in receipt["comparability"]["reasons"]))
+            for rec in receipt["records"]:
+                self.assertFalse(rec["cpu_quota_complete"])
+                self.assertIsNone(rec["cpu_quota"]["observed_cpu_max_origin"])
+                self.assertEqual(rec["cpu_quota"]["requested_container_cpu_max"],
+                                 "200000 100000")
+            evidence = json.loads((out / plan.CASES[0] / "frozen" / "host-evidence.json").read_text())
+            self.assertIsNone(evidence["cpu_quota"]["observed_container_cpu_max"])
 
     def test_operator_environment_is_real_and_store_pinned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -239,7 +287,8 @@ class ExecutorTest(unittest.TestCase):
                  "cpuset_effective": "0-1", "cpu_stat": {"nr_periods": 100, "nr_throttled": 0},
                  "memory_current": 1},
                 {"seconds": 100.0, "exit_code": 0},
-                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000"))
+                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
+                requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA))
         decision = plan.comparability_check(records, cases=plan.ALL_CASES)
         self.assertTrue(decision["comparable"])
 

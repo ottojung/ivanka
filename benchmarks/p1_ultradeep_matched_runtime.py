@@ -134,6 +134,7 @@ DEPLOYED_PINS = {
             "c193ca79b23fc6f2190b92ae7ce70d46de582a3fd71d9c17d09c6b6704d185fb",
     },
 }
+KERNEL_QUOTA_ORIGINS = ("kernel_cgroup_v2_cpu_max", "kernel_cgroup_v1_cpu_cfs")
 COMPARABILITY = {
     "required_container_cpu_max": "200000 100000",
     "required_container_effective_cpus": 2.0,
@@ -478,18 +479,33 @@ def arm_evidence_record(
     step: dict[str, str], before: dict[str, Any], after: dict[str, Any],
     timing: dict[str, Any], *, sampled_rss_bytes: int | None = None,
     container_cpu_max: str | None = None,
+    requested_cpu_max: str | None = None,
+    observed_cpu_quota: dict[str, Any] | None = None,
     stage_timing: dict[str, Any] | None = None,
     log_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Durable per-arm record: matched timing, sampled RSS, quota and host state."""
+    """Durable per-arm record: matched timing, sampled RSS and kernel quota.
+
+    A requested or configured quota is preserved as a claim only. The
+    comparability decision uses the kernel cgroup value observed for the exact
+    bound CID/PID during the supervised arm.
+    """
     rss_ok = (isinstance(sampled_rss_bytes, int)
               and not isinstance(sampled_rss_bytes, bool) and sampled_rss_bytes > 0)
+    requested = requested_cpu_max if isinstance(requested_cpu_max, str) else container_cpu_max
+    observed = observed_cpu_quota if isinstance(observed_cpu_quota, dict) else None
+    observed_value = observed.get("value") if observed else None
+    origin = observed.get("origin") if observed else None
     quota_effective = None
-    if isinstance(container_cpu_max, str):
+    if isinstance(observed_value, str):
         try:
-            quota_effective = effective_cpus(container_cpu_max)
+            quota_effective = effective_cpus(observed_value)
         except ValueError:
             quota_effective = None
+    quota_complete = (
+        requested == COMPARABILITY["required_container_cpu_max"]
+        and quota_effective == COMPARABILITY["required_container_effective_cpus"]
+        and origin in KERNEL_QUOTA_ORIGINS)
     record = {
         "schema": "ivanka.p1.ultradeep.arm-evidence.v1",
         "case": step["case"], "arm": step["arm"],
@@ -503,12 +519,17 @@ def arm_evidence_record(
         "rss_evidence_complete": rss_ok,
         "cpu_quota": {
             "host_cpu_max": before.get("cpu_max"),
-            "container_cpu_max": container_cpu_max,
+            "requested_container_cpu_max": requested,
+            "container_cpu_max": requested,
+            "observed_container_cpu_max": observed_value,
+            "observed_cpu_max_origin": origin,
+            "observed_pid": observed.get("pid") if observed else None,
+            "observed_cgroup": observed.get("cgroup") if observed else None,
+            "observed_raw": observed.get("raw") if observed else None,
             "container_effective_cpus": quota_effective,
             "memory_limit_bytes": int(CONSTRAINTS["memory"]),
         },
-        "cpu_quota_complete": (
-            quota_effective == COMPARABILITY["required_container_effective_cpus"]),
+        "cpu_quota_complete": quota_complete,
         "rss_enforcement": "sampled_userspace_observed",
         "kernel_enforcement": False,
         "constraints": CONSTRAINTS,
@@ -543,6 +564,8 @@ def comparability_check(
         if not evidence_complete(record):
             reasons.append(label + " missing sampled RSS or container CPU quota")
         quota = record.get("cpu_quota") or {}
+        if quota.get("observed_cpu_max_origin") not in KERNEL_QUOTA_ORIGINS:
+            reasons.append(label + " no observed kernel CPU quota")
         if quota.get("container_effective_cpus") != COMPARABILITY[
             "required_container_effective_cpus"
         ]:

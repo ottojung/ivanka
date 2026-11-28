@@ -62,24 +62,79 @@ def default_arm_runner(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     raise Refusal("no arm runner; live execution not authorized")
 
 
-def observe_container_cpu_max(env: dict[str, str], cid: str) -> str | None:
-    """Read live container CPU quota via podman inspect; None if unavailable."""
-    try:
-        out = subprocess.run(
-            ["podman", "inspect", "--format",
-             "{{.HostConfig.CpuQuota}} {{.HostConfig.CpuPeriod}}", cid],
-            env=env, check=True, capture_output=True, text=True, timeout=15,
-        ).stdout.strip().split()
-    except Exception:
+REQUESTED_CPU_MAX = plan.COMPARABILITY["required_container_cpu_max"]
+CPU_MAX_ORIGIN_V2 = "kernel_cgroup_v2_cpu_max"
+CPU_MAX_ORIGIN_V1 = "kernel_cgroup_v1_cpu_cfs"
+KERNEL_QUOTA_ORIGINS = (CPU_MAX_ORIGIN_V2, CPU_MAX_ORIGIN_V1)
+
+
+def normalize_cpu_max(raw: str) -> str | None:
+    """Normalize a kernel cpu.max / CFS pair to the reviewed 'quota period' form."""
+    parts = raw.split()
+    if len(parts) != 2 or not parts[1].isdigit() or int(parts[1]) <= 0:
         return None
-    if len(out) != 2 or not all(part.lstrip("-").isdigit() for part in out):
+    if parts[0] == "max":
+        return "max " + parts[1]
+    if parts[0].isdigit():
+        return parts[0] + " " + parts[1]
+    return None
+
+
+def kernel_cpu_max(cgroup_text: str, cgroup_root: pathlib.Path) -> dict[str, Any] | None:
+    """Read the effective CPU quota from the kernel cgroup of a live process.
+
+    Podman HostConfig describes a request, not enforcement. The cgroup quota
+    file is the only value usable for comparability, and its origin is recorded
+    with the raw bytes so a missing or foreign-namespace reading cannot be
+    mistaken for a matched arm.
+    """
+    for line in cgroup_text.splitlines():
+        fields = line.split(":", 2)
+        if len(fields) != 3:
+            continue
+        hierarchy, controller, path = fields
+        if hierarchy == "0" and controller == "":
+            candidate = cgroup_root / path.lstrip("/") / "cpu.max"
+            if candidate.is_file() and not candidate.is_symlink():
+                raw = candidate.read_text().strip()
+                value = normalize_cpu_max(raw)
+                if value is not None:
+                    return {"value": value, "origin": CPU_MAX_ORIGIN_V2,
+                            "raw": raw, "cgroup_path": path, "source": str(candidate)}
+            continue
+        if controller == "cpu":
+            base = cgroup_root / "cpu" / path.lstrip("/")
+            quota_file, period_file = base / "cpu.cfs_quota_us", base / "cpu.cfs_period_us"
+            if quota_file.is_file() and period_file.is_file():
+                quota = quota_file.read_text().strip()
+                period = period_file.read_text().strip()
+                value = normalize_cpu_max(("max " if quota == "-1" else quota) + " " + period)
+                if value is not None:
+                    return {"value": value, "origin": CPU_MAX_ORIGIN_V1,
+                            "raw": quota + " " + period, "cgroup_path": path,
+                            "source": str(quota_file)}
+    return None
+
+
+def find_observed_cpu_quota(table: dict[int, Any], cid: str,
+                            cgroup_root: pathlib.Path = pathlib.Path("/sys/fs/cgroup"),
+                            ) -> dict[str, Any] | None:
+    """Bind an exact live CID to one PID in the guard's monitored snapshot."""
+    if not cid or len(cid) < 12 or not isinstance(table, dict):
         return None
-    quota, period = int(out[0]), int(out[1])
-    if period <= 0:
-        return None
-    if quota <= 0:
-        return "max " + str(period)
-    return str(quota) + " " + str(period)
+    for pid, record in table.items():
+        if not isinstance(record, dict):
+            continue
+        cgroup_text = record.get("cgroup")
+        if not isinstance(cgroup_text, str) or cid[:12] not in cgroup_text:
+            continue
+        observed = kernel_cpu_max(cgroup_text, cgroup_root)
+        if observed is not None:
+            observed["pid"] = pid
+            observed["cgroup"] = cgroup_text
+            observed["cid"] = cid
+            return observed
+    return None
 
 
 def operator_environment(storage_conf: pathlib.Path,
@@ -101,31 +156,6 @@ def operator_environment(storage_conf: pathlib.Path,
     if shutil.which("podman", path=env.get("PATH")) is None:
         raise Refusal("podman not found in operator PATH")
     return env
-
-
-def observe_starting_container_cpu_max(
-    cidfile: str, env: dict[str, str], *, attempts: int = 20,
-    interval: float = 0.1, observer: Callable[[dict[str, str], str], str | None] | None = None,
-) -> str | None:
-    """Observe the live container quota while the launcher is still running.
-
-    Podman writes the pinned cidfile before the arm exits; a post-run inspect
-    often finds no container because the reviewed argv uses --rm. A failed
-    observation stays None and fails closed in comparability rather than being
-    reported as proof.
-    """
-    inspect = observer or observe_container_cpu_max
-    for _ in range(attempts):
-        try:
-            cid = pathlib.Path(cidfile).read_text().strip()
-        except (OSError, ValueError):
-            cid = ""
-        if cid:
-            observed = inspect(env, cid)
-            if observed is not None:
-                return observed
-        time.sleep(interval)
-    return None
 
 
 def production_podman_spawn(argv: list[str], cidfile: str, env: dict[str, str],
@@ -186,27 +216,49 @@ def build_production_arm_runner(
         return bool(proc is not None and proc.poll() is None)
 
     inner_holder: dict[str, Any] = {}
+    from fail_closed_guard import proc as proc_sampler
 
     def _measure():
         # watch_bound requires a non-None measurement; actual RSS is sampled by
         # the guard's bound tree sampler.
         return True
 
+    def _monitored_snapshot():
+        """Guard-owned PID table; also sample the exact CID's kernel quota.
+
+        The shared guard calls this for binding and on every watch sample, so
+        quota observation occurs only while the arm is under its supervision.
+        No inspection blocks spawn before the CID is bound.
+        """
+        table = proc_sampler.snapshot()
+        cid = inner_holder.get("cid")
+        if not cid:
+            cidfile = inner_holder.get("cidfile")
+            if cidfile:
+                try:
+                    cid = pathlib.Path(cidfile).read_text().strip()
+                except (OSError, ValueError):
+                    cid = ""
+        if cid and inner_holder.get("observed_cpu_quota") is None:
+            inner_holder["observed_cpu_quota"] = find_observed_cpu_quota(table, cid)
+        return table
+
     def _runner(step: dict[str, str], argv: list[str], arm_dir: pathlib.Path,
                 *, deadline: float | None = None) -> dict[str, Any]:
+        inner_holder.clear()
+
         def wrapped_spawn(cidfile, spawn_env, *, argv, arm_dir):
-            proc = production_podman_spawn(argv, cidfile, spawn_env, arm_dir)
-            inner_holder["proc"] = proc
-            inner_holder["observed_container_cpu_max"] = observe_starting_container_cpu_max(
-                cidfile, run_env)
-            return proc
+            inner_holder["cidfile"] = cidfile
+            spawned = production_podman_spawn(argv, cidfile, spawn_env, arm_dir)
+            inner_holder["proc"] = spawned
+            return spawned
 
         local_runner = guarded_podman_arm_runner(
             owner=owner,
             lease_root=lease_root,
             stop_path=stop_path,
             disk_path=disk_path,
-            container_cpu_max="200000 100000",
+            container_cpu_max=REQUESTED_CPU_MAX,
             lock_path=lock_path,
             env=run_env,
             watchdog_path=watchdog_path,
@@ -215,21 +267,17 @@ def build_production_arm_runner(
             spawn=wrapped_spawn,
             running=lambda: _running(inner_holder),
             measure=_measure,
+            snapshot=_monitored_snapshot,
         )
         result = local_runner(step, argv, arm_dir, deadline=deadline)
-        observed = inner_holder.get("observed_container_cpu_max")
-        if observed is None:
-            cidfiles = result.get("pinned_cidfiles") or []
-            if cidfiles:
-                try:
-                    cid = pathlib.Path(cidfiles[0]).read_text().strip()
-                    observed = observe_container_cpu_max(run_env, cid)
-                except Exception:
-                    observed = None
-        if observed is not None:
-            result["observed_container_cpu_max"] = observed
-            if observed != "200000 100000":
-                raise Refusal("observed container cpu.max mismatch: " + observed)
+        observed = inner_holder.get("observed_cpu_quota")
+        # Requested/configured values are preserved but never used as proof.
+        result["requested_container_cpu_max"] = REQUESTED_CPU_MAX
+        result["container_cpu_max"] = REQUESTED_CPU_MAX
+        result["observed_cpu_quota"] = observed
+        result["observed_container_cpu_max"] = observed.get("value") if observed else None
+        if observed is not None and observed["value"] != REQUESTED_CPU_MAX:
+            raise Refusal("observed kernel cpu.max mismatch: " + observed["value"])
         return result
 
     return _runner
@@ -556,6 +604,8 @@ def execute_plan(
             {"case": case, "arm": arm}, before, after, timing,
             sampled_rss_bytes=raw.get("sampled_rss_bytes"),
             container_cpu_max=raw.get("container_cpu_max"),
+            requested_cpu_max=raw.get("requested_container_cpu_max"),
+            observed_cpu_quota=raw.get("observed_cpu_quota"),
             stage_timing=stage_timing,
             log_sha256=log_sha,
         )
@@ -565,7 +615,9 @@ def execute_plan(
             "before": plan.contention_check(before),
             "after": plan.contention_check(after),
         }
-        for key in ("guard_outcome", "pinned_cidfiles"):
+        for key in ("guard_outcome", "pinned_cidfiles",
+                    "requested_container_cpu_max", "observed_cpu_quota",
+                    "observed_container_cpu_max"):
             if key in raw:
                 record[key] = raw[key]
         _write_json_exclusive(arm_dir / "argv.json", {

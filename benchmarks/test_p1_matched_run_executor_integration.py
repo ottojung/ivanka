@@ -145,7 +145,18 @@ class GuardHarness:
 
         def rearming(step, argv, arm_dir, **kwargs):
             self.arm_stop()
-            return inner(step, argv, arm_dir, **kwargs)
+            result = inner(step, argv, arm_dir, **kwargs)
+            result["requested_container_cpu_max"] = "200000 100000"
+            result["container_cpu_max"] = "200000 100000"
+            result["observed_cpu_quota"] = {
+                "value": "200000 100000",
+                "origin": "kernel_cgroup_v2_cpu_max",
+                "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
+                "source": "/sys/fs/cgroup/cpu.max", "pid": PID,
+                "cgroup": "0::/libpod-test.scope", "cid": CID,
+            }
+            result["observed_container_cpu_max"] = "200000 100000"
+            return result
 
         return rearming
 

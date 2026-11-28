@@ -15,6 +15,14 @@ RECEIPT = (
 )
 
 
+OBSERVED_QUOTA = {
+    "value": "200000 100000", "origin": plan.KERNEL_QUOTA_ORIGINS[0],
+    "raw": "200000 100000", "cgroup_path": "/libpod-test.scope",
+    "source": "/sys/fs/cgroup/libpod-test.scope/cpu.max",
+    "pid": 4242, "cgroup": "0::/libpod-test.scope", "cid": "a" * 64,
+}
+
+
 def host(load: float = 1.0, cpu_max: str = "200000 100000",
          cpuset: str = "0-1", periods: int = 100, throttled: int = 0) -> dict:
     return {"loadavg": [load, load, load], "cpu_max": cpu_max,
@@ -243,7 +251,8 @@ class EvidenceTest(unittest.TestCase):
             step, host(), host(load=1.1),
             {"timing_origin": "micall_in_container_monotonic_v1",
              "seconds": 836.2, "exit_code": 0},
-            sampled_rss_bytes=1_500_000_000, container_cpu_max="200000 100000")
+            sampled_rss_bytes=1_500_000_000, container_cpu_max="200000 100000",
+            requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA)
         self.assertEqual(record["sampled_peak_rss_bytes"], 1_500_000_000)
         self.assertEqual(record["cpu_quota"]["container_effective_cpus"], 2.0)
         self.assertTrue(plan.evidence_complete(record))
@@ -255,10 +264,16 @@ class EvidenceTest(unittest.TestCase):
 
     def test_incomplete_evidence_is_refused(self) -> None:
         step = {"case": "ultradeep-s006", "arm": "frozen"}
-        for rss, quota in ((None, "200000 100000"), (10, None), (True, "200000 100000")):
+        for rss, quota, observed in (
+            (None, "200000 100000", OBSERVED_QUOTA),
+            (10, None, OBSERVED_QUOTA),
+            (True, "200000 100000", OBSERVED_QUOTA),
+            (10, "200000 100000", None),
+        ):
             record = plan.arm_evidence_record(
                 step, host(), host(), {"seconds": 1.0, "exit_code": 0},
-                sampled_rss_bytes=rss, container_cpu_max=quota)
+                sampled_rss_bytes=rss, container_cpu_max=quota,
+                requested_cpu_max=quota, observed_cpu_quota=observed)
             self.assertFalse(plan.evidence_complete(record))
 
     def test_comparability_of_a_full_ab_ba_set(self) -> None:
@@ -267,7 +282,8 @@ class EvidenceTest(unittest.TestCase):
             records.append(plan.arm_evidence_record(
                 step, host(), host(load=1.1),
                 {"seconds": 100.0, "exit_code": 0},
-                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000"))
+                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
+                requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA))
         decision = plan.comparability_check(records)
         self.assertTrue(decision["comparable"])
         self.assertFalse(decision["abort"])
@@ -281,7 +297,8 @@ class EvidenceTest(unittest.TestCase):
                     step, host(load=load, throttled=throttled), host(load=load),
                     {"seconds": 100.0, "exit_code": 0},
                     sampled_rss_bytes=1_000_000_000,
-                    container_cpu_max="200000 100000"))
+                    container_cpu_max="200000 100000",
+                    requested_cpu_max="200000 100000", observed_cpu_quota=OBSERVED_QUOTA))
             return result
 
         self.assertTrue(plan.comparability_check(full(throttled=20))["abort"])
@@ -295,6 +312,22 @@ class EvidenceTest(unittest.TestCase):
         mixed[0]["host_after"] = host(load=0.2)
         self.assertTrue(plan.comparability_check(mixed)["abort"])
         self.assertTrue(plan.comparability_check(full()[:4])["abort"])
+
+    def test_comparability_rejects_missing_or_foreign_kernel_quota(self) -> None:
+        def records_for(observed):
+            return [plan.arm_evidence_record(
+                step, host(), host(), {"seconds": 1.0, "exit_code": 0},
+                sampled_rss_bytes=1_000_000_000, container_cpu_max="200000 100000",
+                requested_cpu_max="200000 100000", observed_cpu_quota=observed)
+                for step in plan.alternating_schedule(("ultradeep-s006",))]
+
+        self.assertFalse(plan.comparability_check(
+            records_for(OBSERVED_QUOTA), cases=("ultradeep-s006",))["abort"])
+        for observed in (None, {"value": "200000 100000", "origin": "podman_hostconfig"}):
+            decision = plan.comparability_check(
+                records_for(observed), cases=("ultradeep-s006",))
+            self.assertTrue(decision["abort"])
+            self.assertTrue(any("kernel CPU quota" in r for r in decision["reasons"]))
 
 
 if __name__ == "__main__":

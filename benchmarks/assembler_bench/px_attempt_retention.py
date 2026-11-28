@@ -11,6 +11,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -87,15 +88,85 @@ def _reports(root):
     return by_hash
 
 
+LEASE_SCHEMA = "ivanka.worker-lease.v1"
+OWNERSHIP_STATES = frozenset(("active", "released", "reconciled"))
+# State-less audit evidence is append-only history, never an ownership
+# transition. Exact key sets are pinned: an unknown event, an extra field or
+# a malformed audit record must still fail closed.
+AUDIT_SHAPES = {
+    "bind_unavailable": frozenset(
+        ("at_utc", "cidfile", "event", "lease_id", "owner", "schema")),
+    "startup_abort": frozenset(
+        ("at_utc", "cid", "cidfile", "detail", "event", "lease_id",
+         "lease_state", "owner", "reason", "schema", "teardown",
+         "teardown_result")),
+    "stop_retired": frozenset(
+        ("at_utc", "cid", "event", "lease", "owner", "proof", "schema")),
+}
+
+
+def _owner_of(record):
+    """Owner identity; legacy ownership events used the lease id as owner."""
+    owner = record.get("owner")
+    return owner if owner is not None else record.get("lease")
+
+
 def _leases(root):
     records = {}
     for line in _regular(root / ".worker-lease.jsonl").read_text().splitlines():
         record = json.loads(line)
-        if (not isinstance(record, dict) or not isinstance(record.get("lease"), str)
-                or record.get("schema") != "ivanka.worker-lease.v1"):
+        if not isinstance(record, dict) or record.get("schema") != LEASE_SCHEMA:
             raise ValueError("unknown worker lease schema")
-        records.setdefault(record["lease"], []).append((line, record))
+        state = record.get("state")
+        if isinstance(state, str) and state in OWNERSHIP_STATES:
+            lease = record.get("lease")
+            if (not isinstance(lease, str) or not lease
+                    or "event" in record):
+                raise ValueError("unknown worker lease schema")
+            records.setdefault(lease, []).append((line, record))
+            continue
+        # Only the three known state-less audit shapes may be skipped, and
+        # only when their identity fields are well formed.
+        event = record.get("event")
+        shape = AUDIT_SHAPES.get(event) if isinstance(event, str) else None
+        if shape is None or state is not None or frozenset(record) != shape:
+            raise ValueError("unknown worker lease schema")
+        ident = (record.get("lease") if event == "stop_retired"
+                 else record.get("lease_id"))
+        stamp = record.get("at_utc")
+        owner = record.get("owner")
+        if (not isinstance(ident, str) or not ident
+                or not isinstance(owner, str) or not owner
+                or isinstance(stamp, bool) or not isinstance(stamp, (int, float))
+                or not math.isfinite(stamp)
+                or (event == "startup_abort"
+                    and not isinstance(record.get("lease_state"), str))):
+            raise ValueError("unknown worker lease schema")
     return records
+
+
+def _latest_active(rows):
+    """Replay lease.latest ownership semantics over pre-close rows only.
+
+    A close is ignored unless it matches the owner and CID of the current
+    active lease, so a later foreign/rebound active state remains authoritative
+    and a historical close cannot release it.
+    """
+    active = None
+    for _, row in rows:
+        state = row.get("state")
+        if state == "active":
+            active = row
+        elif state in ("released", "reconciled"):
+            if active is None:
+                continue
+            close_cid = row.get("cid")
+            active_cid = active.get("cid")
+            if (_owner_of(row) == _owner_of(active)
+                    and (close_cid is None or active_cid is None
+                         or close_cid == active_cid)):
+                active = None
+    return active
 
 
 def _bound_report(root, prior, reports, leases):
@@ -125,10 +196,16 @@ def _bound_report(root, prior, reports, leases):
         raise ValueError("missing worker lease")
     line, last = rows[-1]
     if (last.get("state") != "released" or last.get("cid") != cid
-            or not _absence(last.get("proof"), cid)
-            or not any(r.get("state") == "active" and r.get("cid") == cid
-                       for _, r in rows[:-1])):
+            or not _absence(last.get("proof"), cid)):
         raise ValueError("worker lease not released for exact CID")
+    # The authoritative immediately-prior ownership state must be the exact
+    # active lease this close claims: a later foreign/rebound active row must
+    # not be ignored in favour of an older matching one.
+    active = _latest_active(rows[:-1])
+    if (active is None or active.get("state") != "active"
+            or active.get("cid") != cid
+            or _owner_of(active) != _owner_of(last)):
+        raise ValueError("foreign or rebound active lease state")
     return cid, {"launcher_report": _sha(path), "launcher_log": digest,
                  "released_lease": hashlib.sha256(line.encode()).hexdigest()}
 

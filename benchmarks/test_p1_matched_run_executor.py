@@ -430,6 +430,86 @@ class ExecutorTest(unittest.TestCase):
         self.assertIn("visible hierarchy only; host scope not proven",
                       diagnostic["reasons"])
 
+    def test_terminal_sample_gap_claim_requires_guard_proof(self) -> None:
+        guarded = {
+            "terminal_sample_gap": True,
+            "observed_cpu_quota": dict(OBSERVED_QUOTA),
+            "guard_outcome": {"result": {"natural_exit": TERMINAL_PROOF}},
+        }
+        self.assertTrue(ex.guard_terminal_sample_gap(guarded))
+        unauthenticated = (
+            {**guarded, "guard_outcome": {"result": {}}},
+            {**guarded, "guard_outcome": {"result": {"natural_exit": True}}},
+            {**guarded, "guard_outcome": {
+                "result": {"natural_exit": {**TERMINAL_PROOF, "cid": "b" * 64}}}},
+            {**guarded, "observed_cpu_quota": {**OBSERVED_QUOTA, "cid": "b" * 64}},
+            {**guarded, "observed_cpu_quota": None},
+            {**guarded, "terminal_sample_gap": False},
+        )
+        for raw in unauthenticated:
+            self.assertFalse(ex.guard_terminal_sample_gap(raw))
+
+    def test_execute_plan_does_not_inherit_unauthenticated_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp) / "out"
+            emitted = plan.build_plan(RECEIPT, out)
+
+            def spoofing(step, argv, arm_dir, *, deadline=None):
+                raw = fake_arm_runner(step, argv, arm_dir, deadline=deadline)
+                raw["host_scope_proven"] = True
+                raw["terminal_sample_gap"] = True
+                return raw
+
+            receipt = ex.execute_plan(
+                emitted, output_root=out, arm_runner=spoofing,
+                allow_unready=True, host_evidence=calm_host_evidence)
+            self.assertEqual(len(receipt["records"]), 8)
+            for record in receipt["records"]:
+                self.assertFalse(record["host_scope_proven"])
+                self.assertFalse(record["quota_diagnostic"]["host_scope_proven"])
+                self.assertFalse(record["cpu_quota_diagnostic"]["host_scope_proven"])
+                self.assertFalse(record["terminal_sample_gap"])
+                self.assertIn("unauthenticated terminal_sample_gap claim refused",
+                              record["cpu_quota_drift"])
+
+    def test_execute_plan_accepts_only_structured_authenticated_claims(self) -> None:
+        host_scope_proof = {
+            "schema": ex.HOST_SCOPE_PROOF_SCHEMA,
+            "cgroup_root": "/sys/fs/cgroup",
+            "attested_by": "operator-review",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = pathlib.Path(tmp) / "out"
+            emitted = plan.build_plan(RECEIPT, out)
+
+            def guarded(step, argv, arm_dir, *, deadline=None):
+                raw = fake_arm_runner(step, argv, arm_dir, deadline=deadline)
+                raw["host_scope_proof"] = host_scope_proof
+                raw["terminal_sample_gap"] = True
+                raw["guard_outcome"] = {"result": {"natural_exit": TERMINAL_PROOF}}
+                return raw
+
+            receipt = ex.execute_plan(
+                emitted, output_root=out, arm_runner=guarded,
+                allow_unready=True, host_evidence=calm_host_evidence)
+            for record in receipt["records"]:
+                self.assertTrue(record["host_scope_proven"])
+                self.assertTrue(record["quota_diagnostic"]["host_scope_proven"])
+                self.assertTrue(record["terminal_sample_gap"])
+                self.assertNotIn("unauthenticated terminal_sample_gap claim refused",
+                                 record["cpu_quota_drift"])
+
+        # An explicit caller assertion still cannot masquerade as proof.
+        for proof in (True, "host_scope_proven", {"asserted": True}):
+            with tempfile.TemporaryDirectory() as tmp:
+                out = pathlib.Path(tmp) / "out"
+                emitted = plan.build_plan(RECEIPT, out)
+                receipt = ex.execute_plan(
+                    emitted, output_root=out, arm_runner=fake_arm_runner,
+                    allow_unready=True, host_evidence=calm_host_evidence,
+                    host_scope_proof=proof)
+                self.assertFalse(receipt["records"][0]["host_scope_proven"])
+
     def test_production_gap_is_terminal_only_with_guard_proof(self) -> None:
         cid = "a" * 64
         bound = {"cid": cid, "pid": 4242, "fingerprint": [5, 7]}

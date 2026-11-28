@@ -9,15 +9,29 @@ are unchanged. No reference, truth or family label reaches the assembler.
 
 A retained fragment is exactly one observed read sequence: no invented bases,
 no joining of mates or fragments, no phase assertion. Its support is the
-number of distinct observed pair sequences containing it (identical pair
-sequences counted once; minimum 15). A fragment must also account for at
-least 1% of the library's distinct observed pairs, so a trace component such
-as contamination cannot consume a contig slot. This measures observed-sequence
-diversity and does not claim that matching sequences came from the same
-molecule. Regions already represented by selected contigs or supplied seeds
-are skipped by canonical 31-mer coverage, and the total never exceeds the
-configured contig cap. Per-fragment provenance is logged to the assembler
-log with source, length and observed-pair support.
+number of distinct observed library pairs containing it (minimum 15). A pair
+is identified by the unordered canonical identities of its two mates, so
+identical mates within a pair, reverse-complement mates, and repeated copies
+of one pair each count once. All identities are borrowed slices from the
+loaded reads; only fragments that survive filtering are copied. A fragment
+with no valid canonical 31-mer is ineligible. It must also account for at
+least 1% of **all distinct observed library pairs** (the full FASTQ, not a
+scan cap), so a trace component cannot consume a contig slot. This measures
+observed-sequence diversity and does not claim that matching sequences came
+from the same molecule. Regions already represented by selected contigs or
+supplied seeds are skipped by canonical 31-mer coverage, and the total never
+exceeds the configured contig cap. Per-fragment provenance is logged to the
+assembler log with source, length and observed-pair support.
+
+Repeated sequencing errors are counted as repeated observations when the same
+erroneous sequence appears in many distinct pairs. Canonical identity merges
+reverse complements but does not judge whether a base is an error, and a
+fragment needs at least one valid canonical 31-mer. The 1% share guard blocks
+trace components but not a high-frequency recurrent error variant; such a
+variant can still be retained if it clears both thresholds. This is why the
+fragment path is limited to genuinely unrepresented regions and why an
+integrated pilot must check final dominant quality rather than treating
+native contig counts as a success metric.
 
 ## Why this was tried
 
@@ -29,10 +43,13 @@ regions. Native FASTA-to-truth alignment remains a diagnostic, not the gate.
 
 ## Validation
 
-81 unit and 51 contract tests pass, including fixtures for retention,
+88 unit and 51 contract tests pass, including fixtures for retention,
 non-independence of repeated observations, represented-region skipping, the
-1% library-share guard and the contig cap. Formatting, structural lint,
-Clippy on changed files, and reference isolation all pass.
+1% guard at exactly 1.00% and just below (0.99%), denominator pairs beyond a
+fixed scan cap, identical mates, reverse-complement mates and identity
+merging, ambiguous reads without a valid 31-mer, and the contig cap.
+Formatting, structural lint, Clippy on changed files, and reference isolation
+all pass.
 
 Narrow standalone canaries on all 16 jackpot cases increased native contigs
 from 3-11 to 15 and diagnostic exact-substring truth coverage from 0-1,398

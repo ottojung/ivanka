@@ -28,7 +28,7 @@ pub(crate) fn retain(
         if contigs.len() >= limit {
             break;
         }
-        if !represent::uncovered(&represented, &seq) {
+        if !represent::uncovered(&represented, seq) {
             continue;
         }
         eprintln!(
@@ -36,8 +36,8 @@ pub(crate) fn retain(
             seq.len(),
             observed_pairs
         );
-        represent::cover(&mut represented, &seq);
-        contigs.push(seq);
+        represent::cover(&mut represented, seq);
+        contigs.push(seq.to_vec());
         added += 1;
     }
     eprintln!(

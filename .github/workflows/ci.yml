@@ -3,6 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      # Data-only publisher commits only update these generated files.
+      # Pages validates and deploys generated data independently.
+      - "site/bench/data/runs.json"
+      - "site/bench/data/assembler-evidence.json"
   pull_request:
   workflow_dispatch:
 

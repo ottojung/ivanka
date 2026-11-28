@@ -22,6 +22,15 @@ pub(super) fn write(path: &str, contigs: &[Vec<u8>], reads: &Reads) -> io::Resul
     let hits = index::build(contigs);
     let statistics = scoring::count(contigs, reads, &hits);
     let chosen = ranking::best(contigs, &statistics);
+    // Passive, reference-blind diagnostic only: the selected contig keeps its
+    // sequence and output regardless. Ranking or tiling changes that act on
+    // this signal need an integrated run before they can be justified.
+    if let Some((per_mille, first, repeat)) = index::uniqueness::repeated_path(&contigs[chosen]) {
+        eprintln!(
+            "IVANKA_READ_BACKED_REPEATED_PATH per_mille={} windows=[{}:{}]",
+            per_mille, first, repeat
+        );
+    }
     let repaired = circle::repair(&contigs[chosen], &statistics.depth[chosen], reads);
     let (sequence, depth): (&[u8], &[u32]) = match &repaired {
         Some((seq, depths)) => (seq, depths),
